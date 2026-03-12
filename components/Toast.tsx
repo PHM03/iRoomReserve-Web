@@ -17,12 +17,10 @@ export default function Toast({ message, type = 'success', show, onClose, durati
   useEffect(() => {
     if (show) {
       setVisible(true);
-      // Trigger slide-in animation on next frame
       requestAnimationFrame(() => setAnimating(true));
 
       const timer = setTimeout(() => {
         setAnimating(false);
-        // Wait for slide-out animation to finish before hiding
         setTimeout(() => {
           setVisible(false);
           onClose();
@@ -38,24 +36,24 @@ export default function Toast({ message, type = 'success', show, onClose, durati
 
   if (!visible) return null;
 
-  const bgColor = type === 'success'
-    ? 'bg-green-500'
-    : 'bg-red-500';
+  const bgStyle = type === 'success'
+    ? 'bg-green-500/20 border-green-500/40 text-green-300'
+    : 'bg-red-500/20 border-red-500/40 text-red-300';
 
   const icon = type === 'success' ? (
-    <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
     </svg>
   ) : (
-    <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
   );
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
+    <div className="fixed top-0 left-0 right-0 z-[100] flex justify-center pointer-events-none">
       <div
-        className={`mt-4 flex items-center gap-2 px-5 py-3 rounded-lg shadow-lg text-white text-sm font-medium pointer-events-auto transition-all duration-300 ease-in-out ${bgColor} ${
+        className={`mt-4 flex items-center gap-2 px-5 py-3 rounded-xl border text-sm font-bold pointer-events-auto backdrop-blur-xl transition-all duration-300 ease-in-out ${bgStyle} ${
           animating
             ? 'translate-y-0 opacity-100'
             : '-translate-y-4 opacity-0'

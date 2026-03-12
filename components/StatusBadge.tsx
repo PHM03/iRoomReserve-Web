@@ -12,20 +12,20 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   const getStatusStyles = () => {
     switch (status) {
       case 'Available':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-500/20 text-green-300 border-green-500/30';
       case 'Reserved':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
       case 'Occupied':
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-orange-500/20 text-orange-300 border-orange-500/30';
       case 'Vacant':
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-white/10 text-white/50 border-white/20';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-white/10 text-white/50 border-white/20';
     }
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusStyles()}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${getStatusStyles()}`}>
       {status}
     </span>
   );

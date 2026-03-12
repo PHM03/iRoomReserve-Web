@@ -30,23 +30,26 @@ export default function Dashboard() {
   const { firebaseUser, profile, loading, logout } = useAuth();
   const router = useRouter();
 
-  // Redirect to login if not authenticated
+  // Redirect to login if not authenticated, or to superadmin dashboard if Super Admin
   useEffect(() => {
     if (!loading && !firebaseUser) {
       router.push('/');
     }
-  }, [loading, firebaseUser, router]);
+    if (!loading && profile?.role === 'Super Admin') {
+      router.push('/superadmin/dashboard');
+    }
+  }, [loading, firebaseUser, profile, router]);
 
   // Show loading while auth resolves or redirecting
   if (loading || !firebaseUser) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <svg className="animate-spin h-8 w-8 text-red-800 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <svg className="animate-spin h-8 w-8 text-primary mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
           </svg>
-          <p className="text-gray-500">Loading...</p>
+          <p className="text-white/50">Loading...</p>
         </div>
       </div>
     );
@@ -70,77 +73,64 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen relative">
+      {/* Decorative background orbs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-primary/8 blur-3xl" />
+        <div className="absolute bottom-20 -left-40 w-96 h-96 rounded-full bg-secondary/8 blur-3xl" />
+      </div>
+
       <NavBar user={user} onLogout={logout} />
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        {/* Welcome */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-white">Welcome back, {profile?.firstName || 'User'}</h2>
+          <p className="text-white/40 mt-1">Here&apos;s what&apos;s happening with your rooms today</p>
+        </div>
+
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <SummaryCard
-            icon="🟢"
-            number="8"
-            label="Available Rooms"
-            color="border-green-500"
-          />
-          <SummaryCard
-            icon="🔵"
-            number="3"
-            label="Reserved"
-            color="border-blue-500"
-          />
-          <SummaryCard
-            icon="🟠"
-            number="5"
-            label="Occupied"
-            color="border-orange-500"
-          />
-          <SummaryCard
-            icon="🔴"
-            number="2"
-            label="Vacant (no-show)"
-            color="border-red-500"
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <SummaryCard icon="🟢" number="8" label="Available Rooms" color="border-green-500/60" />
+          <SummaryCard icon="🔵" number="3" label="Reserved" color="border-blue-500/60" />
+          <SummaryCard icon="🟠" number="5" label="Occupied" color="border-orange-500/60" />
+          <SummaryCard icon="🔴" number="2" label="Vacant (no-show)" color="border-red-500/60" />
         </div>
 
         {/* Room Availability */}
         <div className="mb-12">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Room Availability — Live</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <h2 className="text-xl font-bold text-white mb-4">Room Availability — Live</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {rooms.map((room) => (
-              <RoomCard
-                key={room.id}
-                name={room.name}
-                floor={room.floor}
-                status={room.status}
-              />
+              <RoomCard key={room.id} name={room.name} floor={room.floor} status={room.status} />
             ))}
           </div>
         </div>
 
         {/* Recent Reservations */}
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">My Recent Reservations</h2>
+          <h2 className="text-xl font-bold text-white mb-4">My Recent Reservations</h2>
 
           {/* Desktop table */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="min-w-full bg-white rounded-lg shadow-md">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purpose</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+          <div className="hidden md:block glass-card overflow-hidden !rounded-xl">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">Room</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">Time</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">Purpose</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {recentReservations.map((reservation) => (
-                  <tr key={reservation.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{reservation.room}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{reservation.date}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{reservation.time}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{reservation.purpose}</td>
+                  <tr key={reservation.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{reservation.room}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white/60">{reservation.date}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white/60">{reservation.time}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white/60">{reservation.purpose}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <StatusBadge status={reservation.status} />
                     </td>
@@ -151,24 +141,24 @@ export default function Dashboard() {
           </div>
 
           {/* Mobile cards */}
-          <div className="md:hidden space-y-4">
+          <div className="md:hidden space-y-3">
             {recentReservations.map((reservation) => (
-              <div key={reservation.id} className="bg-white rounded-lg shadow-md p-4">
+              <div key={reservation.id} className="glass-card p-4">
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <h3 className="font-semibold text-gray-900">{reservation.room}</h3>
-                    <p className="text-sm text-gray-500">{reservation.date}</p>
+                    <h3 className="font-bold text-white">{reservation.room}</h3>
+                    <p className="text-sm text-white/40">{reservation.date}</p>
                   </div>
                   <StatusBadge status={reservation.status} />
                 </div>
-                <div className="space-y-2 text-sm">
+                <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Time:</span>
-                    <span className="font-medium">{reservation.time}</span>
+                    <span className="text-white/40">Time:</span>
+                    <span className="font-bold text-white/70">{reservation.time}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Purpose:</span>
-                    <span className="font-medium">{reservation.purpose}</span>
+                    <span className="text-white/40">Purpose:</span>
+                    <span className="font-bold text-white/70">{reservation.purpose}</span>
                   </div>
                 </div>
               </div>
@@ -178,36 +168,22 @@ export default function Dashboard() {
       </main>
 
       {/* Mobile bottom nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 glass-nav border-t border-white/10">
         <div className="grid grid-cols-4 h-16">
-          <a href="#" className="flex flex-col items-center justify-center text-red-800">
-            <svg className="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-            </svg>
-            <span className="text-xs font-medium">Home</span>
-          </a>
-          <a href="#" className="flex flex-col items-center justify-center text-gray-400">
-            <svg className="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-            </svg>
-            <span className="text-xs">Reservations</span>
-          </a>
-          <a href="#" className="flex flex-col items-center justify-center text-gray-400">
-            <svg className="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-            </svg>
-            <span className="text-xs">Reserve</span>
-          </a>
-          <a href="#" className="flex flex-col items-center justify-center text-gray-400">
-            <svg className="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
-            </svg>
-            <span className="text-xs">Notifications</span>
-          </a>
+          {[
+            { label: 'Home', active: true, icon: <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /> },
+            { label: 'Reservations', active: false, icon: <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" /> },
+            { label: 'Reserve', active: false, icon: <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /> },
+            { label: 'Alerts', active: false, icon: <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" /> },
+          ].map((item) => (
+            <a key={item.label} href="#" className={`flex flex-col items-center justify-center transition-colors ${item.active ? 'text-primary' : 'text-white/30 hover:text-primary'}`}>
+              <svg className="w-5 h-5 mb-1" fill="currentColor" viewBox="0 0 20 20">{item.icon}</svg>
+              <span className="text-[10px] font-bold">{item.label}</span>
+            </a>
+          ))}
         </div>
       </div>
-      {/* Add bottom padding for fixed nav */}
-      <div className="md:hidden h-16"></div>
+      <div className="md:hidden h-16" />
     </div>
   );
 }

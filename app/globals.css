@@ -1,22 +1,151 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: #ffffff;
-  --color-foreground: #000000;
+  --color-background: #1a1a2e;
+  --color-foreground: #e0e0e0;
   --color-primary: #a12124;
-  --color-primary-hover: #8a1b1e;
-  --color-secondary: #625f5f;
+  --color-primary-hover: #c42a2e;
+  --color-secondary: #625f2f;
   --color-dark: #343434;
-  --font-sans: var(--font-geist-sans);
+  --color-glass: rgba(255, 255, 255, 0.08);
+  --color-glass-border: rgba(255, 255, 255, 0.12);
+  --color-glass-hover: rgba(255, 255, 255, 0.14);
+  --font-sans: "Century Gothic", "CenturyGothic", "AppleGothic", "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
-body {
-  background: var(--color-background);
-  color: var(--color-foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ─── Base Styles ─────────────────────────────────────── */
+* {
+  font-family: "Century Gothic", "CenturyGothic", "AppleGothic", "Segoe UI", sans-serif;
 }
 
-input {
-  color: #000000;
+body {
+  background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 40%, #16213e 100%);
+  color: var(--color-foreground);
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Century Gothic", "CenturyGothic", "AppleGothic", "Segoe UI", sans-serif;
+  font-weight: 700;
+}
+
+input, select, textarea {
+  color: #ffffff;
+  font-family: "Century Gothic", "CenturyGothic", "AppleGothic", "Segoe UI", sans-serif;
+}
+
+/* ─── Glassmorphism Utilities ─────────────────────────── */
+.glass {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(161, 33, 36, 0.4);
+  box-shadow: 0 8px 32px rgba(161, 33, 36, 0.15);
+  transform: translateY(-2px);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  color: #ffffff;
+}
+
+.glass-input:focus {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #a12124;
+  box-shadow: 0 0 0 3px rgba(161, 33, 36, 0.2);
+  outline: none;
+}
+
+.glass-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.glass-nav {
+  background: rgba(15, 15, 26, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-badge {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* ─── Button Styles ───────────────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, #a12124 0%, #c42a2e 100%);
+  color: white;
+  font-weight: 700;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(161, 33, 36, 0.3);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #c42a2e 0%, #e83438 100%);
+  box-shadow: 0 6px 20px rgba(161, 33, 36, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ─── Hover Effect (items turn red on hover) ──────────── */
+.hover-red {
+  transition: color 0.2s ease;
+}
+
+.hover-red:hover {
+  color: #a12124 !important;
+}
+
+/* ─── Accent Glow ─────────────────────────────────────── */
+.glow-red {
+  box-shadow: 0 0 20px rgba(161, 33, 36, 0.3), 0 0 60px rgba(161, 33, 36, 0.1);
+}
+
+/* ─── Scrollbar ───────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 33, 36, 0.5);
 }

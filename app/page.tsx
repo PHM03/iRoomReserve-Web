@@ -19,27 +19,10 @@ export default function LoginPage() {
 
   const getRoleFromTab = (tab: string) => {
     switch (tab) {
-      case 'student':
-        return 'Student';
-      case 'faculty':
-        return 'Faculty';
-      case 'admin':
-        return 'Administrator';
-      default:
-        return 'Student';
-    }
-  };
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'Student':
-        return 'bg-blue-100 text-blue-800';
-      case 'Faculty':
-        return 'bg-green-100 text-green-800';
-      case 'Administrator':
-        return 'bg-red-100 text-primary';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'student': return 'Student';
+      case 'faculty': return 'Faculty';
+      case 'admin': return 'Administrator';
+      default: return 'Student';
     }
   };
 
@@ -58,16 +41,26 @@ export default function LoginPage() {
 
     try {
       const credential = await loginWithEmail(email, password);
-      // Save the selected role to the user's Firestore profile
-      await saveUserProfile(credential.user.uid, {
-        firstName: credential.user.displayName?.split(' ')[0] || '',
-        lastName: credential.user.displayName?.split(' ').slice(1).join(' ') || '',
-        email: credential.user.email || '',
-        role,
-      });
+      const { getUserProfile } = await import('@/lib/auth');
+      const userProfile = await getUserProfile(credential.user.uid);
+
+      if (userProfile?.role !== 'Super Admin') {
+        await saveUserProfile(credential.user.uid, {
+          firstName: credential.user.displayName?.split(' ')[0] || '',
+          lastName: credential.user.displayName?.split(' ').slice(1).join(' ') || '',
+          email: credential.user.email || '',
+          role,
+          status: userProfile?.status || (role === 'Student' ? 'approved' : 'pending'),
+        });
+      }
+
       setShowToast(true);
       setTimeout(() => {
-        router.push('/dashboard');
+        if (userProfile?.role === 'Super Admin') {
+          router.push('/superadmin/dashboard');
+        } else {
+          router.push('/dashboard');
+        }
       }, 1500);
     } catch (err: unknown) {
       const firebaseError = err as { code?: string };
@@ -77,65 +70,63 @@ export default function LoginPage() {
     }
   };
 
+  const tabItems = [
+    { key: 'student', label: 'Student' },
+    { key: 'faculty', label: 'Faculty' },
+    { key: 'admin', label: 'Admin' },
+  ];
+
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen flex flex-col relative overflow-hidden">
       <Toast message="Login successful!" type="success" show={showToast} onClose={handleToastClose} />
-      {/* Header with logo */}
-      <div className="bg-primary text-white p-4">
+
+      {/* Decorative background orbs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-secondary/10 blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-3xl" />
+      </div>
+
+      {/* Header */}
+      <div className="glass-nav py-4 px-4 relative z-10">
         <div className="max-w-md mx-auto">
-          <h1 className="text-xl font-bold">iRoomReserve</h1>
-          <p className="text-sm opacity-90">St. Dominic College of Asia</p>
+          <h1 className="text-xl font-bold text-white">iRoomReserve</h1>
+          <p className="text-sm text-white/60">St. Dominic College of Asia</p>
         </div>
       </div>
 
       {/* Login card */}
-      <div className="flex-1 flex items-center justify-center px-4 py-8">
-        <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md">
-          <h2 className="text-2xl font-semibold text-dark mb-4 text-center">Sign In</h2>
+      <div className="flex-1 flex items-center justify-center px-4 py-8 relative z-10">
+        <div className="glass-card p-8 w-full max-w-md">
+          <h2 className="text-2xl font-bold text-white mb-6 text-center">Sign In</h2>
 
           {/* Role Tabs */}
-          <div className="flex mb-6 border-b border-gray-200">
-            <button
-              type="button"
-              onClick={() => setSelectedTab('student')}
-              className={`flex-1 py-2 px-4 text-center font-medium text-sm transition-colors ${selectedTab === 'student'
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-secondary hover:text-dark'
+          <div className="flex mb-6 bg-white/5 rounded-xl p-1 border border-white/10">
+            {tabItems.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setSelectedTab(tab.key)}
+                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all ${
+                  selectedTab === tab.key
+                    ? 'bg-primary text-white shadow-lg shadow-primary/30'
+                    : 'text-white/50 hover:text-white hover:bg-white/5'
                 }`}
-            >
-              Student
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedTab('faculty')}
-              className={`flex-1 py-2 px-4 text-center font-medium text-sm transition-colors ${selectedTab === 'faculty'
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-secondary hover:text-dark'
-                }`}
-            >
-              Faculty
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedTab('admin')}
-              className={`flex-1 py-2 px-4 text-center font-medium text-sm transition-colors ${selectedTab === 'admin'
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-secondary hover:text-dark'
-                }`}
-            >
-              Admin
-            </button>
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-primary text-sm">
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-dark mb-1">
+              <label htmlFor="email" className="block text-sm font-bold text-white/70 mb-1.5">
                 Email Address
               </label>
               <input
@@ -143,23 +134,14 @@ export default function LoginPage() {
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-black"
+                className="glass-input w-full px-4 py-3"
                 placeholder="Enter your email"
                 autoComplete="email"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-dark mb-1">
-                Role
-              </label>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(role)}`}>
-                {role}
-              </span>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-dark mb-1">
+              <label htmlFor="password" className="block text-sm font-bold text-white/70 mb-1.5">
                 Password
               </label>
               <div className="relative">
@@ -168,14 +150,14 @@ export default function LoginPage() {
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-black"
+                  className="glass-input w-full px-4 py-3 pr-12"
                   placeholder="Enter your password"
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-secondary hover:text-dark transition-colors"
+                  className="absolute inset-y-0 right-0 flex items-center pr-4 text-white/40 hover:text-primary transition-colors"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
@@ -193,7 +175,7 @@ export default function LoginPage() {
             </div>
 
             <div className="flex justify-end">
-              <a href="#" className="text-sm text-primary hover:text-primary-hover">
+              <a href="#" className="text-sm text-white/50 hover:text-primary transition-colors font-bold">
                 Forgot Password?
               </a>
             </div>
@@ -201,7 +183,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center py-2 px-4 bg-primary text-white font-medium rounded-md hover:bg-primary-hover transition-colors disabled:opacity-50"
+              className="btn-primary w-full flex items-center justify-center py-3 px-4"
             >
               {loading ? (
                 <>
@@ -217,27 +199,20 @@ export default function LoginPage() {
             </button>
           </form>
 
-
-          <div className="flex items-center my-5">
-            <div className="flex-1 border-t border-gray-300"></div>
-            <span className="px-3 text-sm text-secondary">or</span>
-            <div className="flex-1 border-t border-gray-300"></div>
+          {/* Divider */}
+          <div className="flex items-center my-6">
+            <div className="flex-1 border-t border-white/10" />
+            <span className="px-3 text-sm text-white/30">or</span>
+            <div className="flex-1 border-t border-white/10" />
           </div>
 
-
+          {/* Google Sign-In */}
           <button
             type="button"
             onClick={async () => {
               setError('');
               try {
-                const result = await loginWithGoogle(role);
-                // Also save role for email/password Google users
-                await saveUserProfile(result.user.uid, {
-                  firstName: result.user.displayName?.split(' ')[0] || '',
-                  lastName: result.user.displayName?.split(' ').slice(1).join(' ') || '',
-                  email: result.user.email || '',
-                  role,
-                });
+                await loginWithGoogle(role);
                 setShowToast(true);
                 setTimeout(() => {
                   router.push('/dashboard');
@@ -247,7 +222,7 @@ export default function LoginPage() {
                 setError(getAuthErrorMessage(firebaseError.code || ''));
               }
             }}
-            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white border border-gray-300 rounded-md font-medium text-dark hover:bg-gray-50 hover:shadow-sm transition-all"
+            className="glass-card w-full flex items-center justify-center gap-3 py-3 px-4 font-bold text-white/80 hover:text-white cursor-pointer !border-white/15"
           >
             <svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
               <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
@@ -258,15 +233,13 @@ export default function LoginPage() {
             Continue with Google
           </button>
 
-
-          <p className="mt-5 text-center text-sm text-secondary">
+          {/* Register link */}
+          <p className="mt-5 text-center text-sm text-white/40">
             Don&apos;t have an account?{' '}
             <button
               type="button"
-              onClick={() => {
-                router.push(`/register?role=${selectedTab}`);
-              }}
-              className="font-semibold text-primary hover:text-primary-hover transition-colors"
+              onClick={() => router.push(`/register?role=${selectedTab}`)}
+              className="font-bold text-primary hover:text-primary-hover transition-colors"
             >
               Register
             </button>
@@ -274,9 +247,9 @@ export default function LoginPage() {
         </div>
       </div>
 
-
-      <div className="bg-gray-50 py-4">
-        <div className="max-w-md mx-auto text-center text-xs text-secondary">
+      {/* Footer */}
+      <div className="glass-nav py-4 relative z-10">
+        <div className="max-w-md mx-auto text-center text-xs text-white/30 font-bold">
           iRoomReserve v1.0 — SDCA Capstone Project
         </div>
       </div>

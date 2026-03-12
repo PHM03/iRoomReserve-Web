@@ -13,20 +13,20 @@ const RoomCard: React.FC<RoomCardProps> = ({ name, floor, status }) => {
   const isAvailable = status === 'Available';
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-shadow">
-      <div className="flex justify-between items-start mb-3">
+    <div className="glass-card p-5">
+      <div className="flex justify-between items-start mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">{name}</h3>
-          <p className="text-sm text-gray-500">{floor}</p>
+          <h3 className="text-lg font-bold text-white">{name}</h3>
+          <p className="text-sm text-white/40">{floor}</p>
         </div>
         <StatusBadge status={status} />
       </div>
       <button
         disabled={!isAvailable}
-        className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
+        className={`w-full py-2.5 px-4 rounded-xl font-bold transition-all ${
           isAvailable
-            ? 'bg-red-700 text-white hover:bg-red-800'
-            : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+            ? 'btn-primary'
+            : 'bg-white/5 text-white/30 cursor-not-allowed border border-white/10'
         }`}
       >
         Reserve

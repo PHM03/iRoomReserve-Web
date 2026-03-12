@@ -10,6 +10,7 @@ interface UserProfile {
   lastName: string;
   email: string;
   role: string;
+  status: string;
 }
 
 interface AuthContextType {
@@ -45,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             lastName: data.lastName,
             email: data.email,
             role: data.role || 'Student',
+            status: data.status || 'approved',
           });
         } else {
           setProfile(null);
