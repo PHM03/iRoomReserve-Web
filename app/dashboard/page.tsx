@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import NavBar from '@/components/NavBar';
+import type { AdminTab } from '@/components/NavBar';
 import StudentDashboard from '@/components/dashboards/StudentDashboard';
 import FacultyDashboard from '@/components/dashboards/FacultyDashboard';
 import UtilityStaffDashboard from '@/components/dashboards/UtilityStaffDashboard';
@@ -12,6 +13,9 @@ import AdminDashboard from '@/components/dashboards/AdminDashboard';
 export default function Dashboard() {
   const { firebaseUser, profile, loading, logout } = useAuth();
   const router = useRouter();
+
+  // Admin tab state
+  const [activeTab, setActiveTab] = useState<AdminTab>('pending');
 
   // Redirect to login if not authenticated, or to superadmin dashboard if Super Admin
   useEffect(() => {
@@ -56,6 +60,7 @@ export default function Dashboard() {
   };
 
   const firstName = profile?.firstName || 'User';
+  const isAdmin = profile?.role === 'Administrator';
 
   // Render the role-specific dashboard
   const renderDashboard = () => {
@@ -65,7 +70,7 @@ export default function Dashboard() {
       case 'Utility Staff':
         return <UtilityStaffDashboard firstName={firstName} />;
       case 'Administrator':
-        return <AdminDashboard firstName={firstName} />;
+        return <AdminDashboard firstName={firstName} activeTab={activeTab} />;
       case 'Student':
       default:
         return <StudentDashboard firstName={firstName} />;
@@ -80,7 +85,11 @@ export default function Dashboard() {
         <div className="absolute bottom-20 -left-40 w-96 h-96 rounded-full bg-secondary/8 blur-3xl" />
       </div>
 
-      <NavBar user={user} onLogout={logout} />
+      <NavBar
+        user={user}
+        onLogout={logout}
+        {...(isAdmin ? { activeTab, onTabChange: setActiveTab } : {})}
+      />
       {renderDashboard()}
     </div>
   );

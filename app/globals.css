@@ -149,3 +149,10 @@ input, select, textarea {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(161, 33, 36, 0.5);
 }
+
+/* ─── Select Option Styles (dark theme) ──────────────── */
+select option {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  padding: 8px;
+}
