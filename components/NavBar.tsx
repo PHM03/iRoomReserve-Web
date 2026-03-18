@@ -32,9 +32,9 @@ const NavBar: React.FC<NavBarProps> = ({ user, onLogout, activeTab, onTabChange 
     switch (user.role.toLowerCase()) {
       case 'student':
         return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-      case 'faculty':
+      case 'faculty professor':
         return 'bg-green-500/20 text-green-300 border-green-500/30';
-      case 'utility staff':
+      case 'utility':
         return 'bg-teal-500/20 text-teal-300 border-teal-500/30';
       case 'administrator':
         return 'bg-red-500/20 text-red-300 border-red-500/30';

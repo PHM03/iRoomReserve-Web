@@ -100,9 +100,11 @@ function RegisterForm() {
         message={
           determinedRole === 'Student'
             ? 'Account created! Please check your email to verify before signing in.'
-            : determinedRole === 'Utility Staff'
-              ? 'Account created as Utility Staff! Your registration is pending Super Admin approval.'
-              : 'Account created! Your registration is pending Super Admin approval.'
+            : determinedRole === 'Utility'
+              ? 'Account created as Utility! Your registration is pending Super Admin approval.'
+              : determinedRole === 'Faculty Professor'
+                ? 'Account created as Faculty Professor! Your registration is pending Super Admin approval.'
+                : 'Account created! Your registration is pending Super Admin approval.'
         }
         type="success"
         show={showToast}

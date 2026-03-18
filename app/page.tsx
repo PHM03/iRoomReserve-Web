@@ -46,11 +46,14 @@ export default function LoginPage() {
       const userProfile = await getUserProfile(credential.user.uid);
 
       if (userProfile?.role !== 'Super Admin') {
+        // Only set role on first login (when no role exists yet).
+        // On subsequent logins, preserve the stored role from registration.
+        const existingRole = userProfile?.role;
         await saveUserProfile(credential.user.uid, {
           firstName: credential.user.displayName?.split(' ')[0] || '',
           lastName: credential.user.displayName?.split(' ').slice(1).join(' ') || '',
           email: credential.user.email || '',
-          role,
+          role: existingRole || role,
           status: userProfile?.status || (role === 'Student' ? 'approved' : 'pending'),
         });
       }

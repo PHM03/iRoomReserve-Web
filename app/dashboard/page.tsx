@@ -66,8 +66,10 @@ export default function Dashboard() {
   const renderDashboard = () => {
     switch (profile?.role) {
       case 'Faculty':
+      case 'Faculty Professor':
         return <FacultyDashboard firstName={firstName} />;
       case 'Utility Staff':
+      case 'Utility':
         return <UtilityStaffDashboard firstName={firstName} />;
       case 'Administrator':
         return <AdminDashboard firstName={firstName} activeTab={activeTab} />;

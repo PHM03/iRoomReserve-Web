@@ -57,9 +57,13 @@ export async function loginWithEmail(email: string, password: string) {
     return credential;
   }
 
-  // Check approval status for Faculty, Utility Staff, and Administrator
+  // Check approval status for Faculty Professor, Utility, and Administrator
   const profile = await getUserProfile(credential.user.uid);
-  if (profile && (profile.role === "Faculty" || profile.role === "Administrator" || profile.role === "Utility Staff")) {
+  if (profile && (profile.role === "Faculty Professor" || profile.role === "Administrator" || profile.role === "Utility")) {
+    if (profile.status === "disabled") {
+      await signOut(auth);
+      throw { code: "auth/account-disabled" };
+    }
     if (profile.status === "pending") {
       await signOut(auth);
       throw { code: "auth/account-pending" };
@@ -68,6 +72,11 @@ export async function loginWithEmail(email: string, password: string) {
       await signOut(auth);
       throw { code: "auth/account-rejected" };
     }
+  }
+  // Also check disabled status for students
+  if (profile && profile.status === "disabled") {
+    await signOut(auth);
+    throw { code: "auth/account-disabled" };
   }
 
   return credential;
@@ -81,14 +90,16 @@ export async function registerWithEmail(
   lastName: string,
   role: string = "Student"
 ) {
-  // Auto-detect Utility Staff: if registering as Faculty with a non-SDCA email,
-  // the user is a Utility Staff member.
-  const actualRole = (role === "Faculty" && !isAllowedEmail(email))
-    ? "Utility Staff"
-    : role;
+  // Auto-detect role based on email domain:
+  // - Faculty tab + SDCA email → "Faculty Professor"
+  // - Faculty tab + non-SDCA email (e.g. Gmail) → "Utility"
+  let actualRole = role;
+  if (role === "Faculty") {
+    actualRole = isAllowedEmail(email) ? "Faculty Professor" : "Utility";
+  }
 
-  // Enforce SDCA email for all roles except Utility Staff
-  if (actualRole !== "Utility Staff" && !isAllowedEmail(email)) {
+  // Enforce SDCA email for all roles except Utility
+  if (actualRole !== "Utility" && !isAllowedEmail(email)) {
     throw { code: "auth/unauthorized-domain" };
   }
 
@@ -147,8 +158,12 @@ export async function loginWithGoogle(role: string = "Student") {
     status,
   });
 
-  // Check approval status for Faculty, Utility Staff, and Administrator
-  if (finalRole === "Faculty" || finalRole === "Administrator" || finalRole === "Utility Staff") {
+  // Check approval status for Faculty Professor, Utility, and Administrator
+  if (finalRole === "Faculty Professor" || finalRole === "Administrator" || finalRole === "Utility") {
+    if (status === "disabled") {
+      await signOut(auth);
+      throw { code: "auth/account-disabled" };
+    }
     if (status === "pending") {
       await signOut(auth);
       throw { code: "auth/account-pending" };
@@ -341,7 +356,7 @@ export function onUsersByStatus(
   const q = query(
     collection(db, "users"),
     where("status", "==", status),
-    where("role", "in", ["Faculty", "Administrator", "Utility Staff"])
+    where("role", "in", ["Student", "Faculty Professor", "Utility", "Administrator"])
   );
   return onSnapshot(q, (snapshot) => {
     const users: ManagedUser[] = [];
@@ -397,6 +412,55 @@ export async function rejectUser(uid: string) {
   });
 }
 
+// ─── Delete User Account ────────────────────────────────────────
+export async function deleteUserAccount(uid: string): Promise<void> {
+  const { deleteDoc } = await import("firebase/firestore");
+  await deleteDoc(doc(db, "users", uid));
+}
+
+// ─── Disable User Account ──────────────────────────────────────
+export async function disableUserAccount(uid: string): Promise<void> {
+  await updateDoc(doc(db, "users", uid), {
+    status: "disabled",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// ─── Enable User Account ───────────────────────────────────────
+export async function enableUserAccount(uid: string): Promise<void> {
+  await updateDoc(doc(db, "users", uid), {
+    status: "approved",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// ─── Real-time All Users (excluding Super Admin) ────────────────
+export function onAllUsers(
+  callback: (users: ManagedUser[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "users"),
+    where("role", "in", ["Student", "Faculty Professor", "Utility", "Administrator"])
+  );
+  return onSnapshot(q, (snapshot) => {
+    const users: ManagedUser[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      users.push({
+        uid: docSnap.id,
+        firstName: data.firstName || "",
+        lastName: data.lastName || "",
+        email: data.email || "",
+        role: data.role || "",
+        status: data.status || "",
+        assignedBuilding: data.assignedBuilding || undefined,
+        updatedAt: data.updatedAt,
+      });
+    });
+    callback(users);
+  });
+}
+
 // ─── Friendly Error Messages ────────────────────────────────────
 export function getAuthErrorMessage(code: string): string {
   console.warn("Auth error:", code);
@@ -405,6 +469,7 @@ export function getAuthErrorMessage(code: string): string {
     "auth/email-already-in-use": "This email is already registered.",
     "auth/weak-password": "Password must be at least 6 characters.",
     "auth/invalid-email": "Please enter a valid email address.",
+    "auth/account-disabled": "Your account has been disabled. Please contact the administrator.",
   };
 
   return safeMessages[code] ?? "Invalid email or password.";
