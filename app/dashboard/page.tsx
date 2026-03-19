@@ -15,7 +15,7 @@ export default function Dashboard() {
   const router = useRouter();
 
   // Admin tab state
-  const [activeTab, setActiveTab] = useState<AdminTab>('pending');
+  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
 
   // Redirect to login if not authenticated, or to superadmin dashboard if Super Admin
   useEffect(() => {

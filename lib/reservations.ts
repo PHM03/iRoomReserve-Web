@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { createNotification } from "./notifications";
+import { addRoomHistoryEntry } from "./roomHistory";
 
 // ─── Types ──────────────────────────────────────────────────────
 export interface Reservation {
@@ -163,6 +164,22 @@ export async function approveReservation(
       message: `Your reservation for ${data.roomName} on ${data.date} has been approved.`,
       buildingId: data.buildingId,
       reservationId,
+    });
+
+    // Log to room history
+    await addRoomHistoryEntry({
+      roomId: data.roomId,
+      roomName: data.roomName,
+      buildingId: data.buildingId,
+      userName: data.userName,
+      userRole: data.userRole || "Student",
+      date: data.date,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      type: "reservation",
+      purpose: data.purpose,
+      sourceId: reservationId,
+      status: "approved",
     });
   }
 }

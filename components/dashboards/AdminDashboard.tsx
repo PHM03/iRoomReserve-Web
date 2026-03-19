@@ -31,6 +31,20 @@ import {
   respondToFeedback,
 } from '@/lib/feedback';
 import { getBuildingById } from '@/lib/buildings';
+import {
+  Schedule,
+  ScheduleInput,
+  addSchedule,
+  updateSchedule,
+  deleteSchedule,
+  onSchedulesByBuilding,
+  isRoomInClass,
+  DAY_NAMES,
+} from '@/lib/schedules';
+import {
+  RoomHistoryEntry,
+  onRoomHistoryByBuilding,
+} from '@/lib/roomHistory';
 
 // ─── Helpers ────────────────────────────────────────────────────
 function RoleBadge({ role }: { role: string }) {
@@ -125,6 +139,22 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   // History filter state
   const [historyFilter, setHistoryFilter] = useState<string>('all');
   const [historySearch, setHistorySearch] = useState('');
+  const [historyTypeFilter, setHistoryTypeFilter] = useState<string>('all');
+
+  // Schedules state
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [roomHistory, setRoomHistory] = useState<RoomHistoryEntry[]>([]);
+
+  // Schedule form state
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [schedRoomId, setSchedRoomId] = useState('');
+  const [schedSubject, setSchedSubject] = useState('');
+  const [schedInstructor, setSchedInstructor] = useState('');
+  const [schedDay, setSchedDay] = useState<number>(1);
+  const [schedStart, setSchedStart] = useState('');
+  const [schedEnd, setSchedEnd] = useState('');
+  const [addingSchedule, setAddingSchedule] = useState(false);
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
 
   // ─── Real-time Listeners ────────────────────────────────────
   useEffect(() => {
@@ -135,6 +165,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     const unsubRooms = onRoomsByBuilding(buildingId, (r) => setRooms(r));
     const unsubFeedback = onFeedbackByBuilding(buildingId, setFeedbackList);
     const unsubNotifs = onUnreadNotifications(firebaseUser.uid, setNotifications);
+    const unsubSchedules = onSchedulesByBuilding(buildingId, setSchedules);
+    const unsubHistory = onRoomHistoryByBuilding(buildingId, setRoomHistory);
 
     return () => {
       unsubReservations();
@@ -142,8 +174,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       unsubRooms();
       unsubFeedback();
       unsubNotifs();
+      unsubSchedules();
+      unsubHistory();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildingId, firebaseUser?.uid]);
 
   // Load building floors when on add-rooms tab
@@ -229,7 +263,12 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   };
 
   const handleStatusChange = async (roomId: string, status: Room['status']) => {
-    try { await updateRoomStatus(roomId, status); } catch (err) { console.warn('Failed to update status:', err); }
+    try {
+      await updateRoomStatus(roomId, status);
+    } catch (err) {
+      console.warn('Failed to update status:', err);
+      alert('Failed to update room status. Check the console for details.');
+    }
   };
 
   const handleRespondFeedback = async (feedbackId: string) => {
@@ -243,9 +282,93 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     }
   };
 
+  const handleAddSchedule = async () => {
+    if (!buildingId || !schedRoomId || !schedSubject.trim() || !schedInstructor.trim() || !schedStart || !schedEnd) return;
+    setAddingSchedule(true);
+    try {
+      const room = rooms.find((r) => r.id === schedRoomId);
+      if (editingScheduleId) {
+        await updateSchedule(editingScheduleId, {
+          roomId: schedRoomId,
+          roomName: room?.name || '',
+          subjectName: schedSubject.trim(),
+          instructorName: schedInstructor.trim(),
+          dayOfWeek: schedDay,
+          startTime: schedStart,
+          endTime: schedEnd,
+        });
+        setEditingScheduleId(null);
+      } else {
+        const data: ScheduleInput = {
+          roomId: schedRoomId,
+          roomName: room?.name || '',
+          buildingId,
+          subjectName: schedSubject.trim(),
+          instructorName: schedInstructor.trim(),
+          dayOfWeek: schedDay,
+          startTime: schedStart,
+          endTime: schedEnd,
+          createdBy: firebaseUser?.uid || '',
+        };
+        await addSchedule(data);
+      }
+      setShowScheduleForm(false);
+      setSchedRoomId('');
+      setSchedSubject('');
+      setSchedInstructor('');
+      setSchedDay(1);
+      setSchedStart('');
+      setSchedEnd('');
+    } catch (err) {
+      console.warn('Failed to save schedule:', err);
+      alert('Failed to save schedule. Check the console for details.');
+    }
+    setAddingSchedule(false);
+  };
+
+  const handleEditSchedule = (s: Schedule) => {
+    setEditingScheduleId(s.id);
+    setSchedRoomId(s.roomId);
+    setSchedSubject(s.subjectName);
+    setSchedInstructor(s.instructorName);
+    setSchedDay(s.dayOfWeek);
+    setSchedStart(s.startTime);
+    setSchedEnd(s.endTime);
+    setShowScheduleForm(true);
+  };
+
+  const handleDeleteSchedule = async (id: string) => {
+    if (!confirm('Delete this schedule?')) return;
+    try { await deleteSchedule(id); } catch (err) { console.warn('Failed to delete schedule:', err); }
+  };
+
   // ─── Computed Values ────────────────────────────────────────
-  const filteredHistory = allReservations.filter((r) => {
+  const computeEffectiveStatus = (room: Room): { status: string; detail: string } => {
+    // Manual overrides take priority
+    if (room.status === 'Unavailable') return { status: 'Unavailable', detail: 'Manual override' };
+    if (room.status === 'Occupied') return { status: 'Occupied', detail: 'Manually set' };
+    // Check active class schedules
+    const activeClass = isRoomInClass(schedules, room.id);
+    if (activeClass) return { status: 'Occupied', detail: `Class: ${activeClass.subjectName}` };
+    // Check active reservations
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    const activeReservation = allReservations.find(
+      (r) => r.roomId === room.id && r.status === 'approved' && r.date === today && r.startTime <= currentTime && r.endTime > currentTime
+    );
+    if (activeReservation) return { status: 'Occupied', detail: `Reserved: ${activeReservation.userName}` };
+    return { status: 'Available', detail: '' };
+  };
+
+  const occupiedCount = rooms.filter((r) => computeEffectiveStatus(r).status === 'Occupied').length;
+  const unavailableCount = rooms.filter((r) => r.status === 'Unavailable').length;
+  const availableCount = rooms.length - occupiedCount - unavailableCount;
+  const pendingCount = requests.length;
+
+  const filteredHistory = roomHistory.filter((r) => {
     if (historyFilter !== 'all' && r.status !== historyFilter) return false;
+    if (historyTypeFilter !== 'all' && r.type !== historyTypeFilter) return false;
     if (historySearch && !r.userName.toLowerCase().includes(historySearch.toLowerCase()) && !r.roomName.toLowerCase().includes(historySearch.toLowerCase())) return false;
     return true;
   });
@@ -303,7 +426,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
 
           {/* Notification Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 glass-card !rounded-xl overflow-hidden z-50">
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 glass-card !rounded-xl overflow-hidden z-50" style={{ background: 'rgba(15, 15, 25, 0.95)', backdropFilter: 'blur(20px)' }}>
               <div className="flex items-center justify-between p-4 border-b border-white/10">
                 <h4 className="font-bold text-white text-sm">Notifications</h4>
                 {notifications.length > 0 && (
@@ -349,30 +472,6 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
               </div>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* ─── Summary Strip ───────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <div className="glass-card p-4 border-l-4 border-green-500/60">
-          <p className="text-2xl font-bold text-green-400">{rooms.length}</p>
-          <p className="text-xs text-white/50 font-bold">Total Rooms</p>
-        </div>
-        <div className="glass-card p-4 border-l-4 border-yellow-500/60">
-          <p className="text-2xl font-bold text-yellow-400">{requests.length}</p>
-          <p className="text-xs text-white/50 font-bold">Pending Requests</p>
-        </div>
-        <div className="glass-card p-4 border-l-4 border-emerald-500/60">
-          <p className="text-2xl font-bold text-emerald-400">{rooms.filter(r => r.status === 'Available').length}</p>
-          <p className="text-xs text-white/50 font-bold">Available</p>
-        </div>
-        <div className="glass-card p-4 border-l-4 border-orange-500/60">
-          <p className="text-2xl font-bold text-orange-400">{rooms.filter(r => r.status === 'Occupied').length}</p>
-          <p className="text-xs text-white/50 font-bold">Occupied</p>
-        </div>
-        <div className="glass-card p-4 border-l-4 border-red-500/60">
-          <p className="text-2xl font-bold text-red-400">{rooms.filter(r => r.status === 'Unavailable').length}</p>
-          <p className="text-xs text-white/50 font-bold">Unavailable</p>
         </div>
       </div>
 
@@ -521,11 +620,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           key={opt}
                           type="button"
                           onClick={() => setNewRoomAcStatus(opt)}
-                          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                            newRoomAcStatus === opt
-                              ? 'bg-primary/20 text-primary border border-primary/40'
-                              : 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10 hover:text-white/60'
-                          }`}
+                          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${newRoomAcStatus === opt
+                            ? 'bg-primary/20 text-primary border border-primary/40'
+                            : 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10 hover:text-white/60'
+                            }`}
                         >
                           {opt}
                         </button>
@@ -542,11 +640,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           key={opt}
                           type="button"
                           onClick={() => setNewRoomTvStatus(opt)}
-                          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                            newRoomTvStatus === opt
-                              ? 'bg-primary/20 text-primary border border-primary/40'
-                              : 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10 hover:text-white/60'
-                          }`}
+                          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${newRoomTvStatus === opt
+                            ? 'bg-primary/20 text-primary border border-primary/40'
+                            : 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10 hover:text-white/60'
+                            }`}
                         >
                           {opt}
                         </button>
@@ -766,67 +863,100 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       )}
 
       {/* ════════════════════════════════════════════════════════════ */}
-      {/* ─── TAB: PENDING RESERVATION ────────────────────────────── */}
+      {/* ─── TAB: DASHBOARD OVERVIEW ───────────────────────────────── */}
       {/* ════════════════════════════════════════════════════════════ */}
-      {activeTab === 'pending' && (
+      {activeTab === 'dashboard' && (
         <div>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold text-white">Pending Reservation Requests</h3>
-            {requests.length > 0 && (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-                {requests.length} pending
-              </span>
-            )}
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+            <div className="glass-card p-4"><p className="text-xs text-white/40 font-bold">Total Rooms</p><p className="text-2xl font-bold text-white mt-1">{rooms.length}</p></div>
+            <div className="glass-card p-4"><p className="text-xs text-white/40 font-bold">Occupied Now</p><p className="text-2xl font-bold text-orange-400 mt-1">{occupiedCount}</p></div>
+            <div className="glass-card p-4"><p className="text-xs text-white/40 font-bold">Available</p><p className="text-2xl font-bold text-green-400 mt-1">{availableCount}</p></div>
+            <div className="glass-card p-4"><p className="text-xs text-white/40 font-bold">Pending Requests</p><p className="text-2xl font-bold text-yellow-400 mt-1">{pendingCount}</p></div>
+            <div className="glass-card p-4"><p className="text-xs text-white/40 font-bold">Unavailable</p><p className="text-2xl font-bold text-red-400 mt-1">{unavailableCount}</p></div>
           </div>
 
-          {requests.length === 0 ? (
-            <div className="glass-card p-12 text-center">
-              <div className="text-4xl mb-3">✅</div>
-              <h4 className="text-lg font-bold text-white/60 mb-1">All caught up!</h4>
-              <p className="text-sm text-white/30">No reservation requests waiting for approval.</p>
+          {/* Live Room Status Grid */}
+          <h3 className="text-lg font-bold text-white mb-4">Live Room Status <span className="text-sm text-white/30 font-normal ml-2">({buildingName})</span></h3>
+          {rooms.length === 0 ? (
+            <div className="glass-card p-8 text-center mb-8"><p className="text-sm text-white/30">No rooms configured yet.</p></div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
+              {rooms.map((room) => {
+                const effective = computeEffectiveStatus(room);
+                const borderColor = effective.status === 'Occupied' ? 'border-orange-500/40' : effective.status === 'Unavailable' ? 'border-red-500/40' : 'border-green-500/40';
+                return (
+                  <div key={room.id} className={`glass-card p-4 border-l-4 ${borderColor}`}>
+                    <div className="flex justify-between items-start">
+                      <div><h4 className="font-bold text-white">{room.name}</h4><p className="text-xs text-white/40">{room.floor} · Cap: {room.capacity}</p></div>
+                      <StatusBadge status={effective.status} />
+                    </div>
+                    {effective.detail && <p className="text-xs text-white/50 mt-2">{effective.detail}</p>}
+                  </div>
+                );
+              })}
             </div>
+          )}
+
+          {/* Today's Class Schedules */}
+          {(() => {
+            const todaySchedules = schedules.filter((s) => s.dayOfWeek === new Date().getDay());
+            return (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-white">Today&apos;s Class Schedules <span className="text-sm text-white/30 font-normal ml-1">({DAY_NAMES[new Date().getDay()]})</span></h3>
+                  <span className="text-xs text-white/30">{todaySchedules.length} class{todaySchedules.length !== 1 ? 'es' : ''}</span>
+                </div>
+                {todaySchedules.length === 0 ? (
+                  <div className="glass-card p-6 text-center mb-8"><p className="text-sm text-white/30">No classes scheduled for today.</p></div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
+                    {todaySchedules.map((s) => {
+                      const now = new Date();
+                      const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+                      const isActive = s.startTime <= currentTime && s.endTime > currentTime;
+                      return (
+                        <div key={s.id} className={`glass-card p-4 border-l-4 ${isActive ? 'border-orange-500/60' : 'border-white/10'}`}>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="text-sm font-bold text-white">{s.subjectName}</p>
+                              <p className="text-xs text-white/40 mt-0.5">{s.roomName} · {s.instructorName}</p>
+                              <p className="text-xs text-white/50 mt-1">{s.startTime} – {s.endTime}</p>
+                            </div>
+                            {isActive && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">In Progress</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+
+          {/* Pending Requests */}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-white">Pending Requests</h3>
+            {requests.length > 0 && <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">{requests.length} pending</span>}
+          </div>
+          {requests.length === 0 ? (
+            <div className="glass-card p-8 text-center"><p className="text-sm text-white/30">No requests waiting for approval.</p></div>
           ) : (
             <div className="space-y-3">
               {requests.map((req) => (
                 <div key={req.id} className="glass-card p-4 sm:p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="flex items-center gap-4">
-                      <div className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white font-bold text-sm shrink-0">
-                        {req.userName.split(' ').map(n => n[0]).join('').toUpperCase()}
-                      </div>
+                      <div className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white font-bold text-sm shrink-0">{req.userName.split(' ').map(n => n[0]).join('').toUpperCase()}</div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-white text-sm">{req.userName}</h4>
-                          <RoleBadge role={req.userRole} />
-                        </div>
-                        <p className="text-xs text-white/40 mt-0.5">
-                          {req.roomName} · {req.date} · {req.startTime} – {req.endTime}
-                        </p>
+                        <div className="flex items-center gap-2"><h4 className="font-bold text-white text-sm">{req.userName}</h4><RoleBadge role={req.userRole} /></div>
+                        <p className="text-xs text-white/40 mt-0.5">{req.roomName} · {req.date} · {req.startTime} – {req.endTime}</p>
                         <p className="text-xs text-white/30 mt-0.5">Purpose: {req.purpose}</p>
                       </div>
                     </div>
-
                     <div className="flex gap-2 shrink-0">
-                      <button
-                        onClick={() => handleApprove(req.id)}
-                        disabled={actionLoading === req.id}
-                        className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-bold bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-all disabled:opacity-50"
-                      >
-                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleReject(req.id)}
-                        disabled={actionLoading === req.id}
-                        className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-bold bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all disabled:opacity-50"
-                      >
-                        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        Reject
-                      </button>
+                      <button onClick={() => handleApprove(req.id)} disabled={actionLoading === req.id} className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-bold bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-all disabled:opacity-50">Approve</button>
+                      <button onClick={() => handleReject(req.id)} disabled={actionLoading === req.id} className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-bold bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all disabled:opacity-50">Reject</button>
                     </div>
                   </div>
                 </div>
@@ -837,9 +967,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       )}
 
       {/* ════════════════════════════════════════════════════════════ */}
-      {/* ─── TAB: STATUS ─────────────────────────────────────────── */}
+      {/* ─── TAB: STATUS & SCHEDULING ──────────────────────────────── */}
       {/* ════════════════════════════════════════════════════════════ */}
-      {activeTab === 'status' && (
+      {activeTab === 'status-scheduling' && (
         <div>
           <h3 className="text-xl font-bold text-white mb-6">
             Room Status Monitor
@@ -848,68 +978,113 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
 
           {rooms.length === 0 ? (
             <div className="glass-card p-12 text-center">
-              <p className="text-sm text-white/30">No rooms configured for this building yet. Add rooms first.</p>
+              <p className="text-sm text-white/30">No rooms configured. Add rooms first.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {rooms.map((room) => {
-                const statusBorder = room.status === 'Occupied'
-                  ? 'border-orange-500/40'
-                  : room.status === 'Unavailable'
-                    ? 'border-red-500/40'
-                    : 'border-green-500/40';
-
+                const effective = computeEffectiveStatus(room);
+                const statusBorder = effective.status === 'Occupied' ? 'border-orange-500/40' : effective.status === 'Unavailable' ? 'border-red-500/40' : 'border-green-500/40';
                 return (
                   <div key={room.id} className={`glass-card p-5 border-l-4 ${statusBorder}`}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h4 className="text-lg font-bold text-white">{room.name}</h4>
-                        <p className="text-sm text-white/40">{room.floor} · Cap: {room.capacity}</p>
-                      </div>
-                      <StatusBadge status={room.status} />
+                    <div className="flex justify-between items-start mb-2">
+                      <div><h4 className="text-lg font-bold text-white">{room.name}</h4><p className="text-sm text-white/40">{room.floor} · Cap: {room.capacity}</p></div>
+                      <StatusBadge status={effective.status} />
                     </div>
-                    {room.reservedBy && (
-                      <p className="text-xs text-white/30 mb-3">Reserved by: {room.reservedBy}</p>
-                    )}
-
-                    {/* Status Toggle Buttons */}
+                    {effective.detail && <p className="text-xs text-white/50 mb-2">{effective.detail}</p>}
                     <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
-                      <button
-                        onClick={() => handleStatusChange(room.id, 'Available')}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          room.status === 'Available'
-                            ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                            : 'bg-white/5 text-white/30 border border-white/10 hover:bg-green-500/10 hover:text-green-300'
-                        }`}
-                      >
-                        Available
-                      </button>
-                      <button
-                        onClick={() => handleStatusChange(room.id, 'Occupied')}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          room.status === 'Occupied'
-                            ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
-                            : 'bg-white/5 text-white/30 border border-white/10 hover:bg-orange-500/10 hover:text-orange-300'
-                        }`}
-                      >
-                        Occupied
-                      </button>
-                      <button
-                        onClick={() => handleStatusChange(room.id, 'Unavailable')}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          room.status === 'Unavailable'
-                            ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-                            : 'bg-white/5 text-white/30 border border-white/10 hover:bg-red-500/10 hover:text-red-300'
-                        }`}
-                      >
-                        Unavailable
-                      </button>
+                      <button onClick={() => handleStatusChange(room.id, 'Available')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Available' ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-green-500/10 hover:text-green-300'}`}>Available</button>
+                      <button onClick={() => handleStatusChange(room.id, 'Occupied')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Occupied' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-orange-500/10 hover:text-orange-300'}`}>Occupied</button>
+                      <button onClick={() => handleStatusChange(room.id, 'Unavailable')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Unavailable' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-red-500/10 hover:text-red-300'}`}>Unavailable</button>
                     </div>
                   </div>
                 );
               })}
             </div>
           )}
+
+          {/* ─── Class Schedule Manager ─────────────────────────────── */}
+          <div className="mt-10">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-white">Class Schedules</h3>
+              <button onClick={() => setShowScheduleForm(!showScheduleForm)} className="btn-primary px-4 py-2 text-sm">
+                {showScheduleForm ? 'Cancel' : '+ Add Schedule'}
+              </button>
+            </div>
+
+            {showScheduleForm && (
+              <div className="glass-card p-5 mb-6 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-white/50 mb-1">Room</label>
+                    <select value={schedRoomId} onChange={(e) => setSchedRoomId(e.target.value)} className="glass-input w-full px-4 py-2.5 text-sm">
+                      <option value="">Select room...</option>
+                      {rooms.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.floor})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-white/50 mb-1">Day</label>
+                    <select value={schedDay} onChange={(e) => setSchedDay(Number(e.target.value))} className="glass-input w-full px-4 py-2.5 text-sm">
+                      {DAY_NAMES.map((name, i) => <option key={i} value={i}>{name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-white/50 mb-1">Subject</label>
+                    <input value={schedSubject} onChange={(e) => setSchedSubject(e.target.value)} placeholder="e.g. IT 101" className="glass-input w-full px-4 py-2.5 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-white/50 mb-1">Instructor</label>
+                    <input value={schedInstructor} onChange={(e) => setSchedInstructor(e.target.value)} placeholder="e.g. Prof. Santos" className="glass-input w-full px-4 py-2.5 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-white/50 mb-1">Start Time</label>
+                    <input type="time" value={schedStart} onChange={(e) => setSchedStart(e.target.value)} className="glass-input w-full px-4 py-2.5 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-white/50 mb-1">End Time</label>
+                    <input type="time" value={schedEnd} onChange={(e) => setSchedEnd(e.target.value)} className="glass-input w-full px-4 py-2.5 text-sm" />
+                  </div>
+                </div>
+                <button onClick={handleAddSchedule} disabled={addingSchedule || !schedRoomId || !schedSubject.trim()} className="btn-primary px-6 py-2.5 text-sm disabled:opacity-50">
+                  {addingSchedule ? 'Saving...' : editingScheduleId ? 'Update Schedule' : 'Add Schedule'}
+                </button>
+              </div>
+            )}
+
+            {schedules.length === 0 ? (
+              <div className="glass-card p-8 text-center"><p className="text-sm text-white/30">No class schedules assigned yet.</p></div>
+            ) : (
+              <div className="space-y-4">
+                {[0, 1, 2, 3, 4, 5, 6].map((day) => {
+                  const daySchedules = schedules.filter((s) => s.dayOfWeek === day);
+                  if (daySchedules.length === 0) return null;
+                  return (
+                    <div key={day}>
+                      <h4 className="text-sm font-bold text-white/50 mb-2">{DAY_NAMES[day]}</h4>
+                      <div className="space-y-2">
+                        {daySchedules.map((s) => (
+                          <div key={s.id} className="glass-card p-4 flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-bold text-white">{s.subjectName}</p>
+                              <p className="text-xs text-white/40">{s.roomName} · {s.instructorName} · {s.startTime} – {s.endTime}</p>
+                            </div>
+                            <div className="flex gap-1">
+                              <button onClick={() => handleEditSchedule(s)} className="p-2 rounded-lg text-white/30 hover:text-primary hover:bg-primary/10 transition-all" title="Edit">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                              </button>
+                              <button onClick={() => handleDeleteSchedule(s.id)} className="p-2 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Delete">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -918,32 +1093,18 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'room-history' && (
         <div>
-          <h3 className="text-xl font-bold text-white mb-6">Reservation History</h3>
+          <h3 className="text-xl font-bold text-white mb-6">Room History</h3>
 
           {/* Filters */}
           <div className="glass-card p-4 mb-6">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
-                <input
-                  type="text"
-                  value={historySearch}
-                  onChange={(e) => setHistorySearch(e.target.value)}
-                  placeholder="Search by name or room..."
-                  className="glass-input w-full px-4 py-2.5 text-sm"
-                />
+                <input type="text" value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} placeholder="Search by name or room..." className="glass-input w-full px-4 py-2.5 text-sm" />
               </div>
-              <div className="flex gap-2">
-                {['all', 'approved', 'rejected', 'pending', 'completed'].map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => setHistoryFilter(filter)}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold capitalize transition-all ${
-                      historyFilter === filter
-                        ? 'bg-primary/20 text-primary border border-primary/30'
-                        : 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10'
-                    }`}
-                  >
-                    {filter}
+              <div className="flex gap-2 flex-wrap items-center">
+                {['all', 'approved', 'rejected', 'active', 'completed', 'cancelled'].map((filter) => (
+                  <button key={filter} onClick={() => setHistoryFilter(filter)} className={`px-3 py-2 rounded-lg text-xs font-bold capitalize transition-all ${historyFilter === filter ? 'bg-primary/20 text-primary border border-primary/30' : 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10'}`}>
+                    {filter === 'all' ? 'All Status' : filter}
                   </button>
                 ))}
               </div>
@@ -969,6 +1130,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                     <tr className="border-b border-white/10">
                       <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">User</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">Room</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">Type</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">Date</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">Time</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-white/50 uppercase tracking-wider">Purpose</th>
@@ -985,6 +1147,11 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-white/60">{res.roomName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${res.type === 'reservation' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-purple-500/20 text-purple-300 border-purple-500/30'}`}>
+                            {res.type === 'reservation' ? 'Reservation' : 'Class'}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-white/60">{res.date}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-white/60">{res.startTime} – {res.endTime}</td>
                         <td className="px-6 py-4 text-sm text-white/40 max-w-[200px] truncate">{res.purpose}</td>
@@ -1012,6 +1179,12 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                         <span className="font-bold text-white/70">{res.roomName}</span>
                       </div>
                       <div className="flex justify-between">
+                        <span className="text-white/40">Type:</span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${res.type === 'reservation' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-purple-500/20 text-purple-300 border-purple-500/30'}`}>
+                          {res.type === 'reservation' ? 'Reservation' : 'Class'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
                         <span className="text-white/40">Date:</span>
                         <span className="text-white/70">{res.date}</span>
                       </div>
@@ -1031,7 +1204,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           )}
 
           <div className="mt-4 text-center">
-            <p className="text-xs text-white/20">Showing {filteredHistory.length} of {allReservations.length} reservations</p>
+            <p className="text-xs text-white/20">Showing {filteredHistory.length} of {roomHistory.length} entries</p>
           </div>
         </div>
       )}
