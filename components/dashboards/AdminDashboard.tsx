@@ -136,6 +136,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
 
+  // Room search & filter state
+  const [roomSearch, setRoomSearch] = useState('');
+  const [roomFloorFilter, setRoomFloorFilter] = useState<string>('all');
+
   // History filter state
   const [historyFilter, setHistoryFilter] = useState<string>('all');
   const [historySearch, setHistorySearch] = useState('');
@@ -365,6 +369,22 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   const unavailableCount = rooms.filter((r) => r.status === 'Unavailable').length;
   const availableCount = rooms.length - occupiedCount - unavailableCount;
   const pendingCount = requests.length;
+
+  // Filtered rooms for search & floor filter
+  const uniqueFloors = Array.from(new Set(rooms.map((r) => r.floor))).sort((a, b) => {
+    const floorOrder = (f: string) => {
+      if (f.toLowerCase().includes('ground')) return 0;
+      const match = f.match(/(\d+)/);
+      return match ? parseInt(match[1]) : 999;
+    };
+    return floorOrder(a) - floorOrder(b);
+  });
+
+  const filteredRooms = rooms.filter((r) => {
+    if (roomFloorFilter !== 'all' && r.floor !== roomFloorFilter) return false;
+    if (roomSearch && !r.name.toLowerCase().includes(roomSearch.toLowerCase())) return false;
+    return true;
+  });
 
   const filteredHistory = roomHistory.filter((r) => {
     if (historyFilter !== 'all' && r.status !== historyFilter) return false;
@@ -680,6 +700,54 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             </div>
           )}
 
+          {/* ─── Search & Floor Filter ──────────────────────────── */}
+          {rooms.length > 0 && (
+            <div className="mb-6 space-y-4">
+              {/* Search Bar */}
+              <div className="relative">
+                <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={roomSearch}
+                  onChange={(e) => setRoomSearch(e.target.value)}
+                  placeholder="Search rooms by name..."
+                  className="glass-input w-full pl-10 pr-4 py-2.5 text-sm"
+                />
+              </div>
+              {/* Floor Filter Pills */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setRoomFloorFilter('all')}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                    roomFloorFilter === 'all'
+                      ? 'bg-primary/20 text-primary border border-primary/40'
+                      : 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10 hover:text-white/60'
+                  }`}
+                >
+                  All ({rooms.length})
+                </button>
+                {uniqueFloors.map((floor) => {
+                  const count = rooms.filter((r) => r.floor === floor).length;
+                  return (
+                    <button
+                      key={floor}
+                      onClick={() => setRoomFloorFilter(floor)}
+                      className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                        roomFloorFilter === floor
+                          ? 'bg-primary/20 text-primary border border-primary/40'
+                          : 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10 hover:text-white/60'
+                      }`}
+                    >
+                      {floor} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Room List */}
           {rooms.length === 0 && addRoomStep === 0 ? (
             <div className="glass-card p-12 text-center">
@@ -687,9 +755,15 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
               <h4 className="text-lg font-bold text-white/60 mb-1">No Rooms Yet</h4>
               <p className="text-sm text-white/30">Click &quot;New Room&quot; above to add your first room.</p>
             </div>
-          ) : rooms.length > 0 && (
+          ) : filteredRooms.length === 0 && rooms.length > 0 ? (
+            <div className="glass-card p-8 text-center">
+              <div className="text-3xl mb-3">🔍</div>
+              <h4 className="text-lg font-bold text-white/60 mb-1">No Rooms Found</h4>
+              <p className="text-sm text-white/30">Try adjusting your search or filter.</p>
+            </div>
+          ) : filteredRooms.length > 0 && (
             <div className="space-y-3">
-              {rooms.map((room) => (
+              {filteredRooms.map((room) => (
                 <div key={room.id} className="glass-card p-4 sm:p-5">
                   {editingRoomId === room.id ? (
                     /* Editing Mode */
