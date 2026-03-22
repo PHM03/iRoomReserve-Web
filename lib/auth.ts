@@ -131,47 +131,43 @@ const googleProvider = new GoogleAuthProvider();
 // Restrict Google popup to only show SDCA accounts
 googleProvider.setCustomParameters({ hd: ALLOWED_DOMAIN });
 
-export async function loginWithGoogle(role: string = "Student") {
+export async function loginWithGoogle() {
   const result = await signInWithPopup(auth, googleProvider);
 
-  // Double-check the domain (user could bypass the popup hint)
   if (!result.user.email || !isAllowedEmail(result.user.email)) {
-    // Sign out the unauthorized user immediately
     await signOut(auth);
     throw { code: "auth/unauthorized-domain" };
   }
 
-  // Save profile to Firestore on first Google login
   const { uid, displayName, email } = result.user;
   const nameParts = (displayName ?? "").split(" ");
-
-  // Check if user already has a profile with a role; if not, use the provided role
   const existingProfile = await getUserProfile(uid);
-  const finalRole = existingProfile?.role || role;
-  const status = existingProfile?.status || (finalRole === "Student" ? "approved" : "pending");
 
-  await saveUserProfile(uid, {
-    firstName: nameParts[0] || "",
-    lastName: nameParts.slice(1).join(" ") || "",
-    email: email || "",
-    role: finalRole,
-    status,
-  });
+  if (existingProfile?.role) {
+    const status = existingProfile.status || (existingProfile.role === 'Student' ? 'approved' : 'pending');
 
-  // Check approval status for Faculty Professor, Utility, and Administrator
-  if (finalRole === "Faculty Professor" || finalRole === "Administrator" || finalRole === "Utility") {
-    if (status === "disabled") {
-      await signOut(auth);
-      throw { code: "auth/account-disabled" };
-    }
-    if (status === "pending") {
-      await signOut(auth);
-      throw { code: "auth/account-pending" };
-    }
-    if (status === "rejected") {
-      await signOut(auth);
-      throw { code: "auth/account-rejected" };
-    }
+    if (
+      existingProfile.role === "Faculty Professor" ||
+      existingProfile.role === "Administrator" ||
+      existingProfile.role === "Utility Staff"
+    ) {
+        if (status === "pending") {
+          await signOut(auth);
+          throw { code: "auth/account-pending" };
+        }
+        if (status === "rejected") {
+          await signOut(auth);
+          throw { code: "auth/account-rejected" };
+        }
+      }
+
+    await saveUserProfile(uid, {
+      firstName: nameParts[0] || "",
+      lastName: nameParts.slice(1).join(" ") || "",
+      email: email || "",
+      role: existingProfile.role,
+      status,
+    });
   }
 
   return result;
@@ -467,7 +463,6 @@ export function onAllUsers(
   });
 }
 
-// ─── Friendly Error Messages ────────────────────────────────────
 export function getAuthErrorMessage(code: string): string {
   console.warn("Auth error:", code);
 
@@ -476,6 +471,10 @@ export function getAuthErrorMessage(code: string): string {
     "auth/weak-password": "Password must be at least 6 characters.",
     "auth/invalid-email": "Please enter a valid email address.",
     "auth/account-disabled": "Your account has been disabled. Please contact the administrator.",
+    "auth/email-not-verified": "Please verify your email before logging in.",
+    "auth/account-pending": "Your account is pending approval.",
+    "auth/account-rejected": "Your account has been rejected.",
+    "auth/unauthorized-domain": "Please use your SDCA email address.",
   };
 
   return safeMessages[code] ?? "Invalid email or password.";

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { saveUserProfile } from '@/lib/auth';
+import { saveUserProfile, logout } from '@/lib/auth';
 
 export default function RoleSelectionPage() {
   const { firebaseUser, profile } = useAuth();
@@ -13,21 +13,30 @@ export default function RoleSelectionPage() {
 
   const roles = [
     { key: 'Student', label: 'Student', description: 'Browse and reserve rooms for study or group work' },
-    { key: 'Faculty', label: 'Faculty', description: 'Reserve rooms for classes or faculty meetings' },
-    { key: 'Utility Staff', label: 'Utility Staff', description: 'Manage and monitor room availability' },
+    { key: 'Faculty Professor', label: 'Faculty Professor', description: 'Reserve rooms for classes or faculty meetings' },
+    { key: 'Utility Staff', label: 'Utility Staff', description: 'Manage room equipment and facilities' },
   ];
 
   const handleConfirm = async () => {
     if (!firebaseUser) return;
     setLoading(true);
     try {
+      const status = selectedRole === 'Student' ? 'approved' : 'pending';
+
       await saveUserProfile(firebaseUser.uid, {
         firstName: profile?.firstName || firebaseUser.displayName?.split(' ')[0] || '',
         lastName: profile?.lastName || firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
         email: firebaseUser.email || '',
         role: selectedRole,
-        status: selectedRole === 'Student' ? 'approved' : 'pending',
+        status,
       });
+
+      if (selectedRole === 'Student') {
+        router.push('/dashboard');
+      } else {
+        await logout();
+        router.push('/?pending=true');
+      }
       router.push('/dashboard');
     } finally {
       setLoading(false);

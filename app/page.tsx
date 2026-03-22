@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Toast from '@/components/Toast';
-import { loginWithEmail, loginWithGoogle, saveUserProfile, getAuthErrorMessage, resendVerificationEmail, getUserProfile } from '@/lib/auth';
+import { loginWithEmail, loginWithGoogle, saveUserProfile, getAuthErrorMessage, resendVerificationEmail, getUserProfile, logout } from '@/lib/auth';
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const isPending = searchParams.get('pending') === 'true';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -69,15 +71,29 @@ export default function LoginPage() {
     try {
       const result = await loginWithGoogle();
       const userProfile = await getUserProfile(result.user.uid);
+
+      if (!userProfile?.role) {
+        router.push('/role-selection');
+        return;
+      }
+
+      if (userProfile.status === 'pending') {
+        await logout();
+        setErrorMessage(getAuthErrorMessage('auth/account-pending'));
+        return;
+      }
+
+      if (userProfile.status === 'rejected') {
+        await logout();
+        setErrorMessage(getAuthErrorMessage('auth/account-rejected'));
+        return;
+      }
+
       setToastMessage('Login successful!');
       setShowToast(true);
       setTimeout(() => {
-        if (!userProfile?.role) {
-          router.push('/role-selection');
-        } else {
           router.push('/dashboard');
-        }
-      }, 1500);
+        }, 1500);
     } catch (error: unknown) {
       const firebaseError = error as { code?: string };
       setErrorMessage(getAuthErrorMessage(firebaseError.code || ''));
@@ -133,6 +149,12 @@ export default function LoginPage() {
                   Resend verification email
                 </button>
               )}
+            </div>
+          )}
+
+          {isPending && (
+            <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-300 text-sm">
+              Your account is pending Super Admin approval. You will be notified once approved.
             </div>
           )}
 
@@ -258,5 +280,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white/50">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }
