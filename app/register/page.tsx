@@ -19,7 +19,8 @@ function RegisterForm() {
     }
   };
 
-  const role = getRoleDisplayName(roleParam);
+  const [selectedRole, setSelectedRole] = useState(roleParam);
+  const role = getRoleDisplayName(selectedRole);
   const isFacultyFlow = roleParam === 'faculty' || roleParam === 'utility_staff';
 
   const [firstName, setFirstName] = useState('');
@@ -99,12 +100,12 @@ function RegisterForm() {
       <Toast
         message={
           determinedRole === 'Student'
-            ? 'Account created! Please check your email to verify before signing in.'
+            ? 'Account created! Please check your inbox or spam folder to verify your email before signing in.'
             : determinedRole === 'Utility'
-              ? 'Account created as Utility! Your registration is pending Super Admin approval.'
+              ? 'Account created as Utility! Your registration is pending for Admin approval.'
               : determinedRole === 'Faculty Professor'
-                ? 'Account created as Faculty Professor! Your registration is pending Super Admin approval.'
-                : 'Account created! Your registration is pending Super Admin approval.'
+                ? 'Account created as Faculty Professor! Your registration is pending for Admin approval.'
+                : 'Account created! Your registration is pending for Admin approval.'
         }
         type="success"
         show={showToast}
@@ -131,11 +132,26 @@ function RegisterForm() {
           <h2 className="text-2xl font-bold text-white mb-2 text-center">Create Account</h2>
           <p className="text-sm text-white/50 text-center mb-4">Fill in your details to get started</p>
 
-          {/* Role badge */}
-          <div className="flex justify-center mb-4">
-            <span className="glass-badge inline-flex items-center px-4 py-1.5 rounded-full text-sm font-bold text-white/80">
-              Registering as: {role}
-            </span>
+          {/* Role Tabs */}
+          <div className="flex mb-4 bg-white/5 rounded-xl p-1 border border-white/10">
+            {[
+              { key: 'student', label: 'Student' },
+              { key: 'faculty', label: 'Faculty' },
+              { key: 'utility_staff', label: 'Utility Staff' },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setSelectedRole(tab.key)}
+                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all ${
+                  selectedRole === tab.key
+                    ? 'bg-primary text-white shadow-lg shadow-primary/30'
+                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           {errorMessage && (

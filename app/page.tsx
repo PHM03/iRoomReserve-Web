@@ -3,8 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Toast from '@/components/Toast';
-import { loginWithEmail, loginWithGoogle, saveUserProfile, getAuthErrorMessage } from '@/lib/auth';
-import { error } from 'console';
+import { loginWithEmail, loginWithGoogle, saveUserProfile, getAuthErrorMessage, resendVerificationEmail, getUserProfile } from '@/lib/auth';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -12,22 +11,12 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [selectedTab, setSelectedTab] = useState('student');
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('Login successful!');
+  const [showResendButton, setShowResendButton] = useState(false);
   const router = useRouter();
 
   const handleToastClose = useCallback(() => setShowToast(false), []);
-
-  const getRoleFromTab = (tab: string) => {
-    switch (tab) {
-      case 'student': return 'Student';
-      case 'faculty': return 'Faculty';
-      case 'admin': return 'Administrator';
-      default: return 'Student';
-    }
-  };
-
-  const role = getRoleFromTab(selectedTab);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,22 +31,21 @@ export default function LoginPage() {
 
     try {
       const credential = await loginWithEmail(email, password);
-      const { getUserProfile } = await import('@/lib/auth');
       const userProfile = await getUserProfile(credential.user.uid);
 
       if (userProfile?.role !== 'Super Admin') {
-        // Only set role on first login (when no role exists yet).
-        // On subsequent logins, preserve the stored role from registration.
         const existingRole = userProfile?.role;
-        await saveUserProfile(credential.user.uid, {
-          firstName: credential.user.displayName?.split(' ')[0] || '',
-          lastName: credential.user.displayName?.split(' ').slice(1).join(' ') || '',
-          email: credential.user.email || '',
-          role: existingRole || role,
-          status: userProfile?.status || (role === 'Student' ? 'approved' : 'pending'),
-        });
+        if (existingRole) {
+          await saveUserProfile(credential.user.uid, {
+            firstName: credential.user.displayName?.split(' ')[0] || '',
+            lastName: credential.user.displayName?.split(' ').slice(1).join(' ') || '',
+            email: credential.user.email || '',
+            role: existingRole,
+            status: userProfile?.status || (existingRole === 'Student' ? 'approved' : 'pending'),
+          });
+        }
       }
-
+      setToastMessage('Login successful!');
       setShowToast(true);
       setTimeout(() => {
         if (userProfile?.role === 'Super Admin') {
@@ -68,25 +56,27 @@ export default function LoginPage() {
       }, 1500);
     } catch (err: unknown) {
       const firebaseError = err as { code?: string };
-      setErrorMessage(getAuthErrorMessage(firebaseError.code || ''));
+      const code = firebaseError.code || '';
+      setErrorMessage(getAuthErrorMessage(code));
+      setShowResendButton(code === 'auth/email-not-verified');
     } finally {
       setLoading(false);
     }
   };
 
-  const tabItems = [
-    { key: 'student', label: 'Student' },
-    { key: 'faculty', label: 'Faculty' },
-    { key: 'admin', label: 'Admin' },
-  ];
-
   const handleGoogleSignIn = async () => {
     setErrorMessage('');
     try {
-      await loginWithGoogle(role);
+      const result = await loginWithGoogle();
+      const userProfile = await getUserProfile(result.user.uid);
+      setToastMessage('Login successful!');
       setShowToast(true);
       setTimeout(() => {
-        router.push('/dashboard');
+        if (!userProfile?.role) {
+          router.push('/role-selection');
+        } else {
+          router.push('/dashboard');
+        }
       }, 1500);
     } catch (error: unknown) {
       const firebaseError = error as { code?: string };
@@ -94,9 +84,22 @@ export default function LoginPage() {
     }
   };
 
+  const handleResendVerification = async () => {
+    try {
+      await resendVerificationEmail(email, password);
+      setShowResendButton(false);
+      setErrorMessage('');
+      setToastMessage('Verification email resent! Check your inbox or spam folder.');
+      setShowToast(true);
+    } catch (err: unknown) {
+      const firebaseError = err as { code?: string };
+      setErrorMessage(getAuthErrorMessage(firebaseError.code || ''));
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden">
-      <Toast message="Login successful!" type="success" show={showToast} onClose={handleToastClose} />
+      <Toast message={toastMessage} type="success" show={showToast} onClose={handleToastClose} />
 
       {/* Decorative background orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -118,26 +121,18 @@ export default function LoginPage() {
         <div className="glass-card p-8 w-full max-w-md">
           <h2 className="text-2xl font-bold text-white mb-6 text-center">Sign In</h2>
 
-          {/* Role Tabs */}
-          <div className="flex mb-6 bg-white/5 rounded-xl p-1 border border-white/10">
-            {tabItems.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setSelectedTab(tab.key)}
-                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all ${selectedTab === tab.key
-                  ? 'bg-primary text-white shadow-lg shadow-primary/30'
-                  : 'text-white/50 hover:text-white hover:bg-white/5'
-                  }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
           {errorMessage && (
             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm">
               {errorMessage}
+              {showResendButton && (
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  className="block mt-2 text-primary hover:text-primary-hover font-bold transition-colors"
+                >
+                  Resend verification email
+                </button>
+              )}
             </div>
           )}
 
@@ -247,7 +242,7 @@ export default function LoginPage() {
             Don&apos;t have an account?{' '}
             <button
               type="button"
-              onClick={() => router.push(`/register?role=${selectedTab}`)}
+              onClick={() => router.push(`/register`)}
               className="font-bold text-primary hover:text-primary-hover transition-colors"
             >
               Register
