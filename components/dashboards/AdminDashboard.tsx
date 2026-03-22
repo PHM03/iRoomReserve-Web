@@ -40,6 +40,7 @@ import {
   onSchedulesByBuilding,
   isRoomInClass,
   DAY_NAMES,
+  formatTime12h,
 } from '@/lib/schedules';
 import {
   RoomHistoryEntry,
@@ -995,7 +996,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                             <div>
                               <p className="text-sm font-bold text-white">{s.subjectName}</p>
                               <p className="text-xs text-white/40 mt-0.5">{s.roomName} · {s.instructorName}</p>
-                              <p className="text-xs text-white/50 mt-1">{s.startTime} – {s.endTime}</p>
+                              <p className="text-xs text-white/50 mt-1">{formatTime12h(s.startTime)} – {formatTime12h(s.endTime)}</p>
                             </div>
                             {isActive && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">In Progress</span>}
                           </div>
@@ -1081,7 +1082,20 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           <div className="mt-10">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-white">Class Schedules</h3>
-              <button onClick={() => setShowScheduleForm(!showScheduleForm)} className="btn-primary px-4 py-2 text-sm">
+              <button onClick={() => {
+                if (showScheduleForm) {
+                  setShowScheduleForm(false);
+                  setEditingScheduleId(null);
+                  setSchedRoomId('');
+                  setSchedSubject('');
+                  setSchedInstructor('');
+                  setSchedDay(1);
+                  setSchedStart('');
+                  setSchedEnd('');
+                } else {
+                  setShowScheduleForm(true);
+                }
+              }} className="btn-primary px-4 py-2 text-sm">
                 {showScheduleForm ? 'Cancel' : '+ Add Schedule'}
               </button>
             </div>
@@ -1140,7 +1154,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           <div key={s.id} className="glass-card p-4 flex items-center justify-between">
                             <div>
                               <p className="text-sm font-bold text-white">{s.subjectName}</p>
-                              <p className="text-xs text-white/40">{s.roomName} · {s.instructorName} · {s.startTime} – {s.endTime}</p>
+                              <p className="text-xs text-white/40">{s.roomName} · {s.instructorName} · {formatTime12h(s.startTime)} – {formatTime12h(s.endTime)}</p>
                             </div>
                             <div className="flex gap-1">
                               <button onClick={() => handleEditSchedule(s)} className="p-2 rounded-lg text-white/30 hover:text-primary hover:bg-primary/10 transition-all" title="Edit">

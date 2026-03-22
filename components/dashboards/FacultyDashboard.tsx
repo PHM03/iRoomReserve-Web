@@ -12,7 +12,7 @@ import {
   markAllNotificationsRead,
   Notification,
 } from '@/lib/notifications';
-import { onAllSchedules, Schedule, DAY_NAMES } from '@/lib/schedules';
+import { onAllSchedules, Schedule, DAY_NAMES, formatTime12h } from '@/lib/schedules';
 import Link from 'next/link';
 
 // ─── Status Badge ───────────────────────────────────────────────
@@ -348,7 +348,7 @@ export default function FacultyDashboard({ firstName }: FacultyDashboardProps) {
                         <p className="text-xs text-white/40 mt-0.5">{sched.instructorName}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-primary">{sched.startTime} – {sched.endTime}</p>
+                        <p className="text-sm font-bold text-primary">{formatTime12h(sched.startTime)} – {formatTime12h(sched.endTime)}</p>
                         <p className="text-[10px] text-white/30">{sched.roomName}</p>
                       </div>
                     </div>
