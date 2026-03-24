@@ -1,21 +1,16 @@
 import {
   collection,
-  doc,
-  addDoc,
-  updateDoc,
-  query,
-  where,
-  orderBy,
-  serverTimestamp,
   onSnapshot,
-  Unsubscribe,
+  orderBy,
+  query,
   Timestamp,
-  getDocs,
+  Unsubscribe,
+  where,
 } from "firebase/firestore";
-import { db } from "./firebase";
-import { createNotification } from "./notifications";
 
-// ─── Types ──────────────────────────────────────────────────────
+import { apiRequest } from "@/lib/api/client";
+import { db } from "@/lib/firebase";
+
 export interface Feedback {
   id: string;
   roomId: string;
@@ -26,46 +21,27 @@ export interface Feedback {
   userId: string;
   userName: string;
   message: string;
-  rating: number; // 1-5
+  rating: number;
   adminResponse: string | null;
   respondedAt?: Timestamp | null;
   createdAt?: Timestamp;
 }
 
-export type FeedbackInput = Omit<Feedback, "id" | "adminResponse" | "respondedAt" | "createdAt">;
+export type FeedbackInput = Omit<
+  Feedback,
+  "id" | "adminResponse" | "respondedAt" | "createdAt"
+>;
 
-// ─── Create Feedback ────────────────────────────────────────────
 export async function createFeedback(data: FeedbackInput): Promise<string> {
-  const docRef = await addDoc(collection(db, "feedback"), {
-    ...data,
-    adminResponse: null,
-    respondedAt: null,
-    createdAt: serverTimestamp(),
+  const payload = await apiRequest<{ id: string }>("/api/feedback", {
+    body: data,
+    method: "POST",
+    userId: data.userId,
   });
 
-  // Notify all admins/staff assigned to this building
-  const adminsQuery = query(
-    collection(db, "users"),
-    where("assignedBuildingId", "==", data.buildingId),
-    where("status", "==", "approved")
-  );
-  const adminsSnap = await getDocs(adminsQuery);
-
-  for (const adminDoc of adminsSnap.docs) {
-    await createNotification({
-      recipientUid: adminDoc.id,
-      type: "feedback",
-      title: "New Room Feedback",
-      message: `${data.userName} left feedback for ${data.roomName}: "${data.message.slice(0, 60)}${data.message.length > 60 ? '...' : ''}"`,
-      buildingId: data.buildingId,
-      reservationId: docRef.id,
-    });
-  }
-
-  return docRef.id;
+  return payload.id;
 }
 
-// ─── Real-time Feedback by Building ─────────────────────────────
 export function onFeedbackByBuilding(
   buildingId: string,
   callback: (feedback: Feedback[]) => void
@@ -75,29 +51,35 @@ export function onFeedbackByBuilding(
     where("buildingId", "==", buildingId),
     orderBy("createdAt", "desc")
   );
-  return onSnapshot(q, (snapshot) => {
-    const items: Feedback[] = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    } as Feedback));
-    callback(items);
-  }, (error) => {
-    console.warn('Firestore listener error (feedback):', error);
-  });
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map(
+          (feedbackDoc) =>
+            ({
+              id: feedbackDoc.id,
+              ...feedbackDoc.data(),
+            }) as Feedback
+        )
+      );
+    },
+    (error) => {
+      console.warn("Firestore listener error (feedback):", error);
+    }
+  );
 }
 
-// ─── Respond to Feedback ────────────────────────────────────────
 export async function respondToFeedback(
   feedbackId: string,
   response: string
 ): Promise<void> {
-  await updateDoc(doc(db, "feedback", feedbackId), {
-    adminResponse: response,
-    respondedAt: serverTimestamp(),
+  await apiRequest(`/api/feedback/${feedbackId}`, {
+    body: { response },
+    method: "PATCH",
   });
 }
 
-// ─── Real-time Feedback by User ─────────────────────────────────
 export function onFeedbackByUser(
   userId: string,
   callback: (feedback: Feedback[]) => void
@@ -107,13 +89,21 @@ export function onFeedbackByUser(
     where("userId", "==", userId),
     orderBy("createdAt", "desc")
   );
-  return onSnapshot(q, (snapshot) => {
-    const items: Feedback[] = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    } as Feedback));
-    callback(items);
-  }, (error) => {
-    console.warn('Firestore listener error (feedback by user):', error);
-  });
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map(
+          (feedbackDoc) =>
+            ({
+              id: feedbackDoc.id,
+              ...feedbackDoc.data(),
+            }) as Feedback
+        )
+      );
+    },
+    (error) => {
+      console.warn("Firestore listener error (feedback by user):", error);
+    }
+  );
 }

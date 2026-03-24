@@ -1,19 +1,15 @@
 import {
   collection,
-  doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  serverTimestamp,
   onSnapshot,
+  query,
   Unsubscribe,
+  where,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "./firebase";
 
-// ─── Types ──────────────────────────────────────────────────────
+import { apiRequest } from "@/lib/api/client";
+import { db } from "@/lib/firebase";
+
 export interface Schedule {
   id: string;
   roomId: string;
@@ -21,9 +17,9 @@ export interface Schedule {
   buildingId: string;
   subjectName: string;
   instructorName: string;
-  dayOfWeek: number; // 0=Sunday, 1=Monday, ..., 6=Saturday
-  startTime: string; // "08:00" (24h)
-  endTime: string;   // "09:30" (24h)
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
   createdBy: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -31,7 +27,6 @@ export interface Schedule {
 
 export type ScheduleInput = Omit<Schedule, "id" | "createdAt" | "updatedAt">;
 
-// ─── Day-of-week helpers ────────────────────────────────────────
 export const DAY_NAMES = [
   "Sunday",
   "Monday",
@@ -42,7 +37,22 @@ export const DAY_NAMES = [
   "Saturday",
 ] as const;
 
-// ─── Format 24h → 12h AM/PM ────────────────────────────────────
+function sortSchedules(left: Schedule, right: Schedule) {
+  return (
+    left.dayOfWeek - right.dayOfWeek ||
+    left.startTime.localeCompare(right.startTime) ||
+    left.roomName.localeCompare(right.roomName)
+  );
+}
+
+function chunkValues<T>(values: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
 export function formatTime12h(time24: string): string {
   const [hStr, mStr] = time24.split(":");
   let h = parseInt(hStr, 10);
@@ -52,33 +62,31 @@ export function formatTime12h(time24: string): string {
   return `${h}:${mStr} ${suffix}`;
 }
 
-// ─── Add Schedule ───────────────────────────────────────────────
 export async function addSchedule(data: ScheduleInput): Promise<string> {
-  const docRef = await addDoc(collection(db, "schedules"), {
-    ...data,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  const payload = await apiRequest<{ id: string }>("/api/schedules", {
+    body: data,
+    method: "POST",
   });
-  return docRef.id;
+
+  return payload.id;
 }
 
-// ─── Update Schedule ────────────────────────────────────────────
 export async function updateSchedule(
   scheduleId: string,
   data: Partial<Omit<Schedule, "id" | "createdAt" | "updatedAt">>
 ): Promise<void> {
-  await updateDoc(doc(db, "schedules", scheduleId), {
-    ...data,
-    updatedAt: serverTimestamp(),
+  await apiRequest(`/api/schedules/${scheduleId}`, {
+    body: data,
+    method: "PATCH",
   });
 }
 
-// ─── Delete Schedule ────────────────────────────────────────────
 export async function deleteSchedule(scheduleId: string): Promise<void> {
-  await deleteDoc(doc(db, "schedules", scheduleId));
+  await apiRequest(`/api/schedules/${scheduleId}`, {
+    method: "DELETE",
+  });
 }
 
-// ─── Real-time Schedules by Building ────────────────────────────
 export function onSchedulesByBuilding(
   buildingId: string,
   callback: (schedules: Schedule[]) => void
@@ -91,8 +99,8 @@ export function onSchedulesByBuilding(
     q,
     (snapshot) => {
       const schedules: Schedule[] = snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() } as Schedule))
-        .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+        .map((d) => ({ id: d.id, ...d.data() }) as Schedule)
+        .sort(sortSchedules);
       callback(schedules);
     },
     (error) => {
@@ -101,7 +109,47 @@ export function onSchedulesByBuilding(
   );
 }
 
-// ─── Check if a room is currently in a scheduled class ──────────
+export function onSchedulesByBuildingIds(
+  buildingIds: string[],
+  callback: (schedules: Schedule[]) => void
+): Unsubscribe {
+  const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
+  if (uniqueBuildingIds.length === 0) {
+    callback([]);
+    return () => {};
+  }
+
+  const schedulesByChunk = new Map<number, Schedule[]>();
+  const buildingChunks = chunkValues(uniqueBuildingIds, 10);
+
+  const emit = () => {
+    callback([...schedulesByChunk.values()].flat().sort(sortSchedules));
+  };
+
+  const unsubscribers = buildingChunks.map((buildingChunk, chunkIndex) =>
+    onSnapshot(
+      query(collection(db, "schedules"), where("buildingId", "in", buildingChunk)),
+      (snapshot) => {
+        schedulesByChunk.set(
+          chunkIndex,
+          snapshot.docs.map((scheduleDoc) => ({
+            id: scheduleDoc.id,
+            ...scheduleDoc.data(),
+          })) as Schedule[]
+        );
+        emit();
+      },
+      (error) => {
+        console.warn("Firestore listener error (schedules by building ids):", error);
+      }
+    )
+  );
+
+  return () => {
+    unsubscribers.forEach((unsubscribe) => unsubscribe());
+  };
+}
+
 export function isRoomInClass(
   schedules: Schedule[],
   roomId: string,
@@ -115,16 +163,15 @@ export function isRoomInClass(
 
   return (
     schedules.find(
-      (s) =>
-        s.roomId === roomId &&
-        s.dayOfWeek === currentDay &&
-        s.startTime <= currentTime &&
-        s.endTime > currentTime
-    ) || null
+      (schedule) =>
+        schedule.roomId === roomId &&
+        schedule.dayOfWeek === currentDay &&
+        schedule.startTime <= currentTime &&
+        schedule.endTime > currentTime
+    ) ?? null
   );
 }
 
-// ─── Real-time All Schedules (for student awareness) ────────────
 export function onAllSchedules(
   callback: (schedules: Schedule[]) => void
 ): Unsubscribe {
@@ -133,8 +180,8 @@ export function onAllSchedules(
     q,
     (snapshot) => {
       const schedules: Schedule[] = snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() } as Schedule))
-        .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+        .map((d) => ({ id: d.id, ...d.data() }) as Schedule)
+        .sort(sortSchedules);
       callback(schedules);
     },
     (error) => {
