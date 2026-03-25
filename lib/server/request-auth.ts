@@ -10,6 +10,7 @@ import { getOptionalAdminAuth } from "@/lib/server/firebase-admin";
 export interface RequestAuthContext {
   uid: string | null;
   role: UserRole | null;
+  email: string | null;
   assignedBuildingId: string | null;
   verified: boolean;
 }
@@ -19,17 +20,20 @@ async function getProfileContext(uid: string) {
   if (!profileSnapshot.exists()) {
     return {
       role: null,
+      email: null,
       assignedBuildingId: null,
     };
   }
 
   const profileData = profileSnapshot.data() as {
     role?: string;
+    email?: string | null;
     assignedBuildingId?: string | null;
   };
 
   return {
     role: normalizeRole(profileData.role),
+    email: profileData.email?.trim().toLowerCase() ?? null,
     assignedBuildingId: profileData.assignedBuildingId ?? null,
   };
 }
@@ -51,6 +55,7 @@ export async function getRequestAuthContext(
         return {
           uid: decoded.uid,
           role: profileContext.role ?? fallbackRole,
+          email: profileContext.email ?? decoded.email?.trim().toLowerCase() ?? null,
           assignedBuildingId: profileContext.assignedBuildingId,
           verified: true,
         };
@@ -63,11 +68,12 @@ export async function getRequestAuthContext(
 
   const fallbackProfileContext = fallbackUid
     ? await getProfileContext(fallbackUid)
-    : { role: null, assignedBuildingId: null };
+    : { role: null, email: null, assignedBuildingId: null };
 
   return {
     uid: fallbackUid,
     role: fallbackProfileContext.role ?? fallbackRole,
+    email: fallbackProfileContext.email,
     assignedBuildingId: fallbackProfileContext.assignedBuildingId,
     verified: false,
   };

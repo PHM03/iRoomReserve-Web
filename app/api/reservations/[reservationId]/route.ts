@@ -1,16 +1,9 @@
-import { doc, getDoc } from "firebase/firestore";
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 
-import { USER_ROLES } from "@/lib/domain/roles";
 import { handleApiError, ApiError } from "@/lib/server/api-error";
-import { serverClientDb } from "@/lib/server/firebase-client";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
-import {
-  assertAuthenticated,
-  assertCanManageBuilding,
-  assertRole,
-} from "@/lib/server/route-guards";
+import { assertAuthenticated } from "@/lib/server/route-guards";
 import { roomCheckInMethodSchema } from "@/lib/server/schemas";
 import {
   approveReservationRecord,
@@ -24,9 +17,12 @@ import {
 const reservationActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("approve"),
+    userEmail: z.email(),
   }),
   z.object({
     action: z.literal("reject"),
+    userEmail: z.email(),
+    reason: z.string().trim().min(1),
   }),
   z.object({
     action: z.literal("cancel"),
@@ -47,17 +43,6 @@ const reservationActionSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-async function getReservationBuildingId(reservationId: string) {
-  const reservationSnapshot = await getDoc(
-    doc(serverClientDb, "reservations", reservationId)
-  );
-  if (!reservationSnapshot.exists()) {
-    throw new ApiError(404, "not_found", "Reservation not found.");
-  }
-
-  return (reservationSnapshot.data() as { buildingId?: string }).buildingId;
-}
-
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ reservationId: string }> }
@@ -71,23 +56,27 @@ export async function PATCH(
 
     switch (payload.action) {
       case "approve": {
-        assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
-        const buildingId = await getReservationBuildingId(reservationId);
-        if (!buildingId) {
-          throw new ApiError(400, "missing_building", "Reservation is missing a building.");
+        if (!authContext.email) {
+          throw new ApiError(400, "missing_email", "Authenticated user email is required.");
         }
-        assertCanManageBuilding(authContext, buildingId);
-        await approveReservationRecord(reservationId);
+        if (authContext.email !== payload.userEmail.trim().toLowerCase()) {
+          throw new ApiError(403, "forbidden", "Approver email does not match the authenticated user.");
+        }
+        await approveReservationRecord(reservationId, authContext.email);
         break;
       }
       case "reject": {
-        assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
-        const buildingId = await getReservationBuildingId(reservationId);
-        if (!buildingId) {
-          throw new ApiError(400, "missing_building", "Reservation is missing a building.");
+        if (!authContext.email) {
+          throw new ApiError(400, "missing_email", "Authenticated user email is required.");
         }
-        assertCanManageBuilding(authContext, buildingId);
-        await rejectReservationRecord(reservationId);
+        if (authContext.email !== payload.userEmail.trim().toLowerCase()) {
+          throw new ApiError(403, "forbidden", "Approver email does not match the authenticated user.");
+        }
+        await rejectReservationRecord(
+          reservationId,
+          authContext.email,
+          payload.reason
+        );
         break;
       }
       case "cancel":

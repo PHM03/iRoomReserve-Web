@@ -335,6 +335,7 @@ export async function saveUserProfile(
     doc(db, "users", uid),
     {
       ...data,
+      email: data.email.toLowerCase(),
       ...(data.role ? { role: normalizeRole(data.role) ?? data.role } : {}),
       updatedAt: serverTimestamp(),
     },

@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { getBuildings, Building } from '@/lib/buildings';
+import { type ReservationCampus } from '@/lib/campuses';
+import { normalizeRole, USER_ROLES } from '@/lib/domain/roles';
 import { createReservation, createRecurringReservation } from '@/lib/reservations';
 import { onAvailableRoomsByBuilding } from '@/lib/rooms';
 
@@ -15,6 +17,15 @@ interface Room {
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MAIN_APPROVAL_EMAIL_FIELDS = [
+  { key: 'advisorEmail', label: 'Advisor Email' },
+  { key: 'dsasEmail', label: 'DSAS Email' },
+  { key: 'registrarEmail', label: 'Registrar Email' },
+  { key: 'buildingAdminEmail', label: 'Building Admin Email' },
+] as const;
+const DIGI_APPROVAL_EMAIL_FIELDS = [
+  { key: 'buildingAdminEmail', label: 'Building Admin Email' },
+] as const;
 
 export default function ReserveRoomPage() {
   const { firebaseUser, profile } = useAuth();
@@ -26,6 +37,7 @@ export default function ReserveRoomPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedBuildingId, setSelectedBuildingId] = useState('');
   const [selectedBuildingName, setSelectedBuildingName] = useState('');
+  const [selectedCampus, setSelectedCampus] = useState<ReservationCampus | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [selectedRoomName, setSelectedRoomName] = useState('');
   const [reservationDate, setReservationDate] = useState('');
@@ -42,7 +54,7 @@ export default function ReserveRoomPage() {
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
 
-  // Equipment & endorsement state
+  // Equipment & approval state
   const [equipment, setEquipment] = useState<Record<string, number>>({
     fans: 0,
     speakers: 0,
@@ -51,8 +63,13 @@ export default function ReserveRoomPage() {
     monoblockChairs: 0,
     tables: 0,
   });
-  const [endorsedByEmail, setEndorsedByEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
+  const [approvalEmailError, setApprovalEmailError] = useState('');
+  const [approvalEmails, setApprovalEmails] = useState({
+    advisorEmail: '',
+    dsasEmail: '',
+    registrarEmail: '',
+    buildingAdminEmail: '',
+  });
 
   // Load buildings on mount
   useEffect(() => {
@@ -91,6 +108,14 @@ export default function ReserveRoomPage() {
     setRoomsLoading(Boolean(buildingId));
     setSelectedBuildingId(buildingId);
     setSelectedBuildingName(building?.name || '');
+    setSelectedCampus(building?.campus ?? null);
+    setApprovalEmailError('');
+    setApprovalEmails({
+      advisorEmail: '',
+      dsasEmail: '',
+      registrarEmail: '',
+      buildingAdminEmail: '',
+    });
     setSelectedRoomId('');
     setSelectedRoomName('');
     setFormStep(2);
@@ -146,18 +171,32 @@ export default function ReserveRoomPage() {
   };
 
   const handleSubmitReservation = async () => {
-    if (!firebaseUser || !selectedBuildingId || !selectedRoomId || !startTime || !endTime || !purpose) return;
-    if (endorsedByEmail && !validateEmail(endorsedByEmail)) {
-      setEmailError('Please enter a valid email address.');
+    if (!firebaseUser || !selectedBuildingId || !selectedRoomId || !selectedCampus || !startTime || !endTime || !purpose) return;
+
+    const requiredApprovalFields =
+      selectedCampus === 'digi'
+        ? DIGI_APPROVAL_EMAIL_FIELDS
+        : MAIN_APPROVAL_EMAIL_FIELDS;
+    const hasInvalidApprovalEmail = requiredApprovalFields.some(({ key }) => {
+      const value = approvalEmails[key];
+      return !value.trim() || !validateEmail(value);
+    });
+    if (hasInvalidApprovalEmail) {
+      setApprovalEmailError(
+        selectedCampus === 'digi'
+          ? 'Enter a valid building admin email for Digi Campus.'
+          : 'Enter a valid email for each Main Campus approval step.'
+      );
       return;
     }
     setSubmitting(true);
     try {
       const displayName = firebaseUser.displayName || 'Student';
-      const baseData = {
+      const normalizedUserRole = normalizeRole(profile?.role) ?? USER_ROLES.STUDENT;
+      const sharedData = {
         userId: firebaseUser.uid,
         userName: displayName,
-        userRole: profile?.role || 'Student',
+        userRole: normalizedUserRole,
         roomId: selectedRoomId,
         roomName: selectedRoomName,
         buildingId: selectedBuildingId,
@@ -166,20 +205,49 @@ export default function ReserveRoomPage() {
         endTime,
         purpose,
         equipment,
-        endorsedByEmail: endorsedByEmail.trim() || undefined,
       };
 
-      if (isRecurring && selectedDays.length > 0 && recurringEndDate) {
-        const ids = await createRecurringReservation(
-          baseData,
-          selectedDays,
-          reservationDate,
-          recurringEndDate
-        );
-        setCreatedCount(ids.length);
+      if (selectedCampus === 'main') {
+        const reservationData = {
+          ...sharedData,
+          campus: 'main' as const,
+          advisorEmail: approvalEmails.advisorEmail.trim().toLowerCase(),
+          dsasEmail: approvalEmails.dsasEmail.trim().toLowerCase(),
+          registrarEmail: approvalEmails.registrarEmail.trim().toLowerCase(),
+          buildingAdminEmail: approvalEmails.buildingAdminEmail.trim().toLowerCase(),
+        };
+
+        if (isRecurring && selectedDays.length > 0 && recurringEndDate) {
+          const ids = await createRecurringReservation(
+            reservationData,
+            selectedDays,
+            reservationDate,
+            recurringEndDate
+          );
+          setCreatedCount(ids.length);
+        } else {
+          await createReservation({ ...reservationData, date: reservationDate });
+          setCreatedCount(1);
+        }
       } else {
-        await createReservation({ ...baseData, date: reservationDate });
-        setCreatedCount(1);
+        const reservationData = {
+          ...sharedData,
+          campus: 'digi' as const,
+          buildingAdminEmail: approvalEmails.buildingAdminEmail.trim().toLowerCase(),
+        };
+
+        if (isRecurring && selectedDays.length > 0 && recurringEndDate) {
+          const ids = await createRecurringReservation(
+            reservationData,
+            selectedDays,
+            reservationDate,
+            recurringEndDate
+          );
+          setCreatedCount(ids.length);
+        } else {
+          await createReservation({ ...reservationData, date: reservationDate });
+          setCreatedCount(1);
+        }
       }
       setSubmitSuccess(true);
     } catch (err) {
@@ -212,8 +280,10 @@ export default function ReserveRoomPage() {
             </h3>
             <p className="text-sm text-white/40 mb-6">
               {createdCount > 1
-                ? `${createdCount} recurring reservations have been created. The building admin will review each one.`
-                : 'The building admin will review your request.'
+                ? `${createdCount} recurring reservations have been created. Each one will follow the ${selectedCampus === 'digi' ? 'single-step building admin approval' : 'Main Campus approval chain'}.`
+                : selectedCampus === 'digi'
+                  ? 'Your request will go directly to the building admin for approval.'
+                  : 'Your request will move through the Main Campus approval chain.'
               }
             </p>
             <div className="flex items-center justify-center gap-3">
@@ -242,7 +312,7 @@ export default function ReserveRoomPage() {
                     formStep === 1 ? 'Select Building' :
                     formStep === 2 ? 'Select Room' :
                     formStep === 3 ? 'Schedule & Purpose' :
-                    'Equipment & Endorsement'
+                    'Equipment & Approval'
                   }
                 </p>
               </div>
@@ -531,7 +601,7 @@ export default function ReserveRoomPage() {
                     disabled={!canProceedStep3()}
                     className="btn-primary w-full py-3 px-4 flex items-center justify-center"
                   >
-                    Next: Equipment & Endorsement
+                    Next: Equipment & Approval
                     <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
@@ -540,7 +610,7 @@ export default function ReserveRoomPage() {
               </div>
             )}
 
-            {/* Step 4: Equipment & Endorsement */}
+            {/* Step 4: Equipment & Approval */}
             {formStep === 4 && (
               <div>
                 <div className="flex items-center gap-2 mb-4">
@@ -609,26 +679,42 @@ export default function ReserveRoomPage() {
                     ))}
                   </div>
 
-                  {/* Endorsement */}
                   <div>
-                    <h5 className="text-sm font-bold text-white/60 uppercase tracking-wider mb-3">Signature / Endorsement</h5>
-                    <label className="block text-xs font-bold text-white/40 mb-1.5">
-                      Endorsed by Dean / Department Head
-                    </label>
-                    <input
-                      type="email"
-                      value={endorsedByEmail}
-                      onChange={(e) => {
-                        setEndorsedByEmail(e.target.value);
-                        if (emailError) setEmailError('');
-                      }}
-                      className={`glass-input w-full px-4 py-3 ${
-                        emailError ? '!border-red-500/60' : ''
-                      }`}
-                      placeholder="Input e-mail"
-                    />
-                    {emailError && (
-                      <p className="text-xs text-red-400 mt-1.5 font-bold">{emailError}</p>
+                    <h5 className="text-sm font-bold text-white/60 uppercase tracking-wider mb-3">Approval Routing</h5>
+                    <div className="space-y-3">
+                      {(selectedCampus === 'digi'
+                        ? DIGI_APPROVAL_EMAIL_FIELDS
+                        : MAIN_APPROVAL_EMAIL_FIELDS
+                      ).map((field) => (
+                        <div key={field.key}>
+                          <label className="block text-xs font-bold text-white/40 mb-1.5">
+                            {field.label}
+                          </label>
+                          <input
+                            type="email"
+                            value={approvalEmails[field.key]}
+                            onChange={(e) => {
+                              setApprovalEmails((prev) => ({
+                                ...prev,
+                                [field.key]: e.target.value,
+                              }));
+                              if (approvalEmailError) setApprovalEmailError('');
+                            }}
+                            className={`glass-input w-full px-4 py-3 ${
+                              approvalEmailError ? '!border-red-500/60' : ''
+                            }`}
+                            placeholder={`Input ${field.label.toLowerCase()}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-white/35 mt-2">
+                      {selectedCampus === 'digi'
+                        ? 'Digi Campus uses a single-step building admin approval.'
+                        : 'Main Campus uses advisor, DSAS, registrar, then building admin approval.'}
+                    </p>
+                    {approvalEmailError && (
+                      <p className="text-xs text-red-400 mt-1.5 font-bold">{approvalEmailError}</p>
                     )}
                   </div>
 

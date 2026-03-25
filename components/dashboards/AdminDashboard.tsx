@@ -214,14 +214,20 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
 
   // ─── Handlers ───────────────────────────────────────────────
   const handleApprove = async (id: string) => {
+    const approverEmail = profile?.email || firebaseUser?.email;
+    if (!approverEmail) return;
     setActionLoading(id);
-    try { await approveReservation(id); } catch (err) { console.warn('Failed to approve:', err); }
+    try { await approveReservation(id, approverEmail); } catch (err) { console.warn('Failed to approve:', err); }
     setActionLoading(null);
   };
 
   const handleReject = async (id: string) => {
+    const approverEmail = profile?.email || firebaseUser?.email;
+    if (!approverEmail) return;
+    const reason = window.prompt('Enter a reason for rejecting this reservation.');
+    if (!reason?.trim()) return;
     setActionLoading(id);
-    try { await rejectReservation(id); } catch (err) { console.warn('Failed to reject:', err); }
+    try { await rejectReservation(id, approverEmail, reason.trim()); } catch (err) { console.warn('Failed to reject:', err); }
     setActionLoading(null);
   };
 
@@ -1108,10 +1114,11 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                       <StatusBadge status={effective.status} />
                     </div>
                     {effective.detail && <p className="text-xs text-white/50 mb-2">{effective.detail}</p>}
-                    <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
-                      <button onClick={() => handleStatusChange(room.id, 'Available')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Available' ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-green-500/10 hover:text-green-300'}`}>Available</button>
-                      <button onClick={() => handleStatusChange(room.id, 'Reserved')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Reserved' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-blue-500/10 hover:text-blue-300'}`}>Reserved</button>
-                      <button onClick={() => handleStatusChange(room.id, 'Ongoing')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Ongoing' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-orange-500/10 hover:text-orange-300'}`}>Ongoing</button>
+                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/5">
+                      <button onClick={() => handleStatusChange(room.id, 'Available')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Available' ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-green-500/10 hover:text-green-300'}`}>Available</button>
+                      <button onClick={() => handleStatusChange(room.id, 'Reserved')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Reserved' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-blue-500/10 hover:text-blue-300'}`}>Reserved</button>
+                      <button onClick={() => handleStatusChange(room.id, 'Ongoing')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Ongoing' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-orange-500/10 hover:text-orange-300'}`}>Ongoing</button>
+                      <button onClick={() => handleStatusChange(room.id, 'Unavailable')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Unavailable' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-red-500/10 hover:text-red-300'}`}>Unavailable</button>
                     </div>
                   </div>
                 );
@@ -1413,18 +1420,12 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                     </div>
 
                     {/* Additional Details */}
-                    {(req.equipment || req.endorsedByEmail) && (
+                    {req.equipment && Object.keys(req.equipment).length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                         {req.equipment && Object.keys(req.equipment).length > 0 && (
                           <div className="bg-white/3 rounded-xl p-3 border border-white/5">
                             <p className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1">Equipment</p>
                             <p className="text-sm text-white/70">{Object.entries(req.equipment).map(([k, v]) => `${k} (×${v})`).join(', ')}</p>
-                          </div>
-                        )}
-                        {req.endorsedByEmail && (
-                          <div className="bg-white/3 rounded-xl p-3 border border-white/5">
-                            <p className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1">Endorsed By</p>
-                            <p className="text-sm text-white/70">{req.endorsedByEmail}</p>
                           </div>
                         )}
                       </div>

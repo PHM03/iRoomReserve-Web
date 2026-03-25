@@ -10,7 +10,14 @@ import {
 } from "firebase/firestore";
 
 import { apiRequest } from "@/lib/api/client";
-import { db } from "@/lib/firebase";
+import { type ReservationCampus } from "@/lib/campuses";
+import {
+  type DigiReservationApproverInput,
+  type MainReservationApproverInput,
+  type ReservationApprovalRecord,
+  type ReservationApprovalStep,
+} from "@/lib/reservation-approval";
+import { auth, db } from "@/lib/firebase";
 import { type RoomCheckInMethod } from "@/lib/roomStatus";
 
 export interface Reservation {
@@ -22,12 +29,17 @@ export interface Reservation {
   roomName: string;
   buildingId: string;
   buildingName: string;
+  campus: ReservationCampus;
   date: string;
   startTime: string;
   endTime: string;
   purpose: string;
   equipment?: Record<string, number>;
-  endorsedByEmail?: string;
+  approvalFlow: ReservationApprovalStep[];
+  currentStep: number;
+  approvals: ReservationApprovalRecord[];
+  rejectedBy?: string;
+  reason?: string;
   status: "pending" | "approved" | "rejected" | "completed" | "cancelled";
   adminUid: string | null;
   recurringGroupId?: string;
@@ -40,6 +52,11 @@ export interface Reservation {
 export type ReservationInput = Omit<
   Reservation,
   | "id"
+  | "approvalFlow"
+  | "currentStep"
+  | "approvals"
+  | "rejectedBy"
+  | "reason"
   | "status"
   | "adminUid"
   | "checkedInAt"
@@ -48,7 +65,19 @@ export type ReservationInput = Omit<
   | "updatedAt"
 >;
 
-export async function createReservation(data: ReservationInput): Promise<string> {
+type ReservationCreateBaseInput = Omit<ReservationInput, "date"> & { date: string };
+
+export type ReservationCreateInput =
+  | (ReservationCreateBaseInput & DigiReservationApproverInput)
+  | (ReservationCreateBaseInput & MainReservationApproverInput);
+
+export type RecurringReservationCreateInput =
+  | (Omit<ReservationCreateBaseInput, "date"> & DigiReservationApproverInput)
+  | (Omit<ReservationCreateBaseInput, "date"> & MainReservationApproverInput);
+
+export async function createReservation(
+  data: ReservationCreateInput
+): Promise<string> {
   const payload = await apiRequest<{ id: string }>("/api/reservations", {
     body: {
       type: "single",
@@ -63,7 +92,7 @@ export async function createReservation(data: ReservationInput): Promise<string>
 }
 
 export async function createRecurringReservation(
-  data: Omit<ReservationInput, "date">,
+  data: RecurringReservationCreateInput,
   selectedDays: number[],
   startDate: string,
   endDate: string
@@ -191,17 +220,26 @@ export async function getReservationsByUser(
   );
 }
 
-export async function approveReservation(reservationId: string): Promise<void> {
+export async function approveReservation(
+  reservationId: string,
+  userEmail: string
+): Promise<void> {
   await apiRequest(`/api/reservations/${reservationId}`, {
-    body: { action: "approve" },
+    body: { action: "approve", userEmail },
     method: "PATCH",
+    userId: auth.currentUser?.uid,
   });
 }
 
-export async function rejectReservation(reservationId: string): Promise<void> {
+export async function rejectReservation(
+  reservationId: string,
+  userEmail: string,
+  reason: string
+): Promise<void> {
   await apiRequest(`/api/reservations/${reservationId}`, {
-    body: { action: "reject" },
+    body: { action: "reject", userEmail, reason },
     method: "PATCH",
+    userId: auth.currentUser?.uid,
   });
 }
 

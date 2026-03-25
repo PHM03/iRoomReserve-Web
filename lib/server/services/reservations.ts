@@ -6,13 +6,31 @@ import {
   getDoc,
   getDocs,
   query,
+  runTransaction,
   serverTimestamp,
   Timestamp,
   where,
   writeBatch,
 } from "firebase/firestore";
 
+import {
+  inferCampusFromBuilding,
+  normalizeCampus,
+  type ReservationCampus,
+} from "@/lib/campuses";
 import { normalizeRole } from "@/lib/domain/roles";
+import {
+  buildApprovalFlow,
+  getCurrentApprovalStep,
+  getNextApprovalStep,
+  isCurrentApproverEmail,
+  normalizeApprovalEmail,
+  type DigiReservationApproverInput,
+  type MainReservationApproverInput,
+  type ReservationApprovalRecord,
+  type ReservationApprovalStep,
+  type ReservationApproverInput,
+} from "@/lib/reservation-approval";
 import {
   canReservationCheckIn,
   compareReservationSchedule,
@@ -38,12 +56,17 @@ interface ReservationRecord {
   roomName: string;
   buildingId: string;
   buildingName: string;
+  campus: ReservationCampus;
   date: string;
   startTime: string;
   endTime: string;
   purpose: string;
   equipment?: Record<string, number>;
-  endorsedByEmail?: string;
+  approvalFlow: ReservationApprovalStep[];
+  currentStep: number;
+  approvals: ReservationApprovalRecord[];
+  rejectedBy?: string;
+  reason?: string;
   status: ReservationStatus;
   adminUid: string | null;
   recurringGroupId?: string;
@@ -51,7 +74,7 @@ interface ReservationRecord {
   checkInMethod?: RoomCheckInMethod | null;
 }
 
-export interface ReservationCreateInput {
+interface ReservationCreateBaseInput {
   userId: string;
   userName: string;
   userRole: string;
@@ -59,13 +82,17 @@ export interface ReservationCreateInput {
   roomName: string;
   buildingId: string;
   buildingName: string;
+  campus: ReservationCampus;
   date: string;
   startTime: string;
   endTime: string;
   purpose: string;
   equipment?: Record<string, number>;
-  endorsedByEmail?: string;
 }
+
+export type ReservationCreateInput =
+  | (ReservationCreateBaseInput & DigiReservationApproverInput)
+  | (ReservationCreateBaseInput & MainReservationApproverInput);
 
 function getLocalDateString(date: Date) {
   const year = date.getFullYear();
@@ -123,6 +150,124 @@ async function getBuildingManagerIds(buildingId: string) {
   );
 
   return usersSnapshot.docs.map((userDoc) => userDoc.id);
+}
+
+async function getUserIdsByEmail(email: string) {
+  const usersSnapshot = await getDocs(
+    query(
+      collection(serverClientDb, "users"),
+      where("email", "==", normalizeApprovalEmail(email)),
+      where("status", "==", "approved")
+    )
+  );
+
+  return usersSnapshot.docs.map((userDoc) => userDoc.id);
+}
+
+async function getBuildingCampus(buildingId: string) {
+  const buildingSnapshot = await getDoc(doc(serverClientDb, "buildings", buildingId));
+  if (!buildingSnapshot.exists()) {
+    return null;
+  }
+
+  const buildingData = buildingSnapshot.data() as {
+    campus?: string | null;
+    code?: string | null;
+    name?: string | null;
+  };
+
+  return inferCampusFromBuilding({
+    id: buildingId,
+    campus: buildingData.campus,
+    code: buildingData.code,
+    name: buildingData.name,
+  });
+}
+
+async function resolveReservationCampus(input: {
+  buildingId: string;
+  buildingName: string;
+  campus: ReservationCampus;
+}) {
+  const campusFromBuilding = await getBuildingCampus(input.buildingId);
+  const normalizedInputCampus = normalizeCampus(input.campus);
+
+  if (campusFromBuilding && normalizedInputCampus && campusFromBuilding !== normalizedInputCampus) {
+    throw new ApiError(
+      400,
+      "invalid_campus",
+      "Reservation campus does not match the selected building."
+    );
+  }
+
+  return (
+    campusFromBuilding ??
+    normalizedInputCampus ??
+    inferCampusFromBuilding({
+      id: input.buildingId,
+      name: input.buildingName,
+    }) ??
+    "main"
+  );
+}
+
+function getReservationApproverInput(
+  input: ReservationCreateInput | Omit<ReservationCreateInput, "date">,
+  campus: ReservationCampus
+): ReservationApproverInput {
+  if (campus === "digi") {
+    return {
+      campus,
+      buildingAdminEmail: input.buildingAdminEmail,
+    };
+  }
+
+  if (
+    !("advisorEmail" in input) ||
+    !("dsasEmail" in input) ||
+    !("registrarEmail" in input)
+  ) {
+    throw new ApiError(
+      400,
+      "missing_approvers",
+      "Main Campus reservations require advisor, DSAS, registrar, and building admin emails."
+    );
+  }
+
+  return {
+    campus,
+    advisorEmail: input.advisorEmail,
+    dsasEmail: input.dsasEmail,
+    registrarEmail: input.registrarEmail,
+    buildingAdminEmail: input.buildingAdminEmail,
+  };
+}
+
+function assertReservationPendingApproval(reservation: ReservationRecord) {
+  if (reservation.status !== "pending") {
+    throw new ApiError(
+      400,
+      "invalid_status",
+      "Only pending reservations can be reviewed."
+    );
+  }
+}
+
+function getReservationCurrentApprovalStep(reservation: ReservationRecord) {
+  const currentApprovalStep = getCurrentApprovalStep(
+    reservation.approvalFlow,
+    reservation.currentStep
+  );
+
+  if (!currentApprovalStep) {
+    throw new ApiError(
+      400,
+      "invalid_approval_flow",
+      "Reservation approval flow is incomplete or already finished."
+    );
+  }
+
+  return currentApprovalStep;
 }
 
 function getRoomStatusPayload(
@@ -219,27 +364,48 @@ function formatEquipmentSummary(equipment?: Record<string, number>) {
 }
 
 export async function createReservationRecord(data: ReservationCreateInput) {
-  const managerIds = await getBuildingManagerIds(data.buildingId);
+  const campus = await resolveReservationCampus(data);
+  const approvalFlow = buildApprovalFlow(
+    getReservationApproverInput(data, campus)
+  );
+  const firstApprovalStep = getCurrentApprovalStep(approvalFlow, 0);
+  const firstApproverIds = firstApprovalStep
+    ? await getUserIdsByEmail(firstApprovalStep.email)
+    : [];
   const reservationRef = doc(collection(serverClientDb, "reservations"));
   const batch = writeBatch(serverClientDb);
 
   batch.set(reservationRef, {
-    ...data,
+    userId: data.userId,
+    userName: data.userName,
     userRole: normalizeRole(data.userRole) ?? data.userRole,
+    roomId: data.roomId,
+    roomName: data.roomName,
+    buildingId: data.buildingId,
+    buildingName: data.buildingName,
+    campus,
+    date: data.date,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    purpose: data.purpose,
+    ...(data.equipment ? { equipment: data.equipment } : {}),
+    approvalFlow,
+    currentStep: 0,
+    approvals: [],
     status: "pending",
-    adminUid: managerIds[0] ?? null,
+    adminUid: null,
     checkedInAt: null,
     checkInMethod: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 
-  managerIds.forEach((managerUid) => {
+  firstApproverIds.forEach((recipientUid) => {
     addNotification(batch, {
-      recipientUid: managerUid,
+      recipientUid,
       type: "new_reservation",
       title: "New Reservation Request",
-      message: `${data.userName} reserved ${data.roomName} on ${data.date} (${data.startTime} - ${data.endTime})`,
+      message: `${data.userName} reserved ${data.roomName} on ${data.date} (${data.startTime} - ${data.endTime}). Review is requested for the ${firstApprovalStep?.role ?? "current"} step.`,
       buildingId: data.buildingId,
       reservationId: reservationRef.id,
     });
@@ -264,7 +430,14 @@ export async function createRecurringReservationRecord(
     );
   }
 
-  const managerIds = await getBuildingManagerIds(data.buildingId);
+  const campus = await resolveReservationCampus(data);
+  const approvalFlow = buildApprovalFlow(
+    getReservationApproverInput(data, campus)
+  );
+  const firstApprovalStep = getCurrentApprovalStep(approvalFlow, 0);
+  const firstApproverIds = firstApprovalStep
+    ? await getUserIdsByEmail(firstApprovalStep.email)
+    : [];
   const recurringGroupId = `recurring_${Date.now()}_${Math.random()
     .toString(36)
     .slice(2, 8)}`;
@@ -275,11 +448,24 @@ export async function createRecurringReservationRecord(
     const reservationRef = doc(collection(serverClientDb, "reservations"));
     createdIds.push(reservationRef.id);
     batch.set(reservationRef, {
-      ...data,
+      userId: data.userId,
+      userName: data.userName,
       date,
       userRole: normalizeRole(data.userRole) ?? data.userRole,
+      roomId: data.roomId,
+      roomName: data.roomName,
+      buildingId: data.buildingId,
+      buildingName: data.buildingName,
+      campus,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      purpose: data.purpose,
+      ...(data.equipment ? { equipment: data.equipment } : {}),
+      approvalFlow,
+      currentStep: 0,
+      approvals: [],
       status: "pending",
-      adminUid: managerIds[0] ?? null,
+      adminUid: null,
       recurringGroupId,
       checkedInAt: null,
       checkInMethod: null,
@@ -292,12 +478,12 @@ export async function createRecurringReservationRecord(
     .map((day) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day])
     .join(", ");
 
-  managerIds.forEach((managerUid) => {
+  firstApproverIds.forEach((recipientUid) => {
     addNotification(batch, {
-      recipientUid: managerUid,
+      recipientUid,
       type: "new_reservation",
       title: "New Recurring Reservation",
-      message: `${data.userName} reserved ${data.roomName} every ${dayNames} from ${startDate} to ${endDate} (${data.startTime} - ${data.endTime}) - ${dates.length} dates`,
+      message: `${data.userName} reserved ${data.roomName} every ${dayNames} from ${startDate} to ${endDate} (${data.startTime} - ${data.endTime}) - ${dates.length} dates. Review is requested for the ${firstApprovalStep?.role ?? "current"} step.`,
       buildingId: data.buildingId,
       reservationId: createdIds[0],
     });
@@ -307,100 +493,166 @@ export async function createRecurringReservationRecord(
   return createdIds;
 }
 
-export async function approveReservationRecord(reservationId: string) {
+export async function approveReservationRecord(
+  reservationId: string,
+  userEmail: string
+) {
   const reservationRef = doc(serverClientDb, "reservations", reservationId);
-  const reservationSnapshot = await getDoc(reservationRef);
-  if (!reservationSnapshot.exists()) {
-    throw new ApiError(404, "not_found", "Reservation not found.");
+  const approvalResult = await runTransaction(
+    serverClientDb,
+    async (transaction) => {
+      const reservationSnapshot = await transaction.get(reservationRef);
+      if (!reservationSnapshot.exists()) {
+        throw new ApiError(404, "not_found", "Reservation not found.");
+      }
+
+      const reservation = {
+        id: reservationSnapshot.id,
+        ...reservationSnapshot.data(),
+      } as ReservationRecord;
+
+      assertReservationPendingApproval(reservation);
+
+      const currentApprovalStep = getReservationCurrentApprovalStep(reservation);
+      if (!isCurrentApproverEmail(currentApprovalStep, userEmail)) {
+        throw new ApiError(
+          403,
+          "forbidden",
+          "You are not the current approver for this reservation."
+        );
+      }
+
+      const nextStepIndex = reservation.currentStep + 1;
+      const isFinalApproval = nextStepIndex >= reservation.approvalFlow.length;
+      const approvalEntry: ReservationApprovalRecord = {
+        role: currentApprovalStep.role,
+        email: currentApprovalStep.email,
+        date: Timestamp.now(),
+        status: "approved",
+      };
+
+      transaction.update(reservationRef, {
+        approvals: [...(reservation.approvals ?? []), approvalEntry],
+        currentStep: nextStepIndex,
+        status: isFinalApproval ? "approved" : "pending",
+        updatedAt: serverTimestamp(),
+      });
+
+      return {
+        reservation,
+        currentApprovalStep,
+        nextApprovalStep: getNextApprovalStep(
+          reservation.approvalFlow,
+          reservation.currentStep
+        ),
+        isFinalApproval,
+      };
+    }
+  );
+
+  if (!approvalResult.isFinalApproval) {
+    const nextApproverIds = approvalResult.nextApprovalStep
+      ? await getUserIdsByEmail(approvalResult.nextApprovalStep.email)
+      : [];
+
+    if (nextApproverIds.length === 0) {
+      return;
+    }
+
+    const batch = writeBatch(serverClientDb);
+    nextApproverIds.forEach((recipientUid) => {
+      addNotification(batch, {
+        recipientUid,
+        type: "new_reservation",
+        title: "Reservation Approval Required",
+        message: `${approvalResult.reservation.userName} reserved ${approvalResult.reservation.roomName} on ${approvalResult.reservation.date} (${approvalResult.reservation.startTime} - ${approvalResult.reservation.endTime}). Your ${approvalResult.nextApprovalStep?.role ?? "next"} approval is required.`,
+        buildingId: approvalResult.reservation.buildingId,
+        reservationId,
+      });
+    });
+
+    await batch.commit();
+    return;
   }
 
-  const reservation = {
-    id: reservationSnapshot.id,
-    ...reservationSnapshot.data(),
-  } as ReservationRecord;
   const approvedReservations = await getApprovedReservationsForRoom(
-    reservation.roomId
+    approvalResult.reservation.roomId
   );
   const batch = writeBatch(serverClientDb);
 
-  batch.update(reservationRef, {
-    status: "approved",
-    updatedAt: serverTimestamp(),
-  });
-
   addNotification(batch, {
-    recipientUid: reservation.userId,
+    recipientUid: approvalResult.reservation.userId,
     type: "reservation_approved",
     title: "Reservation Approved",
-    message: `Your reservation for ${reservation.roomName} on ${reservation.date} has been approved.`,
-    buildingId: reservation.buildingId,
+    message: `Your reservation for ${approvalResult.reservation.roomName} on ${approvalResult.reservation.date} has been fully approved.`,
+    buildingId: approvalResult.reservation.buildingId,
     reservationId,
   });
 
-  addRoomHistory(batch, reservation, "approved");
+  addRoomHistory(batch, approvalResult.reservation, "approved");
 
-  const roomStatusPayload = getRoomStatusPayload(
-    [
-      ...approvedReservations.filter(
-        (approvedReservation) => approvedReservation.id !== reservationId
-      ),
-      {
-        ...reservation,
-        status: "approved" as const,
-      },
-    ].sort(compareReservationSchedule),
-    reservationId
-  );
-
-  batch.update(doc(serverClientDb, "rooms", reservation.roomId), {
-    ...roomStatusPayload,
+  batch.update(doc(serverClientDb, "rooms", approvalResult.reservation.roomId), {
+    ...getRoomStatusPayload(approvedReservations, reservationId),
     updatedAt: serverTimestamp(),
   });
 
   await batch.commit();
 }
 
-export async function rejectReservationRecord(reservationId: string) {
+export async function rejectReservationRecord(
+  reservationId: string,
+  userEmail: string,
+  reason: string
+) {
   const reservationRef = doc(serverClientDb, "reservations", reservationId);
-  const reservationSnapshot = await getDoc(reservationRef);
-  if (!reservationSnapshot.exists()) {
-    throw new ApiError(404, "not_found", "Reservation not found.");
-  }
+  const rejectionResult = await runTransaction(
+    serverClientDb,
+    async (transaction) => {
+      const reservationSnapshot = await transaction.get(reservationRef);
+      if (!reservationSnapshot.exists()) {
+        throw new ApiError(404, "not_found", "Reservation not found.");
+      }
 
-  const reservation = {
-    id: reservationSnapshot.id,
-    ...reservationSnapshot.data(),
-  } as ReservationRecord;
-  const approvedReservations =
-    reservation.status === "approved"
-      ? await getApprovedReservationsForRoom(reservation.roomId)
-      : [];
+      const reservation = {
+        id: reservationSnapshot.id,
+        ...reservationSnapshot.data(),
+      } as ReservationRecord;
+
+      assertReservationPendingApproval(reservation);
+
+      const currentApprovalStep = getReservationCurrentApprovalStep(reservation);
+      if (!isCurrentApproverEmail(currentApprovalStep, userEmail)) {
+        throw new ApiError(
+          403,
+          "forbidden",
+          "You are not the current approver for this reservation."
+        );
+      }
+
+      transaction.update(reservationRef, {
+        status: "rejected",
+        rejectedBy: normalizeApprovalEmail(userEmail),
+        reason: reason.trim(),
+        updatedAt: serverTimestamp(),
+      });
+
+      return {
+        reservation,
+        currentApprovalStep,
+      };
+    }
+  );
+
   const batch = writeBatch(serverClientDb);
 
-  batch.update(reservationRef, {
-    status: "rejected",
-    updatedAt: serverTimestamp(),
-  });
-
   addNotification(batch, {
-    recipientUid: reservation.userId,
+    recipientUid: rejectionResult.reservation.userId,
     type: "reservation_rejected",
     title: "Reservation Rejected",
-    message: `Your reservation for ${reservation.roomName} on ${reservation.date} has been rejected.`,
-    buildingId: reservation.buildingId,
+    message: `Your reservation for ${rejectionResult.reservation.roomName} on ${rejectionResult.reservation.date} was rejected during the ${rejectionResult.currentApprovalStep.role} step. Reason: ${reason.trim()}`,
+    buildingId: rejectionResult.reservation.buildingId,
     reservationId,
   });
-
-  if (reservation.status === "approved") {
-    batch.update(doc(serverClientDb, "rooms", reservation.roomId), {
-      ...getRoomStatusPayload(
-        approvedReservations.filter(
-          (approvedReservation) => approvedReservation.id !== reservationId
-        )
-      ),
-      updatedAt: serverTimestamp(),
-    });
-  }
 
   await batch.commit();
 }
@@ -645,13 +897,7 @@ export async function deleteReservationRecord(
 
 export function buildReservationSummary(reservation: ReservationRecord) {
   const equipmentSummary = formatEquipmentSummary(reservation.equipment);
-  const details = [
-    reservation.purpose,
-    equipmentSummary,
-    reservation.endorsedByEmail
-      ? `Endorsed by ${reservation.endorsedByEmail}`
-      : "",
-  ].filter(Boolean);
+  const details = [reservation.purpose, equipmentSummary].filter(Boolean);
 
   return details.join(" | ");
 }

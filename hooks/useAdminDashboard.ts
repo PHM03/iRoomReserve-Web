@@ -146,9 +146,11 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
   }, [buildingId, activeTab]);
 
   const handleApprove = async (id: string) => {
+    const approverEmail = profile?.email || firebaseUser?.email;
+    if (!approverEmail) return;
     setActionLoading(id);
     try {
-      await approveReservation(id);
+      await approveReservation(id, approverEmail);
     } catch (err) {
       console.warn('Failed to approve:', err);
     }
@@ -156,9 +158,13 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
   };
 
   const handleReject = async (id: string) => {
+    const approverEmail = profile?.email || firebaseUser?.email;
+    if (!approverEmail) return;
+    const reason = window.prompt('Enter a reason for rejecting this reservation.');
+    if (!reason?.trim()) return;
     setActionLoading(id);
     try {
-      await rejectReservation(id);
+      await rejectReservation(id, approverEmail, reason.trim());
     } catch (err) {
       console.warn('Failed to reject:', err);
     }

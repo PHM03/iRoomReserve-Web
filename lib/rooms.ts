@@ -18,6 +18,7 @@ import {
   type RoomCheckInMethod,
   type RoomStatusValue,
 } from "@/lib/roomStatus";
+import { auth } from "@/lib/firebase";
 
 export interface Room {
   id: string;
@@ -92,6 +93,7 @@ export async function addRoom(data: RoomInput): Promise<string> {
   const payload = await apiRequest<{ id: string }>("/api/rooms", {
     body: data,
     method: "POST",
+    userId: auth.currentUser?.uid,
   });
 
   return payload.id;
@@ -104,12 +106,14 @@ export async function updateRoom(
   await apiRequest(`/api/rooms/${roomId}`, {
     body: data,
     method: "PATCH",
+    userId: auth.currentUser?.uid,
   });
 }
 
 export async function deleteRoom(roomId: string): Promise<void> {
   await apiRequest(`/api/rooms/${roomId}`, {
     method: "DELETE",
+    userId: auth.currentUser?.uid,
   });
 }
 
@@ -125,6 +129,7 @@ export async function updateRoomStatus(
   await apiRequest(`/api/rooms/${roomId}/status`, {
     body: payload,
     method: "PATCH",
+    userId: auth.currentUser?.uid,
   });
 }
 

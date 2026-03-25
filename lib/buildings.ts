@@ -11,6 +11,7 @@ import {
   onSnapshot,
   Unsubscribe,
 } from "firebase/firestore";
+import { inferCampusFromBuilding, type ReservationCampus } from "./campuses";
 import { db } from "./firebase";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -20,9 +21,27 @@ export interface Building {
   code: string;
   address: string;
   floors: number;
+  campus: ReservationCampus;
   assignedAdminUid: string | null;
   createdAt?: { seconds: number; nanoseconds: number };
   updatedAt?: { seconds: number; nanoseconds: number };
+}
+
+function mapBuilding(
+  buildingId: string,
+  data: Omit<Building, "id" | "campus"> & { campus?: string | null }
+): Building {
+  return {
+    id: buildingId,
+    ...data,
+    campus:
+      inferCampusFromBuilding({
+        id: buildingId,
+        code: data.code,
+        name: data.name,
+        campus: data.campus,
+      }) ?? "main",
+  };
 }
 
 // ─── Get All Buildings ──────────────────────────────────────────
@@ -30,7 +49,12 @@ export async function getBuildings(): Promise<Building[]> {
   const snap = await getDocs(
     query(collection(db, "buildings"), orderBy("name"))
   );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Building));
+  return snap.docs.map((d) =>
+    mapBuilding(
+      d.id,
+      d.data() as Omit<Building, "id" | "campus"> & { campus?: string | null }
+    )
+  );
 }
 
 // ─── Get Available Buildings (no admin assigned) ────────────────
@@ -43,7 +67,10 @@ export async function getAvailableBuildings(): Promise<Building[]> {
 export async function getBuildingById(buildingId: string): Promise<Building | null> {
   const snap = await getDoc(doc(db, "buildings", buildingId));
   if (snap.exists()) {
-    return { id: snap.id, ...snap.data() } as Building;
+    return mapBuilding(
+      snap.id,
+      snap.data() as Omit<Building, "id" | "campus"> & { campus?: string | null }
+    );
   }
   return null;
 }
@@ -57,7 +84,10 @@ export async function getBuildingByAdmin(adminUid: string): Promise<Building | n
   const snap = await getDocs(q);
   if (snap.empty) return null;
   const d = snap.docs[0];
-  return { id: d.id, ...d.data() } as Building;
+  return mapBuilding(
+    d.id,
+    d.data() as Omit<Building, "id" | "campus"> & { campus?: string | null }
+  );
 }
 
 // ─── Assign Admin to Building ───────────────────────────────────
@@ -87,10 +117,12 @@ export function onBuildings(
 ): Unsubscribe {
   const q = query(collection(db, "buildings"), orderBy("name"));
   return onSnapshot(q, (snapshot) => {
-    const buildings: Building[] = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    } as Building));
+    const buildings: Building[] = snapshot.docs.map((d) =>
+      mapBuilding(
+        d.id,
+        d.data() as Omit<Building, "id" | "campus"> & { campus?: string | null }
+      )
+    );
     callback(buildings);
   }, (error) => {
     console.warn('Firestore listener error (buildings):', error);

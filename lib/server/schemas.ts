@@ -1,12 +1,22 @@
 import { z } from "zod";
 
-import { ALL_USER_ROLES } from "../domain/roles";
+import { normalizeCampus, RESERVATION_CAMPUSES } from "../campuses";
+import { ALL_USER_ROLES, normalizeRole } from "../domain/roles";
+import { RESERVATION_APPROVAL_ROLES } from "../reservation-approval";
 
 const nonEmptyString = z.string().trim().min(1);
 const timeString = z.string().regex(/^\d{2}:\d{2}$/, "Expected HH:mm time.");
 const dateString = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD date.");
+const emailString = z.string().trim().toLowerCase().email();
+const userRoleSchema = z.preprocess(
+  (value) =>
+    typeof value === "string"
+      ? normalizeRole(value) ?? value.trim()
+      : value,
+  z.enum(ALL_USER_ROLES)
+);
 
 export const roomStatusSchema = z.enum([
   "Available",
@@ -18,32 +28,114 @@ export const roomStatusSchema = z.enum([
 export const roomCheckInMethodSchema = z.enum(["manual", "ble"]);
 
 export const equipmentSchema = z.record(z.string(), z.number().int().min(0));
+export const reservationCampusSchema = z.preprocess(
+  (value) =>
+    typeof value === "string"
+      ? normalizeCampus(value) ?? value.trim().toLowerCase()
+      : value,
+  z.enum(RESERVATION_CAMPUSES)
+);
 
-export const reservationBaseSchema = z.object({
+export const reservationApprovalRoleSchema = z.enum(
+  RESERVATION_APPROVAL_ROLES
+);
+
+export const reservationApprovalStepSchema = z.object({
+  role: reservationApprovalRoleSchema,
+  email: emailString,
+});
+
+export const reservationApprovalRecordSchema = reservationApprovalStepSchema.extend(
+  {
+    date: z.unknown(),
+    status: z.literal("approved"),
+  }
+);
+
+function normalizeReservationPayload(
+  value: unknown
+): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const nextValue = { ...(value as Record<string, unknown>) };
+
+  if (typeof nextValue.campus === "string") {
+    nextValue.campus =
+      normalizeCampus(nextValue.campus) ??
+      nextValue.campus.trim().toLowerCase();
+  }
+
+  if (typeof nextValue.userRole === "string") {
+    nextValue.userRole =
+      normalizeRole(nextValue.userRole) ?? nextValue.userRole.trim();
+  }
+
+  return nextValue;
+}
+
+const reservationCommonSchema = z.object({
   userId: nonEmptyString,
   userName: nonEmptyString,
-  userRole: z.enum(ALL_USER_ROLES),
+  userRole: userRoleSchema,
   roomId: nonEmptyString,
   roomName: nonEmptyString,
   buildingId: nonEmptyString,
   buildingName: nonEmptyString,
+  campus: reservationCampusSchema,
   startTime: timeString,
   endTime: timeString,
   purpose: nonEmptyString,
   equipment: equipmentSchema.optional(),
-  endorsedByEmail: z.email().optional(),
 });
+
+export const digiReservationBaseSchema = reservationCommonSchema.extend({
+  campus: z.literal("digi"),
+  buildingAdminEmail: emailString,
+});
+
+export const mainReservationBaseSchema = reservationCommonSchema.extend({
+  campus: z.literal("main"),
+  advisorEmail: emailString,
+  dsasEmail: emailString,
+  registrarEmail: emailString,
+  buildingAdminEmail: emailString,
+});
+
+export const reservationBaseSchema = z.union([
+  digiReservationBaseSchema,
+  mainReservationBaseSchema,
+]);
+
+const singleReservationPayloadSchema = z.discriminatedUnion("campus", [
+  digiReservationBaseSchema.extend({
+    date: dateString,
+  }),
+  mainReservationBaseSchema.extend({
+    date: dateString,
+  }),
+]);
+
+const recurringReservationPayloadSchema = z.discriminatedUnion("campus", [
+  digiReservationBaseSchema,
+  mainReservationBaseSchema,
+]);
 
 export const createReservationSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("single"),
-    reservation: reservationBaseSchema.extend({
-      date: dateString,
-    }),
+    reservation: z.preprocess(
+      normalizeReservationPayload,
+      singleReservationPayloadSchema
+    ),
   }),
   z.object({
     type: z.literal("recurring"),
-    reservation: reservationBaseSchema,
+    reservation: z.preprocess(
+      normalizeReservationPayload,
+      recurringReservationPayloadSchema
+    ),
     selectedDays: z.array(z.number().int().min(0).max(6)).min(1),
     startDate: dateString,
     endDate: dateString,
