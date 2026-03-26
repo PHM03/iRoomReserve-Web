@@ -4,14 +4,12 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs,
-  query,
   serverTimestamp,
-  where,
   writeBatch,
 } from "firebase/firestore";
 
 import { serverClientDb } from "@/lib/server/firebase-client";
+import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
 
 export interface AdminRequestCreateInput {
   userId: string;
@@ -25,13 +23,7 @@ export interface AdminRequestCreateInput {
 }
 
 export async function createAdminRequestRecord(data: AdminRequestCreateInput) {
-  const adminsSnapshot = await getDocs(
-    query(
-      collection(serverClientDb, "users"),
-      where("assignedBuildingId", "==", data.buildingId),
-      where("status", "==", "approved")
-    )
-  );
+  const adminIds = await getAssignedManagerIds(data.buildingId);
 
   const requestRef = doc(collection(serverClientDb, "adminRequests"));
   const batch = writeBatch(serverClientDb);
@@ -43,10 +35,10 @@ export async function createAdminRequestRecord(data: AdminRequestCreateInput) {
     createdAt: serverTimestamp(),
   });
 
-  adminsSnapshot.docs.forEach((adminDoc) => {
+  adminIds.forEach((adminUid) => {
     const notificationRef = doc(collection(serverClientDb, "notifications"));
     batch.set(notificationRef, {
-      recipientUid: adminDoc.id,
+      recipientUid: adminUid,
       type: "system",
       title: "New Admin Request",
       message: `${data.userName}: ${data.subject} - "${data.message.slice(0, 60)}${

@@ -3,14 +3,12 @@ import "server-only";
 import {
   collection,
   doc,
-  getDocs,
-  query,
   serverTimestamp,
-  where,
   writeBatch,
 } from "firebase/firestore";
 
 import { serverClientDb } from "@/lib/server/firebase-client";
+import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
 
 export interface FeedbackCreateInput {
   roomId: string;
@@ -25,13 +23,7 @@ export interface FeedbackCreateInput {
 }
 
 export async function createFeedbackRecord(data: FeedbackCreateInput) {
-  const adminsSnapshot = await getDocs(
-    query(
-      collection(serverClientDb, "users"),
-      where("assignedBuildingId", "==", data.buildingId),
-      where("status", "==", "approved")
-    )
-  );
+  const adminIds = await getAssignedManagerIds(data.buildingId);
 
   const feedbackRef = doc(collection(serverClientDb, "feedback"));
   const batch = writeBatch(serverClientDb);
@@ -43,10 +35,10 @@ export async function createFeedbackRecord(data: FeedbackCreateInput) {
     createdAt: serverTimestamp(),
   });
 
-  adminsSnapshot.docs.forEach((adminDoc) => {
+  adminIds.forEach((adminUid) => {
     const notificationRef = doc(collection(serverClientDb, "notifications"));
     batch.set(notificationRef, {
-      recipientUid: adminDoc.id,
+      recipientUid: adminUid,
       type: "feedback",
       title: "New Room Feedback",
       message: `${data.userName} left feedback for ${data.roomName}: "${data.message.slice(

@@ -11,6 +11,10 @@ import {
   writeBatch,
 } from "firebase/firestore";
 
+import {
+  normalizeAssignedBuildings,
+  type AssignedBuildingReference,
+} from "@/lib/assignedBuildings";
 import { normalizeRole, USER_ROLES, type UserRole } from "@/lib/domain/roles";
 import { serverClientDb } from "@/lib/server/firebase-client";
 import { getOptionalAdminAuth } from "@/lib/server/firebase-admin";
@@ -23,17 +27,20 @@ async function clearAssignedBuildingIfNeeded(uid: string) {
 
   const userData = userSnapshot.data() as {
     role?: string;
+    assignedBuilding?: string | null;
     assignedBuildingId?: string | null;
+    assignedBuildingIds?: string[];
+    assignedBuildings?: AssignedBuildingReference[];
   };
 
-  const assignedBuildingId = userData.assignedBuildingId;
+  const assignedBuildings = normalizeAssignedBuildings(userData);
   const normalizedRole = normalizeRole(userData.role);
   const shouldClearBuilding =
-    Boolean(assignedBuildingId) &&
+    assignedBuildings.length > 0 &&
     (normalizedRole === USER_ROLES.ADMIN ||
       normalizedRole === USER_ROLES.UTILITY);
 
-  if (!shouldClearBuilding || !assignedBuildingId) {
+  if (!shouldClearBuilding) {
     return null;
   }
 
@@ -45,7 +52,7 @@ async function clearAssignedBuildingIfNeeded(uid: string) {
   );
 
   return {
-    assignedBuildingId,
+    assignedBuildingIds: assignedBuildings.map((building) => building.id),
     buildingRefs: buildingsSnapshot.docs.map((buildingDoc) => buildingDoc.ref),
   };
 }
@@ -62,20 +69,37 @@ export async function approveUserProfile(uid: string) {
 export async function approveManagedUserProfile(
   uid: string,
   role: UserRole,
-  buildingId: string,
-  buildingName: string
+  buildings: AssignedBuildingReference[]
 ) {
+  const assignedBuildings = normalizeAssignedBuildings({
+    assignedBuildings: buildings,
+  });
+  if (assignedBuildings.length === 0) {
+    throw new Error("At least one building is required.");
+  }
+
+  const existingAssignment = await clearAssignedBuildingIfNeeded(uid);
   const batch = writeBatch(serverClientDb);
   batch.update(doc(serverClientDb, "users", uid), {
     status: "approved",
     role,
-    assignedBuilding: buildingName,
-    assignedBuildingId: buildingId,
+    assignedBuilding: assignedBuildings[0].name,
+    assignedBuildingId: assignedBuildings[0].id,
+    assignedBuildings,
+    assignedBuildingIds: assignedBuildings.map((building) => building.id),
     updatedAt: serverTimestamp(),
   });
-  batch.update(doc(serverClientDb, "buildings", buildingId), {
-    assignedAdminUid: uid,
-    updatedAt: serverTimestamp(),
+  existingAssignment?.buildingRefs.forEach((buildingRef) => {
+    batch.update(buildingRef, {
+      assignedAdminUid: null,
+      updatedAt: serverTimestamp(),
+    });
+  });
+  assignedBuildings.forEach((building) => {
+    batch.update(doc(serverClientDb, "buildings", building.id), {
+      assignedAdminUid: uid,
+      updatedAt: serverTimestamp(),
+    });
   });
   await batch.commit();
 }
@@ -87,6 +111,8 @@ export async function rejectUserProfile(uid: string) {
     status: "rejected",
     assignedBuilding: null,
     assignedBuildingId: null,
+    assignedBuildings: [],
+    assignedBuildingIds: [],
     updatedAt: serverTimestamp(),
   });
   assignedBuilding?.buildingRefs.forEach((buildingRef) => {

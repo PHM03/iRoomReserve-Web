@@ -47,7 +47,10 @@ export function assertCanManageBuilding(
     throw new ApiError(403, "forbidden", "You do not have permission to manage this building.");
   }
 
-  if (!context.assignedBuildingId || context.assignedBuildingId !== buildingId) {
+  if (
+    !context.assignedBuildingIds.includes(buildingId) &&
+    (!context.assignedBuildingId || context.assignedBuildingId !== buildingId)
+  ) {
     throw new ApiError(403, "forbidden", "You can only manage resources for your assigned building.");
   }
 }

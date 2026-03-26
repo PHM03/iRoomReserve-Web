@@ -3,6 +3,7 @@ import "server-only";
 import type { NextRequest } from "next/server";
 import { doc, getDoc } from "firebase/firestore";
 
+import { normalizeAssignedBuildings } from "@/lib/assignedBuildings";
 import { normalizeRole, type UserRole } from "@/lib/domain/roles";
 import { serverClientDb } from "@/lib/server/firebase-client";
 import { getOptionalAdminAuth } from "@/lib/server/firebase-admin";
@@ -12,6 +13,7 @@ export interface RequestAuthContext {
   role: UserRole | null;
   email: string | null;
   assignedBuildingId: string | null;
+  assignedBuildingIds: string[];
   verified: boolean;
 }
 
@@ -22,6 +24,7 @@ async function getProfileContext(uid: string) {
       role: null,
       email: null,
       assignedBuildingId: null,
+      assignedBuildingIds: [],
     };
   }
 
@@ -29,12 +32,19 @@ async function getProfileContext(uid: string) {
     role?: string;
     email?: string | null;
     assignedBuildingId?: string | null;
+    assignedBuilding?: string | null;
+    assignedBuildingIds?: string[];
+    assignedBuildings?: unknown;
   };
+
+  const assignedBuildings = normalizeAssignedBuildings(profileData);
 
   return {
     role: normalizeRole(profileData.role),
     email: profileData.email?.trim().toLowerCase() ?? null,
-    assignedBuildingId: profileData.assignedBuildingId ?? null,
+    assignedBuildingId:
+      assignedBuildings[0]?.id ?? profileData.assignedBuildingId ?? null,
+    assignedBuildingIds: assignedBuildings.map((building) => building.id),
   };
 }
 
@@ -57,6 +67,7 @@ export async function getRequestAuthContext(
           role: profileContext.role ?? fallbackRole,
           email: profileContext.email ?? decoded.email?.trim().toLowerCase() ?? null,
           assignedBuildingId: profileContext.assignedBuildingId,
+          assignedBuildingIds: profileContext.assignedBuildingIds,
           verified: true,
         };
       } catch {
@@ -68,13 +79,14 @@ export async function getRequestAuthContext(
 
   const fallbackProfileContext = fallbackUid
     ? await getProfileContext(fallbackUid)
-    : { role: null, email: null, assignedBuildingId: null };
+    : { role: null, email: null, assignedBuildingId: null, assignedBuildingIds: [] };
 
   return {
     uid: fallbackUid,
     role: fallbackProfileContext.role ?? fallbackRole,
     email: fallbackProfileContext.email,
     assignedBuildingId: fallbackProfileContext.assignedBuildingId,
+    assignedBuildingIds: fallbackProfileContext.assignedBuildingIds,
     verified: false,
   };
 }

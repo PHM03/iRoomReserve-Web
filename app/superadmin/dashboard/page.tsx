@@ -13,6 +13,7 @@ import {
   enableUserAccount,
   ManagedUser,
 } from '@/lib/auth';
+import { type AssignedBuildingReference } from '@/lib/assignedBuildings';
 import { getBuildings, Building } from '@/lib/buildings';
 import { USER_ROLES } from '@/lib/domain/roles';
 import { seedBuildings } from '@/lib/seedBuildings';
@@ -30,7 +31,7 @@ export default function SuperAdminDashboard() {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
   const [availableBuildings, setAvailableBuildings] = useState<Building[]>([]);
-  const [selectedBuildingId, setSelectedBuildingId] = useState('');
+  const [selectedBuildingIds, setSelectedBuildingIds] = useState<string[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
 
   // ─── Delete Confirmation State ─────────────────────────────────
@@ -81,7 +82,7 @@ export default function SuperAdminDashboard() {
   // ─── Handlers ─────────────────────────────────────────────────
   const openApprovalModal = async (user: ManagedUser) => {
     setSelectedUser(user);
-    setSelectedBuildingId('');
+    setSelectedBuildingIds(user.assignedBuildingIds ?? []);
     setShowApprovalModal(true);
     try {
       setAvailableBuildings(await getBuildings());
@@ -92,12 +93,14 @@ export default function SuperAdminDashboard() {
   };
 
   const handleApproveWithBuilding = async () => {
-    if (!selectedUser || !selectedBuildingId) return;
+    if (!selectedUser || selectedBuildingIds.length === 0) return;
     setModalLoading(true);
     try {
-      const building = availableBuildings.find((b) => b.id === selectedBuildingId);
-      if (!building) return;
-      await approveAdmin(selectedUser.uid, building.id, building.name, selectedUser.role);
+      const selectedBuildings: AssignedBuildingReference[] = availableBuildings
+        .filter((building) => selectedBuildingIds.includes(building.id))
+        .map((building) => ({ id: building.id, name: building.name }));
+      if (selectedBuildings.length === 0) return;
+      await approveAdmin(selectedUser.uid, selectedBuildings, selectedUser.role);
     } catch (err) {
       console.warn('Failed to approve admin:', err);
     }
@@ -216,6 +219,14 @@ export default function SuperAdminDashboard() {
   // Helper to check if a user needs building assignment during approval
   const needsBuildingAssignment = (user: ManagedUser) =>
     user.role === USER_ROLES.ADMIN || user.role === USER_ROLES.UTILITY;
+
+  const toggleSelectedBuilding = (buildingId: string) => {
+    setSelectedBuildingIds((current) =>
+      current.includes(buildingId)
+        ? current.filter((id) => id !== buildingId)
+        : [...current, buildingId]
+    );
+  };
 
   return (
     <div className="min-h-screen relative">
@@ -440,14 +451,22 @@ export default function SuperAdminDashboard() {
                     </span>
 
                     {/* Building badge for assigned admins */}
-                    {user.assignedBuilding && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/20 text-blue-300 border-blue-500/30">
+                    {(user.assignedBuildings?.length
+                      ? user.assignedBuildings
+                      : user.assignedBuilding
+                        ? [{ id: user.assignedBuildingId ?? user.assignedBuilding, name: user.assignedBuilding }]
+                        : []
+                    ).map((building) => (
+                      <span
+                        key={`${user.uid}-${building.id}`}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/20 text-blue-300 border-blue-500/30"
+                      >
                         <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                         </svg>
-                        {user.assignedBuilding}
+                        {building.name}
                       </span>
-                    )}
+                    ))}
 
                     {/* ─── Action Buttons ────────────────────────── */}
 
@@ -568,8 +587,8 @@ export default function SuperAdminDashboard() {
             onClick={() => !modalLoading && setShowApprovalModal(false)}
           />
           <div className="glass-card !bg-[#1a1a2e]/95 p-6 sm:p-8 w-full max-w-md relative z-10 !rounded-2xl border-primary/20">
-            <h2 className="text-xl font-bold text-white mb-1">Approve & Assign Building</h2>
-            <p className="text-sm text-white/40 mb-6">Assign a building for this person to manage.</p>
+            <h2 className="text-xl font-bold text-white mb-1">Approve & Assign Buildings</h2>
+            <p className="text-sm text-white/40 mb-6">Choose one or more buildings for this person to manage.</p>
 
             <div className="flex items-center space-x-4 glass-card !bg-white/5 p-4 !rounded-xl mb-6">
               <div className="w-11 h-11 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-sm shrink-0">
@@ -582,22 +601,36 @@ export default function SuperAdminDashboard() {
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-bold text-white/70 mb-1.5">Assign Building</label>
-              <select
-                value={selectedBuildingId}
-                onChange={(e) => setSelectedBuildingId(e.target.value)}
-                className="glass-input w-full px-4 py-3 bg-white/6 appearance-none cursor-pointer"
-                style={{ backgroundImage: 'none' }}
-              >
-                <option value="" disabled className="bg-[#1a1a2e] text-white/50">
-                  Select a building...
-                </option>
-                {availableBuildings.map((b) => (
-                  <option key={b.id} value={b.id} className="bg-[#1a1a2e] text-white">
-                    {b.name} {b.code ? `(${b.code})` : ''}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-sm font-bold text-white/70 mb-2">Assign Buildings</label>
+              <div className="space-y-2 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-3">
+                {availableBuildings.map((building) => {
+                  const checked = selectedBuildingIds.includes(building.id);
+
+                  return (
+                    <label
+                      key={building.id}
+                      className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-all ${
+                        checked
+                          ? 'border-primary/40 bg-primary/10 text-white'
+                          : 'border-white/10 bg-transparent text-white/70 hover:bg-white/5'
+                      }`}
+                    >
+                      <div>
+                        <p className="text-sm font-bold">{building.name}</p>
+                        <p className="text-xs text-white/40">
+                          {building.code ? `${building.code} · ` : ''}{building.floors} floors
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelectedBuilding(building.id)}
+                        className="h-4 w-4 accent-teal-400"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
               {availableBuildings.length === 0 && (
                 <p className="text-xs text-yellow-400/70 mt-2">
                   ⚠ No buildings found. Please add buildings in Firestore first.
@@ -615,7 +648,7 @@ export default function SuperAdminDashboard() {
               </button>
               <button
                 onClick={handleApproveWithBuilding}
-                disabled={!selectedBuildingId || modalLoading}
+                disabled={selectedBuildingIds.length === 0 || modalLoading}
                 className="flex-1 py-3 px-4 rounded-xl text-sm font-bold bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-all disabled:opacity-30 flex items-center justify-center"
               >
                 {modalLoading ? (

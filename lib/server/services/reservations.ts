@@ -39,6 +39,7 @@ import {
 } from "@/lib/roomStatus";
 import { ApiError } from "@/lib/server/api-error";
 import { serverClientDb } from "@/lib/server/firebase-client";
+import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
 
 type ReservationStatus =
   | "pending"
@@ -141,15 +142,7 @@ async function getApprovedReservationsForRoom(roomId: string) {
 }
 
 async function getBuildingManagerIds(buildingId: string) {
-  const usersSnapshot = await getDocs(
-    query(
-      collection(serverClientDb, "users"),
-      where("assignedBuildingId", "==", buildingId),
-      where("status", "==", "approved")
-    )
-  );
-
-  return usersSnapshot.docs.map((userDoc) => userDoc.id);
+  return getAssignedManagerIds(buildingId);
 }
 
 async function getUserIdsByEmail(email: string) {

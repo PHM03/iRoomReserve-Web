@@ -37,8 +37,18 @@ export default function UtilityStaffDashboard({
   firstName,
 }: UtilityStaffDashboardProps) {
   const { firebaseUser, profile } = useAuth();
-  const buildingId = profile?.assignedBuildingId;
-  const buildingName = profile?.assignedBuilding;
+  const managedBuildings = profile?.assignedBuildings ?? [];
+  const [selectedManagedBuildingId, setSelectedManagedBuildingId] = useState('');
+  const effectiveManagedBuildingId = managedBuildings.some(
+    (building) => building.id === selectedManagedBuildingId
+  )
+    ? selectedManagedBuildingId
+    : managedBuildings[0]?.id ?? profile?.assignedBuildingId ?? '';
+  const selectedManagedBuilding = managedBuildings.find(
+    (building) => building.id === effectiveManagedBuildingId
+  ) ?? managedBuildings[0];
+  const buildingId = selectedManagedBuilding?.id ?? profile?.assignedBuildingId;
+  const buildingName = selectedManagedBuilding?.name ?? profile?.assignedBuilding;
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -144,6 +154,25 @@ export default function UtilityStaffDashboard({
         <p className="text-white/40 mt-1">
           Managing: <span className="text-teal-400 font-bold">{buildingName}</span>
         </p>
+        {managedBuildings.length > 1 && (
+          <div className="mt-4 max-w-xs">
+            <label className="block text-xs font-bold uppercase tracking-wide text-white/35 mb-2">
+              Active Building
+            </label>
+            <select
+              value={buildingId ?? ''}
+              onChange={(event) => setSelectedManagedBuildingId(event.target.value)}
+              className="glass-input w-full px-4 py-3 bg-white/6 appearance-none cursor-pointer"
+              style={{ backgroundImage: 'none' }}
+            >
+              {managedBuildings.map((building) => (
+                <option key={building.id} value={building.id} className="bg-[#1a1a2e] text-white">
+                  {building.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">

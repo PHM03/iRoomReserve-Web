@@ -23,6 +23,10 @@ import {
 
 import { apiRequest } from "@/lib/api/client";
 import {
+  normalizeAssignedBuildings,
+  type AssignedBuildingReference,
+} from "@/lib/assignedBuildings";
+import {
   ALLOWED_EMAIL_DOMAIN,
   SUPERADMIN_EMAIL,
   SUPERADMIN_PASSWORD,
@@ -285,11 +289,19 @@ export async function getUserProfile(uid: string) {
     status?: string;
     assignedBuilding?: string;
     assignedBuildingId?: string;
+    assignedBuildings?: AssignedBuildingReference[];
+    assignedBuildingIds?: string[];
   };
+
+  const assignedBuildings = normalizeAssignedBuildings(data);
 
   return {
     ...data,
     role: normalizeRole(data.role) ?? data.role,
+    assignedBuilding: assignedBuildings[0]?.name ?? data.assignedBuilding,
+    assignedBuildingId: assignedBuildings[0]?.id ?? data.assignedBuildingId,
+    assignedBuildings,
+    assignedBuildingIds: assignedBuildings.map((building) => building.id),
   };
 }
 
@@ -329,6 +341,8 @@ export async function saveUserProfile(
     status?: string;
     assignedBuilding?: string | null;
     assignedBuildingId?: string | null;
+    assignedBuildings?: AssignedBuildingReference[] | null;
+    assignedBuildingIds?: string[] | null;
   }
 ) {
   await setDoc(
@@ -352,6 +366,8 @@ export interface ManagedUser {
   status: string;
   assignedBuilding?: string;
   assignedBuildingId?: string;
+  assignedBuildings?: AssignedBuildingReference[];
+  assignedBuildingIds?: string[];
   updatedAt?: { seconds: number; nanoseconds: number };
 }
 
@@ -366,14 +382,54 @@ function mapManagedUser(
     email: String(data.email || ""),
     role: normalizeRole(String(data.role || "")) ?? String(data.role || ""),
     status: String(data.status || ""),
-    assignedBuilding:
-      typeof data.assignedBuilding === "string"
-        ? data.assignedBuilding
-        : undefined,
-    assignedBuildingId:
-      typeof data.assignedBuildingId === "string"
-        ? data.assignedBuildingId
-        : undefined,
+    assignedBuilding: normalizeAssignedBuildings({
+      assignedBuilding:
+        typeof data.assignedBuilding === "string"
+          ? data.assignedBuilding
+          : undefined,
+      assignedBuildingId:
+        typeof data.assignedBuildingId === "string"
+          ? data.assignedBuildingId
+          : undefined,
+      assignedBuildings: data.assignedBuildings,
+      assignedBuildingIds: data.assignedBuildingIds,
+    })[0]?.name,
+    assignedBuildingId: normalizeAssignedBuildings({
+      assignedBuilding:
+        typeof data.assignedBuilding === "string"
+          ? data.assignedBuilding
+          : undefined,
+      assignedBuildingId:
+        typeof data.assignedBuildingId === "string"
+          ? data.assignedBuildingId
+          : undefined,
+      assignedBuildings: data.assignedBuildings,
+      assignedBuildingIds: data.assignedBuildingIds,
+    })[0]?.id,
+    assignedBuildings: normalizeAssignedBuildings({
+      assignedBuilding:
+        typeof data.assignedBuilding === "string"
+          ? data.assignedBuilding
+          : undefined,
+      assignedBuildingId:
+        typeof data.assignedBuildingId === "string"
+          ? data.assignedBuildingId
+          : undefined,
+      assignedBuildings: data.assignedBuildings,
+      assignedBuildingIds: data.assignedBuildingIds,
+    }),
+    assignedBuildingIds: normalizeAssignedBuildings({
+      assignedBuilding:
+        typeof data.assignedBuilding === "string"
+          ? data.assignedBuilding
+          : undefined,
+      assignedBuildingId:
+        typeof data.assignedBuildingId === "string"
+          ? data.assignedBuildingId
+          : undefined,
+      assignedBuildings: data.assignedBuildings,
+      assignedBuildingIds: data.assignedBuildingIds,
+    }).map((building) => building.id),
     updatedAt: data.updatedAt as { seconds: number; nanoseconds: number } | undefined,
   };
 }
@@ -426,16 +482,14 @@ export async function approveUser(uid: string) {
 
 export async function approveAdmin(
   uid: string,
-  buildingId: string,
-  buildingName: string,
+  buildings: AssignedBuildingReference[],
   role: string = USER_ROLES.ADMIN
 ) {
   const normalizedRole = normalizeRole(role);
   await apiRequest(`/api/admin/users/${uid}`, {
     body: {
       action: "approve-managed",
-      buildingId,
-      buildingName,
+      buildings,
       role:
         normalizedRole === USER_ROLES.UTILITY
           ? USER_ROLES.UTILITY

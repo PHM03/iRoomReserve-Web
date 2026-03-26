@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { getUserProfile, logout as firebaseLogout } from '@/lib/auth';
+import { type AssignedBuildingReference } from '@/lib/assignedBuildings';
 
 interface UserProfile {
   firstName: string;
@@ -13,6 +14,8 @@ interface UserProfile {
   status: string;
   assignedBuilding?: string;
   assignedBuildingId?: string;
+  assignedBuildings?: AssignedBuildingReference[];
+  assignedBuildingIds?: string[];
 }
 
 interface AuthContextType {
@@ -58,6 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             status: data.status || 'approved',
             assignedBuilding: (data as Record<string, unknown>).assignedBuilding as string | undefined,
             assignedBuildingId: (data as Record<string, unknown>).assignedBuildingId as string | undefined,
+            assignedBuildings: (data as Record<string, unknown>).assignedBuildings as AssignedBuildingReference[] | undefined,
+            assignedBuildingIds: (data as Record<string, unknown>).assignedBuildingIds as string[] | undefined,
           });
         } else {
           setProfile(null);
