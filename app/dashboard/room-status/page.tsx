@@ -1,74 +1,160 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import BuildingSection from '@/components/room-status/BuildingSection';
+import CampusSelector from '@/components/room-status/CampusSelector';
+import FloorAccordion from '@/components/room-status/FloorAccordion';
+import RoomList from '@/components/room-status/RoomList';
 import { useAuth } from '@/context/AuthContext';
-import { onRoomsByBuilding, Room } from '@/lib/rooms';
-import { onReservationsByBuilding, Reservation } from '@/lib/reservations';
+import { onBuildings, type Building } from '@/lib/buildings';
+import { inferCampusFromBuilding, type ReservationCampus } from '@/lib/campuses';
+import { onRoomsByBuildingIds, Room } from '@/lib/rooms';
+import {
+  onReservationsByBuildingIds,
+  Reservation,
+} from '@/lib/reservations';
+import {
+  buildCampusOptions,
+  type CampusOption,
+  groupRoomStatusesByFloor,
+  type RoomStatusViewItem,
+} from '@/lib/roomStatusView';
 import {
   isRoomInClass,
-  onSchedulesByBuilding,
+  onSchedulesByBuildingIds,
   Schedule,
 } from '@/lib/schedules';
-import StatusBadge from '@/components/StatusBadge';
 import { resolveRoomStatus } from '@/lib/roomStatus';
 
 export default function RoomStatusPage() {
   const { firebaseUser, profile } = useAuth();
   const managedBuildings = profile?.assignedBuildings ?? [];
-  const [selectedManagedBuildingId, setSelectedManagedBuildingId] = useState('');
-  const effectiveManagedBuildingId = managedBuildings.some(
-    (building) => building.id === selectedManagedBuildingId
-  )
-    ? selectedManagedBuildingId
-    : managedBuildings[0]?.id ?? profile?.assignedBuildingId ?? '';
-  const selectedManagedBuilding = managedBuildings.find(
-    (building) => building.id === effectiveManagedBuildingId
-  ) ?? managedBuildings[0];
-  const buildingId = selectedManagedBuilding?.id ?? profile?.assignedBuildingId;
-  const buildingName = selectedManagedBuilding?.name ?? profile?.assignedBuilding;
-
+  const [buildingRecords, setBuildingRecords] = useState<Building[]>([]);
+  const [selectedCampusId, setSelectedCampusId] = useState<ReservationCampus | ''>('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
 
+  const managedBuildingIds = useMemo(
+    () => [
+      ...new Set(
+        [
+          ...(profile?.assignedBuildings ?? []).map((building) => building.id),
+          profile?.assignedBuildingId ?? '',
+        ].filter(Boolean)
+      ),
+    ],
+    [profile]
+  );
+
   useEffect(() => {
-    if (!firebaseUser || !buildingId) {
+    if (!firebaseUser || managedBuildingIds.length === 0) {
       return;
     }
 
-    const unsubscribeRooms = onRoomsByBuilding(buildingId, setRooms);
-    const unsubscribeReservations = onReservationsByBuilding(
-      buildingId,
+    const unsubscribeBuildings = onBuildings((allBuildings) => {
+      setBuildingRecords(
+        allBuildings.filter((building) => managedBuildingIds.includes(building.id))
+      );
+    });
+
+    return () => {
+      unsubscribeBuildings();
+    };
+  }, [firebaseUser, managedBuildingIds]);
+
+  const liveById = new Map(buildingRecords.map((building) => [building.id, building]));
+  const fallbackNames = new Map(
+    managedBuildings.map((building) => [building.id, building.name])
+  );
+
+  if (profile?.assignedBuildingId && profile.assignedBuilding) {
+    fallbackNames.set(profile.assignedBuildingId, profile.assignedBuilding);
+  }
+
+  const managedBuildingOptions = managedBuildingIds.map((buildingId) => {
+    const liveBuilding = liveById.get(buildingId);
+    if (liveBuilding) {
+      return liveBuilding;
+    }
+
+    const fallbackName = fallbackNames.get(buildingId) ?? buildingId;
+
+    return {
+      id: buildingId,
+      name: fallbackName,
+      code: '',
+      address: '',
+      floors: 0,
+      campus:
+        inferCampusFromBuilding({
+          id: buildingId,
+          name: fallbackName,
+        }) ?? 'main',
+      assignedAdminUid: null,
+    } satisfies Building;
+  });
+
+  const campusOptions: CampusOption[] = buildCampusOptions(managedBuildingOptions);
+  const effectiveCampusId =
+    campusOptions.some((campus) => campus.id === selectedCampusId)
+      ? selectedCampusId
+      : campusOptions[0]?.id ?? '';
+  const activeCampus =
+    campusOptions.find((campus) => campus.id === effectiveCampusId) ??
+    campusOptions[0];
+  const buildingOptions = useMemo(
+    () => activeCampus?.buildings ?? [],
+    [activeCampus]
+  );
+  const activeCampusBuildingIds = useMemo(
+    () => buildingOptions.map((building) => building.buildingId),
+    [buildingOptions]
+  );
+
+  useEffect(() => {
+    if (!firebaseUser || activeCampusBuildingIds.length === 0) {
+      return;
+    }
+
+    const unsubscribeRooms = onRoomsByBuildingIds(
+      activeCampusBuildingIds,
+      setRooms
+    );
+    const unsubscribeReservations = onReservationsByBuildingIds(
+      activeCampusBuildingIds,
       setReservations
     );
-    const unsubscribeSchedules = onSchedulesByBuilding(buildingId, setSchedules);
+    const unsubscribeSchedules = onSchedulesByBuildingIds(
+      activeCampusBuildingIds,
+      setSchedules
+    );
 
     return () => {
       unsubscribeRooms();
       unsubscribeReservations();
       unsubscribeSchedules();
     };
-  }, [buildingId, firebaseUser]);
+  }, [activeCampusBuildingIds, firebaseUser]);
 
-  if (!buildingId || !buildingName) {
-    return (
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white">Room Status</h2>
-          <p className="text-white/40 mt-1">
-            No building is assigned to your account yet.
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  const roomStatuses = rooms.map((room) => ({
+  const roomStatuses: RoomStatusViewItem[] = rooms.map((room) => ({
     room,
     resolved: resolveRoomStatus(room, reservations, {
       activeSchedule: isRoomInClass(schedules, room.id),
     }),
   }));
+  const buildingSections = buildingOptions.map((building) => ({
+    building,
+    floors: groupRoomStatusesByFloor(
+      roomStatuses.filter((item) => item.room.buildingId === building.buildingId)
+    ),
+  }));
+  const shouldShowBuildingSections =
+    activeCampus?.id === 'main' || buildingSections.length > 1;
+  const campusFloorGroups = shouldShowBuildingSections
+    ? []
+    : groupRoomStatusesByFloor(roomStatuses);
+
   const availableCount = roomStatuses.filter(
     ({ resolved }) => resolved.status === 'Available'
   ).length;
@@ -79,42 +165,58 @@ export default function RoomStatusPage() {
     ({ resolved }) => resolved.status === 'Ongoing'
   ).length;
 
-  return (
-    <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-white">Room Status</h2>
+  if (managedBuildingIds.length === 0) {
+    return (
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-white">
+            Room Status &amp; Schedule
+          </h2>
           <p className="text-white/40 mt-1">
-            Live room availability for{' '}
-            <span className="text-teal-400 font-bold">{buildingName}</span>
+            No building is assigned to your account yet.
           </p>
-          {managedBuildings.length > 1 && (
-            <div className="mt-4 max-w-xs">
-              <label className="block text-xs font-bold uppercase tracking-wide text-white/35 mb-2">
-                Active Building
-              </label>
-              <select
-                value={buildingId ?? ''}
-                onChange={(event) => setSelectedManagedBuildingId(event.target.value)}
-                className="glass-input w-full px-4 py-3 bg-white/6 appearance-none cursor-pointer"
-                style={{ backgroundImage: 'none' }}
-              >
-                {managedBuildings.map((building) => (
-                  <option key={building.id} value={building.id} className="bg-[#1a1a2e] text-white">
-                    {building.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
-        <p className="text-xs text-white/35 max-w-sm">
-          Manual check-in updates this same status pipeline now, and BLE can be
-          attached to the same backend flow later.
-        </p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
+      <div className="mb-8 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-white">
+            Room Status &amp; Schedule
+          </h2>
+          <p className="text-white/40 mt-1">
+            Expand a floor to render room cards for{' '}
+            <span className="text-teal-400 font-bold">
+              {activeCampus?.label ?? 'your assigned campus'}
+            </span>
+            .
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/40 max-w-md">
+          Floors stay collapsed by default so large buildings remain easy to
+          scan without breaking the current reservation and live status flow.
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+      {campusOptions.length > 1 ? (
+        <div className="mb-6">
+          <CampusSelector
+            options={campusOptions}
+            value={effectiveCampusId}
+            onChange={(campus) => {
+              setSelectedCampusId(campus);
+              setRooms([]);
+              setReservations([]);
+              setSchedules([]);
+            }}
+          />
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <div className="glass-card p-5">
           <p className="text-xs text-white/40 font-bold">Total Rooms</p>
           <p className="text-2xl font-bold text-white mt-1">{rooms.length}</p>
@@ -140,56 +242,37 @@ export default function RoomStatusPage() {
       </div>
 
       {roomStatuses.length === 0 ? (
-        <div className="glass-card p-12 text-center">
-          <p className="text-sm text-white/30">No rooms configured yet.</p>
+        <div className="rounded-[20px] border border-white/10 bg-white/5 p-12 text-center backdrop-blur-md">
+          <p className="text-base font-bold text-white">
+            No rooms are configured for this campus yet.
+          </p>
+          <p className="text-sm text-white/35 mt-2">
+            Once rooms are added, they will be grouped into collapsible floor
+            sections automatically.
+          </p>
+        </div>
+      ) : shouldShowBuildingSections ? (
+        <div className="space-y-5">
+          {buildingSections.map((section) => (
+            <BuildingSection
+              key={section.building.buildingId}
+              building={section.building}
+              floors={section.floors}
+            />
+          ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {roomStatuses.map(({ room, resolved }) => (
-            <div
-              key={room.id}
-              className={`glass-card p-5 border-l-4 ${
-                resolved.status === 'Available'
-                  ? 'border-green-500/40'
-                  : resolved.status === 'Reserved'
-                    ? 'border-blue-500/40'
-                    : resolved.status === 'Ongoing'
-                      ? 'border-orange-500/40'
-                      : 'border-red-500/40'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-lg font-bold text-white">{room.name}</h3>
-                  <p className="text-sm text-white/40">
-                    {room.floor} | Capacity {room.capacity}
-                  </p>
-                </div>
-                <StatusBadge status={resolved.status} />
-              </div>
-              <p className="text-sm text-white/55 mt-3">{resolved.detail}</p>
-              <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <p className="text-white/25 uppercase tracking-wide">Type</p>
-                  <p className="text-white/60 mt-1">{room.roomType}</p>
-                </div>
-                <div>
-                  <p className="text-white/25 uppercase tracking-wide">Cooling</p>
-                  <p className="text-white/60 mt-1">{room.acStatus}</p>
-                </div>
-                <div>
-                  <p className="text-white/25 uppercase tracking-wide">Display</p>
-                  <p className="text-white/60 mt-1">{room.tvProjectorStatus}</p>
-                </div>
-                <div>
-                  <p className="text-white/25 uppercase tracking-wide">Reserved By</p>
-                  <p className="text-white/60 mt-1">
-                    {resolved.reservation?.userName ?? 'No active reservation'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="space-y-3">
+          {campusFloorGroups.map((floorGroup) => {
+            return (
+              <FloorAccordion
+                key={`${effectiveCampusId}:${floorGroup.id}`}
+                floor={floorGroup.label}
+                roomCount={floorGroup.rooms.length}
+                renderContent={() => <RoomList items={floorGroup.rooms} />}
+              />
+            );
+          })}
         </div>
       )}
     </main>

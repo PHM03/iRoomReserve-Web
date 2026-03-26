@@ -166,6 +166,51 @@ export function onRoomsByBuilding(
   );
 }
 
+export function onRoomsByBuildingIds(
+  buildingIds: string[],
+  callback: (rooms: Room[]) => void
+): Unsubscribe {
+  const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
+  if (uniqueBuildingIds.length === 0) {
+    callback([]);
+    return () => {};
+  }
+
+  const roomsByChunk = new Map<number, Room[]>();
+  const buildingChunks = chunkValues(uniqueBuildingIds, 10);
+
+  const emit = () => {
+    callback([...roomsByChunk.values()].flat().sort(sortRooms));
+  };
+
+  const unsubscribers = buildingChunks.map((buildingChunk, chunkIndex) =>
+    onSnapshot(
+      query(collection(db, "rooms"), where("buildingId", "in", buildingChunk)),
+      (snapshot) => {
+        roomsByChunk.set(
+          chunkIndex,
+          snapshot.docs.map((roomDoc) =>
+            mapRoom(
+              roomDoc.id,
+              roomDoc.data() as Omit<Room, "id" | "status"> & {
+                status?: string | null;
+              }
+            )
+          )
+        );
+        emit();
+      },
+      (error) => {
+        console.warn("Firestore listener error (rooms by building ids):", error);
+      }
+    )
+  );
+
+  return () => {
+    unsubscribers.forEach((unsubscribe) => unsubscribe());
+  };
+}
+
 export function onAvailableRoomsByBuilding(
   buildingId: string,
   callback: (rooms: Room[]) => void

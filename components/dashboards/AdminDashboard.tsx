@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import FloorAccordion from '@/components/room-status/FloorAccordion';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminTab } from '@/context/AdminTabContext';
 import type { AdminTab } from '@/components/NavBar';
@@ -142,6 +143,60 @@ function getBuildingFloorOptions(buildingId?: string, buildingFloors?: number) {
   }
 }
 
+const ROOM_TYPE_OPTIONS = [
+  'Conference Room',
+  'Glass Room',
+  'Classroom',
+  'Specialized Room',
+  'Gymnasium',
+] as const;
+
+const ROOM_TYPE_LABELS: Record<(typeof ROOM_TYPE_OPTIONS)[number], string> = {
+  'Conference Room': 'Conference Room',
+  'Glass Room': 'Glass Room',
+  Classroom: 'Classroom',
+  'Specialized Room': 'Specialized Room (e.g., Computer Lab)',
+  Gymnasium: 'Gymnasium',
+};
+
+const ROOM_AC_OPTIONS = [
+  'Working',
+  'Not Working',
+  'No Air Conditioning',
+] as const;
+
+const ROOM_DISPLAY_OPTIONS = [
+  'Working',
+  'Not Working',
+  'No Television or Projector',
+] as const;
+
+function getManagedBuildingDisplayLabel(input: {
+  id?: string | null;
+  name?: string | null;
+}) {
+  const searchValue = `${input.id ?? ''} ${input.name ?? ''}`.toLowerCase();
+
+  if (/\bgd[\s-]?1\b/.test(searchValue)) {
+    return 'GD1';
+  }
+
+  if (/\bgd[\s-]?2\b/.test(searchValue)) {
+    return 'GD2';
+  }
+
+  if (/\bgd[\s-]?3\b/.test(searchValue)) {
+    return 'GD3';
+  }
+
+  return input.name?.trim() || input.id?.trim() || 'Assigned Building';
+}
+
+function getManagedBuildingOptionLabel(building: { id: string; name: string }) {
+  const displayLabel = getManagedBuildingDisplayLabel(building);
+  return displayLabel === building.name ? displayLabel : `${displayLabel} - ${building.name}`;
+}
+
 // ─── Component ──────────────────────────────────────────────────
 interface AdminDashboardProps {
   firstName: string;
@@ -166,6 +221,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   ) ?? managedBuildings[0];
   const buildingId = selectedManagedBuilding?.id ?? profile?.assignedBuildingId;
   const buildingName = selectedManagedBuilding?.name ?? profile?.assignedBuilding;
+  const activeBuildingLabel = getManagedBuildingDisplayLabel({
+    id: buildingId,
+    name: buildingName,
+  });
 
   // ─── State ──────────────────────────────────────────────────
   const [requests, setRequests] = useState<Reservation[]>([]);
@@ -192,6 +251,11 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   const [editName, setEditName] = useState('');
   const [editFloor, setEditFloor] = useState('');
   const [editCapacity, setEditCapacity] = useState('');
+  const [editRoomType, setEditRoomType] = useState('');
+  const [editAcStatus, setEditAcStatus] = useState('');
+  const [editTvStatus, setEditTvStatus] = useState('');
+  const [savingRoomId, setSavingRoomId] = useState<string | null>(null);
+  const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
 
   // Feedback response state
   const [respondingId, setRespondingId] = useState<string | null>(null);
@@ -306,6 +370,39 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     setNewRoomTvStatus('');
   };
 
+  const resetEditRoomForm = () => {
+    setEditingRoomId(null);
+    setEditName('');
+    setEditFloor('');
+    setEditCapacity('');
+    setEditRoomType('');
+    setEditAcStatus('');
+    setEditTvStatus('');
+  };
+
+  const startEditingRoom = (room: Room) => {
+    setEditingRoomId(room.id);
+    setEditName(room.name);
+    setEditFloor(room.floor);
+    setEditCapacity(String(room.capacity));
+    setEditRoomType(room.roomType || '');
+    setEditAcStatus(room.acStatus || 'No Air Conditioning');
+    setEditTvStatus(room.tvProjectorStatus || 'No Television or Projector');
+  };
+
+  const handleAddRoomBuildingChange = (nextBuildingId: string) => {
+    if (!nextBuildingId || nextBuildingId === buildingId) {
+      return;
+    }
+
+    setSelectedManagedBuildingId(nextBuildingId);
+    setNewRoomFloor('');
+
+    if (addRoomStep === 2) {
+      setAddRoomStep(1);
+    }
+  };
+
   const handleAddRoom = async () => {
     if (!buildingId || !buildingName || !newRoomName.trim() || !newRoomFloor.trim() || !newRoomType) return;
     setAddingRoom(true);
@@ -330,21 +427,62 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   };
 
   const handleEditRoom = async (roomId: string) => {
+    if (!editName.trim() || !editFloor.trim() || !editRoomType) return;
+    setSavingRoomId(roomId);
+
     try {
-      await updateRoom(roomId, {
+      const payload = {
         name: editName.trim(),
         floor: editFloor.trim(),
-        capacity: parseInt(editCapacity) || 30,
-      });
-      setEditingRoomId(null);
+        roomType: editRoomType,
+        acStatus: editAcStatus || 'No Air Conditioning',
+        tvProjectorStatus: editTvStatus || 'No Television or Projector',
+        capacity: parseInt(editCapacity, 10) || 30,
+      };
+
+      await updateRoom(roomId, payload);
+      setRooms((currentRooms) =>
+        currentRooms.map((room) =>
+          room.id === roomId ? { ...room, ...payload } : room
+        )
+      );
+      resetEditRoomForm();
     } catch (err) {
       console.warn('Failed to update room:', err);
+      alert('Failed to update room. Please try again.');
+    } finally {
+      setSavingRoomId(null);
     }
   };
 
   const handleDeleteRoom = async (roomId: string) => {
     if (!confirm('Are you sure you want to delete this room?')) return;
-    try { await deleteRoom(roomId); } catch (err) { console.warn('Failed to delete:', err); }
+    setDeletingRoomId(roomId);
+
+    try {
+      await deleteRoom(roomId);
+      setRooms((currentRooms) => currentRooms.filter((room) => room.id !== roomId));
+      setSchedules((currentSchedules) =>
+        currentSchedules.filter((schedule) => schedule.roomId !== roomId)
+      );
+
+      if (editingRoomId === roomId) {
+        resetEditRoomForm();
+      }
+
+      if (schedRoomId === roomId) {
+        setSchedRoomId('');
+      }
+    } catch (err) {
+      console.warn('Failed to delete:', err);
+      alert(
+        err instanceof Error
+          ? err.message
+          : 'Failed to delete room. Please try again.'
+      );
+    } finally {
+      setDeletingRoomId(null);
+    }
   };
 
   const handleStatusChange = async (roomId: string, status: Room['status']) => {
@@ -472,6 +610,23 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     if (roomSearch && !r.name.toLowerCase().includes(roomSearch.toLowerCase())) return false;
     return true;
   });
+
+  const statusMonitorFloorGroups = useMemo(() => {
+    const roomsByFloor = new Map<string, Room[]>();
+
+    rooms.forEach((room) => {
+      const floorRooms = roomsByFloor.get(room.floor) ?? [];
+      floorRooms.push(room);
+      roomsByFloor.set(room.floor, floorRooms);
+    });
+
+    return uniqueFloors
+      .map((floor) => ({
+        floor,
+        rooms: roomsByFloor.get(floor) ?? [],
+      }))
+      .filter((floorGroup) => floorGroup.rooms.length > 0);
+  }, [rooms, uniqueFloors]);
 
   const filteredHistory = roomHistory.filter((r) => {
     if (historyFilter !== 'all' && r.status !== historyFilter) return false;
@@ -611,17 +766,29 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
 
           {/* ─── Step 0: New Room Button ─────────────────────────── */}
           {addRoomStep === 0 && (
-            <button
-              onClick={() => setAddRoomStep(1)}
-              className="w-full glass-card p-6 !rounded-2xl flex items-center justify-center gap-3 mb-8 group hover:!border-primary/40 transition-all cursor-pointer"
-            >
-              <svg className="w-6 h-6 text-white/40 group-hover:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              <span className="text-lg font-bold text-white/60 group-hover:text-white transition-colors">
-                New Room
-              </span>
-            </button>
+            <div className="mb-8 space-y-3">
+              <button
+                onClick={() => setAddRoomStep(1)}
+                className="w-full glass-card p-6 !rounded-2xl flex items-center justify-center gap-3 group hover:!border-primary/40 transition-all cursor-pointer"
+              >
+                <svg className="w-6 h-6 text-white/40 group-hover:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="text-lg font-bold text-white/60 group-hover:text-white transition-colors">
+                  New Room
+                </span>
+              </button>
+
+              <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-white/35">
+                  Active Building
+                </p>
+                <p className="mt-1 text-sm font-bold text-white">{activeBuildingLabel}</p>
+                {buildingName && activeBuildingLabel !== buildingName ? (
+                  <p className="mt-1 text-xs text-white/35">{buildingName}</p>
+                ) : null}
+              </div>
+            </div>
           )}
 
           {/* ─── Step 1: Select Floor ────────────────────────────── */}
@@ -645,6 +812,31 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
               <div className="flex gap-2 mb-6">
                 <div className="h-1 flex-1 rounded-full bg-primary" />
                 <div className="h-1 flex-1 rounded-full bg-white/10" />
+              </div>
+              <div className="mb-6">
+                <label className="block text-xs font-bold text-white/40 mb-1.5">
+                  Building
+                </label>
+                {managedBuildings.length > 1 ? (
+                  <select
+                    value={buildingId ?? ''}
+                    onChange={(event) => handleAddRoomBuildingChange(event.target.value)}
+                    className="glass-input w-full px-4 py-2.5 text-sm appearance-none cursor-pointer"
+                  >
+                    {managedBuildings.map((building) => (
+                      <option key={building.id} value={building.id}>
+                        {getManagedBuildingOptionLabel(building)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                    <p className="text-sm font-bold text-white">{activeBuildingLabel}</p>
+                    {buildingName && activeBuildingLabel !== buildingName ? (
+                      <p className="mt-1 text-xs text-white/35">{buildingName}</p>
+                    ) : null}
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {addRoomFloorOptions.map((floorLabel, index) => (
@@ -707,6 +899,32 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                 <div className="h-1 flex-1 rounded-full bg-primary" />
               </div>
 
+              <div className="mb-6">
+                <label className="block text-xs font-bold text-white/40 mb-1.5">
+                  Building
+                </label>
+                {managedBuildings.length > 1 ? (
+                  <select
+                    value={buildingId ?? ''}
+                    onChange={(event) => handleAddRoomBuildingChange(event.target.value)}
+                    className="glass-input w-full px-4 py-2.5 text-sm appearance-none cursor-pointer"
+                  >
+                    {managedBuildings.map((building) => (
+                      <option key={building.id} value={building.id}>
+                        {getManagedBuildingOptionLabel(building)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                    <p className="text-sm font-bold text-white">{activeBuildingLabel}</p>
+                    {buildingName && activeBuildingLabel !== buildingName ? (
+                      <p className="mt-1 text-xs text-white/35">{buildingName}</p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-6">
                 {/* Room Name & Type */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -728,11 +946,11 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                       className="glass-input w-full px-4 py-2.5 text-sm appearance-none cursor-pointer"
                     >
                       <option value="" disabled>Select room type</option>
-                      <option value="Conference Room">Conference Room</option>
-                      <option value="Glass Room">Glass Room</option>
-                      <option value="Classroom">Classroom</option>
-                      <option value="Specialized Room">Specialized Room (e.g., Computer Lab)</option>
-                      <option value="Gymnasium">Gymnasium</option>
+                      {ROOM_TYPE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {ROOM_TYPE_LABELS[option]}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -745,7 +963,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                   <div className="mb-4">
                     <label className="block text-xs font-bold text-white/40 mb-2">Air Conditioner Status</label>
                     <div className="flex flex-wrap gap-2">
-                      {['Working', 'Not Working', 'No Air Conditioning'].map((opt) => (
+                      {ROOM_AC_OPTIONS.map((opt) => (
                         <button
                           key={opt}
                           type="button"
@@ -765,7 +983,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                   <div className="mb-4">
                     <label className="block text-xs font-bold text-white/40 mb-2">Television or Projector</label>
                     <div className="flex flex-wrap gap-2">
-                      {['Working', 'Not Working', 'No Television or Projector'].map((opt) => (
+                      {ROOM_DISPLAY_OPTIONS.map((opt) => (
                         <button
                           key={opt}
                           type="button"
@@ -877,39 +1095,136 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                 <div key={room.id} className="glass-card p-4 sm:p-5">
                   {editingRoomId === room.id ? (
                     /* Editing Mode */
-                    <div className="flex flex-col sm:flex-row gap-3 items-end">
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <input
-                          type="text"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          className="glass-input px-3 py-2 text-sm"
-                          placeholder="Room name"
-                        />
-                        <input
-                          type="text"
-                          value={editFloor}
-                          onChange={(e) => setEditFloor(e.target.value)}
-                          className="glass-input px-3 py-2 text-sm"
-                          placeholder="Floor"
-                        />
-                        <input
-                          type="number"
-                          value={editCapacity}
-                          onChange={(e) => setEditCapacity(e.target.value)}
-                          className="glass-input px-3 py-2 text-sm"
-                          placeholder="Capacity"
-                        />
+                    <div className="space-y-5">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1.5 block text-xs font-bold text-white/40">
+                            Room Name *
+                          </label>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="glass-input w-full px-4 py-2.5 text-sm"
+                            placeholder="e.g. Room 312"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-xs font-bold text-white/40">
+                            Floor *
+                          </label>
+                          <select
+                            value={editFloor}
+                            onChange={(e) => setEditFloor(e.target.value)}
+                            className="glass-input w-full cursor-pointer appearance-none px-4 py-2.5 text-sm"
+                          >
+                            <option value="" disabled>Select floor</option>
+                            {addRoomFloorOptions.map((floorOption) => (
+                              <option key={floorOption} value={floorOption}>
+                                {floorOption}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-1.5 block text-xs font-bold text-white/40">
+                            Room Type *
+                          </label>
+                          <select
+                            value={editRoomType}
+                            onChange={(e) => setEditRoomType(e.target.value)}
+                            className="glass-input w-full cursor-pointer appearance-none px-4 py-2.5 text-sm"
+                          >
+                            <option value="" disabled>Select room type</option>
+                            {ROOM_TYPE_OPTIONS.map((option) => (
+                              <option key={option} value={option}>
+                                {ROOM_TYPE_LABELS[option]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                      <div className="flex gap-2 shrink-0">
+
+                      <div>
+                        <h5 className="mb-4 text-sm font-bold uppercase tracking-wider text-white/60">
+                          Facilities
+                        </h5>
+
+                        <div className="mb-4">
+                          <label className="mb-2 block text-xs font-bold text-white/40">
+                            Air Conditioner Status
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {ROOM_AC_OPTIONS.map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                onClick={() => setEditAcStatus(option)}
+                                className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${
+                                  editAcStatus === option
+                                    ? 'border border-primary/40 bg-primary/20 text-primary'
+                                    : 'border border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60'
+                                }`}
+                              >
+                                {option}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <label className="mb-2 block text-xs font-bold text-white/40">
+                            Television or Projector
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {ROOM_DISPLAY_OPTIONS.map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                onClick={() => setEditTvStatus(option)}
+                                className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${
+                                  editTvStatus === option
+                                    ? 'border border-primary/40 bg-primary/20 text-primary'
+                                    : 'border border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60'
+                                }`}
+                              >
+                                {option}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1.5 block text-xs font-bold text-white/40">
+                            Capacity
+                          </label>
+                          <input
+                            type="number"
+                            value={editCapacity}
+                            onChange={(e) => setEditCapacity(e.target.value)}
+                            className="glass-input w-full px-4 py-2.5 text-sm sm:w-40"
+                            placeholder="30"
+                            min={1}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => handleEditRoom(room.id)}
+                          disabled={
+                            savingRoomId === room.id ||
+                            !editName.trim() ||
+                            !editFloor.trim() ||
+                            !editRoomType
+                          }
                           className="px-4 py-2 rounded-xl text-sm font-bold bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-all"
                         >
-                          Save
+                          {savingRoomId === room.id ? 'Saving...' : 'Save Changes'}
                         </button>
                         <button
-                          onClick={() => setEditingRoomId(null)}
+                          onClick={resetEditRoomForm}
+                          disabled={savingRoomId === room.id}
                           className="px-4 py-2 rounded-xl text-sm font-bold bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 transition-all"
                         >
                           Cancel
@@ -933,21 +1248,18 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                       <div className="flex items-center gap-2 flex-wrap">
                         <StatusBadge status={room.status} />
                         <button
-                          onClick={() => {
-                            setEditingRoomId(room.id);
-                            setEditName(room.name);
-                            setEditFloor(room.floor);
-                            setEditCapacity(String(room.capacity));
-                          }}
+                          onClick={() => startEditingRoom(room)}
+                          disabled={deletingRoomId === room.id}
                           className="px-3 py-1.5 rounded-lg text-xs font-bold text-white/40 hover:text-primary hover:bg-white/5 border border-white/10 transition-all"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDeleteRoom(room.id)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-400/60 hover:text-red-300 hover:bg-red-500/10 border border-white/10 transition-all"
+                          disabled={deletingRoomId === room.id}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-400/60 hover:text-red-300 hover:bg-red-500/10 border border-white/10 transition-all disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Delete
+                          {deletingRoomId === room.id ? 'Deleting...' : 'Delete'}
                         </button>
                       </div>
                     </div>
@@ -1182,26 +1494,47 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
               <p className="text-sm text-white/30">No rooms configured. Add rooms first.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {rooms.map((room) => {
-                const effective = computeEffectiveStatus(room);
-                const statusBorder = effective.status === 'Ongoing' ? 'border-orange-500/40' : effective.status === 'Reserved' ? 'border-blue-500/40' : effective.status === 'Unavailable' ? 'border-red-500/40' : 'border-green-500/40';
-                return (
-                  <div key={room.id} className={`glass-card p-5 border-l-4 ${statusBorder}`}>
-                    <div className="flex justify-between items-start mb-2">
-                      <div><h4 className="text-lg font-bold text-white">{room.name}</h4><p className="text-sm text-white/40">{room.floor} · Cap: {room.capacity}</p></div>
-                      <StatusBadge status={effective.status} />
+            <div className="space-y-4 mb-8">
+              {statusMonitorFloorGroups.map((floorGroup) => (
+                <FloorAccordion
+                  key={floorGroup.floor}
+                  floor={floorGroup.floor}
+                  roomCount={floorGroup.rooms.length}
+                  renderContent={() => (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {floorGroup.rooms.map((room) => {
+                        const effective = computeEffectiveStatus(room);
+                        const statusBorder = effective.status === 'Ongoing'
+                          ? 'border-orange-500/40'
+                          : effective.status === 'Reserved'
+                            ? 'border-blue-500/40'
+                            : effective.status === 'Unavailable'
+                              ? 'border-red-500/40'
+                              : 'border-green-500/40';
+
+                        return (
+                          <div key={room.id} className={`glass-card p-5 border-l-4 ${statusBorder}`}>
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className="text-lg font-bold text-white">{room.name}</h4>
+                                <p className="text-sm text-white/40">{room.floor} | Cap: {room.capacity}</p>
+                              </div>
+                              <StatusBadge status={effective.status} />
+                            </div>
+                            {effective.detail && <p className="text-xs text-white/50 mb-2">{effective.detail}</p>}
+                            <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/5">
+                              <button onClick={() => handleStatusChange(room.id, 'Available')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Available' ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-green-500/10 hover:text-green-300'}`}>Available</button>
+                              <button onClick={() => handleStatusChange(room.id, 'Reserved')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Reserved' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-blue-500/10 hover:text-blue-300'}`}>Reserved</button>
+                              <button onClick={() => handleStatusChange(room.id, 'Ongoing')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Ongoing' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-orange-500/10 hover:text-orange-300'}`}>Ongoing</button>
+                              <button onClick={() => handleStatusChange(room.id, 'Unavailable')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Unavailable' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-red-500/10 hover:text-red-300'}`}>Unavailable</button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    {effective.detail && <p className="text-xs text-white/50 mb-2">{effective.detail}</p>}
-                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/5">
-                      <button onClick={() => handleStatusChange(room.id, 'Available')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Available' ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-green-500/10 hover:text-green-300'}`}>Available</button>
-                      <button onClick={() => handleStatusChange(room.id, 'Reserved')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Reserved' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-blue-500/10 hover:text-blue-300'}`}>Reserved</button>
-                      <button onClick={() => handleStatusChange(room.id, 'Ongoing')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Ongoing' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-orange-500/10 hover:text-orange-300'}`}>Ongoing</button>
-                      <button onClick={() => handleStatusChange(room.id, 'Unavailable')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Unavailable' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-white/5 text-white/30 border border-white/10 hover:bg-red-500/10 hover:text-red-300'}`}>Unavailable</button>
-                    </div>
-                  </div>
-                );
-              })}
+                  )}
+                />
+              ))}
             </div>
           )}
 

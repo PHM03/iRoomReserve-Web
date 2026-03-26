@@ -2,10 +2,12 @@ import "server-only";
 
 import {
   collection,
-  deleteDoc,
   doc,
+  getDocs,
+  query,
   serverTimestamp,
   updateDoc,
+  where,
   writeBatch,
 } from "firebase/firestore";
 
@@ -57,15 +59,44 @@ export async function updateRoomRecord(
   roomId: string,
   data: Partial<RoomCreateInput>
 ) {
-  await updateDoc(doc(serverClientDb, "rooms", roomId), {
+  const batch = writeBatch(serverClientDb);
+  const roomRef = doc(serverClientDb, "rooms", roomId);
+
+  batch.update(roomRef, {
     ...data,
     ...(data.status ? { status: normalizeRoomStatus(data.status) } : {}),
     updatedAt: serverTimestamp(),
   });
+
+  if (data.name) {
+    const scheduleSnapshot = await getDocs(
+      query(collection(serverClientDb, "schedules"), where("roomId", "==", roomId))
+    );
+
+    scheduleSnapshot.docs.forEach((scheduleDoc) => {
+      batch.update(scheduleDoc.ref, {
+        roomName: data.name,
+        updatedAt: serverTimestamp(),
+      });
+    });
+  }
+
+  await batch.commit();
 }
 
 export async function deleteRoomRecord(roomId: string) {
-  await deleteDoc(doc(serverClientDb, "rooms", roomId));
+  const batch = writeBatch(serverClientDb);
+  const roomRef = doc(serverClientDb, "rooms", roomId);
+  const scheduleSnapshot = await getDocs(
+    query(collection(serverClientDb, "schedules"), where("roomId", "==", roomId))
+  );
+
+  batch.delete(roomRef);
+  scheduleSnapshot.docs.forEach((scheduleDoc) => {
+    batch.delete(scheduleDoc.ref);
+  });
+
+  await batch.commit();
 }
 
 export async function updateRoomStatusRecord(

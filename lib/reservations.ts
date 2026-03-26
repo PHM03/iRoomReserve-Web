@@ -75,6 +75,26 @@ export type RecurringReservationCreateInput =
   | (Omit<ReservationCreateBaseInput, "date"> & DigiReservationApproverInput)
   | (Omit<ReservationCreateBaseInput, "date"> & MainReservationApproverInput);
 
+function chunkValues<T>(values: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function sortReservations(left: Reservation, right: Reservation) {
+  const leftSeconds = left.createdAt?.seconds ?? 0;
+  const rightSeconds = right.createdAt?.seconds ?? 0;
+
+  return (
+    rightSeconds - leftSeconds ||
+    right.date.localeCompare(left.date) ||
+    right.startTime.localeCompare(left.startTime) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
 export async function createReservation(
   data: ReservationCreateInput
 ): Promise<string> {
@@ -170,6 +190,56 @@ export function onReservationsByBuilding(
       console.warn("Firestore listener error (reservations by building):", error);
     }
   );
+}
+
+export function onReservationsByBuildingIds(
+  buildingIds: string[],
+  callback: (reservations: Reservation[]) => void
+): Unsubscribe {
+  const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
+  if (uniqueBuildingIds.length === 0) {
+    callback([]);
+    return () => {};
+  }
+
+  const reservationsByChunk = new Map<number, Reservation[]>();
+  const buildingChunks = chunkValues(uniqueBuildingIds, 10);
+
+  const emit = () => {
+    callback([...reservationsByChunk.values()].flat().sort(sortReservations));
+  };
+
+  const unsubscribers = buildingChunks.map((buildingChunk, chunkIndex) =>
+    onSnapshot(
+      query(
+        collection(db, "reservations"),
+        where("buildingId", "in", buildingChunk)
+      ),
+      (snapshot) => {
+        reservationsByChunk.set(
+          chunkIndex,
+          snapshot.docs.map(
+            (reservationDoc) =>
+              ({
+                id: reservationDoc.id,
+                ...reservationDoc.data(),
+              }) as Reservation
+          )
+        );
+        emit();
+      },
+      (error) => {
+        console.warn(
+          "Firestore listener error (reservations by building ids):",
+          error
+        );
+      }
+    )
+  );
+
+  return () => {
+    unsubscribers.forEach((unsubscribe) => unsubscribe());
+  };
 }
 
 export function onReservationsByUser(
