@@ -103,6 +103,45 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
+function formatOrdinalFloor(level: number) {
+  switch (level) {
+    case 1:
+      return '1st Floor';
+    case 2:
+      return '2nd Floor';
+    case 3:
+      return '3rd Floor';
+    default:
+      return `${level}th Floor`;
+  }
+}
+
+function getBuildingFloorOptions(buildingId?: string, buildingFloors?: number) {
+  switch (buildingId) {
+    case 'gd1':
+      return [
+        'Basement Floor',
+        'Ground Floor',
+        ...Array.from({ length: 7 }, (_, index) => formatOrdinalFloor(index + 2)),
+      ];
+    case 'gd2':
+      return [
+        'Ground Floor',
+        ...Array.from({ length: 9 }, (_, index) => formatOrdinalFloor(index + 2)),
+      ];
+    case 'gd3':
+      return [
+        'Ground Floor',
+        ...Array.from({ length: 10 }, (_, index) => formatOrdinalFloor(index + 2)),
+      ];
+    default:
+      return Array.from({ length: buildingFloors || 5 }, (_, index) => {
+        if (index === 0) return 'Ground Floor';
+        return formatOrdinalFloor(index);
+      });
+  }
+}
+
 // ─── Component ──────────────────────────────────────────────────
 interface AdminDashboardProps {
   firstName: string;
@@ -440,6 +479,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     if (historySearch && !r.userName.toLowerCase().includes(historySearch.toLowerCase()) && !r.roomName.toLowerCase().includes(historySearch.toLowerCase())) return false;
     return true;
   });
+  const addRoomFloorOptions = getBuildingFloorOptions(buildingId, buildingFloors);
 
   // ─── No Building Assigned State ─────────────────────────────
   if (!buildingId || !buildingName) {
@@ -607,24 +647,27 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                 <div className="h-1 flex-1 rounded-full bg-white/10" />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {Array.from({ length: buildingFloors || 5 }, (_, i) => {
-                  const floorLabel = i === 0 ? 'Ground Floor' : `${i === 1 ? '1st' : i === 2 ? '2nd' : i === 3 ? '3rd' : `${i}th`} Floor`;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        setNewRoomFloor(floorLabel);
-                        setAddRoomStep(2);
-                      }}
-                      className="glass-card !bg-white/5 p-4 !rounded-xl text-center group hover:!border-primary/40 transition-all cursor-pointer"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                        <span className="text-primary font-bold text-sm">{i === 0 ? 'G' : i}</span>
-                      </div>
-                      <p className="text-sm font-bold text-white/70 group-hover:text-white transition-colors">{floorLabel}</p>
-                    </button>
-                  );
-                })}
+                {addRoomFloorOptions.map((floorLabel, index) => (
+                  <button
+                    key={floorLabel}
+                    onClick={() => {
+                      setNewRoomFloor(floorLabel);
+                      setAddRoomStep(2);
+                    }}
+                    className="glass-card !bg-white/5 p-4 !rounded-xl text-center group hover:!border-primary/40 transition-all cursor-pointer"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
+                      <span className="text-primary font-bold text-sm">
+                        {floorLabel === 'Basement Floor'
+                          ? 'B'
+                          : floorLabel === 'Ground Floor'
+                            ? 'G'
+                            : index}
+                      </span>
+                    </div>
+                    <p className="text-sm font-bold text-white/70 group-hover:text-white transition-colors">{floorLabel}</p>
+                  </button>
+                ))}
               </div>
             </div>
           )}
