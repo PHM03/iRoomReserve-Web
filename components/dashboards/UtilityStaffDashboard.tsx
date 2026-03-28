@@ -122,7 +122,7 @@ export default function UtilityStaffDashboard({
         <div className="glass-card p-12 text-center">
           <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
             <svg
-              className="w-8 h-8 text-yellow-400"
+              className="w-8 h-8 ui-text-yellow"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -152,7 +152,7 @@ export default function UtilityStaffDashboard({
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-black">Hello, {firstName} 🔑</h2>
         <p className="text-black mt-1">
-          Managing: <span className="text-teal-400 font-bold">{buildingName}</span>
+          Managing: <span className="ui-text-teal font-bold">{buildingName}</span>
         </p>
         {managedBuildings.length > 1 && (
           <div className="mt-4 max-w-xs">
@@ -177,23 +177,23 @@ export default function UtilityStaffDashboard({
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <div className="glass-card p-5 border-l-4 border-teal-500/60">
-          <p className="text-2xl font-bold text-teal-400">{rooms.length}</p>
+          <p className="text-2xl font-bold ui-text-teal">{rooms.length}</p>
           <p className="text-xs text-black font-bold">Total Rooms</p>
         </div>
         <div className="glass-card p-5 border-l-4 border-green-500/60">
-          <p className="text-2xl font-bold text-green-400">{availableCount}</p>
+          <p className="text-2xl font-bold ui-text-green">{availableCount}</p>
           <p className="text-xs text-black font-bold">Available</p>
         </div>
         <div className="glass-card p-5 border-l-4 border-blue-500/60">
-          <p className="text-2xl font-bold text-blue-400">{reservedCount}</p>
+          <p className="text-2xl font-bold ui-text-blue">{reservedCount}</p>
           <p className="text-xs text-black font-bold">Reserved</p>
         </div>
         <div className="glass-card p-5 border-l-4 border-orange-500/60">
-          <p className="text-2xl font-bold text-orange-400">{ongoingCount}</p>
+          <p className="text-2xl font-bold ui-text-orange">{ongoingCount}</p>
           <p className="text-xs text-black font-bold">Ongoing</p>
         </div>
         <div className="glass-card p-5 border-l-4 border-yellow-500/60">
-          <p className="text-2xl font-bold text-yellow-400">{openRequests.length}</p>
+          <p className="text-2xl font-bold ui-text-yellow">{openRequests.length}</p>
           <p className="text-xs text-black font-bold">Open Requests</p>
         </div>
       </div>
@@ -375,7 +375,7 @@ export default function UtilityStaffDashboard({
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-black">Admin Requests</h3>
           {openRequests.length > 0 && (
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-blue">
               {openRequests.length} open
             </span>
           )}
@@ -393,10 +393,10 @@ export default function UtilityStaffDashboard({
             {adminRequests.slice(0, 10).map((request) => {
               const requestStatusStyle =
                 request.status === 'open'
-                  ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                  ? 'ui-badge-blue'
                   : request.status === 'responded'
-                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                    : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+                    ? 'ui-badge-green'
+                    : 'ui-badge-gray';
               const requestTypeIcon =
                 request.type === 'equipment'
                   ? '🔧'

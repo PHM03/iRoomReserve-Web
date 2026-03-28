@@ -3,12 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import {
-  onReservationsByUser,
+  getReservationsByUser,
   Reservation,
 } from '@/lib/reservations';
 import {
   createFeedback,
-  onFeedbackByUser,
+  getFeedbackByUser,
   Feedback,
 } from '@/lib/feedback';
 
@@ -29,14 +29,31 @@ export default function FeedbackPage() {
 
   useEffect(() => {
     if (!firebaseUser) return;
-    const unsubFeedback = onFeedbackByUser(firebaseUser.uid, setFeedbackList);
-    const unsubReservations = onReservationsByUser(firebaseUser.uid, setReservations);
-    return () => {
-      unsubFeedback();
-      unsubReservations();
+
+    let cancelled = false;
+
+    const loadFeedbackData = async () => {
+      try {
+        const [nextFeedback, nextReservations] = await Promise.all([
+          getFeedbackByUser(firebaseUser.uid),
+          getReservationsByUser(firebaseUser.uid),
+        ]);
+
+        if (!cancelled) {
+          setFeedbackList(nextFeedback);
+          setReservations(nextReservations);
+        }
+      } catch (error) {
+        console.error('Failed to load feedback page data:', error);
+      }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firebaseUser?.uid]);
+
+    loadFeedbackData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [firebaseUser]);
 
   // Completed reservations that don't have feedback yet
   const completedReservations = reservations.filter((r) => r.status === 'completed');
@@ -67,6 +84,12 @@ export default function FeedbackPage() {
         message: comment.trim(),
         rating,
       });
+      const [nextFeedback, nextReservations] = await Promise.all([
+        getFeedbackByUser(firebaseUser.uid),
+        getReservationsByUser(firebaseUser.uid),
+      ]);
+      setFeedbackList(nextFeedback);
+      setReservations(nextReservations);
       setSubmitSuccess(true);
       setTimeout(() => {
         setShowForm(false);
@@ -85,7 +108,7 @@ export default function FeedbackPage() {
     return Array.from({ length: 5 }, (_, i) => (
       <svg
         key={i}
-        className={`${size} ${i < count ? 'text-yellow-400' : 'text-black'}`}
+        className={`${size} ${i < count ? 'ui-text-yellow' : 'text-black'}`}
         fill="currentColor"
         viewBox="0 0 20 20"
       >
@@ -133,7 +156,7 @@ export default function FeedbackPage() {
           {submitSuccess ? (
             <div className="text-center py-8">
               <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-8 h-8 ui-text-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
@@ -174,7 +197,7 @@ export default function FeedbackPage() {
                       >
                         <svg
                           className={`w-8 h-8 ${
-                            star <= (hoverRating || rating) ? 'text-yellow-400' : 'text-black'
+                            star <= (hoverRating || rating) ? 'ui-text-yellow' : 'text-black'
                           } transition-colors`}
                           fill="currentColor"
                           viewBox="0 0 20 20"

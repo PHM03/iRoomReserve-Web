@@ -189,7 +189,7 @@ export default function RoomStatusPage() {
           </h2>
           <p className="text-black mt-1">
             Expand a floor to render room cards for{' '}
-            <span className="text-teal-400 font-bold">
+            <span className="ui-text-teal font-bold">
               {activeCampus?.label ?? 'your assigned campus'}
             </span>
             .
@@ -223,19 +223,19 @@ export default function RoomStatusPage() {
         </div>
         <div className="glass-card p-5">
           <p className="text-xs text-black font-bold">Available</p>
-          <p className="text-2xl font-bold text-green-400 mt-1">
+          <p className="text-2xl font-bold ui-text-green mt-1">
             {availableCount}
           </p>
         </div>
         <div className="glass-card p-5">
           <p className="text-xs text-black font-bold">Reserved</p>
-          <p className="text-2xl font-bold text-blue-400 mt-1">
+          <p className="text-2xl font-bold ui-text-blue mt-1">
             {reservedCount}
           </p>
         </div>
         <div className="glass-card p-5">
           <p className="text-xs text-black font-bold">Ongoing</p>
-          <p className="text-2xl font-bold text-orange-400 mt-1">
+          <p className="text-2xl font-bold ui-text-orange mt-1">
             {ongoingCount}
           </p>
         </div>

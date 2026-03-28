@@ -57,8 +57,8 @@ import {
 // ─── Helpers ────────────────────────────────────────────────────
 function RoleBadge({ role }: { role: string }) {
   const style = role === 'Faculty'
-    ? 'bg-green-500/20 text-green-300 border-green-500/30'
-    : 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+    ? 'ui-badge-green'
+    : 'ui-badge-blue';
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${style}`}>
       {role}
@@ -69,15 +69,15 @@ function RoleBadge({ role }: { role: string }) {
 function StatusBadge({ status }: { status: string }) {
   const style = (() => {
     switch (status) {
-      case 'Ongoing': return 'bg-orange-500/20 text-orange-300 border-orange-500/30';
-      case 'Reserved': return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-      case 'Unavailable': return 'bg-red-500/20 text-red-300 border-red-500/30';
-      case 'Available': return 'bg-green-500/20 text-green-300 border-green-500/30';
-      case 'approved': return 'bg-green-500/20 text-green-300 border-green-500/30';
-      case 'rejected': return 'bg-red-500/20 text-red-300 border-red-500/30';
-      case 'pending': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
-      case 'completed': return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-      default: return 'bg-dark/10 text-black border-dark/20';
+      case 'Ongoing': return 'ui-badge-orange';
+      case 'Reserved': return 'ui-badge-blue';
+      case 'Unavailable': return 'ui-badge-red';
+      case 'Available': return 'ui-badge-green';
+      case 'approved': return 'ui-badge-green';
+      case 'rejected': return 'ui-badge-red';
+      case 'pending': return 'ui-badge-yellow';
+      case 'completed': return 'ui-badge-blue';
+      default: return 'ui-badge-gray';
     }
   })();
   return (
@@ -93,7 +93,7 @@ function StarRating({ rating }: { rating: number }) {
       {[1, 2, 3, 4, 5].map((star) => (
         <svg
           key={star}
-          className={`w-4 h-4 ${star <= rating ? 'text-yellow-400' : 'text-black'}`}
+          className={`w-4 h-4 ${star <= rating ? 'ui-text-yellow' : 'text-black'}`}
           fill="currentColor"
           viewBox="0 0 20 20"
         >
@@ -268,7 +268,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   // History filter state
   const [historyFilter, setHistoryFilter] = useState<string>('all');
   const [historySearch, setHistorySearch] = useState('');
-  const [historyTypeFilter, setHistoryTypeFilter] = useState<string>('all');
+  const [historyTypeFilter] = useState<string>('all');
 
   // Schedules state
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -646,7 +646,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
         </div>
         <div className="glass-card p-12 text-center">
           <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-8 h-8 ui-text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
           </div>
@@ -1218,7 +1218,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                             !editFloor.trim() ||
                             !editRoomType
                           }
-                          className="px-4 py-2 rounded-xl text-sm font-bold bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-all"
+                          className="px-4 py-2 rounded-xl text-sm font-bold ui-button-green"
                         >
                           {savingRoomId === room.id ? 'Saving...' : 'Save Changes'}
                         </button>
@@ -1257,7 +1257,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                         <button
                           onClick={() => handleDeleteRoom(room.id)}
                           disabled={deletingRoomId === room.id}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-400/60 hover:text-red-300 hover:bg-red-500/10 border border-dark/10 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold ui-button-ghost ui-text-red ui-button-ghost-danger disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {deletingRoomId === room.id ? 'Deleting...' : 'Delete'}
                         </button>
@@ -1366,10 +1366,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           {/* Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
             <div className="glass-card p-4"><p className="text-xs text-black font-bold">Total Rooms</p><p className="text-2xl font-bold text-black mt-1">{rooms.length}</p></div>
-            <div className="glass-card p-4"><p className="text-xs text-black font-bold">Reserved</p><p className="text-2xl font-bold text-blue-400 mt-1">{reservedCount}</p></div>
-            <div className="glass-card p-4"><p className="text-xs text-black font-bold">Available</p><p className="text-2xl font-bold text-green-400 mt-1">{availableCount}</p></div>
-            <button onClick={() => setActiveTab('pending')} className="glass-card p-4 text-left hover:!border-yellow-500/40 transition-all cursor-pointer"><p className="text-xs text-black font-bold">Pending Requests</p><p className="text-2xl font-bold text-yellow-400 mt-1">{pendingCount}</p><p className="text-[10px] text-black mt-0.5">Click to review →</p></button>
-            <div className="glass-card p-4"><p className="text-xs text-black font-bold">Ongoing</p><p className="text-2xl font-bold text-orange-400 mt-1">{ongoingCount}</p></div>
+            <div className="glass-card p-4"><p className="text-xs text-black font-bold">Reserved</p><p className="text-2xl font-bold ui-text-blue mt-1">{reservedCount}</p></div>
+            <div className="glass-card p-4"><p className="text-xs text-black font-bold">Available</p><p className="text-2xl font-bold ui-text-green mt-1">{availableCount}</p></div>
+            <button onClick={() => setActiveTab('pending')} className="glass-card p-4 text-left hover:!border-yellow-500/40 transition-all cursor-pointer"><p className="text-xs text-black font-bold">Pending Requests</p><p className="text-2xl font-bold ui-text-yellow mt-1">{pendingCount}</p><p className="text-[10px] text-black mt-0.5">Click to review →</p></button>
+            <div className="glass-card p-4"><p className="text-xs text-black font-bold">Ongoing</p><p className="text-2xl font-bold ui-text-orange mt-1">{ongoingCount}</p></div>
           </div>
 
           {/* Live Room Status Grid */}
@@ -1419,7 +1419,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                               <p className="text-xs text-black mt-0.5">{s.roomName} · {s.instructorName}</p>
                               <p className="text-xs text-black mt-1">{formatTime12h(s.startTime)} – {formatTime12h(s.endTime)}</p>
                             </div>
-                            {isActive && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">In Progress</span>}
+                            {isActive && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ui-badge-orange">In Progress</span>}
                           </div>
                         </div>
                       );
@@ -1450,7 +1450,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                   className="glass-card p-4 w-full text-left hover:!border-yellow-500/30 transition-all cursor-pointer"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400 font-bold text-sm shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center ui-text-yellow font-bold text-sm shrink-0">
                       {req.userName.split(' ').map(n => n[0]).join('').toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -1523,10 +1523,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                             </div>
                             {effective.detail && <p className="text-xs text-black mb-2">{effective.detail}</p>}
                             <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-dark/5">
-                              <button onClick={() => handleStatusChange(room.id, 'Available')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Available' ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-dark/5 text-black border border-dark/10 hover:bg-green-500/10 hover:text-green-300'}`}>Available</button>
-                              <button onClick={() => handleStatusChange(room.id, 'Reserved')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Reserved' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-dark/5 text-black border border-dark/10 hover:bg-blue-500/10 hover:text-blue-300'}`}>Reserved</button>
-                              <button onClick={() => handleStatusChange(room.id, 'Ongoing')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Ongoing' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : 'bg-dark/5 text-black border border-dark/10 hover:bg-orange-500/10 hover:text-orange-300'}`}>Ongoing</button>
-                              <button onClick={() => handleStatusChange(room.id, 'Unavailable')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Unavailable' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-dark/5 text-black border border-dark/10 hover:bg-red-500/10 hover:text-red-300'}`}>Unavailable</button>
+                              <button onClick={() => handleStatusChange(room.id, 'Available')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Available' ? 'ui-button-green' : 'ui-button-gray'}`}>Available</button>
+                              <button onClick={() => handleStatusChange(room.id, 'Reserved')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Reserved' ? 'ui-button-blue' : 'ui-button-gray'}`}>Reserved</button>
+                              <button onClick={() => handleStatusChange(room.id, 'Ongoing')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Ongoing' ? 'ui-button-orange' : 'ui-button-gray'}`}>Ongoing</button>
+                              <button onClick={() => handleStatusChange(room.id, 'Unavailable')} className={`py-1.5 rounded-lg text-xs font-bold transition-all ${room.status === 'Unavailable' ? 'ui-button-red' : 'ui-button-gray'}`}>Unavailable</button>
                             </div>
                           </div>
                         );
@@ -1620,7 +1620,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                               <button onClick={() => handleEditSchedule(s)} className="p-2 rounded-lg text-black hover:text-primary hover:bg-primary/10 transition-all" title="Edit">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                               </button>
-                              <button onClick={() => handleDeleteSchedule(s.id)} className="p-2 rounded-lg text-black hover:text-red-400 hover:bg-red-500/10 transition-all" title="Delete">
+                              <button onClick={() => handleDeleteSchedule(s.id)} className="p-2 rounded-lg ui-button-ghost ui-button-ghost-danger transition-all" title="Delete">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                               </button>
                             </div>
@@ -1696,7 +1696,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{res.roomName}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${res.type === 'reservation' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-purple-500/20 text-purple-300 border-purple-500/30'}`}>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${res.type === 'reservation' ? 'ui-badge-blue' : 'ui-badge-purple'}`}>
                             {res.type === 'reservation' ? 'Reservation' : 'Class'}
                           </span>
                         </td>
@@ -1728,7 +1728,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                       </div>
                       <div className="flex justify-between">
                         <span className="text-black">Type:</span>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${res.type === 'reservation' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-purple-500/20 text-purple-300 border-purple-500/30'}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${res.type === 'reservation' ? 'ui-badge-blue' : 'ui-badge-purple'}`}>
                           {res.type === 'reservation' ? 'Reservation' : 'Class'}
                         </span>
                       </div>
@@ -1767,13 +1767,13 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
               <h3 className="text-xl font-bold text-black flex items-center gap-3">
                 Pending Reservations
                 {requests.length > 0 && (
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-yellow">
                     {requests.length} pending
                   </span>
                 )}
               </h3>
               <p className="text-black mt-1 text-sm">
-                Review and approve reservation requests for <span className="text-teal-400 font-bold">{buildingName}</span>
+                Review and approve reservation requests for <span className="ui-text-teal font-bold">{buildingName}</span>
               </p>
             </div>
           </div>
@@ -1794,7 +1794,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                     {/* User Info Row */}
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400 font-bold text-sm shrink-0">
+                        <div className="w-12 h-12 rounded-full bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center ui-text-yellow font-bold text-sm shrink-0">
                           {req.userName.split(' ').map(n => n[0]).join('').toUpperCase()}
                         </div>
                         <div>
@@ -1805,7 +1805,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           <p className="text-xs text-black">Reservation Request</p>
                         </div>
                       </div>
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-yellow">
                         Pending
                       </span>
                     </div>
@@ -1848,7 +1848,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                       <button
                         onClick={() => handleApprove(req.id)}
                         disabled={actionLoading === req.id}
-                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-all disabled:opacity-50"
+                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold ui-button-green disabled:opacity-50"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -1858,7 +1858,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                       <button
                         onClick={() => handleReject(req.id)}
                         disabled={actionLoading === req.id}
-                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all disabled:opacity-50"
+                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold ui-button-red disabled:opacity-50"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1919,13 +1919,13 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                 <h3 className="text-xl font-bold text-black flex items-center gap-3">
                   Inbox
                   {openCount > 0 && (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-blue">
                       {openCount} new
                     </span>
                   )}
                 </h3>
                 <p className="text-black mt-1 text-sm">
-                  Messages from users in <span className="text-teal-400 font-bold">{buildingName}</span>
+                  Messages from users in <span className="ui-text-teal font-bold">{buildingName}</span>
                 </p>
               </div>
             </div>
@@ -1978,9 +1978,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                               <div className="flex items-center gap-2 mb-0.5">
                                 <h4 className="text-sm font-bold text-black">{req.userName}</h4>
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                  req.status === 'open' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
-                                  req.status === 'responded' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                                  'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                                  req.status === 'open' ? 'ui-badge-blue' :
+                                  req.status === 'responded' ? 'ui-badge-green' :
+                                  'ui-badge-gray'
                                 } capitalize`}>
                                   {req.status}
                                 </span>
@@ -2010,7 +2010,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           {/* Admin Response */}
                           {req.adminResponse && (
                             <div className="mt-4">
-                              <p className="text-xs font-bold text-green-400 mb-2">Your Response</p>
+                              <p className="text-xs font-bold ui-text-green mb-2">Your Response</p>
                               <div className="bg-green-500/5 border border-green-500/15 rounded-xl p-3">
                                 <p className="text-sm text-black leading-relaxed">{req.adminResponse}</p>
                               </div>

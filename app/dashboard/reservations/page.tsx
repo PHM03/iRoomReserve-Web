@@ -302,7 +302,7 @@ export default function MyReservationsPage() {
                       <button
                         onClick={() => handleCancel(reservation.id)}
                         disabled={actionLoading === reservation.id}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-all disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl text-xs font-bold ui-button-red disabled:opacity-50"
                       >
                         {actionLoading === reservation.id ? 'Processing...' : 'Cancel'}
                       </button>
@@ -311,7 +311,7 @@ export default function MyReservationsPage() {
                       <button
                         onClick={() => handleCheckIn(reservation.id)}
                         disabled={actionLoading === reservation.id}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-orange-300 bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20 transition-all disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl text-xs font-bold ui-button-orange disabled:opacity-50"
                       >
                         {actionLoading === reservation.id
                           ? 'Processing...'
@@ -322,7 +322,7 @@ export default function MyReservationsPage() {
                       <button
                         onClick={() => handleComplete(reservation.id)}
                         disabled={actionLoading === reservation.id}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-green-400 bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-all disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl text-xs font-bold ui-button-green disabled:opacity-50"
                       >
                         {actionLoading === reservation.id
                           ? 'Processing...'
@@ -332,7 +332,7 @@ export default function MyReservationsPage() {
                     <button
                       onClick={() => handleDelete(reservation.id)}
                       disabled={actionLoading === reservation.id}
-                      className="p-2 rounded-xl text-black hover:text-red-400 hover:bg-red-500/10 border border-dark/10 transition-all disabled:opacity-50"
+                      className="p-2 rounded-xl ui-button-ghost ui-button-ghost-danger disabled:opacity-50"
                       title="Delete reservation"
                     >
                       <svg

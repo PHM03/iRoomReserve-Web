@@ -189,21 +189,21 @@ export default function SuperAdminDashboard() {
 
   const getRoleBadge = (role: string) => {
     switch (role) {
-      case 'Student': return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-      case 'Faculty Professor': return 'bg-green-500/20 text-green-300 border-green-500/30';
-      case 'Utility Staff': return 'bg-teal-500/20 text-teal-300 border-teal-500/30';
-      case 'Administrator': return 'bg-red-500/20 text-red-300 border-red-500/30';
-      default: return 'bg-dark/10 text-black border-dark/20';
+      case 'Student': return 'ui-badge-blue';
+      case 'Faculty Professor': return 'ui-badge-green';
+      case 'Utility Staff': return 'ui-badge-teal';
+      case 'Administrator': return 'ui-badge-red';
+      default: return 'ui-badge-gray';
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'approved': return 'bg-green-500/20 text-green-300 border-green-500/30';
-      case 'pending': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
-      case 'rejected': return 'bg-red-500/20 text-red-300 border-red-500/30';
-      case 'disabled': return 'bg-gray-500/20 text-gray-300 border-gray-500/30';
-      default: return 'bg-dark/10 text-black border-dark/20';
+      case 'approved': return 'ui-badge-green';
+      case 'pending': return 'ui-badge-yellow';
+      case 'rejected': return 'ui-badge-red';
+      case 'disabled': return 'ui-badge-gray';
+      default: return 'ui-badge-gray';
     }
   };
 
@@ -257,7 +257,7 @@ export default function SuperAdminDashboard() {
                 <div className="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
                   SA
                 </div>
-                <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ui-badge-purple">
                   Super Admin
                 </span>
               </div>
@@ -306,10 +306,10 @@ export default function SuperAdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-black font-bold">Pending</p>
-                <p className="text-2xl font-bold text-yellow-400 mt-1">{pendingUsers.length}</p>
+                <p className="text-2xl font-bold ui-text-yellow mt-1">{pendingUsers.length}</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 ui-text-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -319,10 +319,10 @@ export default function SuperAdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-black font-bold">Students</p>
-                <p className="text-2xl font-bold text-blue-400 mt-1">{students.length}</p>
+                <p className="text-2xl font-bold ui-text-blue mt-1">{students.length}</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 ui-text-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
               </div>
@@ -332,10 +332,10 @@ export default function SuperAdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-black font-bold">Faculty Prof</p>
-                <p className="text-2xl font-bold text-green-400 mt-1">{facultyProfessors.length}</p>
+                <p className="text-2xl font-bold ui-text-green mt-1">{facultyProfessors.length}</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 ui-text-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
                 </svg>
               </div>
@@ -345,10 +345,10 @@ export default function SuperAdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-black font-bold">Utility Staff</p>
-                <p className="text-2xl font-bold text-teal-400 mt-1">{utilityUsers.length}</p>
+                <p className="text-2xl font-bold ui-text-teal mt-1">{utilityUsers.length}</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-teal-500/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 ui-text-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
@@ -359,10 +359,10 @@ export default function SuperAdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-black font-bold">Admins</p>
-                <p className="text-2xl font-bold text-red-400 mt-1">{administrators.length}</p>
+                <p className="text-2xl font-bold ui-text-red mt-1">{administrators.length}</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 ui-text-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               </div>
@@ -372,10 +372,10 @@ export default function SuperAdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-black font-bold">Disabled</p>
-                <p className="text-2xl font-bold text-gray-400 mt-1">{disabledUsers.length}</p>
+                <p className="text-2xl font-bold ui-text-gray mt-1">{disabledUsers.length}</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-gray-500/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 ui-text-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                 </svg>
               </div>
@@ -459,7 +459,7 @@ export default function SuperAdminDashboard() {
                     ).map((building) => (
                       <span
                         key={`${user.uid}-${building.id}`}
-                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/20 text-blue-300 border-blue-500/30"
+                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-blue"
                       >
                         <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -477,7 +477,7 @@ export default function SuperAdminDashboard() {
                           <button
                             onClick={() => openApprovalModal(user)}
                             disabled={actionLoading === user.uid}
-                            className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-all disabled:opacity-50"
+                            className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-green disabled:opacity-50"
                           >
                             <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -488,7 +488,7 @@ export default function SuperAdminDashboard() {
                           <button
                             onClick={() => handleApprove(user.uid)}
                             disabled={actionLoading === user.uid}
-                            className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-all disabled:opacity-50"
+                            className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-green disabled:opacity-50"
                           >
                             <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -499,7 +499,7 @@ export default function SuperAdminDashboard() {
                         <button
                           onClick={() => handleReject(user.uid)}
                           disabled={actionLoading === user.uid}
-                          className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all disabled:opacity-50"
+                          className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-red disabled:opacity-50"
                         >
                           <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -515,7 +515,7 @@ export default function SuperAdminDashboard() {
                         <button
                           onClick={() => handleDisable(user.uid)}
                           disabled={actionLoading === user.uid}
-                          className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-yellow-500/10 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/20 transition-all disabled:opacity-50"
+                          className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-yellow disabled:opacity-50"
                           title="Disable account"
                         >
                           <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -527,7 +527,7 @@ export default function SuperAdminDashboard() {
                           <button
                             onClick={() => handleRevokeAdmin(user)}
                             disabled={actionLoading === user.uid}
-                            className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-dark/5 text-black border border-dark/10 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30 transition-all disabled:opacity-50"
+                            className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-ghost ui-button-ghost-danger disabled:opacity-50"
                           >
                             Revoke
                           </button>
@@ -540,7 +540,7 @@ export default function SuperAdminDashboard() {
                       <button
                         onClick={() => handleEnable(user.uid)}
                         disabled={actionLoading === user.uid}
-                        className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-green-500/10 text-green-300 border border-green-500/30 hover:bg-green-500/20 transition-all disabled:opacity-50"
+                        className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-green disabled:opacity-50"
                       >
                         <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -554,7 +554,7 @@ export default function SuperAdminDashboard() {
                       <button
                         onClick={() => needsBuildingAssignment(user) ? openApprovalModal(user) : handleApprove(user.uid)}
                         disabled={actionLoading === user.uid}
-                        className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-dark/5 text-black border border-dark/10 hover:bg-green-500/20 hover:text-green-300 hover:border-green-500/30 transition-all disabled:opacity-50"
+                        className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-ghost ui-button-ghost-success disabled:opacity-50"
                       >
                         Reinstate
                       </button>
@@ -564,7 +564,7 @@ export default function SuperAdminDashboard() {
                     <button
                       onClick={() => { setDeletingUser(user); setShowDeleteModal(true); }}
                       disabled={actionLoading === user.uid}
-                      className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-dark/5 text-red-400/60 border border-dark/10 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30 transition-all disabled:opacity-50"
+                      className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-ghost ui-text-red ui-button-ghost-danger disabled:opacity-50"
                       title="Delete account"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -632,7 +632,7 @@ export default function SuperAdminDashboard() {
                 })}
               </div>
               {availableBuildings.length === 0 && (
-                <p className="text-xs text-yellow-400/70 mt-2">
+                <p className="text-xs ui-text-yellow mt-2">
                   ⚠ No buildings found. Please add buildings in Firestore first.
                 </p>
               )}
@@ -649,7 +649,7 @@ export default function SuperAdminDashboard() {
               <button
                 onClick={handleApproveWithBuilding}
                 disabled={selectedBuildingIds.length === 0 || modalLoading}
-                className="flex-1 py-3 px-4 rounded-xl text-sm font-bold bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-all disabled:opacity-30 flex items-center justify-center"
+                className="flex-1 py-3 px-4 rounded-xl text-sm font-bold ui-button-green disabled:opacity-30 flex items-center justify-center"
               >
                 {modalLoading ? (
                   <>
@@ -682,7 +682,7 @@ export default function SuperAdminDashboard() {
           />
           <div className="glass-card !bg-white/95 p-6 sm:p-8 w-full max-w-md relative z-10 !rounded-2xl border-red-500/20">
             <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-7 h-7 ui-text-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
             </div>
@@ -702,7 +702,7 @@ export default function SuperAdminDashboard() {
               <button
                 onClick={handleDeleteConfirm}
                 disabled={actionLoading === deletingUser.uid}
-                className="flex-1 py-3 px-4 rounded-xl text-sm font-bold bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all disabled:opacity-50 flex items-center justify-center"
+                className="flex-1 py-3 px-4 rounded-xl text-sm font-bold ui-button-red disabled:opacity-50 flex items-center justify-center"
               >
                 {actionLoading === deletingUser.uid ? (
                   <>

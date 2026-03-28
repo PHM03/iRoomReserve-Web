@@ -27,30 +27,30 @@ interface StatusBadgeProps {
 function getBadgeStyle(status: string): string {
   switch (status) {
     case 'Available':
-      return 'bg-green-100/90 text-green-800 border-green-300/80 shadow-[inset_0_0_0_1px_rgba(34,197,94,0.08)]';
+      return 'ui-badge-green';
     case 'Reserved':
-      return 'bg-blue-100/90 text-blue-800 border-blue-300/80 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.08)]';
+      return 'ui-badge-blue';
     case 'Ongoing':
     case 'Occupied':
-      return 'bg-orange-100/90 text-orange-800 border-orange-300/80 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.08)]';
+      return 'ui-badge-orange';
     case 'Unavailable':
-      return 'bg-red-100/90 text-red-800 border-red-300/80 shadow-[inset_0_0_0_1px_rgba(239,68,68,0.08)]';
+      return 'ui-badge-red';
     case 'approved':
     case 'responded':
-      return 'bg-green-100/90 text-green-800 border-green-300/80 shadow-[inset_0_0_0_1px_rgba(34,197,94,0.08)]';
+      return 'ui-badge-green';
     case 'pending':
     case 'open':
-      return 'bg-blue-100/90 text-blue-800 border-blue-300/80 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.08)]';
+      return 'ui-badge-blue';
     case 'completed':
-      return 'bg-yellow-100/90 text-yellow-800 border-yellow-300/80 shadow-[inset_0_0_0_1px_rgba(234,179,8,0.08)]';
+      return 'ui-badge-yellow';
     case 'rejected':
-      return 'bg-red-100/90 text-red-800 border-red-300/80 shadow-[inset_0_0_0_1px_rgba(239,68,68,0.08)]';
+      return 'ui-badge-red';
     case 'cancelled':
     case 'closed':
     case 'Vacant':
-      return 'bg-[#f0f0f0] text-[#343434] border-[#d1d1d1]';
+      return 'ui-badge-gray';
     default:
-      return 'bg-[#f0f0f0] text-[#343434] border-[#d1d1d1]';
+      return 'ui-badge-gray';
   }
 }
 

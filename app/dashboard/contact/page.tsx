@@ -118,10 +118,10 @@ export default function ContactAdminPage() {
 
   const statusStyle = (status: string) => {
     switch (status) {
-      case 'open': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'responded': return 'bg-green-500/20 text-green-400 border-green-500/30';
-      case 'closed': return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
-      default: return 'bg-dark/10 text-black border-dark/20';
+      case 'open': return 'ui-badge-blue';
+      case 'responded': return 'ui-badge-green';
+      case 'closed': return 'ui-badge-gray';
+      default: return 'ui-badge-gray';
     }
   };
 
@@ -151,7 +151,7 @@ export default function ContactAdminPage() {
           {submitSuccess ? (
             <div className="text-center py-8">
               <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-8 h-8 ui-text-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>

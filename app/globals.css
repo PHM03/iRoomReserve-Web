@@ -163,3 +163,213 @@ select option {
   color: #000000;
   padding: 8px;
 }
+
+.ui-badge-blue,
+.ui-badge-green,
+.ui-badge-orange,
+.ui-badge-red,
+.ui-badge-yellow,
+.ui-badge-gray,
+.ui-badge-purple,
+.ui-badge-teal {
+  box-shadow: inset 0 0 0 1px rgba(52, 52, 52, 0.04);
+}
+
+.ui-badge-blue {
+  background: rgba(219, 234, 254, 0.92);
+  color: #1d4ed8;
+  border-color: rgba(147, 197, 253, 0.85);
+}
+
+.ui-badge-green {
+  background: rgba(220, 252, 231, 0.92);
+  color: #166534;
+  border-color: rgba(134, 239, 172, 0.85);
+}
+
+.ui-badge-orange {
+  background: rgba(255, 237, 213, 0.94);
+  color: #c2410c;
+  border-color: rgba(253, 186, 116, 0.88);
+}
+
+.ui-badge-red {
+  background: rgba(254, 226, 226, 0.94);
+  color: #b91c1c;
+  border-color: rgba(252, 165, 165, 0.88);
+}
+
+.ui-badge-yellow {
+  background: rgba(254, 249, 195, 0.94);
+  color: #a16207;
+  border-color: rgba(253, 224, 71, 0.82);
+}
+
+.ui-badge-gray {
+  background: rgba(243, 244, 246, 0.96);
+  color: #374151;
+  border-color: rgba(209, 213, 219, 0.9);
+}
+
+.ui-badge-purple {
+  background: rgba(237, 233, 254, 0.94);
+  color: #6d28d9;
+  border-color: rgba(196, 181, 253, 0.88);
+}
+
+.ui-badge-teal {
+  background: rgba(204, 251, 241, 0.92);
+  color: #0f766e;
+  border-color: rgba(94, 234, 212, 0.85);
+}
+
+.ui-button-blue,
+.ui-button-green,
+.ui-button-orange,
+.ui-button-red,
+.ui-button-yellow,
+.ui-button-gray,
+.ui-button-purple {
+  transition: all 0.2s ease;
+}
+
+.ui-button-blue {
+  background: rgba(219, 234, 254, 0.92);
+  color: #1d4ed8;
+  border: 1px solid rgba(147, 197, 253, 0.85);
+}
+
+.ui-button-blue:hover:not(:disabled) {
+  background: rgba(191, 219, 254, 0.98);
+  color: #1e3a8a;
+  border-color: rgba(96, 165, 250, 0.92);
+}
+
+.ui-button-green {
+  background: rgba(220, 252, 231, 0.92);
+  color: #166534;
+  border: 1px solid rgba(134, 239, 172, 0.85);
+}
+
+.ui-button-green:hover:not(:disabled) {
+  background: rgba(187, 247, 208, 0.98);
+  color: #14532d;
+  border-color: rgba(74, 222, 128, 0.92);
+}
+
+.ui-button-orange {
+  background: rgba(255, 237, 213, 0.94);
+  color: #c2410c;
+  border: 1px solid rgba(253, 186, 116, 0.88);
+}
+
+.ui-button-orange:hover:not(:disabled) {
+  background: rgba(254, 215, 170, 0.98);
+  color: #9a3412;
+  border-color: rgba(251, 146, 60, 0.92);
+}
+
+.ui-button-red {
+  background: rgba(254, 226, 226, 0.94);
+  color: #b91c1c;
+  border: 1px solid rgba(252, 165, 165, 0.88);
+}
+
+.ui-button-red:hover:not(:disabled) {
+  background: rgba(254, 202, 202, 0.98);
+  color: #991b1b;
+  border-color: rgba(248, 113, 113, 0.92);
+}
+
+.ui-button-yellow {
+  background: rgba(254, 249, 195, 0.94);
+  color: #a16207;
+  border: 1px solid rgba(253, 224, 71, 0.82);
+}
+
+.ui-button-yellow:hover:not(:disabled) {
+  background: rgba(254, 240, 138, 0.98);
+  color: #854d0e;
+  border-color: rgba(250, 204, 21, 0.9);
+}
+
+.ui-button-gray {
+  background: rgba(243, 244, 246, 0.96);
+  color: #374151;
+  border: 1px solid rgba(209, 213, 219, 0.9);
+}
+
+.ui-button-gray:hover:not(:disabled) {
+  background: rgba(229, 231, 235, 0.98);
+  color: #1f2937;
+  border-color: rgba(156, 163, 175, 0.92);
+}
+
+.ui-button-purple {
+  background: rgba(237, 233, 254, 0.94);
+  color: #6d28d9;
+  border: 1px solid rgba(196, 181, 253, 0.88);
+}
+
+.ui-button-purple:hover:not(:disabled) {
+  background: rgba(221, 214, 254, 0.98);
+  color: #5b21b6;
+  border-color: rgba(167, 139, 250, 0.92);
+}
+
+.ui-button-ghost {
+  background: rgba(245, 245, 245, 0.95);
+  color: #1f2937;
+  border: 1px solid rgba(52, 52, 52, 0.14);
+  transition: all 0.2s ease;
+}
+
+.ui-button-ghost:hover:not(:disabled) {
+  background: rgba(241, 241, 241, 0.98);
+  color: #a12124;
+  border-color: rgba(161, 33, 36, 0.24);
+}
+
+.ui-button-ghost-danger:hover:not(:disabled) {
+  background: rgba(254, 242, 242, 0.98);
+  color: #b91c1c;
+  border-color: rgba(252, 165, 165, 0.88);
+}
+
+.ui-button-ghost-success:hover:not(:disabled) {
+  background: rgba(240, 253, 244, 0.98);
+  color: #166534;
+  border-color: rgba(134, 239, 172, 0.88);
+}
+
+.ui-text-blue {
+  color: #1d4ed8;
+}
+
+.ui-text-green {
+  color: #166534;
+}
+
+.ui-text-orange {
+  color: #c2410c;
+}
+
+.ui-text-red {
+  color: #b91c1c;
+}
+
+.ui-text-yellow {
+  color: #a16207;
+}
+
+.ui-text-gray {
+  color: #374151;
+}
+
+.ui-text-purple {
+  color: #6d28d9;
+}
+
+.ui-text-teal {
+  color: #0f766e;
+}

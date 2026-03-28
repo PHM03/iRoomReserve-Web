@@ -269,12 +269,12 @@ export default function ReserveRoomPage() {
       <div className="glass-card p-6 !rounded-2xl">
         {/* Success State */}
         {submitSuccess ? (
-          <div className="text-center py-12">
-            <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-5">
-              <svg className="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
+            <div className="text-center py-12">
+              <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-5">
+                <svg className="w-10 h-10 ui-text-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
             <h3 className="text-xl font-bold text-black mb-2">
               {createdCount > 1 ? `${createdCount} Reservations Submitted!` : 'Reservation Submitted!'}
             </h3>
@@ -423,7 +423,7 @@ export default function ReserveRoomPage() {
                       >
                         <h5 className="font-bold text-black text-sm">{room.name}</h5>
                         <p className="text-[10px] text-black mt-0.5">{room.floor}</p>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border bg-green-500/20 text-green-300 border-green-500/30 mt-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ui-badge-green mt-2">
                           Available
                         </span>
                       </button>
@@ -714,7 +714,7 @@ export default function ReserveRoomPage() {
                         : 'Main Campus uses advisor, DSAS, registrar, then building admin approval.'}
                     </p>
                     {approvalEmailError && (
-                      <p className="text-xs text-red-400 mt-1.5 font-bold">{approvalEmailError}</p>
+                      <p className="text-xs ui-text-red mt-1.5 font-bold">{approvalEmailError}</p>
                     )}
                   </div>
 

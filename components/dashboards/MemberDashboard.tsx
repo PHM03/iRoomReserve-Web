@@ -212,9 +212,9 @@ export default function MemberDashboard({
                         <svg
                           className={`w-4 h-4 ${
                             notification.type === 'reservation_approved'
-                              ? 'text-green-400'
+                              ? 'ui-text-green'
                               : notification.type === 'reservation_rejected'
-                                ? 'text-red-400'
+                                ? 'ui-text-red'
                                 : 'text-primary'
                           }`}
                           fill="none"
@@ -285,7 +285,7 @@ export default function MemberDashboard({
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
               <svg
-                className="w-4 h-4 text-blue-400"
+                className="w-4 h-4 ui-text-blue"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -321,7 +321,7 @@ export default function MemberDashboard({
                   <button
                     onClick={() => handleCheckIn(activeReservation.id)}
                     disabled={checkInLoading === activeReservation.id}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-orange-500/15 text-orange-300 border border-orange-500/25 hover:bg-orange-500/20 transition-all disabled:opacity-50"
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold ui-button-orange disabled:opacity-50"
                   >
                     {checkInLoading === activeReservation.id
                       ? 'Checking in...'
@@ -344,7 +344,7 @@ export default function MemberDashboard({
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
               <svg
-                className="w-4 h-4 text-purple-400"
+                className="w-4 h-4 ui-text-purple"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -369,7 +369,7 @@ export default function MemberDashboard({
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
               <svg
-                className="w-4 h-4 text-green-400"
+                className="w-4 h-4 ui-text-green"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -437,7 +437,7 @@ export default function MemberDashboard({
                     <button
                       onClick={() => handleCheckIn(reservation.id)}
                       disabled={checkInLoading === reservation.id}
-                      className="px-3 py-1 rounded-lg text-[11px] font-bold bg-orange-500/15 text-orange-300 border border-orange-500/25 hover:bg-orange-500/20 transition-all disabled:opacity-50"
+                      className="px-3 py-1 rounded-lg text-[11px] font-bold ui-button-orange disabled:opacity-50"
                     >
                       {checkInLoading === reservation.id
                         ? 'Checking in...'

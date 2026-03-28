@@ -1,5 +1,6 @@
 import {
   collection,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -105,5 +106,22 @@ export function onFeedbackByUser(
     (error) => {
       console.warn("Firestore listener error (feedback by user):", error);
     }
+  );
+}
+
+export async function getFeedbackByUser(userId: string): Promise<Feedback[]> {
+  const q = query(
+    collection(db, "feedback"),
+    where("userId", "==", userId),
+    orderBy("createdAt", "desc")
+  );
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map(
+    (feedbackDoc) =>
+      ({
+        id: feedbackDoc.id,
+        ...feedbackDoc.data(),
+      }) as Feedback
   );
 }
