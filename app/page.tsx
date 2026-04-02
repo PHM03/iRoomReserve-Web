@@ -2,10 +2,15 @@
 
 import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import AuthAlert from '@/components/AuthAlert';
 import Toast from '@/components/Toast';
 import { loginWithEmail, loginWithGoogle, saveUserProfile, getAuthErrorMessage, resendVerificationEmail, getUserProfile, logout } from '@/lib/auth';
 
 function LoginForm() {
+  type VantaEffectHandle = {
+    destroy: () => void;
+  };
+
   const searchParams = useSearchParams();
   const isPending = searchParams.get('pending') === 'true';
   const [email, setEmail] = useState('');
@@ -18,7 +23,7 @@ function LoginForm() {
   const [showResendButton, setShowResendButton] = useState(false);
   const router = useRouter();
   const vantaRef = useRef<HTMLDivElement | null>(null);
-  const vantaEffectRef = useRef<any>(null);
+  const vantaEffectRef = useRef<VantaEffectHandle | null>(null);
 
   const handleToastClose = useCallback(() => setShowToast(false), []);
 
@@ -196,26 +201,31 @@ function LoginForm() {
         <div className="glass-card p-8 w-full max-w-md">
           <h2 className="text-2xl font-bold text-black mb-6 text-center">Sign In</h2>
 
-          {errorMessage && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm">
-              {errorMessage}
-              {showResendButton && (
-                <button
-                  type="button"
-                  onClick={handleResendVerification}
-                  className="block mt-2 text-primary hover:text-primary-hover font-bold transition-colors"
-                >
-                  Resend verification email
-                </button>
-              )}
-            </div>
-          )}
+          {errorMessage ? (
+            <AuthAlert
+              message={
+                <>
+                  <p>{errorMessage}</p>
+                  {showResendButton ? (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      className="mt-2 inline-flex text-sm font-bold text-red-800 underline decoration-red-300 underline-offset-4 transition-colors hover:text-red-950"
+                    >
+                      Resend verification email
+                    </button>
+                  ) : null}
+                </>
+              }
+            />
+          ) : null}
 
-          {isPending && (
-            <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-300 text-sm">
-              Your account is pending Super Admin approval. You will be notified once approved.
-            </div>
-          )}
+          {isPending ? (
+            <AuthAlert
+              tone="warning"
+              message="Your account is pending Super Admin approval. You will be notified once approved."
+            />
+          ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

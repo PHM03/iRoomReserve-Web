@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import AuthAlert from '@/components/AuthAlert';
 import Toast from '@/components/Toast';
 import { USER_ROLES } from '@/lib/domain/roles';
 import { registerWithEmail, getAuthErrorMessage } from '@/lib/auth';
@@ -153,11 +154,7 @@ function RegisterForm() {
             ))}
           </div>
 
-          {errorMessage && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm">
-              {errorMessage}
-            </div>
-          )}
+          {errorMessage ? <AuthAlert message={errorMessage} /> : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">

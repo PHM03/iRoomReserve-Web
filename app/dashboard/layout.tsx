@@ -60,6 +60,18 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const isFaculty = profile?.role === USER_ROLES.FACULTY;
   const isUtility = profile?.role === USER_ROLES.UTILITY;
   const isStudent = !isAdmin && !isFaculty && !isUtility;
+  const shouldUseRoleBackground =
+    isUtility || isFaculty || isStudent || isAdmin;
+  const roleBackgroundImage = isUtility
+    ? '/images/utility-dashboard-bg.png'
+    : isAdmin
+      ? '/images/admin-superadmin-dashboard-bg.png'
+      : '/images/student-faculty-dashboard-bg.png';
+  const roleBackgroundOverlayClassName = isUtility
+    ? 'absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.12)_0%,rgba(248,249,250,0.42)_18%,rgba(248,249,250,0.68)_48%,rgba(248,249,250,0.86)_100%)]'
+    : isAdmin
+      ? 'absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.2)_0%,rgba(248,249,250,0.38)_16%,rgba(248,249,250,0.64)_46%,rgba(248,249,250,0.86)_100%)]'
+      : 'absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.16)_0%,rgba(248,249,250,0.34)_18%,rgba(248,249,250,0.62)_48%,rgba(248,249,250,0.84)_100%)]';
 
   // Shared mobile bottom nav icons
   const navIcons = {
@@ -97,20 +109,36 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen relative">
-      {/* Decorative background orbs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-primary/8 blur-3xl" />
-        <div className="absolute bottom-20 -left-40 w-96 h-96 rounded-full bg-secondary/8 blur-3xl" />
+    <div className={`min-h-screen relative ${shouldUseRoleBackground ? 'isolate' : ''}`}>
+      {shouldUseRoleBackground ? (
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div
+            className="absolute inset-0 bg-center bg-no-repeat opacity-80"
+            style={{
+              backgroundImage: `url('${roleBackgroundImage}')`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center center',
+            }}
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(161,33,36,0.2),transparent_30%)]" />
+          <div className={roleBackgroundOverlayClassName} />
+        </div>
+      ) : (
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-primary/8 blur-3xl" />
+          <div className="absolute bottom-20 -left-40 w-96 h-96 rounded-full bg-secondary/8 blur-3xl" />
+        </div>
+      )}
+
+      <div className="relative z-10">
+        <NavBar
+          user={user}
+          onLogout={logout}
+          {...(isAdmin ? { activeTab, onTabChange: setActiveTab } : {})}
+        />
+
+        {children}
       </div>
-
-      <NavBar
-        user={user}
-        onLogout={logout}
-        {...(isAdmin ? { activeTab, onTabChange: setActiveTab } : {})}
-      />
-
-      {children}
 
       {/* Mobile Bottom Nav (Student only) */}
       {isStudent && (

@@ -229,13 +229,21 @@ export default function SuperAdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen relative">
-      {/* Decorative background orbs */}
+    <div className="min-h-screen relative isolate">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-primary/8 blur-3xl" />
-        <div className="absolute bottom-20 -left-40 w-96 h-96 rounded-full bg-secondary/8 blur-3xl" />
+        <div
+          className="absolute inset-0 bg-center bg-no-repeat opacity-80"
+          style={{
+            backgroundImage: "url('/images/admin-superadmin-dashboard-bg.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center center',
+          }}
+        />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(161,33,36,0.2),transparent_30%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.2)_0%,rgba(248,249,250,0.38)_16%,rgba(248,249,250,0.64)_46%,rgba(248,249,250,0.86)_100%)]" />
       </div>
 
+      <div className="relative z-10">
       {/* Top Nav */}
       <nav className="glass-nav sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -578,6 +586,7 @@ export default function SuperAdminDashboard() {
           </div>
         )}
       </main>
+      </div>
 
       {/* ─── Approval Modal ──────────────────────────────────────── */}
       {showApprovalModal && selectedUser && (
