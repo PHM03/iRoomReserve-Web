@@ -19,20 +19,14 @@ describe('reservation approval helpers', () => {
     ]);
   });
 
-  it('builds a normalized four-step Main approval flow', () => {
+  it('builds a normalized single-step Main approval flow for faculty review', () => {
     const approvalFlow = buildApprovalFlow({
       campus: 'main',
       advisorEmail: 'Advisor@sdca.edu.ph ',
-      dsasEmail: 'DSAS@sdca.edu.ph',
-      registrarEmail: 'Registrar@sdca.edu.ph',
-      buildingAdminEmail: 'BuildingAdmin@sdca.edu.ph',
     });
 
     expect(approvalFlow).toEqual([
       { role: 'advisor', email: 'advisor@sdca.edu.ph' },
-      { role: 'dsas', email: 'dsas@sdca.edu.ph' },
-      { role: 'registrar', email: 'registrar@sdca.edu.ph' },
-      { role: 'building_admin', email: 'buildingadmin@sdca.edu.ph' },
     ]);
   });
 
@@ -40,19 +34,13 @@ describe('reservation approval helpers', () => {
     const approvalFlow = buildApprovalFlow({
       campus: 'main',
       advisorEmail: 'advisor@sdca.edu.ph',
-      dsasEmail: 'dsas@sdca.edu.ph',
-      registrarEmail: 'registrar@sdca.edu.ph',
-      buildingAdminEmail: 'building-admin@sdca.edu.ph',
     });
 
-    expect(getCurrentApprovalStep(approvalFlow, 1)).toEqual({
-      role: 'dsas',
-      email: 'dsas@sdca.edu.ph',
+    expect(getCurrentApprovalStep(approvalFlow, 0)).toEqual({
+      role: 'advisor',
+      email: 'advisor@sdca.edu.ph',
     });
-    expect(getNextApprovalStep(approvalFlow, 1)).toEqual({
-      role: 'registrar',
-      email: 'registrar@sdca.edu.ph',
-    });
+    expect(getNextApprovalStep(approvalFlow, 0)).toBeNull();
     expect(getCurrentApprovalStep(approvalFlow, 99)).toBeNull();
   });
 

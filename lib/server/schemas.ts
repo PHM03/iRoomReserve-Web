@@ -101,9 +101,6 @@ export const digiReservationBaseSchema = reservationCommonSchema.extend({
 export const mainReservationBaseSchema = reservationCommonSchema.extend({
   campus: z.literal("main"),
   advisorEmail: emailString,
-  dsasEmail: emailString,
-  registrarEmail: emailString,
-  buildingAdminEmail: emailString,
 });
 
 export const reservationBaseSchema = z.union([

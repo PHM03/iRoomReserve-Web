@@ -98,6 +98,21 @@ function sortReservations(left: Reservation, right: Reservation) {
   );
 }
 
+function normalizeApprovalEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function getCurrentApprovalStep(reservation: Reservation) {
+  if (
+    !Array.isArray(reservation.approvalFlow) ||
+    typeof reservation.currentStep !== "number"
+  ) {
+    return null;
+  }
+
+  return reservation.approvalFlow[reservation.currentStep] ?? null;
+}
+
 export async function createReservation(
   data: ReservationCreateInput
 ): Promise<string> {
@@ -136,6 +151,17 @@ export async function createRecurringReservation(
   return payload.ids;
 }
 
+export async function validateReservationApprover(
+  campus: ReservationCampus,
+  email: string
+): Promise<{ email: string; ok: true }> {
+  return apiRequest("/api/reservation-approvers/validate", {
+    body: { campus, email },
+    method: "POST",
+    userId: auth.currentUser?.uid,
+  });
+}
+
 export function onPendingReservationsByBuilding(
   buildingId: string,
   callback: (reservations: Reservation[]) => void
@@ -162,6 +188,44 @@ export function onPendingReservationsByBuilding(
     },
     (error) => {
       console.warn("Firestore listener error (pending reservations):", error);
+    }
+  );
+}
+
+export function onPendingReservationsByApprover(
+  userEmail: string,
+  callback: (reservations: Reservation[]) => void
+): Unsubscribe {
+  const normalizedEmail = normalizeApprovalEmail(userEmail);
+  const reservationsQuery = query(
+    collection(db, "reservations"),
+    where("status", "==", "pending"),
+    orderBy("createdAt", "desc")
+  );
+
+  return onSnapshot(
+    reservationsQuery,
+    (snapshot) => {
+      callback(
+        snapshot.docs
+          .map(
+            (reservationDoc) =>
+              ({
+                id: reservationDoc.id,
+                ...reservationDoc.data(),
+              }) as Reservation
+          )
+          .filter((reservation) => {
+            const currentStep = getCurrentApprovalStep(reservation);
+            return currentStep?.email === normalizedEmail;
+          })
+      );
+    },
+    (error) => {
+      console.warn(
+        "Firestore listener error (pending reservations by approver):",
+        error
+      );
     }
   );
 }

@@ -1,14 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { getBuildings, Building } from '@/lib/buildings';
 import { type ReservationCampus } from '@/lib/campuses';
 import { normalizeRole, USER_ROLES } from '@/lib/domain/roles';
-import { createReservation, createRecurringReservation } from '@/lib/reservations';
-import { storage } from '@/lib/firebase';
+import {
+  createReservation,
+  createRecurringReservation,
+  validateReservationApprover,
+} from '@/lib/reservations';
 import { onRoomsByBuilding } from '@/lib/rooms';
 
 interface Room {
@@ -19,14 +21,12 @@ interface Room {
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// TODO: Replace this temporary Digital Campus approver email with the actual configurable building admin source.
+const DIGITAL_CAMPUS_BUILDING_ADMIN_EMAIL = 'kenjimwill.baltero@sdca.edu.ph';
 const CAMPUS_TIME_RANGES: Record<ReservationCampus, { endMinutes: number; startMinutes: number }> = {
   digi: { startMinutes: 7 * 60, endMinutes: 17 * 60 },
   main: { startMinutes: 7 * 60, endMinutes: 21 * 60 },
 };
-const APPROVAL_EMAIL_FIELDS = [
-  { key: 'advisorEmail', label: 'Email of Adviser / Dept. Head / Professor' },
-] as const;
-
 function timeStringToMinutes(value: string): number {
   const [hours, minutes] = value.split(':').map(Number);
   return hours * 60 + minutes;
@@ -106,8 +106,9 @@ export default function ReserveRoomPage() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [createdCount, setCreatedCount] = useState(0);
-  const [approvalDocument, setApprovalDocument] = useState<File | null>(null);
-  const [approvalDocumentError, setApprovalDocumentError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [validatingApprover, setValidatingApprover] = useState(false);
+  const [submitPhase, setSubmitPhase] = useState<'idle' | 'validating-email' | 'creating-reservation'>('idle');
 
   // Recurring state
   const [isRecurring, setIsRecurring] = useState(false);
@@ -126,9 +127,6 @@ export default function ReserveRoomPage() {
   const [approvalEmailError, setApprovalEmailError] = useState('');
   const [approvalEmails, setApprovalEmails] = useState({
     advisorEmail: '',
-    dsasEmail: '',
-    registrarEmail: '',
-    buildingAdminEmail: '',
   });
 
   // Load buildings on mount
@@ -221,14 +219,9 @@ export default function ReserveRoomPage() {
     setEndTime('');
     setProgramDepartmentOrganization('');
     setPurpose('');
-    setApprovalDocument(null);
-    setApprovalDocumentError('');
     setApprovalEmailError('');
     setApprovalEmails({
       advisorEmail: '',
-      dsasEmail: '',
-      registrarEmail: '',
-      buildingAdminEmail: '',
     });
     setSelectedRoomId('');
     setSelectedRoomName('');
@@ -261,6 +254,8 @@ export default function ReserveRoomPage() {
     return regex.test(email);
   };
 
+  const approvalFieldLabel = 'Email of Adviser / Dept. Head / Professor';
+
   // Calculate preview dates for recurring
   const getPreviewDates = (): string[] => {
     if (!reservationDate || !recurringEndDate || selectedDays.length === 0) return [];
@@ -284,49 +279,43 @@ export default function ReserveRoomPage() {
     return !!reservationDate;
   };
 
-  const uploadApprovalDocument = async () => {
-    if (!approvalDocument || !firebaseUser) {
-      return null;
-    }
-
-    const sanitizedName = approvalDocument.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storageRef = ref(
-      storage,
-      `reservation-approval-documents/${firebaseUser.uid}/${Date.now()}-${sanitizedName}`
-    );
-
-    await uploadBytes(storageRef, approvalDocument);
-    const downloadUrl = await getDownloadURL(storageRef);
-
-    return {
-      approvalDocumentName: approvalDocument.name,
-      approvalDocumentUrl: downloadUrl,
-    };
-  };
-
   const handleSubmitReservation = async () => {
     if (!firebaseUser || !selectedBuildingId || !selectedRoomId || !selectedCampus || !startTime || !endTime || !programDepartmentOrganization || !purpose) return;
     if (!isTimeRangeValid(selectedCampus, startTime, endTime)) return;
-    if (!approvalDocument) {
-      setApprovalDocumentError('Please upload your concept paper or letter of approval.');
-      return;
-    }
+    setSubmitError('');
+    setSubmitPhase('idle');
 
-    const requiredApprovalFields =
-      APPROVAL_EMAIL_FIELDS;
-    const hasInvalidApprovalEmail = requiredApprovalFields.some(({ key }) => {
-      const value = approvalEmails[key];
-      return !value.trim() || !validateEmail(value);
-    });
-    if (hasInvalidApprovalEmail) {
+    const approvalEmail = selectedCampus === 'digi'
+      ? DIGITAL_CAMPUS_BUILDING_ADMIN_EMAIL
+      : approvalEmails.advisorEmail.trim().toLowerCase();
+
+    if (!approvalEmail || !validateEmail(approvalEmail)) {
       setApprovalEmailError(
-        'Enter a valid email for your adviser, department head, or professor.'
+        selectedCampus === 'digi'
+          ? 'Enter a valid iRoomReserve email for the Digital Campus building admin.'
+          : 'Enter a valid email for your adviser, department head, or professor.'
       );
       return;
     }
+
+    setValidatingApprover(true);
+    setSubmitPhase('validating-email');
+    try {
+      await validateReservationApprover(selectedCampus, approvalEmail);
+    } catch (error) {
+      setApprovalEmailError(
+        error instanceof Error
+          ? error.message
+          : 'We could not validate that approval email right now.'
+      );
+      setValidatingApprover(false);
+      setSubmitPhase('idle');
+      return;
+    }
+    setValidatingApprover(false);
+
     setSubmitting(true);
     try {
-      const uploadedApprovalDocument = await uploadApprovalDocument();
       const displayName = firebaseUser.displayName || 'Student';
       const normalizedUserRole = normalizeRole(profile?.role) ?? USER_ROLES.STUDENT;
       const sharedData = {
@@ -341,19 +330,15 @@ export default function ReserveRoomPage() {
         endTime,
         programDepartmentOrganization,
         purpose,
-        ...(uploadedApprovalDocument ?? {}),
         equipment,
       };
+      setSubmitPhase('creating-reservation');
 
       if (selectedCampus === 'main') {
-        const primaryApprovalEmail = approvalEmails.advisorEmail.trim().toLowerCase();
         const reservationData = {
           ...sharedData,
           campus: 'main' as const,
-          advisorEmail: primaryApprovalEmail,
-          dsasEmail: primaryApprovalEmail,
-          registrarEmail: primaryApprovalEmail,
-          buildingAdminEmail: primaryApprovalEmail,
+          advisorEmail: approvalEmail,
         };
 
         if (isRecurring && selectedDays.length > 0 && recurringEndDate) {
@@ -369,11 +354,10 @@ export default function ReserveRoomPage() {
           setCreatedCount(1);
         }
       } else {
-        const primaryApprovalEmail = approvalEmails.advisorEmail.trim().toLowerCase();
         const reservationData = {
           ...sharedData,
           campus: 'digi' as const,
-          buildingAdminEmail: primaryApprovalEmail,
+          buildingAdminEmail: approvalEmail,
         };
 
         if (isRecurring && selectedDays.length > 0 && recurringEndDate) {
@@ -390,10 +374,18 @@ export default function ReserveRoomPage() {
         }
       }
       setSubmitSuccess(true);
+      setSubmitPhase('idle');
     } catch (err) {
       console.error('Failed to create reservation:', err);
+      setSubmitError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to create reservation. Please try again.'
+      );
+      setSubmitPhase('idle');
     }
     setSubmitting(false);
+    setValidatingApprover(false);
   };
 
   const previewDates = isRecurring ? getPreviewDates() : [];
@@ -420,10 +412,10 @@ export default function ReserveRoomPage() {
             </h3>
             <p className="text-sm text-black mb-6">
               {createdCount > 1
-                ? `${createdCount} recurring reservations have been created. Each one will follow the ${selectedCampus === 'digi' ? 'single-step building admin approval' : 'Main Campus approval chain'}.`
+                ? `${createdCount} recurring reservations have been created. Each one will follow the ${selectedCampus === 'digi' ? 'Digital Campus building admin review' : 'faculty review step for Main Campus'}.`
                 : selectedCampus === 'digi'
                   ? 'Your request will go directly to the building admin for approval.'
-                  : 'Your request will move through the Main Campus approval chain.'
+                  : 'Your request will first be sent to the faculty reviewer you entered for approval.'
               }
             </p>
             <div className="flex items-center justify-center gap-3">
@@ -774,7 +766,7 @@ export default function ReserveRoomPage() {
                       value={purpose}
                       onChange={(e) => setPurpose(e.target.value)}
                       className="glass-input w-full px-4 py-3"
-                      placeholder="e.g., Group Study, Meeting, Workshop"
+                      placeholder="e.g., General Assembly of BSIT, Faculty Meeting, Rehearsals for Upcoming Event, Workshop"
                     />
                   </div>
 
@@ -864,77 +856,63 @@ export default function ReserveRoomPage() {
                     ))}
                   </div>
 
-                  <div>
-                    <h5 className="text-sm font-bold text-black uppercase tracking-wider mb-3">Approval Routing</h5>
-                    <div className="space-y-3">
-                      {APPROVAL_EMAIL_FIELDS.map((field) => (
-                        <div key={field.key}>
+                  {selectedCampus !== 'digi' && (
+                    <div>
+                      <h5 className="text-sm font-bold text-black uppercase tracking-wider mb-3">Approval Routing</h5>
+                      <div className="space-y-3">
+                        <div>
                           <label className="block text-xs font-bold text-black mb-1.5">
-                            {field.label}
+                            {approvalFieldLabel}
                           </label>
                           <input
                             type="email"
-                            value={approvalEmails[field.key]}
+                            value={approvalEmails.advisorEmail}
                             onChange={(e) => {
                               setApprovalEmails((prev) => ({
                                 ...prev,
-                                [field.key]: e.target.value,
+                                advisorEmail: e.target.value,
                               }));
                               if (approvalEmailError) setApprovalEmailError('');
+                              if (submitError) setSubmitError('');
                             }}
                             className={`glass-input w-full px-4 py-3 ${
                               approvalEmailError ? '!border-red-500/60' : ''
                             }`}
-                            placeholder={`Input ${field.label.toLowerCase()}`}
+                            placeholder={`Input ${approvalFieldLabel.toLowerCase()}`}
                           />
                         </div>
-                      ))}
+                      </div>
+                      <p className="text-[11px] text-black mt-2">
+                        Main Campus reservations first go to the faculty reviewer whose email you enter here.
+                      </p>
+                      {approvalEmailError && (
+                        <p className="text-xs ui-text-red mt-1.5 font-bold">{approvalEmailError}</p>
+                      )}
                     </div>
-                    <p className="text-[11px] text-black mt-2">
-                      The same contact email will be used for the current approval routing behind the scenes.
-                    </p>
-                    {approvalEmailError && (
-                      <p className="text-xs ui-text-red mt-1.5 font-bold">{approvalEmailError}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-black mb-1.5">
-                      Concept Paper / Letter of Approval
-                    </label>
-                    <input
-                      type="file"
-                      onChange={(e) => {
-                        const nextFile = e.target.files?.[0] ?? null;
-                        setApprovalDocument(nextFile);
-                        if (approvalDocumentError) setApprovalDocumentError('');
-                      }}
-                      className={`glass-input w-full px-4 py-3 ${
-                        approvalDocumentError ? '!border-red-500/60' : ''
-                      }`}
-                      accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                    />
-                    <p className="text-[11px] text-black mt-2">
-                      Accepted files: PDF, DOC, DOCX, PNG, JPG, JPEG.
-                    </p>
-                    {approvalDocumentError && (
-                      <p className="text-xs ui-text-red mt-1.5 font-bold">{approvalDocumentError}</p>
-                    )}
-                  </div>
+                  )}
 
                   {/* Submit */}
+                  {submitError && (
+                    <p className="text-xs ui-text-red font-bold">{submitError}</p>
+                  )}
                   <button
                     onClick={handleSubmitReservation}
-                    disabled={submitting}
+                    disabled={submitting || validatingApprover}
                     className="btn-primary w-full py-3 px-4 flex items-center justify-center"
                   >
-                    {submitting ? (
+                    {submitting || validatingApprover ? (
                       <>
                         <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-black" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                         </svg>
-                        {isRecurring ? 'Creating Reservations...' : 'Submitting...'}
+                        {submitPhase === 'validating-email'
+                          ? 'Validating Email...'
+                          : submitPhase === 'creating-reservation'
+                            ? isRecurring
+                              ? 'Creating Reservations...'
+                              : 'Creating Reservation...'
+                            : 'Submitting...'}
                       </>
                     ) : (
                       isRecurring && previewDates.length > 1

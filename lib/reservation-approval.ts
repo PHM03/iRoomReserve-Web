@@ -5,8 +5,6 @@ import { type ReservationCampus } from "@/lib/campuses";
 export const RESERVATION_APPROVAL_ROLES = [
   "building_admin",
   "advisor",
-  "dsas",
-  "registrar",
 ] as const;
 
 export type ReservationApprovalRole =
@@ -30,9 +28,6 @@ export interface DigiReservationApproverInput {
 export interface MainReservationApproverInput {
   campus: "main";
   advisorEmail: string;
-  dsasEmail: string;
-  registrarEmail: string;
-  buildingAdminEmail: string;
 }
 
 export type ReservationApproverInput =
@@ -57,15 +52,6 @@ export function buildApprovalFlow(
 
   return [
     { role: "advisor", email: normalizeApprovalEmail(approvers.advisorEmail) },
-    { role: "dsas", email: normalizeApprovalEmail(approvers.dsasEmail) },
-    {
-      role: "registrar",
-      email: normalizeApprovalEmail(approvers.registrarEmail),
-    },
-    {
-      role: "building_admin",
-      email: normalizeApprovalEmail(approvers.buildingAdminEmail),
-    },
   ];
 }
 

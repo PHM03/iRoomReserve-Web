@@ -177,7 +177,7 @@ export default function MemberDashboard({
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 !rounded-xl overflow-hidden z-50 bg-white/95 backdrop-blur-xl border border-dark/15 shadow-2xl shadow-black/20">
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 !rounded-xl overflow-hidden z-50 border border-dark/12 shadow-2xl shadow-black/20" style={{ background: 'rgba(248, 246, 242, 0.98)', backdropFilter: 'blur(20px)' }}>
               <div className="flex items-center justify-between p-4 border-b border-dark/10">
                 <h4 className="font-bold text-black text-sm">Notifications</h4>
                 {notifications.length > 0 && (
@@ -192,13 +192,13 @@ export default function MemberDashboard({
               <div className="max-h-64 overflow-y-auto">
                 {notifications.length === 0 ? (
                   <div className="p-6 text-center">
-                    <p className="text-sm text-black">No new notifications</p>
+                    <p className="text-sm text-black/80">No new notifications</p>
                   </div>
                 ) : (
                   notifications.map((notification) => (
                     <div
                       key={notification.id}
-                      className="p-3 border-b border-dark/5 hover:bg-primary/10 transition-colors flex items-start gap-3"
+                      className="p-3 border-b border-dark/5 hover:bg-primary/8 transition-colors flex items-start gap-3"
                     >
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
@@ -249,13 +249,13 @@ export default function MemberDashboard({
                         <p className="text-xs font-bold text-black">
                           {notification.title}
                         </p>
-                        <p className="text-[11px] text-black mt-0.5">
+                        <p className="text-[11px] text-black/80 mt-0.5 leading-relaxed">
                           {notification.message}
                         </p>
                       </div>
                       <button
                         onClick={() => markNotificationRead(notification.id)}
-                        className="text-black hover:text-primary transition-colors shrink-0"
+                        className="text-black/70 hover:text-primary transition-colors shrink-0"
                       >
                         <svg
                           className="w-4 h-4"

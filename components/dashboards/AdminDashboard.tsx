@@ -234,6 +234,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [rejectingReservationId, setRejectingReservationId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [reservationActionError, setReservationActionError] = useState('');
 
   // Add Room wizard state
   const [addRoomStep, setAddRoomStep] = useState(0); // 0=button, 1=floor, 2=form
@@ -336,18 +339,38 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   const handleApprove = async (id: string) => {
     const approverEmail = profile?.email || firebaseUser?.email;
     if (!approverEmail) return;
+    setReservationActionError('');
     setActionLoading(id);
-    try { await approveReservation(id, approverEmail); } catch (err) { console.warn('Failed to approve:', err); }
+    try {
+      await approveReservation(id, approverEmail);
+    } catch (err) {
+      console.warn('Failed to approve:', err);
+      setReservationActionError(
+        err instanceof Error ? err.message : 'Failed to approve reservation.'
+      );
+    }
     setActionLoading(null);
   };
 
   const handleReject = async (id: string) => {
     const approverEmail = profile?.email || firebaseUser?.email;
     if (!approverEmail) return;
-    const reason = window.prompt('Enter a reason for rejecting this reservation.');
-    if (!reason?.trim()) return;
+    if (!rejectReason.trim()) {
+      setReservationActionError('Please enter a reason before rejecting this reservation.');
+      return;
+    }
+    setReservationActionError('');
     setActionLoading(id);
-    try { await rejectReservation(id, approverEmail, reason.trim()); } catch (err) { console.warn('Failed to reject:', err); }
+    try {
+      await rejectReservation(id, approverEmail, rejectReason.trim());
+      setRejectingReservationId(null);
+      setRejectReason('');
+    } catch (err) {
+      console.warn('Failed to reject:', err);
+      setReservationActionError(
+        err instanceof Error ? err.message : 'Failed to reject reservation.'
+      );
+    }
     setActionLoading(null);
   };
 
@@ -708,7 +731,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
 
           {/* Notification Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 glass-card !rounded-xl overflow-hidden z-50" style={{ background: 'rgba(15, 15, 25, 0.95)', backdropFilter: 'blur(20px)' }}>
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 !rounded-xl overflow-hidden z-50 border border-dark/12 shadow-2xl shadow-black/20" style={{ background: 'rgba(248, 246, 242, 0.98)', backdropFilter: 'blur(20px)' }}>
               <div className="flex items-center justify-between p-4 border-b border-dark/10">
                 <h4 className="font-bold text-black text-sm">Notifications</h4>
                 {notifications.length > 0 && (
@@ -723,26 +746,26 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
               <div className="max-h-64 overflow-y-auto">
                 {notifications.length === 0 ? (
                   <div className="p-6 text-center">
-                    <p className="text-sm text-black">No new notifications</p>
+                    <p className="text-sm text-black/80">No new notifications</p>
                   </div>
                 ) : (
                   notifications.map((notif) => (
                     <div
                       key={notif.id}
-                      className="p-3 border-b border-dark/5 hover:bg-primary/10 transition-colors flex items-start gap-3"
+                      className="p-3 border-b border-dark/5 hover:bg-primary/8 transition-colors flex items-start gap-3"
                     >
-                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="w-8 h-8 rounded-full bg-primary/12 border border-primary/18 flex items-center justify-center shrink-0 mt-0.5">
                         <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-black">{notif.title}</p>
-                        <p className="text-[11px] text-black mt-0.5">{notif.message}</p>
+                        <p className="text-[11px] text-black/80 mt-0.5 leading-relaxed">{notif.message}</p>
                       </div>
                       <button
                         onClick={() => handleDismissNotification(notif.id)}
-                        className="text-black hover:text-primary transition-colors shrink-0"
+                        className="text-black/70 hover:text-primary transition-colors shrink-0"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1788,6 +1811,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             </div>
           ) : (
             <div className="space-y-4">
+              {reservationActionError && (
+                <p className="text-xs ui-text-red font-bold">{reservationActionError}</p>
+              )}
               {requests.map((req) => (
                 <div key={req.id} className="glass-card !rounded-xl overflow-hidden border-l-4 border-yellow-500/40">
                   <div className="p-5">
@@ -1856,7 +1882,13 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                         Approve
                       </button>
                       <button
-                        onClick={() => handleReject(req.id)}
+                        onClick={() => {
+                          setReservationActionError('');
+                          setRejectingReservationId(
+                            rejectingReservationId === req.id ? null : req.id
+                          );
+                          setRejectReason('');
+                        }}
                         disabled={actionLoading === req.id}
                         className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold ui-button-red disabled:opacity-50"
                       >
@@ -1866,6 +1898,38 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                         Reject
                       </button>
                     </div>
+
+                    {rejectingReservationId === req.id && (
+                      <div className="mt-4 space-y-3 pt-4 border-t border-dark/5">
+                        <label className="block text-xs font-bold text-black">
+                          Reason for rejection
+                        </label>
+                        <textarea
+                          value={rejectReason}
+                          onChange={(e) => setRejectReason(e.target.value)}
+                          className="glass-input w-full px-4 py-3 min-h-[110px] resize-none"
+                          placeholder="Explain why this reservation request is being rejected."
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleReject(req.id)}
+                            disabled={actionLoading === req.id || !rejectReason.trim()}
+                            className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl text-sm font-bold ui-button-red disabled:opacity-50"
+                          >
+                            Confirm Rejection
+                          </button>
+                          <button
+                            onClick={() => {
+                              setRejectingReservationId(null);
+                              setRejectReason('');
+                            }}
+                            className="px-4 py-2 text-sm font-bold text-black hover:text-primary transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

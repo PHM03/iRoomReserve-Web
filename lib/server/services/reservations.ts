@@ -18,7 +18,7 @@ import {
   normalizeCampus,
   type ReservationCampus,
 } from "@/lib/campuses";
-import { normalizeRole } from "@/lib/domain/roles";
+import { normalizeRole, USER_ROLES } from "@/lib/domain/roles";
 import {
   buildApprovalFlow,
   getCurrentApprovalStep,
@@ -163,6 +163,57 @@ async function getUserIdsByEmail(email: string) {
   return usersSnapshot.docs.map((userDoc) => userDoc.id);
 }
 
+async function getApprovedUsersByEmail(email: string) {
+  const usersSnapshot = await getDocs(
+    query(
+      collection(serverClientDb, "users"),
+      where("email", "==", normalizeApprovalEmail(email)),
+      where("status", "==", "approved")
+    )
+  );
+
+  return usersSnapshot.docs.map((userDoc) => ({
+    id: userDoc.id,
+    role: normalizeRole(
+      (userDoc.data() as { role?: string | null }).role ?? null
+    ),
+  }));
+}
+
+export async function validateReservationApprover(input: {
+  campus: ReservationCampus;
+  email: string;
+}) {
+  const normalizedEmail = normalizeApprovalEmail(input.email);
+  const approvedUsers = await getApprovedUsersByEmail(normalizedEmail);
+
+  if (approvedUsers.length === 0) {
+    throw new ApiError(
+      400,
+      "approver_not_found",
+      input.campus === "main"
+        ? "The adviser, department head, or professor email must belong to an approved iRoomReserve faculty account."
+        : "The Digital Campus building admin email must belong to an approved iRoomReserve account."
+    );
+  }
+
+  if (
+    input.campus === "main" &&
+    !approvedUsers.some((user) => user.role === USER_ROLES.FACULTY)
+  ) {
+    throw new ApiError(
+      400,
+      "invalid_approver_role",
+      "The adviser, department head, or professor email must belong to an approved faculty iRoomReserve account."
+    );
+  }
+
+  return {
+    email: normalizedEmail,
+    matchedUserIds: approvedUsers.map((user) => user.id),
+  };
+}
+
 async function getBuildingCampus(buildingId: string) {
   const buildingSnapshot = await getDoc(doc(serverClientDb, "buildings", buildingId));
   if (!buildingSnapshot.exists()) {
@@ -215,6 +266,14 @@ function getReservationApproverInput(
   campus: ReservationCampus
 ): ReservationApproverInput {
   if (campus === "digi") {
+    if (!("buildingAdminEmail" in input)) {
+      throw new ApiError(
+        400,
+        "missing_approvers",
+        "Digital Campus reservations require a building admin email."
+      );
+    }
+
     return {
       campus,
       buildingAdminEmail: input.buildingAdminEmail,
@@ -222,23 +281,42 @@ function getReservationApproverInput(
   }
 
   if (
-    !("advisorEmail" in input) ||
-    !("dsasEmail" in input) ||
-    !("registrarEmail" in input)
+    !("advisorEmail" in input)
   ) {
     throw new ApiError(
       400,
       "missing_approvers",
-      "Main Campus reservations require advisor, DSAS, registrar, and building admin emails."
+      "Main Campus reservations require an adviser, department head, or professor email."
     );
   }
 
   return {
     campus,
     advisorEmail: input.advisorEmail,
-    dsasEmail: input.dsasEmail,
-    registrarEmail: input.registrarEmail,
-    buildingAdminEmail: input.buildingAdminEmail,
+  };
+}
+
+async function getInitialApproverIdsOrThrow(
+  approvalFlow: ReservationApprovalStep[],
+  campus: ReservationCampus
+) {
+  const firstApprovalStep = getCurrentApprovalStep(approvalFlow, 0);
+  if (!firstApprovalStep) {
+    throw new ApiError(
+      400,
+      "invalid_approval_flow",
+      "Reservation approval flow is incomplete."
+    );
+  }
+
+  const validation = await validateReservationApprover({
+    campus,
+    email: firstApprovalStep.email,
+  });
+
+  return {
+    firstApprovalStep,
+    firstApproverIds: validation.matchedUserIds,
   };
 }
 
@@ -367,10 +445,8 @@ export async function createReservationRecord(data: ReservationCreateInput) {
   const approvalFlow = buildApprovalFlow(
     getReservationApproverInput(data, campus)
   );
-  const firstApprovalStep = getCurrentApprovalStep(approvalFlow, 0);
-  const firstApproverIds = firstApprovalStep
-    ? await getUserIdsByEmail(firstApprovalStep.email)
-    : [];
+  const { firstApprovalStep, firstApproverIds } =
+    await getInitialApproverIdsOrThrow(approvalFlow, campus);
   const reservationRef = doc(collection(serverClientDb, "reservations"));
   const batch = writeBatch(serverClientDb);
 
@@ -438,10 +514,8 @@ export async function createRecurringReservationRecord(
   const approvalFlow = buildApprovalFlow(
     getReservationApproverInput(data, campus)
   );
-  const firstApprovalStep = getCurrentApprovalStep(approvalFlow, 0);
-  const firstApproverIds = firstApprovalStep
-    ? await getUserIdsByEmail(firstApprovalStep.email)
-    : [];
+  const { firstApprovalStep, firstApproverIds } =
+    await getInitialApproverIdsOrThrow(approvalFlow, campus);
   const recurringGroupId = `recurring_${Date.now()}_${Math.random()
     .toString(36)
     .slice(2, 8)}`;
