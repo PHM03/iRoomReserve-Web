@@ -16,6 +16,7 @@ import {
 import { apiRequest } from "@/lib/api/client";
 import { db } from "@/lib/firebase";
 import {
+  normalizeRoomCheckInMethod,
   normalizeRoomStatus,
   type RoomCheckInMethod,
   type RoomStatusValue,
@@ -33,6 +34,11 @@ export interface Room {
   status: RoomStatusValue;
   buildingId: string;
   buildingName: string;
+  beaconId?: string | null;
+  beaconConnected?: boolean;
+  beaconDeviceName?: string | null;
+  beaconLastConnectedAt?: Timestamp | null;
+  beaconLastDisconnectedAt?: Timestamp | null;
   reservedBy: string | null;
   activeReservationId?: string | null;
   checkedInAt?: Timestamp | null;
@@ -48,6 +54,10 @@ export type RoomInput = Omit<
   | "updatedAt"
   | "reservedBy"
   | "activeReservationId"
+  | "beaconConnected"
+  | "beaconDeviceName"
+  | "beaconLastConnectedAt"
+  | "beaconLastDisconnectedAt"
   | "checkedInAt"
   | "checkInMethod"
 >;
@@ -58,6 +68,10 @@ export interface RoomStatusUpdate {
   activeReservationId?: string | null;
   checkedInAt?: Timestamp | FieldValue | null;
   checkInMethod?: RoomCheckInMethod | null;
+  beaconConnected?: boolean;
+  beaconDeviceName?: string | null;
+  beaconLastConnectedAt?: Timestamp | FieldValue | null;
+  beaconLastDisconnectedAt?: Timestamp | FieldValue | null;
 }
 
 function mapRoom(
@@ -68,10 +82,15 @@ function mapRoom(
     id: roomId,
     ...data,
     status: normalizeRoomStatus(data.status),
+    beaconId: typeof data.beaconId === "string" ? data.beaconId : null,
+    beaconConnected: data.beaconConnected ?? false,
+    beaconDeviceName: data.beaconDeviceName ?? null,
+    beaconLastConnectedAt: data.beaconLastConnectedAt ?? null,
+    beaconLastDisconnectedAt: data.beaconLastDisconnectedAt ?? null,
     reservedBy: data.reservedBy ?? null,
     activeReservationId: data.activeReservationId ?? null,
     checkedInAt: data.checkedInAt ?? null,
-    checkInMethod: data.checkInMethod ?? null,
+    checkInMethod: normalizeRoomCheckInMethod(data.checkInMethod) ?? null,
   };
 }
 

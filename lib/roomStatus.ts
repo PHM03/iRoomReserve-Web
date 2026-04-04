@@ -1,7 +1,7 @@
 import { Timestamp } from "firebase/firestore";
 
 export const ROOM_STATUS_VALUES = ["Available", "Reserved", "Ongoing"] as const;
-export const ROOM_CHECK_IN_METHODS = ["manual", "ble"] as const;
+export const ROOM_CHECK_IN_METHODS = ["manual", "bluetooth"] as const;
 
 export type RoomStatus = (typeof ROOM_STATUS_VALUES)[number];
 export type RoomStatusValue = RoomStatus | "Unavailable";
@@ -11,6 +11,8 @@ export interface RoomStatusRoomLike {
   id: string;
   status?: string | null;
   activeReservationId?: string | null;
+  beaconConnected?: boolean | null;
+  checkInMethod?: RoomCheckInMethod | null;
 }
 
 export interface RoomStatusReservationLike {
@@ -35,6 +37,24 @@ export interface ResolvedRoomStatus {
   status: RoomStatusValue;
   reservation: RoomStatusReservationLike | null;
   detail: string;
+}
+
+export function normalizeRoomCheckInMethod(
+  method?: string | null
+): RoomCheckInMethod | null {
+  if (typeof method !== "string") {
+    return null;
+  }
+
+  switch (method.trim().toLowerCase()) {
+    case "manual":
+      return "manual";
+    case "ble":
+    case "bluetooth":
+      return "bluetooth";
+    default:
+      return null;
+  }
 }
 
 export function normalizeRoomStatus(status?: string | null): RoomStatusValue {
@@ -149,15 +169,22 @@ export function getPrimaryRoomReservation(
 export function getReservationRoomStatus(
   reservation: Pick<
     RoomStatusReservationLike,
-    "id" | "status" | "date" | "checkedInAt"
+    "id" | "status" | "date" | "checkedInAt" | "checkInMethod"
   >,
   room?: RoomStatusRoomLike | null
 ): RoomStatusValue {
-  if (reservation.checkedInAt) {
+  const roomStatus = normalizeRoomStatus(room?.status);
+  const checkInMethod = normalizeRoomCheckInMethod(
+    reservation.checkInMethod ?? room?.checkInMethod
+  );
+  const bluetoothDisconnected =
+    Boolean(reservation.checkedInAt) &&
+    checkInMethod === "bluetooth" &&
+    room?.beaconConnected === false;
+
+  if (reservation.checkedInAt && !bluetoothDisconnected) {
     return "Ongoing";
   }
-
-  const roomStatus = normalizeRoomStatus(room?.status);
 
   if (roomStatus === "Unavailable") {
     return "Unavailable";
@@ -181,12 +208,30 @@ export function resolveRoomStatus(
   const { activeSchedule = null, now = new Date() } = options;
   const roomStatus = normalizeRoomStatus(room.status);
   const reservation = getPrimaryRoomReservation(room, reservations, now);
+  const checkInMethod = normalizeRoomCheckInMethod(
+    reservation?.checkInMethod ?? room.checkInMethod
+  );
+  const bluetoothDisconnected =
+    Boolean(reservation?.checkedInAt) &&
+    checkInMethod === "bluetooth" &&
+    room.beaconConnected === false;
 
   if (roomStatus === "Unavailable") {
     return {
       status: "Unavailable",
       reservation,
       detail: "Unavailable",
+    };
+  }
+
+  if (bluetoothDisconnected) {
+    return {
+      status: roomStatus,
+      reservation,
+      detail:
+        roomStatus === "Available"
+          ? "Beacon disconnected"
+          : "Bluetooth beacon lost connection",
     };
   }
 

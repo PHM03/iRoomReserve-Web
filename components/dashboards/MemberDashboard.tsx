@@ -2,12 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Toast from '@/components/Toast';
 import { useAuth } from '@/context/AuthContext';
 import {
-  checkInReservation,
   onReservationsByUser,
   Reservation,
 } from '@/lib/reservations';
+import { useBluetoothReservationCheckIn } from '@/hooks/useBluetoothReservationCheckIn';
 import {
   markAllNotificationsRead,
   markNotificationRead,
@@ -39,12 +40,20 @@ export default function MemberDashboard({
   welcomeEmoji,
 }: MemberDashboardProps) {
   const { firebaseUser } = useAuth();
+  const {
+    checkInWithBluetooth,
+    dismissToast,
+    getConnectionStatus,
+    loadingReservationId,
+    showToast,
+    toastMessage,
+    toastType,
+  } = useBluetoothReservationCheckIn();
   const [reservationHistory, setReservationHistory] = useState<Reservation[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [checkInLoading, setCheckInLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (!firebaseUser) {
@@ -84,12 +93,32 @@ export default function MemberDashboard({
   const roomLookup = Object.fromEntries(
     rooms.map((room) => [room.id, room] as const)
   ) as Record<string, Room | undefined>;
+  const getBluetoothConnectionStatus = (reservation: Reservation) => {
+    const room = roomLookup[reservation.roomId];
+    const localStatus = getConnectionStatus(reservation.id);
+
+    if (localStatus === 'connecting') {
+      return 'Connecting...';
+    }
+
+    if (localStatus === 'connected') {
+      return 'Connected';
+    }
+
+    if (!room?.beaconId && reservation.checkInMethod !== 'bluetooth') {
+      return null;
+    }
+
+    return room?.beaconConnected ? 'Connected' : 'Disconnected';
+  };
 
   const getRoomStatus = (reservation: Reservation) =>
     getReservationRoomStatus(reservation, roomLookup[reservation.roomId]);
   const canCheckIn = (reservation: Reservation) =>
     canReservationCheckIn(reservation) &&
     getRoomStatus(reservation) !== 'Unavailable';
+  const shouldShowBluetoothAction = (reservation: Reservation) =>
+    getConnectionStatus(reservation.id) === 'connecting' || canCheckIn(reservation);
 
   const handleMarkAllRead = async () => {
     if (!firebaseUser) {
@@ -97,22 +126,6 @@ export default function MemberDashboard({
     }
 
     await markAllNotificationsRead(firebaseUser.uid);
-  };
-
-  const handleCheckIn = async (reservationId: string) => {
-    if (!firebaseUser) {
-      return;
-    }
-
-    setCheckInLoading(reservationId);
-
-    try {
-      await checkInReservation(reservationId, firebaseUser.uid);
-    } catch (error) {
-      console.error('Failed to check in:', error);
-    }
-
-    setCheckInLoading(null);
   };
 
   const pendingCount = reservationHistory.filter(
@@ -141,6 +154,13 @@ export default function MemberDashboard({
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
+      <Toast
+        message={toastMessage}
+        type={toastType}
+        show={showToast}
+        onClose={dismissToast}
+      />
+
       <div className="mb-8 flex items-start justify-between">
         <div>
           <h2 className="text-2xl font-bold text-black">
@@ -302,11 +322,20 @@ export default function MemberDashboard({
           </div>
           {activeReservation ? (
             <>
+              {(() => {
+                const bluetoothConnectionStatus =
+                  getBluetoothConnectionStatus(activeReservation);
+
+                return (
+                  <>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-lg font-bold text-black">
                   {activeReservation.roomName}
                 </h3>
                 <StatusBadge status={getRoomStatus(activeReservation)} />
+                {bluetoothConnectionStatus ? (
+                  <StatusBadge status={bluetoothConnectionStatus} />
+                ) : null}
               </div>
               <p className="text-xs text-black mt-2">
                 {activeReservation.buildingName}
@@ -317,18 +346,27 @@ export default function MemberDashboard({
               </p>
               <div className="flex items-center gap-2 flex-wrap mt-3">
                 <StatusBadge status={activeReservation.status} />
-                {canCheckIn(activeReservation) && (
+                {shouldShowBluetoothAction(activeReservation) && (
                   <button
-                    onClick={() => handleCheckIn(activeReservation.id)}
-                    disabled={checkInLoading === activeReservation.id}
+                    onClick={() =>
+                      checkInWithBluetooth({
+                        reservation: activeReservation,
+                        room: roomLookup[activeReservation.roomId],
+                        userId: firebaseUser?.uid ?? '',
+                      })
+                    }
+                    disabled={loadingReservationId === activeReservation.id}
                     className="px-3 py-1.5 rounded-lg text-xs font-bold ui-button-orange disabled:opacity-50"
                   >
-                    {checkInLoading === activeReservation.id
-                      ? 'Checking in...'
-                      : 'Check-in'}
+                    {loadingReservationId === activeReservation.id
+                      ? 'Connecting...'
+                      : 'Check In via Bluetooth'}
                   </button>
                 )}
               </div>
+                  </>
+                );
+              })()}
             </>
           ) : (
             <div className="text-center py-2">
@@ -425,6 +463,12 @@ export default function MemberDashboard({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {upcomingReservations.map((reservation) => (
               <div key={reservation.id} className="glass-card p-4 !rounded-xl">
+                {(() => {
+                  const bluetoothConnectionStatus =
+                    getBluetoothConnectionStatus(reservation);
+
+                  return (
+                    <>
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <h4 className="text-sm font-bold text-black">
                     {reservation.roomName}
@@ -433,15 +477,24 @@ export default function MemberDashboard({
                 </div>
                 <div className="flex items-center gap-2 flex-wrap mb-2">
                   <StatusBadge status={reservation.status} />
-                  {canCheckIn(reservation) && (
+                  {bluetoothConnectionStatus ? (
+                    <StatusBadge status={bluetoothConnectionStatus} />
+                  ) : null}
+                  {shouldShowBluetoothAction(reservation) && (
                     <button
-                      onClick={() => handleCheckIn(reservation.id)}
-                      disabled={checkInLoading === reservation.id}
+                      onClick={() =>
+                        checkInWithBluetooth({
+                          reservation,
+                          room: roomLookup[reservation.roomId],
+                          userId: firebaseUser?.uid ?? '',
+                        })
+                      }
+                      disabled={loadingReservationId === reservation.id}
                       className="px-3 py-1 rounded-lg text-[11px] font-bold ui-button-orange disabled:opacity-50"
                     >
-                      {checkInLoading === reservation.id
-                        ? 'Checking in...'
-                        : 'Check-in'}
+                      {loadingReservationId === reservation.id
+                        ? 'Connecting...'
+                        : 'Check In via Bluetooth'}
                     </button>
                   )}
                 </div>
@@ -480,6 +533,9 @@ export default function MemberDashboard({
                     {reservation.startTime} - {reservation.endTime}
                   </span>
                 </div>
+                    </>
+                  );
+                })()}
               </div>
             ))}
           </div>

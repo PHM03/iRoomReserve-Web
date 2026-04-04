@@ -11,6 +11,7 @@ import {
   checkInReservationRecord,
   completeReservationRecord,
   deleteReservationRecord,
+  disconnectReservationBeaconRecord,
   rejectReservationRecord,
 } from "@/lib/server/services/reservations";
 
@@ -32,6 +33,10 @@ const reservationActionSchema = z.discriminatedUnion("action", [
     action: z.literal("check-in"),
     userId: z.string().trim().min(1),
     method: roomCheckInMethodSchema.optional(),
+  }),
+  z.object({
+    action: z.literal("disconnect-beacon"),
+    userId: z.string().trim().min(1),
   }),
   z.object({
     action: z.literal("complete"),
@@ -80,19 +85,37 @@ export async function PATCH(
         break;
       }
       case "cancel":
+        if (authContext.uid !== payload.userId) {
+          throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
+        }
         await cancelReservationRecord(reservationId, payload.userId);
         break;
       case "check-in":
+        if (authContext.uid !== payload.userId) {
+          throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
+        }
         await checkInReservationRecord(
           reservationId,
           payload.userId,
           payload.method
         );
         break;
+      case "disconnect-beacon":
+        if (authContext.uid !== payload.userId) {
+          throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
+        }
+        await disconnectReservationBeaconRecord(reservationId, payload.userId);
+        break;
       case "complete":
+        if (authContext.uid !== payload.userId) {
+          throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
+        }
         await completeReservationRecord(reservationId, payload.userId);
         break;
       case "delete":
+        if (authContext.uid !== payload.userId) {
+          throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
+        }
         await deleteReservationRecord(reservationId, payload.userId);
         break;
       default:

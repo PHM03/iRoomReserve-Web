@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import BeaconStatusSection from '@/components/BeaconStatusSection';
 import FloorAccordion from '@/components/room-status/FloorAccordion';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminTab } from '@/context/AdminTabContext';
@@ -54,6 +55,7 @@ import {
   respondToAdminRequest,
 } from '@/lib/adminRequests';
 import { getManagedBuildingsForCampus } from '@/lib/campusAssignments';
+import { normalizeRoomCheckInMethod } from '@/lib/roomStatus';
 
 // ─── Helpers ────────────────────────────────────────────────────
 function RoleBadge({ role }: { role: string }) {
@@ -247,6 +249,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   const [newRoomType, setNewRoomType] = useState('');
   const [newRoomAcStatus, setNewRoomAcStatus] = useState('');
   const [newRoomTvStatus, setNewRoomTvStatus] = useState('');
+  const [newRoomBeaconId, setNewRoomBeaconId] = useState('');
   const [addingRoom, setAddingRoom] = useState(false);
   const [buildingFloors, setBuildingFloors] = useState(0);
 
@@ -258,6 +261,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   const [editRoomType, setEditRoomType] = useState('');
   const [editAcStatus, setEditAcStatus] = useState('');
   const [editTvStatus, setEditTvStatus] = useState('');
+  const [editBeaconId, setEditBeaconId] = useState('');
   const [savingRoomId, setSavingRoomId] = useState<string | null>(null);
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
 
@@ -392,6 +396,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     setNewRoomType('');
     setNewRoomAcStatus('');
     setNewRoomTvStatus('');
+    setNewRoomBeaconId('');
   };
 
   const resetEditRoomForm = () => {
@@ -402,6 +407,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     setEditRoomType('');
     setEditAcStatus('');
     setEditTvStatus('');
+    setEditBeaconId('');
   };
 
   const startEditingRoom = (room: Room) => {
@@ -412,6 +418,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     setEditRoomType(room.roomType || '');
     setEditAcStatus(room.acStatus || 'No Air Conditioning');
     setEditTvStatus(room.tvProjectorStatus || 'No Television or Projector');
+    setEditBeaconId(room.beaconId || '');
   };
 
   const handleAddRoomBuildingChange = (nextBuildingId: string) => {
@@ -441,6 +448,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
         status: 'Available',
         buildingId,
         buildingName,
+        beaconId: newRoomBeaconId.trim() || null,
       };
       await addRoom(data);
       resetAddRoomWizard();
@@ -462,6 +470,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
         acStatus: editAcStatus || 'No Air Conditioning',
         tvProjectorStatus: editTvStatus || 'No Television or Projector',
         capacity: parseInt(editCapacity, 10) || 30,
+        beaconId: editBeaconId.trim() || null,
       };
 
       await updateRoom(roomId, payload);
@@ -593,7 +602,22 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   const computeEffectiveStatus = (room: Room): { status: string; detail: string } => {
     // Manual overrides take priority
     if (room.status === 'Unavailable') return { status: 'Unavailable', detail: 'Manual override' };
-    if (room.status === 'Ongoing') return { status: 'Ongoing', detail: 'Checked in' };
+    if (room.status === 'Ongoing') {
+      if (
+        normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth' &&
+        room.beaconConnected === false
+      ) {
+        return { status: 'Available', detail: 'Bluetooth beacon disconnected' };
+      }
+
+      return {
+        status: 'Ongoing',
+        detail:
+          normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth'
+            ? 'Bluetooth beacon connected'
+            : 'Checked in',
+      };
+    }
     if (room.status === 'Reserved') return { status: 'Reserved', detail: 'Reserved' };
     // Check active class schedules
     const activeClass = isRoomInClass(schedules, room.id);
@@ -606,6 +630,18 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       (r) => r.roomId === room.id && r.status === 'approved' && r.date === today && r.startTime <= currentTime && r.endTime > currentTime
     );
     if (activeReservation) {
+      const activeCheckInMethod = normalizeRoomCheckInMethod(
+        activeReservation.checkInMethod ?? room.checkInMethod
+      );
+
+      if (
+        activeReservation.checkedInAt &&
+        activeCheckInMethod === 'bluetooth' &&
+        room.beaconConnected === false
+      ) {
+        return { status: 'Available', detail: 'Bluetooth beacon disconnected' };
+      }
+
       return activeReservation.checkedInAt
         ? { status: 'Ongoing', detail: `Checked in: ${activeReservation.userName}` }
         : { status: 'Reserved', detail: `Reserved: ${activeReservation.userName}` };
@@ -979,6 +1015,23 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-black mb-1.5">
+                    Beacon ID
+                  </label>
+                  <input
+                    type="text"
+                    value={newRoomBeaconId}
+                    onChange={(e) => setNewRoomBeaconId(e.target.value)}
+                    placeholder="e.g. ESP32_ROOM_301"
+                    className="glass-input w-full px-4 py-2.5 text-sm"
+                  />
+                  <p className="mt-1.5 text-xs text-black">
+                    Use the exact ESP32 BLE device name for Bluetooth room
+                    check-in.
+                  </p>
+                </div>
+
                 {/* Facilities Section */}
                 <div>
                   <h5 className="text-sm font-bold text-black uppercase tracking-wider mb-4">Facilities</h5>
@@ -1166,6 +1219,21 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                               </option>
                             ))}
                           </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="mb-1.5 block text-xs font-bold text-black">
+                            Beacon ID
+                          </label>
+                          <input
+                            type="text"
+                            value={editBeaconId}
+                            onChange={(e) => setEditBeaconId(e.target.value)}
+                            className="glass-input w-full px-4 py-2.5 text-sm"
+                            placeholder="e.g. ESP32_ROOM_301"
+                          />
+                          <p className="mt-1.5 text-xs text-black">
+                            Match this to the beacon&apos;s exact BLE device name.
+                          </p>
                         </div>
                       </div>
 
@@ -1417,6 +1485,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
               })}
             </div>
           )}
+
+          <BeaconStatusSection buildingName={buildingName} rooms={rooms} />
 
           {/* Today's Class Schedules */}
           {(() => {

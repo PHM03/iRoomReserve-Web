@@ -17,6 +17,9 @@ export type StatusBadgeValue =
   | 'open'
   | 'responded'
   | 'closed'
+  | 'Connected'
+  | 'Disconnected'
+  | 'Connecting...'
   | string;
 
 interface StatusBadgeProps {
@@ -37,13 +40,17 @@ function getBadgeStyle(status: string): string {
       return 'ui-badge-red';
     case 'approved':
     case 'responded':
+    case 'Connected':
       return 'ui-badge-green';
     case 'pending':
     case 'open':
       return 'ui-badge-blue';
+    case 'Connecting...':
+      return 'ui-badge-orange';
     case 'completed':
       return 'ui-badge-yellow';
     case 'rejected':
+    case 'Disconnected':
       return 'ui-badge-red';
     case 'cancelled':
     case 'closed':

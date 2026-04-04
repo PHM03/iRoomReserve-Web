@@ -396,6 +396,20 @@ export async function checkInReservation(
   });
 }
 
+export async function disconnectReservationBeacon(
+  reservationId: string,
+  userId: string
+): Promise<void> {
+  await apiRequest(`/api/reservations/${reservationId}`, {
+    body: {
+      action: "disconnect-beacon",
+      userId,
+    },
+    method: "PATCH",
+    userId,
+  });
+}
+
 export async function cancelReservation(
   reservationId: string,
   userId: string

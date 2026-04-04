@@ -34,6 +34,7 @@ import {
 import {
   canReservationCheckIn,
   compareReservationSchedule,
+  normalizeRoomCheckInMethod,
   normalizeRoomStatus,
   type RoomCheckInMethod,
 } from "@/lib/roomStatus";
@@ -354,6 +355,9 @@ function getRoomStatusPayload(
   if (approvedReservations.length === 0) {
     return {
       status: "Available",
+      beaconConnected: false,
+      beaconDeviceName: null,
+      beaconLastConnectedAt: null,
       reservedBy: null,
       activeReservationId: null,
       checkedInAt: null,
@@ -371,13 +375,24 @@ function getRoomStatusPayload(
     : null;
   const selectedReservation =
     checkedInReservation ?? preferredReservation ?? approvedReservations[0];
+  const selectedCheckInMethod = normalizeRoomCheckInMethod(
+    selectedReservation.checkInMethod
+  );
 
   return {
     status: selectedReservation.checkedInAt ? "Ongoing" : "Reserved",
+    beaconConnected:
+      Boolean(selectedReservation.checkedInAt) &&
+      selectedCheckInMethod === "bluetooth",
+    beaconDeviceName: null,
+    beaconLastConnectedAt:
+      selectedCheckInMethod === "bluetooth"
+        ? selectedReservation.checkedInAt ?? null
+        : null,
     reservedBy: selectedReservation.userId ?? null,
     activeReservationId: selectedReservation.id,
     checkedInAt: selectedReservation.checkedInAt ?? null,
-    checkInMethod: selectedReservation.checkInMethod ?? null,
+    checkInMethod: selectedCheckInMethod ?? null,
   } as const;
 }
 
@@ -807,6 +822,7 @@ export async function checkInReservationRecord(
   userId: string,
   method: RoomCheckInMethod = "manual"
 ) {
+  const normalizedMethod = normalizeRoomCheckInMethod(method) ?? "manual";
   const reservationRef = doc(serverClientDb, "reservations", reservationId);
   const reservationSnapshot = await getDoc(reservationRef);
   if (!reservationSnapshot.exists()) {
@@ -837,11 +853,27 @@ export async function checkInReservationRecord(
   const roomStatus = normalizeRoomStatus(
     (roomSnapshot.data() as { status?: string | null }).status
   );
+  const roomBeaconId =
+    typeof (roomSnapshot.data() as { beaconId?: string | null }).beaconId ===
+    "string"
+      ? (
+          roomSnapshot.data() as {
+            beaconId?: string | null;
+          }
+        ).beaconId?.trim() ?? ""
+      : "";
   if (roomStatus === "Unavailable") {
     throw new ApiError(
       400,
       "room_unavailable",
       "This room is currently unavailable for check-in."
+    );
+  }
+  if (normalizedMethod === "bluetooth" && roomBeaconId.length === 0) {
+    throw new ApiError(
+      400,
+      "missing_beacon",
+      "This room does not have a Bluetooth beacon configured yet."
     );
   }
 
@@ -850,16 +882,22 @@ export async function checkInReservationRecord(
 
   batch.update(reservationRef, {
     checkedInAt: serverTimestamp(),
-    checkInMethod: method,
+    checkInMethod: normalizedMethod,
     updatedAt: serverTimestamp(),
   });
 
   batch.update(roomRef, {
     status: "Ongoing",
+    beaconConnected: normalizedMethod === "bluetooth",
+    beaconDeviceName:
+      normalizedMethod === "bluetooth" ? roomBeaconId : null,
+    beaconLastConnectedAt:
+      normalizedMethod === "bluetooth" ? serverTimestamp() : null,
+    beaconLastDisconnectedAt: null,
     reservedBy: reservation.userId,
     activeReservationId: reservationId,
     checkedInAt: serverTimestamp(),
-    checkInMethod: method,
+    checkInMethod: normalizedMethod,
     updatedAt: serverTimestamp(),
   });
 
@@ -873,6 +911,73 @@ export async function checkInReservationRecord(
       reservationId,
     });
   });
+
+  await batch.commit();
+}
+
+export async function disconnectReservationBeaconRecord(
+  reservationId: string,
+  userId: string
+) {
+  const reservationRef = doc(serverClientDb, "reservations", reservationId);
+  const reservationSnapshot = await getDoc(reservationRef);
+  if (!reservationSnapshot.exists()) {
+    throw new ApiError(404, "not_found", "Reservation not found.");
+  }
+
+  const reservation = {
+    id: reservationSnapshot.id,
+    ...reservationSnapshot.data(),
+  } as ReservationRecord;
+  if (reservation.userId !== userId) {
+    throw new ApiError(
+      403,
+      "forbidden",
+      "You cannot update Bluetooth for this reservation."
+    );
+  }
+  if (reservation.status !== "approved") {
+    return;
+  }
+
+  const roomRef = doc(serverClientDb, "rooms", reservation.roomId);
+  const roomSnapshot = await getDoc(roomRef);
+  if (!roomSnapshot.exists()) {
+    throw new ApiError(404, "not_found", "Room not found.");
+  }
+
+  const roomData = roomSnapshot.data() as {
+    activeReservationId?: string | null;
+    beaconConnected?: boolean | null;
+    checkInMethod?: string | null;
+  };
+  const roomCheckInMethod = normalizeRoomCheckInMethod(roomData.checkInMethod);
+  const shouldResetRoom =
+    roomData.activeReservationId === reservationId ||
+    roomData.beaconConnected === true ||
+    roomCheckInMethod === "bluetooth";
+
+  const batch = writeBatch(serverClientDb);
+
+  batch.update(reservationRef, {
+    checkedInAt: null,
+    checkInMethod: null,
+    updatedAt: serverTimestamp(),
+  });
+
+  if (shouldResetRoom) {
+    batch.update(roomRef, {
+      status: "Available",
+      beaconConnected: false,
+      beaconDeviceName: null,
+      beaconLastDisconnectedAt: serverTimestamp(),
+      reservedBy: null,
+      activeReservationId: null,
+      checkedInAt: null,
+      checkInMethod: null,
+      updatedAt: serverTimestamp(),
+    });
+  }
 
   await batch.commit();
 }

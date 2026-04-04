@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import BeaconStatusSection from '@/components/BeaconStatusSection';
 import { useAuth } from '@/context/AuthContext';
 import {
   DAY_NAMES,
@@ -241,6 +242,8 @@ export default function UtilityStaffDashboard({
           </div>
         </div>
       </div>
+
+      <BeaconStatusSection buildingName={buildingName} rooms={rooms} />
 
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">

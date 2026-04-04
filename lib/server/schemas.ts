@@ -10,6 +10,17 @@ const dateString = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD date.");
 const emailString = z.string().trim().toLowerCase().email();
+const nullableBeaconIdSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return value ?? null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  },
+  z.string().trim().min(1).nullable().optional()
+);
 const userRoleSchema = z.preprocess(
   (value) =>
     typeof value === "string"
@@ -25,7 +36,17 @@ export const roomStatusSchema = z.enum([
   "Unavailable",
 ]);
 
-export const roomCheckInMethodSchema = z.enum(["manual", "ble"]);
+export const roomCheckInMethodSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    return normalized === "ble" ? "bluetooth" : normalized;
+  },
+  z.enum(["manual", "bluetooth"])
+);
 
 export const equipmentSchema = z.record(z.string(), z.number().int().min(0));
 export const reservationCampusSchema = z.preprocess(
@@ -191,6 +212,7 @@ export const roomInputSchema = z.object({
   status: roomStatusSchema,
   buildingId: nonEmptyString,
   buildingName: nonEmptyString,
+  beaconId: nullableBeaconIdSchema,
 });
 
 export const roomUpdateSchema = roomInputSchema
@@ -205,6 +227,14 @@ export const roomStatusUpdateSchema = z.object({
   activeReservationId: z.string().trim().nullable().optional(),
   checkedInAt: z.union([z.literal(null), z.string(), z.undefined()]).optional(),
   checkInMethod: roomCheckInMethodSchema.nullable().optional(),
+  beaconConnected: z.boolean().optional(),
+  beaconDeviceName: z.string().trim().nullable().optional(),
+  beaconLastConnectedAt: z
+    .union([z.literal(null), z.string(), z.undefined()])
+    .optional(),
+  beaconLastDisconnectedAt: z
+    .union([z.literal(null), z.string(), z.undefined()])
+    .optional(),
 });
 
 export const scheduleInputSchema = z.object({

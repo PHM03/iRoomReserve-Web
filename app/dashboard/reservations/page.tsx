@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Toast from '@/components/Toast';
 import { useAuth } from '@/context/AuthContext';
 import {
   cancelReservation,
-  checkInReservation,
   completeReservation,
   deleteReservation,
   onReservationsByUser,
   Reservation,
 } from '@/lib/reservations';
+import { useBluetoothReservationCheckIn } from '@/hooks/useBluetoothReservationCheckIn';
 import { onRoomsByIds, Room } from '@/lib/rooms';
 import StatusBadge from '@/components/StatusBadge';
 import {
@@ -27,6 +28,15 @@ type FilterTab =
 
 export default function MyReservationsPage() {
   const { firebaseUser } = useAuth();
+  const {
+    checkInWithBluetooth,
+    dismissToast,
+    getConnectionStatus,
+    loadingReservationId,
+    showToast,
+    toastMessage,
+    toastType,
+  } = useBluetoothReservationCheckIn();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
@@ -56,10 +66,30 @@ export default function MyReservationsPage() {
   const roomLookup = Object.fromEntries(
     rooms.map((room) => [room.id, room] as const)
   ) as Record<string, Room | undefined>;
+  const getBluetoothConnectionStatus = (reservation: Reservation) => {
+    const room = roomLookup[reservation.roomId];
+    const localStatus = getConnectionStatus(reservation.id);
+
+    if (localStatus === 'connecting') {
+      return 'Connecting...';
+    }
+
+    if (localStatus === 'connected') {
+      return 'Connected';
+    }
+
+    if (!room?.beaconId && reservation.checkInMethod !== 'bluetooth') {
+      return null;
+    }
+
+    return room?.beaconConnected ? 'Connected' : 'Disconnected';
+  };
   const canCheckIn = (reservation: Reservation) =>
     canReservationCheckIn(reservation) &&
     getReservationRoomStatus(reservation, roomLookup[reservation.roomId]) !==
       'Unavailable';
+  const shouldShowBluetoothAction = (reservation: Reservation) =>
+    getConnectionStatus(reservation.id) === 'connecting' || canCheckIn(reservation);
 
   const filteredReservations =
     activeFilter === 'all'
@@ -120,22 +150,6 @@ export default function MyReservationsPage() {
     setActionLoading(null);
   };
 
-  const handleCheckIn = async (reservationId: string) => {
-    if (!firebaseUser) {
-      return;
-    }
-
-    setActionLoading(reservationId);
-
-    try {
-      await checkInReservation(reservationId, firebaseUser.uid);
-    } catch (error) {
-      console.error('Failed to check in:', error);
-    }
-
-    setActionLoading(null);
-  };
-
   const handleComplete = async (reservationId: string) => {
     if (!firebaseUser) {
       return;
@@ -178,6 +192,13 @@ export default function MyReservationsPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
+      <Toast
+        message={toastMessage}
+        type={toastType}
+        show={showToast}
+        onClose={dismissToast}
+      />
+
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-black">My Reservations</h2>
         <p className="text-black mt-1">
@@ -238,6 +259,8 @@ export default function MyReservationsPage() {
               reservation,
               roomLookup[reservation.roomId]
             );
+            const bluetoothConnectionStatus =
+              getBluetoothConnectionStatus(reservation);
 
             return (
               <div key={reservation.id} className="glass-card p-5 !rounded-xl">
@@ -249,6 +272,9 @@ export default function MyReservationsPage() {
                       </h3>
                       <StatusBadge status={reservation.status} />
                       <StatusBadge status={roomStatus} />
+                      {bluetoothConnectionStatus ? (
+                        <StatusBadge status={bluetoothConnectionStatus} />
+                      ) : null}
                     </div>
                     <p className="text-sm text-black">
                       {reservation.buildingName}
@@ -307,15 +333,24 @@ export default function MyReservationsPage() {
                         {actionLoading === reservation.id ? 'Processing...' : 'Cancel'}
                       </button>
                     )}
-                    {canCheckIn(reservation) && (
+                    {shouldShowBluetoothAction(reservation) && (
                       <button
-                        onClick={() => handleCheckIn(reservation.id)}
-                        disabled={actionLoading === reservation.id}
+                        onClick={() =>
+                          checkInWithBluetooth({
+                            reservation,
+                            room: roomLookup[reservation.roomId],
+                            userId: firebaseUser?.uid ?? '',
+                          })
+                        }
+                        disabled={
+                          actionLoading === reservation.id ||
+                          loadingReservationId === reservation.id
+                        }
                         className="px-4 py-2 rounded-xl text-xs font-bold ui-button-orange disabled:opacity-50"
                       >
-                        {actionLoading === reservation.id
-                          ? 'Processing...'
-                          : 'Check-in'}
+                        {loadingReservationId === reservation.id
+                          ? 'Connecting...'
+                          : 'Check In via Bluetooth'}
                       </button>
                     )}
                     {reservation.status === 'approved' && (

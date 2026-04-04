@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 
 import {
+  normalizeRoomCheckInMethod,
   normalizeRoomStatus,
   type RoomCheckInMethod,
   type RoomStatusValue,
@@ -28,6 +29,7 @@ export interface RoomCreateInput {
   status: RoomStatusValue;
   buildingId: string;
   buildingName: string;
+  beaconId?: string | null;
 }
 
 export interface RoomStatusUpdateInput {
@@ -36,6 +38,10 @@ export interface RoomStatusUpdateInput {
   activeReservationId?: string | null;
   checkedInAt?: Date | string | null;
   checkInMethod?: RoomCheckInMethod | null;
+  beaconConnected?: boolean;
+  beaconDeviceName?: string | null;
+  beaconLastConnectedAt?: Date | string | null;
+  beaconLastDisconnectedAt?: Date | string | null;
 }
 
 export async function createRoomRecord(data: RoomCreateInput) {
@@ -44,6 +50,11 @@ export async function createRoomRecord(data: RoomCreateInput) {
   batch.set(roomRef, {
     ...data,
     status: normalizeRoomStatus(data.status),
+    beaconId: data.beaconId ?? null,
+    beaconConnected: false,
+    beaconDeviceName: null,
+    beaconLastConnectedAt: null,
+    beaconLastDisconnectedAt: null,
     reservedBy: null,
     activeReservationId: null,
     checkedInAt: null,
@@ -103,9 +114,23 @@ export async function updateRoomStatusRecord(
   roomId: string,
   data: RoomStatusUpdateInput
 ) {
+  const normalizedCheckInMethod =
+    data.checkInMethod === undefined
+      ? undefined
+      : normalizeRoomCheckInMethod(data.checkInMethod);
+
   await updateDoc(doc(serverClientDb, "rooms", roomId), {
     ...data,
+    ...(normalizedCheckInMethod !== undefined
+      ? { checkInMethod: normalizedCheckInMethod }
+      : {}),
     status: normalizeRoomStatus(data.status),
+    ...(data.status !== "Ongoing" && data.beaconConnected === undefined
+      ? {
+          beaconConnected: false,
+          beaconDeviceName: null,
+        }
+      : {}),
     updatedAt: serverTimestamp(),
   });
 }
