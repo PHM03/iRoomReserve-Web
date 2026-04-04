@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Toast from '@/components/Toast';
+
+import BleStatus from '@/components/BleStatus';
+import StatusBadge from '@/components/StatusBadge';
 import { useAuth } from '@/context/AuthContext';
+import { onRoomsByIds, Room } from '@/lib/rooms';
 import {
   cancelReservation,
   completeReservation,
@@ -10,13 +13,7 @@ import {
   onReservationsByUser,
   Reservation,
 } from '@/lib/reservations';
-import { useBluetoothReservationCheckIn } from '@/hooks/useBluetoothReservationCheckIn';
-import { onRoomsByIds, Room } from '@/lib/rooms';
-import StatusBadge from '@/components/StatusBadge';
-import {
-  canReservationCheckIn,
-  getReservationRoomStatus,
-} from '@/lib/roomStatus';
+import { getReservationRoomStatus } from '@/lib/roomStatus';
 
 type FilterTab =
   | 'all'
@@ -28,15 +25,6 @@ type FilterTab =
 
 export default function MyReservationsPage() {
   const { firebaseUser } = useAuth();
-  const {
-    checkInWithBluetooth,
-    dismissToast,
-    getConnectionStatus,
-    loadingReservationId,
-    showToast,
-    toastMessage,
-    toastType,
-  } = useBluetoothReservationCheckIn();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
@@ -47,7 +35,10 @@ export default function MyReservationsPage() {
       return;
     }
 
-    const unsubscribeReservations = onReservationsByUser(firebaseUser.uid, setReservations);
+    const unsubscribeReservations = onReservationsByUser(
+      firebaseUser.uid,
+      setReservations
+    );
 
     return () => {
       unsubscribeReservations();
@@ -66,30 +57,6 @@ export default function MyReservationsPage() {
   const roomLookup = Object.fromEntries(
     rooms.map((room) => [room.id, room] as const)
   ) as Record<string, Room | undefined>;
-  const getBluetoothConnectionStatus = (reservation: Reservation) => {
-    const room = roomLookup[reservation.roomId];
-    const localStatus = getConnectionStatus(reservation.id);
-
-    if (localStatus === 'connecting') {
-      return 'Connecting...';
-    }
-
-    if (localStatus === 'connected') {
-      return 'Connected';
-    }
-
-    if (!room?.beaconId && reservation.checkInMethod !== 'bluetooth') {
-      return null;
-    }
-
-    return room?.beaconConnected ? 'Connected' : 'Disconnected';
-  };
-  const canCheckIn = (reservation: Reservation) =>
-    canReservationCheckIn(reservation) &&
-    getReservationRoomStatus(reservation, roomLookup[reservation.roomId]) !==
-      'Unavailable';
-  const shouldShowBluetoothAction = (reservation: Reservation) =>
-    getConnectionStatus(reservation.id) === 'connecting' || canCheckIn(reservation);
 
   const filteredReservations =
     activeFilter === 'all'
@@ -192,13 +159,6 @@ export default function MyReservationsPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
-      <Toast
-        message={toastMessage}
-        type={toastType}
-        show={showToast}
-        onClose={dismissToast}
-      />
-
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-black">My Reservations</h2>
         <p className="text-black mt-1">
@@ -255,34 +215,97 @@ export default function MyReservationsPage() {
           </div>
         ) : (
           filteredReservations.map((reservation) => {
-            const roomStatus = getReservationRoomStatus(
-              reservation,
-              roomLookup[reservation.roomId]
-            );
-            const bluetoothConnectionStatus =
-              getBluetoothConnectionStatus(reservation);
+            const room = roomLookup[reservation.roomId];
+            const roomStatus = getReservationRoomStatus(reservation, room);
 
             return (
               <div key={reservation.id} className="glass-card p-5 !rounded-xl">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <h3 className="text-base font-bold text-black">
-                        {reservation.roomName}
-                      </h3>
-                      <StatusBadge status={reservation.status} />
-                      <StatusBadge status={roomStatus} />
-                      {bluetoothConnectionStatus ? (
-                        <StatusBadge status={bluetoothConnectionStatus} />
-                      ) : null}
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                        <h3 className="text-base font-bold text-black">
+                          {reservation.roomName}
+                        </h3>
+                        <StatusBadge status={reservation.status} />
+                        <StatusBadge status={roomStatus} />
+                      </div>
+                      <p className="text-sm text-black">
+                        {reservation.buildingName}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-4 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <svg
+                            className="w-3.5 h-3.5 text-black"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                          <span className="text-xs text-black">
+                            {reservation.date}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <svg
+                            className="w-3.5 h-3.5 text-black"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <span className="text-xs text-black">
+                            {reservation.startTime} - {reservation.endTime}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-black mt-1.5">
+                        {reservation.purpose}
+                      </p>
                     </div>
-                    <p className="text-sm text-black">
-                      {reservation.buildingName}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-4 mt-2">
-                      <div className="flex items-center gap-1.5">
+
+                    <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:min-w-[140px]">
+                      {(reservation.status === 'pending' ||
+                        reservation.status === 'approved') && (
+                        <button
+                          onClick={() => handleCancel(reservation.id)}
+                          disabled={actionLoading === reservation.id}
+                          className="px-4 py-2 rounded-xl text-xs font-bold ui-button-red disabled:opacity-50"
+                        >
+                          {actionLoading === reservation.id ? 'Processing...' : 'Cancel'}
+                        </button>
+                      )}
+                      {reservation.status === 'approved' && (
+                        <button
+                          onClick={() => handleComplete(reservation.id)}
+                          disabled={actionLoading === reservation.id}
+                          className="px-4 py-2 rounded-xl text-xs font-bold ui-button-green disabled:opacity-50"
+                        >
+                          {actionLoading === reservation.id
+                            ? 'Processing...'
+                            : 'Mark Complete'}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(reservation.id)}
+                        disabled={actionLoading === reservation.id}
+                        className="p-2 rounded-xl ui-button-ghost ui-button-ghost-danger disabled:opacity-50"
+                        title="Delete reservation"
+                      >
                         <svg
-                          className="w-3.5 h-3.5 text-black"
+                          className="w-4 h-4"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -291,100 +314,14 @@ export default function MyReservationsPage() {
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                           />
                         </svg>
-                        <span className="text-xs text-black">
-                          {reservation.date}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <svg
-                          className="w-3.5 h-3.5 text-black"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                        <span className="text-xs text-black">
-                          {reservation.startTime} - {reservation.endTime}
-                        </span>
-                      </div>
+                      </button>
                     </div>
-                    <p className="text-xs text-black mt-1.5">
-                      {reservation.purpose}
-                    </p>
                   </div>
 
-                  <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:min-w-[140px]">
-                    {(reservation.status === 'pending' ||
-                      reservation.status === 'approved') && (
-                      <button
-                        onClick={() => handleCancel(reservation.id)}
-                        disabled={actionLoading === reservation.id}
-                        className="px-4 py-2 rounded-xl text-xs font-bold ui-button-red disabled:opacity-50"
-                      >
-                        {actionLoading === reservation.id ? 'Processing...' : 'Cancel'}
-                      </button>
-                    )}
-                    {shouldShowBluetoothAction(reservation) && (
-                      <button
-                        onClick={() =>
-                          checkInWithBluetooth({
-                            reservation,
-                            room: roomLookup[reservation.roomId],
-                            userId: firebaseUser?.uid ?? '',
-                          })
-                        }
-                        disabled={
-                          actionLoading === reservation.id ||
-                          loadingReservationId === reservation.id
-                        }
-                        className="px-4 py-2 rounded-xl text-xs font-bold ui-button-orange disabled:opacity-50"
-                      >
-                        {loadingReservationId === reservation.id
-                          ? 'Connecting...'
-                          : 'Check In via Bluetooth'}
-                      </button>
-                    )}
-                    {reservation.status === 'approved' && (
-                      <button
-                        onClick={() => handleComplete(reservation.id)}
-                        disabled={actionLoading === reservation.id}
-                        className="px-4 py-2 rounded-xl text-xs font-bold ui-button-green disabled:opacity-50"
-                      >
-                        {actionLoading === reservation.id
-                          ? 'Processing...'
-                          : 'Mark Complete'}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleDelete(reservation.id)}
-                      disabled={actionLoading === reservation.id}
-                      className="p-2 rounded-xl ui-button-ghost ui-button-ghost-danger disabled:opacity-50"
-                      title="Delete reservation"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  </div>
+                  <BleStatus reservation={reservation} room={room} />
                 </div>
               </div>
             );

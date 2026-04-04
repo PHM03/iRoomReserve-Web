@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import BeaconStatusSection from '@/components/BeaconStatusSection';
+import BleAdminMonitor from '@/components/BleAdminMonitor';
+import BleSummaryCard from '@/components/BleSummaryCard';
 import FloorAccordion from '@/components/room-status/FloorAccordion';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminTab } from '@/context/AdminTabContext';
@@ -1486,7 +1487,11 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             </div>
           )}
 
-          <BeaconStatusSection buildingName={buildingName} rooms={rooms} />
+          <BleSummaryCard
+            buildingName={buildingName}
+            className="mb-8"
+            onViewDetails={() => setActiveTab('status-scheduling')}
+          />
 
           {/* Today's Class Schedules */}
           {(() => {
@@ -1633,6 +1638,12 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           )}
 
           {/* ─── Class Schedule Manager ─────────────────────────────── */}
+          <BleAdminMonitor
+            buildingName={buildingName}
+            rooms={rooms}
+            className="mb-10"
+          />
+
           <div className="mt-10">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-black">Class Schedules</h3>

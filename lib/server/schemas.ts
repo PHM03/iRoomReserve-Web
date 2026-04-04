@@ -96,6 +96,27 @@ function normalizeReservationPayload(
   return nextValue;
 }
 
+function normalizeRoomPayload(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const nextValue = { ...(value as Record<string, unknown>) };
+  const beaconId =
+    typeof nextValue.bleBeaconId === "string" &&
+    nextValue.bleBeaconId.trim().length > 0
+      ? nextValue.bleBeaconId.trim()
+      : typeof nextValue.beaconId === "string" &&
+          nextValue.beaconId.trim().length > 0
+        ? nextValue.beaconId.trim()
+        : null;
+
+  nextValue.beaconId = beaconId;
+  nextValue.bleBeaconId = beaconId;
+
+  return nextValue;
+}
+
 const reservationCommonSchema = z.object({
   userId: nonEmptyString,
   userName: nonEmptyString,
@@ -202,7 +223,7 @@ export const feedbackRespondSchema = z.object({
   response: nonEmptyString,
 });
 
-export const roomInputSchema = z.object({
+const roomBaseSchema = z.object({
   name: nonEmptyString,
   floor: nonEmptyString,
   roomType: nonEmptyString,
@@ -213,13 +234,17 @@ export const roomInputSchema = z.object({
   buildingId: nonEmptyString,
   buildingName: nonEmptyString,
   beaconId: nullableBeaconIdSchema,
+  bleBeaconId: nullableBeaconIdSchema,
 });
 
-export const roomUpdateSchema = roomInputSchema
-  .partial()
-  .refine((value) => Object.keys(value).length > 0, {
+export const roomInputSchema = z.preprocess(normalizeRoomPayload, roomBaseSchema);
+
+export const roomUpdateSchema = z.preprocess(
+  normalizeRoomPayload,
+  roomBaseSchema.partial().refine((value) => Object.keys(value).length > 0, {
     message: "At least one room field must be provided.",
-  });
+  })
+);
 
 export const roomStatusUpdateSchema = z.object({
   status: roomStatusSchema,

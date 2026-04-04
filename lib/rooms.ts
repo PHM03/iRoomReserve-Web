@@ -35,6 +35,7 @@ export interface Room {
   buildingId: string;
   buildingName: string;
   beaconId?: string | null;
+  bleBeaconId?: string | null;
   beaconConnected?: boolean;
   beaconDeviceName?: string | null;
   beaconLastConnectedAt?: Timestamp | null;
@@ -78,11 +79,19 @@ function mapRoom(
   roomId: string,
   data: Omit<Room, "id" | "status"> & { status?: string | null }
 ): Room {
+  const normalizedBeaconId =
+    typeof data.bleBeaconId === "string" && data.bleBeaconId.trim().length > 0
+      ? data.bleBeaconId.trim()
+      : typeof data.beaconId === "string" && data.beaconId.trim().length > 0
+        ? data.beaconId.trim()
+        : null;
+
   return {
     id: roomId,
     ...data,
     status: normalizeRoomStatus(data.status),
-    beaconId: typeof data.beaconId === "string" ? data.beaconId : null,
+    beaconId: normalizedBeaconId,
+    bleBeaconId: normalizedBeaconId,
     beaconConnected: data.beaconConnected ?? false,
     beaconDeviceName: data.beaconDeviceName ?? null,
     beaconLastConnectedAt: data.beaconLastConnectedAt ?? null,

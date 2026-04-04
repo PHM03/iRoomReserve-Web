@@ -5,7 +5,9 @@ import {
   getBluetoothErrorMessage,
 } from '../lib/beaconBluetooth';
 import {
+  DEFAULT_RESERVATION_TIME_ZONE,
   getReservationRoomStatus,
+  isReservationActiveTimeSlot,
   normalizeRoomCheckInMethod,
   resolveRoomStatus,
 } from '../lib/roomStatus';
@@ -63,5 +65,36 @@ describe('roomStatus bluetooth handling', () => {
 
     expect(getReservationRoomStatus(reservation, room)).toBe('Available');
     expect(resolveRoomStatus(room, [reservation]).status).toBe('Available');
+  });
+
+  it('only enables BLE access during the active reservation time slot', () => {
+    const reservation = {
+      status: 'approved',
+      date: '2026-04-04',
+      startTime: '08:00',
+      endTime: '09:00',
+    };
+
+    expect(
+      isReservationActiveTimeSlot(
+        reservation,
+        new Date('2026-04-04T08:30:00+08:00'),
+        DEFAULT_RESERVATION_TIME_ZONE
+      )
+    ).toBe(true);
+    expect(
+      isReservationActiveTimeSlot(
+        reservation,
+        new Date('2026-04-04T07:59:00+08:00'),
+        DEFAULT_RESERVATION_TIME_ZONE
+      )
+    ).toBe(false);
+    expect(
+      isReservationActiveTimeSlot(
+        reservation,
+        new Date('2026-04-04T09:00:00+08:00'),
+        DEFAULT_RESERVATION_TIME_ZONE
+      )
+    ).toBe(false);
   });
 });

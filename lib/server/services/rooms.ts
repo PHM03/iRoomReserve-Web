@@ -30,6 +30,7 @@ export interface RoomCreateInput {
   buildingId: string;
   buildingName: string;
   beaconId?: string | null;
+  bleBeaconId?: string | null;
 }
 
 export interface RoomStatusUpdateInput {
@@ -44,13 +45,32 @@ export interface RoomStatusUpdateInput {
   beaconLastDisconnectedAt?: Date | string | null;
 }
 
+function normalizeBeaconId(value?: string | null) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+  return trimmedValue.length > 0 ? trimmedValue : null;
+}
+
+function resolveBeaconId(input: {
+  beaconId?: string | null;
+  bleBeaconId?: string | null;
+}) {
+  return normalizeBeaconId(input.bleBeaconId) ?? normalizeBeaconId(input.beaconId);
+}
+
 export async function createRoomRecord(data: RoomCreateInput) {
   const roomRef = doc(collection(serverClientDb, "rooms"));
   const batch = writeBatch(serverClientDb);
+  const beaconId = resolveBeaconId(data);
+
   batch.set(roomRef, {
     ...data,
     status: normalizeRoomStatus(data.status),
-    beaconId: data.beaconId ?? null,
+    beaconId,
+    bleBeaconId: beaconId,
     beaconConnected: false,
     beaconDeviceName: null,
     beaconLastConnectedAt: null,
@@ -72,9 +92,18 @@ export async function updateRoomRecord(
 ) {
   const batch = writeBatch(serverClientDb);
   const roomRef = doc(serverClientDb, "rooms", roomId);
+  const beaconIdProvided =
+    data.beaconId !== undefined || data.bleBeaconId !== undefined;
+  const normalizedBeaconId = beaconIdProvided ? resolveBeaconId(data) : undefined;
 
   batch.update(roomRef, {
     ...data,
+    ...(beaconIdProvided
+      ? {
+          beaconId: normalizedBeaconId,
+          bleBeaconId: normalizedBeaconId,
+        }
+      : {}),
     ...(data.status ? { status: normalizeRoomStatus(data.status) } : {}),
     updatedAt: serverTimestamp(),
   });

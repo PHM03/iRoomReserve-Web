@@ -202,6 +202,21 @@ describe('server schemas', () => {
     ).toBe(true);
 
     expect(
+      roomInputSchema.safeParse({
+        name: 'Room 102',
+        floor: '2nd Floor',
+        roomType: 'Classroom',
+        acStatus: 'Working',
+        tvProjectorStatus: 'Working',
+        capacity: 30,
+        status: 'Available',
+        buildingId: 'building-1',
+        buildingName: 'Main Building',
+        bleBeaconId: 'HC-05-ROOM-102',
+      }).success
+    ).toBe(true);
+
+    expect(
       scheduleInputSchema.safeParse({
         roomId: 'room-1',
         roomName: 'Room 101',

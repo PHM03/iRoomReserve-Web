@@ -2,6 +2,7 @@ import { Timestamp } from "firebase/firestore";
 
 export const ROOM_STATUS_VALUES = ["Available", "Reserved", "Ongoing"] as const;
 export const ROOM_CHECK_IN_METHODS = ["manual", "bluetooth"] as const;
+export const DEFAULT_RESERVATION_TIME_ZONE = "Asia/Manila";
 
 export type RoomStatus = (typeof ROOM_STATUS_VALUES)[number];
 export type RoomStatusValue = RoomStatus | "Unavailable";
@@ -82,6 +83,51 @@ export function getCurrentTimeString(date: Date = new Date()): string {
   const hours = date.getHours().toString().padStart(2, "0");
   const minutes = date.getMinutes().toString().padStart(2, "0");
   return `${hours}:${minutes}`;
+}
+
+export function getCurrentDateTimeStringInTimeZone(
+  date: Date = new Date(),
+  timeZone: string = DEFAULT_RESERVATION_TIME_ZONE
+) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  ) as Record<string, string>;
+
+  return {
+    date: `${values.year}-${values.month}-${values.day}`,
+    time: `${values.hour}:${values.minute}`,
+  };
+}
+
+export function isReservationActiveTimeSlot(
+  reservation: Pick<
+    RoomStatusReservationLike,
+    "status" | "date" | "startTime" | "endTime"
+  >,
+  now: Date = new Date(),
+  timeZone: string = DEFAULT_RESERVATION_TIME_ZONE
+): boolean {
+  const currentDateTime = getCurrentDateTimeStringInTimeZone(now, timeZone);
+
+  return (
+    reservation.status === "approved" &&
+    reservation.date === currentDateTime.date &&
+    reservation.startTime <= currentDateTime.time &&
+    reservation.endTime > currentDateTime.time
+  );
 }
 
 export function compareReservationSchedule(

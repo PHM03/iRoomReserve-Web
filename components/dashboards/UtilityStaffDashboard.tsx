@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import BeaconStatusSection from '@/components/BeaconStatusSection';
+import BleAdminMonitor from '@/components/BleAdminMonitor';
 import { useAuth } from '@/context/AuthContext';
 import {
   DAY_NAMES,
@@ -243,7 +243,15 @@ export default function UtilityStaffDashboard({
         </div>
       </div>
 
-      <BeaconStatusSection buildingName={buildingName} rooms={rooms} />
+      <section className="mb-8">
+        <div className="mb-4">
+          <h3 className="text-xl font-bold text-black">BLE Beacon Status</h3>
+          <p className="text-sm text-black mt-1">
+            Full beacon telemetry, connection history, and refresh controls for {buildingName}.
+          </p>
+        </div>
+        <BleAdminMonitor buildingName={buildingName} rooms={rooms} />
+      </section>
 
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">

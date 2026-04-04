@@ -853,15 +853,16 @@ export async function checkInReservationRecord(
   const roomStatus = normalizeRoomStatus(
     (roomSnapshot.data() as { status?: string | null }).status
   );
+  const roomData = roomSnapshot.data() as {
+    beaconId?: string | null;
+    bleBeaconId?: string | null;
+  };
   const roomBeaconId =
-    typeof (roomSnapshot.data() as { beaconId?: string | null }).beaconId ===
-    "string"
-      ? (
-          roomSnapshot.data() as {
-            beaconId?: string | null;
-          }
-        ).beaconId?.trim() ?? ""
-      : "";
+    typeof roomData.bleBeaconId === "string" && roomData.bleBeaconId.trim().length > 0
+      ? roomData.bleBeaconId.trim()
+      : typeof roomData.beaconId === "string" && roomData.beaconId.trim().length > 0
+        ? roomData.beaconId.trim()
+        : "";
   if (roomStatus === "Unavailable") {
     throw new ApiError(
       400,

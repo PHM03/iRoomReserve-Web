@@ -237,6 +237,7 @@ function LoginForm() {
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                suppressHydrationWarning
                 className="glass-input w-full px-4 py-3"
                 placeholder="Enter your email"
                 autoComplete="email"
@@ -253,6 +254,7 @@ function LoginForm() {
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  suppressHydrationWarning
                   className="glass-input w-full px-4 py-3 pr-12"
                   placeholder="Enter your password"
                   autoComplete="current-password"
@@ -260,6 +262,7 @@ function LoginForm() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  suppressHydrationWarning
                   className="absolute inset-y-0 right-0 flex items-center pr-4 text-black hover:text-primary transition-colors"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
@@ -281,6 +284,7 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() => router.push('/forgot-password')}
+                suppressHydrationWarning
                 className="text-sm text-black hover:text-primary transition-colors font-bold"
               >
                 Forgot Password?
@@ -290,6 +294,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
+              suppressHydrationWarning
               className="btn-primary w-full flex items-center justify-center py-3 px-4"
             >
               {loading ? (
@@ -317,6 +322,7 @@ function LoginForm() {
           <button
             type="button"
             onClick={handleGoogleSignIn}
+            suppressHydrationWarning
             className="glass-card w-full flex items-center justify-center gap-3 py-3 px-4 font-bold text-black hover:text-primary cursor-pointer !border-dark/15"
           >
             <svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -334,6 +340,7 @@ function LoginForm() {
             <button
               type="button"
               onClick={() => router.push(`/register`)}
+              suppressHydrationWarning
               className="font-bold text-primary hover:text-primary-hover transition-colors"
             >
               Register
