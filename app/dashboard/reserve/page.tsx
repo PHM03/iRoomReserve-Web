@@ -1,24 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import RoomCard from '@/components/RoomCard';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
 import { getCampusName, getManagedBuildingsForCampus } from '@/lib/campusAssignments';
-import { type ReservationCampus } from '@/lib/campuses';
+import { inferCampusFromBuilding, type ReservationCampus } from '@/lib/campuses';
 import { normalizeRole, USER_ROLES } from '@/lib/domain/roles';
 import {
   createReservation,
   createRecurringReservation,
   validateReservationApprover,
 } from '@/lib/reservations';
-import { onRoomsByBuilding } from '@/lib/rooms';
+import { onRoomsByBuildingIds, type Room } from '@/lib/rooms';
 
-interface Room {
-  id: string;
-  name: string;
-  floor: string;
-  status: string;
-}
+type CampusFilter = ReservationCampus | 'all';
+type DetailsStep = 2 | 3;
+type RoomFilterKey = 'available' | 'classroom' | 'laboratory';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // TODO: Replace this temporary Digital Campus approver email with the actual configurable building admin source.
@@ -27,6 +25,24 @@ const CAMPUS_TIME_RANGES: Record<ReservationCampus, { endMinutes: number; startM
   digi: { startMinutes: 7 * 60, endMinutes: 17 * 60 },
   main: { startMinutes: 7 * 60, endMinutes: 21 * 60 },
 };
+const ALL_MANAGED_BUILDING_IDS = [
+  ...getManagedBuildingsForCampus('main'),
+  ...getManagedBuildingsForCampus('digi'),
+].map((building) => building.id);
+const FILTER_CHIPS: Array<{ key: RoomFilterKey; label: string }> = [
+  { key: 'classroom', label: 'Classroom' },
+  { key: 'laboratory', label: 'Laboratory' },
+  { key: 'available', label: 'Available' },
+];
+const INITIAL_EQUIPMENT = {
+  fans: 0,
+  speakers: 0,
+  televisions: 0,
+  hdmiCables: 0,
+  monoblockChairs: 0,
+  tables: 0,
+};
+
 function timeStringToMinutes(value: string): number {
   const [hours, minutes] = value.split(':').map(Number);
   return hours * 60 + minutes;
@@ -84,18 +100,39 @@ function isTimeRangeValid(
   );
 }
 
+function getRoomCampus(room: Room): ReservationCampus | null {
+  return inferCampusFromBuilding({
+    id: room.buildingId,
+    name: room.buildingName,
+  });
+}
+
+function getRoomAvailability(room: Room): 'Available' | 'Occupied' {
+  return room.status === 'Available' ? 'Available' : 'Occupied';
+}
+
+function matchesRoomType(room: Room, filter: Exclude<RoomFilterKey, 'available'>): boolean {
+  const roomType = room.roomType.trim().toLowerCase();
+
+  if (filter === 'classroom') {
+    return roomType.includes('classroom');
+  }
+
+  return roomType.includes('laboratory');
+}
+
 export default function ReserveRoomPage() {
   const { firebaseUser, profile } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedRoomParam = searchParams.get('roomId') ?? '';
 
-  // Form state
-  const [formStep, setFormStep] = useState(1);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [selectedBuildingId, setSelectedBuildingId] = useState('');
-  const [selectedBuildingName, setSelectedBuildingName] = useState('');
-  const [selectedCampus, setSelectedCampus] = useState<ReservationCampus | null>(null);
-  const [selectedRoomId, setSelectedRoomId] = useState('');
-  const [selectedRoomName, setSelectedRoomName] = useState('');
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [activeCampusFilter, setActiveCampusFilter] = useState<CampusFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeRoomFilters, setActiveRoomFilters] = useState<RoomFilterKey[]>([]);
+  const [detailsStep, setDetailsStep] = useState<DetailsStep>(2);
   const [reservationDate, setReservationDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -103,57 +140,44 @@ export default function ReserveRoomPage() {
   const [purpose, setPurpose] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [roomsLoading, setRoomsLoading] = useState(false);
   const [createdCount, setCreatedCount] = useState(0);
   const [submitError, setSubmitError] = useState('');
   const [validatingApprover, setValidatingApprover] = useState(false);
   const [submitPhase, setSubmitPhase] = useState<'idle' | 'validating-email' | 'creating-reservation'>('idle');
-
-  // Recurring state
   const [isRecurring, setIsRecurring] = useState(false);
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
-
-  // Equipment & approval state
   const [equipment, setEquipment] = useState<Record<string, number>>({
-    fans: 0,
-    speakers: 0,
-    televisions: 0,
-    hdmiCables: 0,
-    monoblockChairs: 0,
-    tables: 0,
+    ...INITIAL_EQUIPMENT,
   });
   const [approvalEmailError, setApprovalEmailError] = useState('');
   const [approvalEmails, setApprovalEmails] = useState({
     advisorEmail: '',
   });
 
-  // Load rooms when building selected
   useEffect(() => {
-    if (!selectedBuildingId) {
-      return;
-    }
-
-    const unsubscribe = onRoomsByBuilding(selectedBuildingId, (nextRooms) => {
-      setRooms(
-        nextRooms
-          .filter((room) => room.status === 'Available')
-          .map((room) => ({
-            id: room.id,
-            name: room.name,
-            floor: room.floor,
-            status: room.status,
-          }))
-      );
+    const unsubscribe = onRoomsByBuildingIds(ALL_MANAGED_BUILDING_IDS, (nextRooms) => {
+      setRooms(nextRooms);
       setRoomsLoading(false);
     });
 
     return () => {
       unsubscribe();
     };
-  }, [selectedBuildingId]);
+  }, []);
 
-  const availableRooms = selectedBuildingId ? rooms : [];
+  const selectedRoom = selectedRoomParam
+    ? rooms.find((room) => room.id === selectedRoomParam) ?? null
+    : null;
+  const selectedCampus = selectedRoom ? getRoomCampus(selectedRoom) : null;
+  const selectedRoomId = selectedRoom?.id ?? '';
+  const selectedRoomName = selectedRoom?.name ?? '';
+  const selectedBuildingId = selectedRoom?.buildingId ?? '';
+  const selectedBuildingName = selectedRoom?.buildingName ?? '';
+  const selectedRoomCampusName = selectedCampus
+    ? getCampusName(selectedCampus)
+    : selectedBuildingName || 'Unknown campus';
+  const currentStep = selectedRoomParam ? detailsStep : 1;
   const campusTimeOptions = getCampusTimeOptions(selectedCampus);
   const startTimeOptions = selectedCampus
     ? campusTimeOptions.filter((time) => {
@@ -174,121 +198,164 @@ export default function ReserveRoomPage() {
         );
       })
     : [];
-  const mainCampusBuildings = getManagedBuildingsForCampus('main');
-  const buildings = mainCampusBuildings.map((building) => ({
-    ...building,
-    code: '',
-    floors: 0,
-  }));
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const hasTypeFilters =
+    activeRoomFilters.includes('classroom') || activeRoomFilters.includes('laboratory');
+  const filteredRooms = rooms.filter((room) => {
+    const roomCampus = getRoomCampus(room);
+    const matchesCampus =
+      activeCampusFilter === 'all' ? true : roomCampus === activeCampusFilter;
+    const searchableText = [
+      room.name,
+      room.buildingName,
+      room.floor,
+      room.roomType,
+    ]
+      .join(' ')
+      .toLowerCase();
+    const matchesSearch =
+      normalizedQuery.length === 0 || searchableText.includes(normalizedQuery);
+    const matchesType =
+      !hasTypeFilters ||
+      activeRoomFilters
+        .filter((filter): filter is Exclude<RoomFilterKey, 'available'> => filter !== 'available')
+        .some((filter) => matchesRoomType(room, filter));
+    const matchesAvailability =
+      !activeRoomFilters.includes('available') || room.status === 'Available';
 
-  const resetReservationDetails = () => {
-    setRooms([]);
+    return matchesCampus && matchesSearch && matchesType && matchesAvailability;
+  });
+  const previewDates = isRecurring ? getPreviewDates() : [];
+  const canContinueToEquipment = canProceedToEquipment();
+
+  function resetReservationDetails() {
+    setReservationDate('');
     setStartTime('');
     setEndTime('');
     setProgramDepartmentOrganization('');
     setPurpose('');
+    setSubmitError('');
     setApprovalEmailError('');
+    setCreatedCount(0);
+    setIsRecurring(false);
+    setSelectedDays([]);
+    setRecurringEndDate('');
+    setEquipment({ ...INITIAL_EQUIPMENT });
     setApprovalEmails({
       advisorEmail: '',
     });
-    setSelectedRoomId('');
-    setSelectedRoomName('');
-  };
+  }
 
-  // Handlers
-  const handleCampusChange = (campusValue: string) => {
-    const nextCampus = campusValue ? (campusValue as ReservationCampus) : null;
-    const nextBuilding =
-      nextCampus === 'digi'
-        ? getManagedBuildingsForCampus('digi')[0]
-        : null;
-
-    resetReservationDetails();
-    setSelectedCampus(nextCampus);
-    setSelectedBuildingId(nextBuilding?.id ?? '');
-    setSelectedBuildingName(nextBuilding?.name ?? '');
-    setRoomsLoading(Boolean(nextBuilding?.id));
-    setFormStep(1);
-  };
-
-  const handleBuildingSelect = (buildingId: string) => {
-    const building = mainCampusBuildings.find((item) => item.id === buildingId);
-    resetReservationDetails();
-    setRoomsLoading(Boolean(buildingId));
-    setSelectedBuildingId(buildingId);
-    setSelectedBuildingName(building?.name || '');
-    setSelectedCampus('main');
-    setFormStep(1);
-  };
-
-  const handleProceedToRooms = () => {
-    if (!selectedBuildingId) {
-      return;
+  function getPreviewDates(): string[] {
+    if (!reservationDate || !recurringEndDate || selectedDays.length === 0) {
+      return [];
     }
 
-    setFormStep(2);
-  };
-
-  const handleRoomSelect = (roomId: string) => {
-    const room = availableRooms.find((r) => r.id === roomId);
-    setSelectedRoomId(roomId);
-    setSelectedRoomName(room?.name || '');
-    setFormStep(3);
-  };
-
-  const updateEquipment = (key: string, delta: number) => {
-    setEquipment((prev) => ({
-      ...prev,
-      [key]: Math.max(0, (prev[key] || 0) + delta),
-    }));
-  };
-
-  const toggleDay = (day: number) => {
-    setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-    );
-  };
-
-  const validateEmail = (email: string): boolean => {
-    if (!email.trim()) return true;
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return regex.test(email);
-  };
-
-  const approvalFieldLabel = 'Email of Adviser / Dept. Head / Professor';
-
-  // Calculate preview dates for recurring
-  const getPreviewDates = (): string[] => {
-    if (!reservationDate || !recurringEndDate || selectedDays.length === 0) return [];
     const dates: string[] = [];
-    const current = new Date(reservationDate + 'T00:00:00');
-    const end = new Date(recurringEndDate + 'T00:00:00');
+    const current = new Date(`${reservationDate}T00:00:00`);
+    const end = new Date(`${recurringEndDate}T00:00:00`);
+
     while (current <= end && dates.length < 20) {
       if (selectedDays.includes(current.getDay())) {
         dates.push(current.toISOString().split('T')[0]);
       }
       current.setDate(current.getDate() + 1);
     }
-    return dates;
-  };
 
-  const canProceedStep3 = (): boolean => {
-    if (!startTime || !endTime || !programDepartmentOrganization || !purpose || !isTimeRangeValid(selectedCampus, startTime, endTime)) return false;
+    return dates;
+  }
+
+  function canProceedToEquipment(): boolean {
+    if (
+      !startTime ||
+      !endTime ||
+      !programDepartmentOrganization ||
+      !purpose ||
+      !isTimeRangeValid(selectedCampus, startTime, endTime)
+    ) {
+      return false;
+    }
+
     if (isRecurring) {
       return !!reservationDate && !!recurringEndDate && selectedDays.length > 0;
     }
-    return !!reservationDate;
-  };
 
-  const handleSubmitReservation = async () => {
-    if (!firebaseUser || !selectedBuildingId || !selectedRoomId || !selectedCampus || !startTime || !endTime || !programDepartmentOrganization || !purpose) return;
-    if (!isTimeRangeValid(selectedCampus, startTime, endTime)) return;
+    return !!reservationDate;
+  }
+
+  function toggleDay(day: number) {
+    setSelectedDays((prev) =>
+      prev.includes(day) ? prev.filter((value) => value !== day) : [...prev, day]
+    );
+  }
+
+  function updateEquipment(key: string, delta: number) {
+    setEquipment((prev) => ({
+      ...prev,
+      [key]: Math.max(0, (prev[key] || 0) + delta),
+    }));
+  }
+
+  function validateEmail(email: string): boolean {
+    if (!email.trim()) {
+      return true;
+    }
+
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  }
+
+  function handleCampusFilterChange(nextCampus: CampusFilter) {
+    setActiveCampusFilter(nextCampus);
+  }
+
+  function toggleRoomFilter(filter: RoomFilterKey) {
+    setActiveRoomFilters((prev) =>
+      prev.includes(filter) ? prev.filter((item) => item !== filter) : [...prev, filter]
+    );
+  }
+
+  function handleRoomSelect(roomId: string) {
+    if (selectedRoomId !== roomId) {
+      resetReservationDetails();
+    }
+
+    setDetailsStep(2);
+    router.push(`/dashboard/reserve?roomId=${roomId}`);
+  }
+
+  function handleBackToRoomList() {
+    setDetailsStep(2);
+    setApprovalEmailError('');
+    setSubmitError('');
+    router.push('/dashboard/reserve');
+  }
+
+  async function handleSubmitReservation() {
+    if (
+      !firebaseUser ||
+      !selectedBuildingId ||
+      !selectedRoomId ||
+      !selectedCampus ||
+      !startTime ||
+      !endTime ||
+      !programDepartmentOrganization ||
+      !purpose
+    ) {
+      return;
+    }
+
+    if (!isTimeRangeValid(selectedCampus, startTime, endTime)) {
+      return;
+    }
+
     setSubmitError('');
     setSubmitPhase('idle');
 
-    const approvalEmail = selectedCampus === 'digi'
-      ? DIGITAL_CAMPUS_BUILDING_ADMIN_EMAIL
-      : approvalEmails.advisorEmail.trim().toLowerCase();
+    const approvalEmail =
+      selectedCampus === 'digi'
+        ? DIGITAL_CAMPUS_BUILDING_ADMIN_EMAIL
+        : approvalEmails.advisorEmail.trim().toLowerCase();
 
     if (!approvalEmail || !validateEmail(approvalEmail)) {
       setApprovalEmailError(
@@ -301,6 +368,7 @@ export default function ReserveRoomPage() {
 
     setValidatingApprover(true);
     setSubmitPhase('validating-email');
+
     try {
       await validateReservationApprover(selectedCampus, approvalEmail);
     } catch (error) {
@@ -313,9 +381,10 @@ export default function ReserveRoomPage() {
       setSubmitPhase('idle');
       return;
     }
-    setValidatingApprover(false);
 
+    setValidatingApprover(false);
     setSubmitting(true);
+
     try {
       const displayName = firebaseUser.displayName || 'Student';
       const normalizedUserRole = normalizeRole(profile?.role) ?? USER_ROLES.STUDENT;
@@ -333,13 +402,14 @@ export default function ReserveRoomPage() {
         purpose,
         equipment,
       };
+
       setSubmitPhase('creating-reservation');
 
       if (selectedCampus === 'main') {
         const reservationData = {
           ...sharedData,
-          campus: 'main' as const,
           advisorEmail: approvalEmail,
+          campus: 'main' as const,
         };
 
         if (isRecurring && selectedDays.length > 0 && recurringEndDate) {
@@ -357,8 +427,8 @@ export default function ReserveRoomPage() {
       } else {
         const reservationData = {
           ...sharedData,
-          campus: 'digi' as const,
           buildingAdminEmail: approvalEmail,
+          campus: 'digi' as const,
         };
 
         if (isRecurring && selectedDays.length > 0 && recurringEndDate) {
@@ -374,55 +444,58 @@ export default function ReserveRoomPage() {
           setCreatedCount(1);
         }
       }
+
       setSubmitSuccess(true);
       setSubmitPhase('idle');
-    } catch (err) {
-      console.error('Failed to create reservation:', err);
+    } catch (error) {
+      console.error('Failed to create reservation:', error);
       setSubmitError(
-        err instanceof Error
-          ? err.message
+        error instanceof Error
+          ? error.message
           : 'Failed to create reservation. Please try again.'
       );
       setSubmitPhase('idle');
     }
+
     setSubmitting(false);
     setValidatingApprover(false);
-  };
-
-  const previewDates = isRecurring ? getPreviewDates() : [];
+  }
 
   return (
-    <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
-      {/* Header */}
+    <main className="relative z-10 mx-auto max-w-5xl px-4 py-8 pb-24 sm:px-6 lg:px-8 md:pb-8">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-black">Reserve a Room</h2>
-        <p className="text-black mt-1">Find and book the perfect space for your needs</p>
+        <p className="mt-1 text-black">
+          Browse rooms, filter quickly, and continue straight into reservation details.
+        </p>
       </div>
 
       <div className="glass-card p-6 !rounded-2xl">
-        {/* Success State */}
         {submitSuccess ? (
-            <div className="text-center py-12">
-              <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-5">
-                <svg className="w-10 h-10 ui-text-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-            <h3 className="text-xl font-bold text-black mb-2">
+          <div className="py-12 text-center">
+            <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20">
+              <svg className="h-10 w-10 ui-text-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="mb-2 text-xl font-bold text-black">
               {createdCount > 1 ? `${createdCount} Reservations Submitted!` : 'Reservation Submitted!'}
             </h3>
-            <p className="text-sm text-black mb-6">
+            <p className="mb-6 text-sm text-black">
               {createdCount > 1
-                ? `${createdCount} recurring reservations have been created. Each one will follow the ${selectedCampus === 'digi' ? 'Digital Campus building admin review' : 'faculty review step for Main Campus'}.`
+                ? `${createdCount} recurring reservations have been created. Each one will follow the ${
+                    selectedCampus === 'digi'
+                      ? 'Digital Campus building admin review'
+                      : 'faculty review step for Main Campus'
+                  }.`
                 : selectedCampus === 'digi'
                   ? 'Your request will go directly to the building admin for approval.'
-                  : 'Your request will first be sent to the faculty reviewer you entered for approval.'
-              }
+                  : 'Your request will first be sent to the faculty reviewer you entered for approval.'}
             </p>
             <div className="flex items-center justify-center gap-3">
               <button
                 onClick={() => router.push('/dashboard')}
-                className="px-6 py-2.5 rounded-xl text-sm font-bold text-black hover:text-primary bg-dark/5 hover:bg-primary/10 border border-dark/10 transition-all"
+                className="rounded-xl border border-dark/10 bg-dark/5 px-6 py-2.5 text-sm font-bold text-black transition-all hover:bg-primary/10 hover:text-primary"
               >
                 Back to Dashboard
               </button>
@@ -436,240 +509,320 @@ export default function ReserveRoomPage() {
           </div>
         ) : (
           <>
-            {/* Progress Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="mb-6 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-black">New Reservation</h3>
-                <p className="text-xs text-black mt-0.5">
-                  Step {formStep} of 4 — {
-                    formStep === 1 ? 'Select Campus & Building' :
-                    formStep === 2 ? 'Select Room' :
-                    formStep === 3 ? 'Schedule & Purpose' :
-                    'Equipment & Approval'
-                  }
+                <p className="mt-0.5 text-xs text-black">
+                  Step {currentStep} of 3 -{' '}
+                  {currentStep === 1
+                    ? 'Select Room'
+                    : currentStep === 2
+                      ? 'Reservation Details'
+                      : 'Equipment & Approval'}
                 </p>
               </div>
               <button
                 onClick={() => router.push('/dashboard')}
-                className="p-2 rounded-lg text-black hover:text-primary hover:bg-primary/10 transition-all"
+                className="rounded-lg p-2 text-black transition-all hover:bg-primary/10 hover:text-primary"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Progress Bar */}
-            <div className="flex gap-2 mb-6">
-              {[1, 2, 3, 4].map((step) => (
+            <div className="mb-6 flex gap-2">
+              {[1, 2, 3].map((step) => (
                 <div
                   key={step}
                   className={`h-1 flex-1 rounded-full transition-all ${
-                    step <= formStep ? 'bg-primary' : 'bg-dark/10'
+                    step <= currentStep ? 'bg-primary' : 'bg-dark/10'
                   }`}
                 />
               ))}
             </div>
 
-            {/* Step 1: Select Campus & Building */}
-            {formStep === 1 && (
-              <div>
-                <h4 className="text-sm font-bold text-black mb-3">Where would you like to book?</h4>
-                <div className="space-y-4 mb-4">
+            {currentStep === 1 && (
+              <div className="space-y-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <label className="block text-sm font-bold text-black mb-1.5">Campus</label>
-                    <select
-                      value={selectedCampus ?? ''}
-                      onChange={(event) => handleCampusChange(event.target.value)}
-                      className="glass-input w-full px-4 py-3"
-                    >
-                      <option value="">Select campus</option>
-                      <option value="main">{getCampusName('main')}</option>
-                      <option value="digi">{getCampusName('digi')}</option>
-                    </select>
+                    <h4 className="text-sm font-bold text-black">Choose a room</h4>
+                    <p className="mt-1 text-xs text-black">
+                      Campus tabs, search, and filter chips work together on this page.
+                    </p>
                   </div>
+                  <div className="glass-badge inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-black">
+                    Showing {filteredRooms.length} of {rooms.length} rooms
+                  </div>
+                </div>
 
-                  {selectedCampus === 'main' && (
-                    <div>
-                      <label className="block text-sm font-bold text-black mb-1.5">Building</label>
-                      <select
-                        value={selectedBuildingId}
-                        onChange={(event) => handleBuildingSelect(event.target.value)}
-                        className="glass-input w-full px-4 py-3"
-                      >
-                        <option value="">Select building</option>
-                        {mainCampusBuildings.map((building) => (
-                          <option key={building.id} value={building.id}>
-                            {building.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {selectedCampus === 'digi' && (
-                    <div className="glass-card !bg-dark/5 p-4 !rounded-xl border-primary/20">
-                      <p className="text-xs font-bold uppercase tracking-wide text-black mb-1">Building</p>
-                      <p className="text-sm font-bold text-black">{selectedBuildingName}</p>
-                      <p className="text-[11px] text-black mt-1">
-                        Digi Campus reservations automatically use SDCA Digital Campus.
-                      </p>
-                    </div>
-                  )}
-
+                <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={handleProceedToRooms}
-                    disabled={!selectedBuildingId}
-                    className="btn-primary w-full py-3 px-4 flex items-center justify-center"
+                    type="button"
+                    onClick={() => setActiveCampusFilter('all')}
+                    className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${
+                      activeCampusFilter === 'all'
+                        ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
+                        : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
+                    }`}
                   >
-                    Next: Select Room
-                    <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    All Rooms
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCampusFilterChange('main')}
+                    className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${
+                      activeCampusFilter === 'main'
+                        ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
+                        : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
+                    }`}
+                  >
+                    {getCampusName('main')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCampusFilterChange('digi')}
+                    className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${
+                      activeCampusFilter === 'digi'
+                        ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
+                        : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
+                    }`}
+                  >
+                    {getCampusName('digi')}
                   </button>
                 </div>
-                {true ? (
-                  <></>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {buildings.map((building) => (
-                      <button
-                        key={building.id}
-                        onClick={() => handleBuildingSelect(building.id)}
-                        className="glass-card !bg-dark/5 p-4 !rounded-xl text-left group hover:!border-primary/40 transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-                            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
-                          </div>
-                          <div>
-                            <h5 className="font-bold text-black text-sm group-hover:text-primary transition-colors">{building.name}</h5>
-                            {building.code && (
-                              <p className="text-[10px] text-black">{building.code} · {building.floors} floors</p>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* Step 2: Select Room */}
-            {formStep === 2 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <button
-                    onClick={() => setFormStep(1)}
-                    className="p-1 rounded-lg text-black hover:text-primary transition-colors"
+                <div className="relative">
+                  <svg
+                    className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/60"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
+                    <path
+                      d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                    />
+                  </svg>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    className="glass-input w-full px-12 py-3"
+                    placeholder="Search by room name or number"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveRoomFilters([])}
+                    className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                      activeRoomFilters.length === 0
+                        ? 'border border-primary/25 bg-primary/15 text-primary'
+                        : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
+                    }`}
+                  >
+                    All
                   </button>
-                  <h4 className="text-sm font-bold text-black">
-                    Available rooms in <span className="text-primary">{selectedBuildingName}</span>
-                  </h4>
+                  {FILTER_CHIPS.map((chip) => {
+                    const isActive = activeRoomFilters.includes(chip.key);
+
+                    return (
+                      <button
+                        key={chip.key}
+                        type="button"
+                        onClick={() => toggleRoomFilter(chip.key)}
+                        className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                          isActive
+                            ? 'border border-primary/25 bg-primary/15 text-primary'
+                            : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
+                        }`}
+                      >
+                        {chip.label}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {roomsLoading ? (
-                  <div className="text-center py-8">
-                    <svg className="animate-spin h-6 w-6 text-black mx-auto mb-3" fill="none" viewBox="0 0 24 24">
+                  <div className="py-12 text-center">
+                    <svg className="mx-auto mb-3 h-6 w-6 animate-spin text-black" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
                     <p className="text-sm text-black">Loading rooms...</p>
                   </div>
-                ) : availableRooms.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-black">No available rooms in this building.</p>
+                ) : filteredRooms.length === 0 ? (
+                  <div className="rounded-2xl border border-dark/10 bg-dark/5 p-8 text-center">
+                    <p className="text-sm font-bold text-black">No rooms match the current filters.</p>
+                    <p className="mt-1 text-xs text-black">
+                      Try switching campuses, clearing chips, or searching for another room.
+                    </p>
                     <button
-                      onClick={() => setFormStep(1)}
-                      className="mt-3 text-sm text-primary font-bold hover:text-primary-hover transition-colors"
+                      type="button"
+                      onClick={() => {
+                        setActiveCampusFilter('all');
+                        setSearchQuery('');
+                        setActiveRoomFilters([]);
+                      }}
+                      className="mt-4 text-sm font-bold text-primary transition-colors hover:text-primary-hover"
                     >
-                      Choose another building
+                      Clear filters
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {availableRooms.map((room) => (
-                      <button
-                        key={room.id}
-                        onClick={() => handleRoomSelect(room.id)}
-                        className="glass-card !bg-dark/5 p-4 !rounded-xl text-left group hover:!border-green-500/40 transition-all cursor-pointer border-l-4 border-green-500/40"
-                      >
-                        <h5 className="font-bold text-black text-sm">{room.name}</h5>
-                        <p className="text-[10px] text-black mt-0.5">{room.floor}</p>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ui-badge-green mt-2">
-                          Available
-                        </span>
-                      </button>
-                    ))}
+                  <div className="max-h-[34rem] overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {filteredRooms.map((room) => {
+                        const roomCampus = getRoomCampus(room);
+
+                        return (
+                          <RoomCard
+                            key={room.id}
+                            availability={getRoomAvailability(room)}
+                            buildingName={room.buildingName}
+                            campusName={
+                              roomCampus ? getCampusName(roomCampus) : room.buildingName || 'Unknown campus'
+                            }
+                            floor={room.floor}
+                            name={room.name}
+                            onClick={() => handleRoomSelect(room.id)}
+                            roomType={room.roomType}
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Step 3: Schedule & Purpose */}
-            {formStep === 3 && (
+            {currentStep > 1 && !selectedRoom && roomsLoading && (
+              <div className="py-12 text-center">
+                <svg className="mx-auto mb-3 h-6 w-6 animate-spin text-black" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <p className="text-sm text-black">Loading reservation details...</p>
+              </div>
+            )}
+
+            {currentStep > 1 && !roomsLoading && !selectedRoom && (
+              <div className="rounded-2xl border border-dark/10 bg-dark/5 p-8 text-center">
+                <p className="text-sm font-bold text-black">That room is no longer available.</p>
+                <p className="mt-1 text-xs text-black">
+                  Return to the room list and choose another available room.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleBackToRoomList}
+                  className="mt-4 text-sm font-bold text-primary transition-colors hover:text-primary-hover"
+                >
+                  Back to room list
+                </button>
+              </div>
+            )}
+
+            {selectedRoom && selectedRoom.status !== 'Available' && (
+              <div className="rounded-2xl border border-orange-500/20 bg-orange-50/80 p-8 text-center">
+                <p className="text-sm font-bold text-black">{selectedRoomName} is currently occupied.</p>
+                <p className="mt-1 text-xs text-black">
+                  Choose another room to continue with your reservation.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleBackToRoomList}
+                  className="mt-4 text-sm font-bold text-primary transition-colors hover:text-primary-hover"
+                >
+                  Back to room list
+                </button>
+              </div>
+            )}
+
+            {selectedRoom && selectedRoom.status === 'Available' && currentStep === 2 && (
               <div>
-                <div className="flex items-center gap-2 mb-4">
+                <div className="mb-4 flex items-center gap-2">
                   <button
-                    onClick={() => setFormStep(2)}
-                    className="p-1 rounded-lg text-black hover:text-primary transition-colors"
+                    onClick={handleBackToRoomList}
+                    className="rounded-lg p-1 text-black transition-colors hover:text-primary"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                   </button>
-                  <h4 className="text-sm font-bold text-black">
-                    Booking <span className="text-primary">{selectedRoomName}</span> in {selectedBuildingName}
-                  </h4>
+                  <h4 className="text-sm font-bold text-black">Reservation Details</h4>
+                </div>
+
+                <div className="mb-5 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-lg font-bold text-black">{selectedRoomName}</p>
+                      <p className="mt-1 text-sm text-black">
+                        {selectedBuildingName} | {selectedRoom.floor}
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center rounded-full border border-primary/20 bg-white/80 px-3 py-1 text-xs font-bold text-primary">
+                      {selectedRoomCampusName}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="glass-badge rounded-full px-3 py-1 text-xs font-bold text-black">
+                      {selectedRoom.roomType || 'Room'}
+                    </span>
+                    <span className="glass-badge rounded-full px-3 py-1 text-xs font-bold text-black">
+                      {getRoomAvailability(selectedRoom)}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
-                  {/* Recurring Toggle */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-dark/5 border border-dark/10">
+                  <div className="flex items-center justify-between rounded-xl border border-dark/10 bg-dark/5 p-3">
                     <div>
                       <span className="text-sm font-bold text-black">Recurring Reservation</span>
-                      <p className="text-[10px] text-black mt-0.5">Book the same time slot on multiple days</p>
+                      <p className="mt-0.5 text-[10px] text-black">
+                        Book the same time slot on multiple days
+                      </p>
                     </div>
                     <button
+                      type="button"
                       onClick={() => {
-                        setIsRecurring(!isRecurring);
-                        if (!isRecurring) {
+                        setIsRecurring((prev) => !prev);
+                        if (isRecurring) {
                           setSelectedDays([]);
                           setRecurringEndDate('');
                         }
                       }}
-                      className={`relative w-11 h-6 rounded-full transition-all ${
+                      className={`relative h-6 w-11 rounded-full transition-all ${
                         isRecurring ? 'bg-primary' : 'bg-dark/15'
                       }`}
                     >
-                      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all ${
-                        isRecurring ? 'left-[22px]' : 'left-0.5'
-                      }`} />
+                      <span
+                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-all ${
+                          isRecurring ? 'left-[22px]' : 'left-0.5'
+                        }`}
+                      />
                     </button>
                   </div>
 
-                  {/* Single Date or Date Range */}
                   {isRecurring ? (
                     <>
-                      {/* Day Picker */}
                       <div>
-                        <label className="block text-sm font-bold text-black mb-2">Select Days of the Week</label>
+                        <label className="mb-2 block text-sm font-bold text-black">
+                          Select Days of the Week
+                        </label>
                         <div className="flex gap-2">
-                          {DAY_LABELS.map((label, i) => (
+                          {DAY_LABELS.map((label, index) => (
                             <button
                               key={label}
-                              onClick={() => toggleDay(i)}
-                              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                                selectedDays.includes(i)
-                                  ? 'bg-primary/20 text-primary border border-primary/30'
-                                  : 'bg-dark/5 text-black border border-dark/10 hover:text-primary hover:bg-primary/10'
+                              type="button"
+                              onClick={() => toggleDay(index)}
+                              className={`flex-1 rounded-xl py-2.5 text-xs font-bold transition-all ${
+                                selectedDays.includes(index)
+                                  ? 'border border-primary/30 bg-primary/20 text-primary'
+                                  : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
                               }`}
                             >
                               {label}
@@ -678,49 +831,54 @@ export default function ReserveRoomPage() {
                         </div>
                       </div>
 
-                      {/* Date Range */}
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-bold text-black mb-1.5">Start Date</label>
+                          <label className="mb-1.5 block text-sm font-bold text-black">
+                            Start Date
+                          </label>
                           <input
                             type="date"
                             value={reservationDate}
-                            onChange={(e) => setReservationDate(e.target.value)}
+                            onChange={(event) => setReservationDate(event.target.value)}
                             className="glass-input w-full px-4 py-3"
                             min={new Date().toISOString().split('T')[0]}
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-black mb-1.5">End Date</label>
+                          <label className="mb-1.5 block text-sm font-bold text-black">
+                            End Date
+                          </label>
                           <input
                             type="date"
                             value={recurringEndDate}
-                            onChange={(e) => setRecurringEndDate(e.target.value)}
+                            onChange={(event) => setRecurringEndDate(event.target.value)}
                             className="glass-input w-full px-4 py-3"
                             min={reservationDate || new Date().toISOString().split('T')[0]}
                           />
                         </div>
                       </div>
 
-                      {/* Preview */}
                       {previewDates.length > 0 && (
-                        <div className="p-3 rounded-xl bg-primary/5 border border-primary/15">
-                          <div className="flex items-center gap-2 mb-2">
-                            <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
+                          <div className="mb-2 flex items-center gap-2">
+                            <svg className="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" />
                             </svg>
                             <span className="text-xs font-bold text-primary">
                               {previewDates.length} reservation{previewDates.length > 1 ? 's' : ''} will be created
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
-                            {previewDates.map((d) => (
-                              <span key={d} className="px-2 py-0.5 rounded-lg bg-dark/5 text-[10px] text-black font-bold border border-dark/10">
-                                {d}
+                            {previewDates.map((date) => (
+                              <span
+                                key={date}
+                                className="rounded-lg border border-dark/10 bg-dark/5 px-2 py-0.5 text-[10px] font-bold text-black"
+                              >
+                                {date}
                               </span>
                             ))}
                             {previewDates.length >= 20 && (
-                              <span className="px-2 py-0.5 text-[10px] text-black font-bold">…and more</span>
+                              <span className="px-2 py-0.5 text-[10px] font-bold text-black">...and more</span>
                             )}
                           </div>
                         </div>
@@ -728,25 +886,24 @@ export default function ReserveRoomPage() {
                     </>
                   ) : (
                     <div>
-                      <label className="block text-sm font-bold text-black mb-1.5">Date</label>
+                      <label className="mb-1.5 block text-sm font-bold text-black">Date</label>
                       <input
                         type="date"
                         value={reservationDate}
-                        onChange={(e) => setReservationDate(e.target.value)}
+                        onChange={(event) => setReservationDate(event.target.value)}
                         className="glass-input w-full px-4 py-3"
                         min={new Date().toISOString().split('T')[0]}
                       />
                     </div>
                   )}
 
-                  {/* Time */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-bold text-black mb-1.5">Start Time</label>
+                      <label className="mb-1.5 block text-sm font-bold text-black">Start Time</label>
                       <select
                         value={startTime}
-                        onChange={(e) => {
-                          const nextStartTime = e.target.value;
+                        onChange={(event) => {
+                          const nextStartTime = event.target.value;
                           setStartTime(nextStartTime);
 
                           if (
@@ -768,10 +925,10 @@ export default function ReserveRoomPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-black mb-1.5">End Time</label>
+                      <label className="mb-1.5 block text-sm font-bold text-black">End Time</label>
                       <select
                         value={endTime}
-                        onChange={(e) => setEndTime(e.target.value)}
+                        onChange={(event) => setEndTime(event.target.value)}
                         disabled={!startTime}
                         className="glass-input w-full px-4 py-3"
                       >
@@ -785,34 +942,33 @@ export default function ReserveRoomPage() {
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-black -mt-2">
+                  <p className="text-[11px] text-black">
                     {selectedCampus === 'digi'
                       ? 'Digital Campus reservations can be booked from 7:00 AM to 5:00 PM in 30-minute intervals, with at least 1 hour between start and end time.'
                       : selectedCampus === 'main'
                         ? 'Main Campus reservations can be booked from 7:00 AM to 9:00 PM in 30-minute intervals, with at least 1 hour between start and end time.'
-                        : 'Choose a building to load the allowed reservation hours.'}
+                        : 'Choose a room to load the allowed reservation hours.'}
                   </p>
 
-                  {/* Purpose */}
-                    <div>
-                      <label className="block text-sm font-bold text-black mb-1.5">
-                        Program/Department/Organization
-                      </label>
-                      <input
-                        type="text"
-                        value={programDepartmentOrganization}
-                        onChange={(e) => setProgramDepartmentOrganization(e.target.value)}
-                        className="glass-input w-full px-4 py-3"
-                        placeholder="Enter your program, department, or organization"
-                      />
-                    </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-bold text-black">
+                      Program/Department/Organization
+                    </label>
+                    <input
+                      type="text"
+                      value={programDepartmentOrganization}
+                      onChange={(event) => setProgramDepartmentOrganization(event.target.value)}
+                      className="glass-input w-full px-4 py-3"
+                      placeholder="Enter your program, department, or organization"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-bold text-black mb-1.5">Purpose</label>
-                      <input
-                        type="text"
+                  <div>
+                    <label className="mb-1.5 block text-sm font-bold text-black">Purpose</label>
+                    <input
+                      type="text"
                       value={purpose}
-                      onChange={(e) => setPurpose(e.target.value)}
+                      onChange={(event) => setPurpose(event.target.value)}
                       className="glass-input w-full px-4 py-3"
                       placeholder="e.g., General Assembly of BSIT, Faculty Meeting, Rehearsals for Upcoming Event, Workshop"
                     />
@@ -820,14 +976,17 @@ export default function ReserveRoomPage() {
 
                   <button
                     onClick={() => {
-                      if (!canProceedStep3()) return;
-                      setFormStep(4);
+                      if (!canContinueToEquipment) {
+                        return;
+                      }
+
+                      setDetailsStep(3);
                     }}
-                    disabled={!canProceedStep3()}
-                    className="btn-primary w-full py-3 px-4 flex items-center justify-center"
+                    disabled={!canContinueToEquipment}
+                    className="btn-primary flex w-full items-center justify-center px-4 py-3"
                   >
                     Next: Equipment & Approval
-                    <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
@@ -835,37 +994,34 @@ export default function ReserveRoomPage() {
               </div>
             )}
 
-            {/* Step 4: Equipment & Approval */}
-            {formStep === 4 && (
+            {selectedRoom && selectedRoom.status === 'Available' && currentStep === 3 && (
               <div>
-                <div className="flex items-center gap-2 mb-4">
+                <div className="mb-4 flex items-center gap-2">
                   <button
-                    onClick={() => setFormStep(3)}
-                    className="p-1 rounded-lg text-black hover:text-primary transition-colors"
+                    onClick={() => setDetailsStep(2)}
+                    className="rounded-lg p-1 text-black transition-colors hover:text-primary"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                   </button>
                   <h4 className="text-sm font-bold text-black">Materials / Equipment</h4>
                 </div>
 
-                {/* Recurring summary banner */}
                 {isRecurring && previewDates.length > 0 && (
-                  <div className="p-3 rounded-xl bg-primary/5 border border-primary/15 mb-4">
+                  <div className="mb-4 rounded-xl border border-primary/15 bg-primary/5 p-3">
                     <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      <svg className="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15" />
                       </svg>
                       <span className="text-xs font-bold text-primary">
-                        Recurring: {previewDates.length} reservations ({selectedDays.map((d) => DAY_LABELS[d]).join(', ')})
+                        Recurring: {previewDates.length} reservations ({selectedDays.map((day) => DAY_LABELS[day]).join(', ')})
                       </span>
                     </div>
                   </div>
                 )}
 
                 <div className="space-y-6">
-                  {/* Equipment Steppers */}
                   <div className="space-y-3">
                     {[
                       { key: 'fans', label: 'Fans' },
@@ -877,7 +1033,7 @@ export default function ReserveRoomPage() {
                     ].map((item) => (
                       <div
                         key={item.key}
-                        className="flex items-center justify-between p-3 rounded-xl bg-dark/5 border border-dark/10"
+                        className="flex items-center justify-between rounded-xl border border-dark/10 bg-dark/5 p-3"
                       >
                         <span className="text-sm font-bold text-black">{item.label}</span>
                         <div className="flex items-center gap-3">
@@ -885,9 +1041,9 @@ export default function ReserveRoomPage() {
                             type="button"
                             onClick={() => updateEquipment(item.key, -1)}
                             disabled={equipment[item.key] === 0}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-all bg-dark/5 border border-dark/10 hover:bg-primary/10 hover:text-primary disabled:opacity-30 disabled:hover:bg-primary/10 disabled:hover:text-primary"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-dark/10 bg-dark/5 text-sm font-bold transition-all hover:bg-primary/10 hover:text-primary disabled:opacity-30"
                           >
-                            −
+                            -
                           </button>
                           <span className="w-8 text-center text-sm font-bold text-black">
                             {equipment[item.key]}
@@ -895,7 +1051,7 @@ export default function ReserveRoomPage() {
                           <button
                             type="button"
                             onClick={() => updateEquipment(item.key, 1)}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-all bg-dark/5 border border-dark/10 hover:bg-primary/10 hover:text-primary"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-dark/10 bg-dark/5 text-sm font-bold transition-all hover:bg-primary/10 hover:text-primary"
                           >
                             +
                           </button>
@@ -906,51 +1062,57 @@ export default function ReserveRoomPage() {
 
                   {selectedCampus !== 'digi' && (
                     <div>
-                      <h5 className="text-sm font-bold text-black uppercase tracking-wider mb-3">Approval Routing</h5>
+                      <h5 className="mb-3 text-sm font-bold uppercase tracking-wider text-black">
+                        Approval Routing
+                      </h5>
                       <div className="space-y-3">
                         <div>
-                          <label className="block text-xs font-bold text-black mb-1.5">
-                            {approvalFieldLabel}
+                          <label className="mb-1.5 block text-xs font-bold text-black">
+                            Email of Adviser / Dept. Head / Professor
                           </label>
                           <input
                             type="email"
                             value={approvalEmails.advisorEmail}
-                            onChange={(e) => {
+                            onChange={(event) => {
                               setApprovalEmails((prev) => ({
                                 ...prev,
-                                advisorEmail: e.target.value,
+                                advisorEmail: event.target.value,
                               }));
-                              if (approvalEmailError) setApprovalEmailError('');
-                              if (submitError) setSubmitError('');
+
+                              if (approvalEmailError) {
+                                setApprovalEmailError('');
+                              }
+
+                              if (submitError) {
+                                setSubmitError('');
+                              }
                             }}
                             className={`glass-input w-full px-4 py-3 ${
                               approvalEmailError ? '!border-red-500/60' : ''
                             }`}
-                            placeholder={`Input ${approvalFieldLabel.toLowerCase()}`}
+                            placeholder="Input email of adviser / dept. head / professor"
                           />
                         </div>
                       </div>
-                      <p className="text-[11px] text-black mt-2">
+                      <p className="mt-2 text-[11px] text-black">
                         Main Campus reservations first go to the faculty reviewer whose email you enter here.
                       </p>
                       {approvalEmailError && (
-                        <p className="text-xs ui-text-red mt-1.5 font-bold">{approvalEmailError}</p>
+                        <p className="mt-1.5 text-xs font-bold ui-text-red">{approvalEmailError}</p>
                       )}
                     </div>
                   )}
 
-                  {/* Submit */}
-                  {submitError && (
-                    <p className="text-xs ui-text-red font-bold">{submitError}</p>
-                  )}
+                  {submitError && <p className="text-xs font-bold ui-text-red">{submitError}</p>}
+
                   <button
                     onClick={handleSubmitReservation}
                     disabled={submitting || validatingApprover}
-                    className="btn-primary w-full py-3 px-4 flex items-center justify-center"
+                    className="btn-primary flex w-full items-center justify-center px-4 py-3"
                   >
                     {submitting || validatingApprover ? (
                       <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-black" fill="none" viewBox="0 0 24 24">
+                        <svg className="-ml-1 mr-2 h-4 w-4 animate-spin text-black" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                         </svg>
@@ -962,10 +1124,10 @@ export default function ReserveRoomPage() {
                               : 'Creating Reservation...'
                             : 'Submitting...'}
                       </>
+                    ) : isRecurring && previewDates.length > 1 ? (
+                      `Submit ${previewDates.length} Reservations`
                     ) : (
-                      isRecurring && previewDates.length > 1
-                        ? `Submit ${previewDates.length} Reservations`
-                        : 'Submit Reservation'
+                      'Submit Reservation'
                     )}
                   </button>
                 </div>

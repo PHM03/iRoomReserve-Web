@@ -1,39 +1,89 @@
 'use client';
 
 import React from 'react';
-import StatusBadge from './StatusBadge';
-import type { RoomStatusValue } from '@/lib/roomStatus';
 
 interface RoomCardProps {
-  name: string;
+  availability: 'Available' | 'Occupied';
+  buildingName?: string;
+  campusName: string;
+  disabled?: boolean;
   floor: string;
-  status: RoomStatusValue;
+  name: string;
+  onClick?: () => void;
+  roomType: string;
 }
 
-const RoomCard: React.FC<RoomCardProps> = ({ name, floor, status }) => {
-  const isAvailable = status === 'Available';
+function getAccentClass(availability: RoomCardProps['availability']) {
+  return availability === 'Available'
+    ? 'border-green-500/45'
+    : 'border-orange-500/45';
+}
+
+function getAvailabilityClass(availability: RoomCardProps['availability']) {
+  return availability === 'Available' ? 'ui-badge-green' : 'ui-badge-orange';
+}
+
+export default function RoomCard({
+  availability,
+  buildingName,
+  campusName,
+  disabled = false,
+  floor,
+  name,
+  onClick,
+  roomType,
+}: RoomCardProps) {
+  const isAvailable = availability === 'Available';
 
   return (
-    <div className="glass-card p-5">
-      <div className="flex justify-between items-start mb-4">
-        <div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`glass-card w-full border-l-4 p-5 text-left transition-all ${getAccentClass(
+        availability
+      )} ${
+        disabled
+          ? 'cursor-not-allowed opacity-80 hover:translate-y-0 hover:!border-dark/10 hover:!shadow-none'
+          : 'cursor-pointer'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h3 className="text-lg font-bold text-black">{name}</h3>
-          <p className="text-sm text-black">{floor}</p>
+          <p className="mt-1 text-xs text-black">
+            {[buildingName, floor].filter(Boolean).join(' | ')}
+          </p>
         </div>
-        <StatusBadge status={status} />
+        <span
+          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${getAvailabilityClass(
+            availability
+          )}`}
+        >
+          {availability}
+        </span>
       </div>
-      <button
-        disabled={!isAvailable}
-        className={`w-full py-2.5 px-4 rounded-xl font-bold transition-all ${
-          isAvailable
-            ? 'btn-primary'
-            : 'bg-dark/5 text-black cursor-not-allowed border border-dark/10'
-        }`}
-      >
-        Reserve
-      </button>
-    </div>
-  );
-};
 
-export default RoomCard;
+      <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <p className="uppercase tracking-wide text-black">Type</p>
+          <p className="mt-1 text-sm text-black">{roomType || 'Room'}</p>
+        </div>
+        <div>
+          <p className="uppercase tracking-wide text-black">Campus</p>
+          <p className="mt-1 text-sm text-black">{campusName}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-dark/5 pt-4">
+        <span
+          className={`text-sm font-bold transition-colors ${
+            isAvailable ? 'text-primary hover:text-primary-hover' : 'text-black/60'
+          }`}
+        >
+          {isAvailable ? 'View reservation details' : 'Currently occupied'}
+        </span>
+      </div>
+    </button>
+  );
+}
