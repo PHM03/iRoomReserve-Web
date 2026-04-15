@@ -1,6 +1,6 @@
 'use client';
 
-import { auth } from "@/lib/firebase";
+import { auth } from "@/lib/configs/firebase";
 import type { UserRole } from "@/lib/domain/roles";
 
 interface ApiRequestOptions {

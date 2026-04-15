@@ -10,7 +10,7 @@ import {
 } from "firebase/firestore";
 
 import { apiRequest } from "@/lib/api/client";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/configs/firebase";
 
 export interface Feedback {
   id: string;

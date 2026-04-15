@@ -33,7 +33,7 @@ import {
   SUPERADMIN_PASSWORD,
 } from "@/lib/domain/auth-constants";
 import { normalizeRole, USER_ROLES } from "@/lib/domain/roles";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/configs/firebase";
 import { type ReservationCampus } from "@/lib/campuses";
 
 const MANAGED_ROLE_QUERY_VALUES = [

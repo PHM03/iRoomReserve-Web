@@ -12,7 +12,7 @@ import {
   Unsubscribe,
 } from "firebase/firestore";
 import { inferCampusFromBuilding, type ReservationCampus } from "./campuses";
-import { db } from "./firebase";
+import { db } from "./configs/firebase";
 
 // ─── Types ──────────────────────────────────────────────────────
 export interface Building {

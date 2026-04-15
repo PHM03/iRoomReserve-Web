@@ -14,14 +14,14 @@ import {
 } from "firebase/firestore";
 
 import { apiRequest } from "@/lib/api/client";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/configs/firebase";
 import {
   normalizeRoomCheckInMethod,
   normalizeRoomStatus,
   type RoomCheckInMethod,
   type RoomStatusValue,
 } from "@/lib/roomStatus";
-import { auth } from "@/lib/firebase";
+import { auth } from "@/lib/configs/firebase";
 
 export interface Room {
   id: string;

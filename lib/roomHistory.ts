@@ -8,7 +8,7 @@ import {
   Unsubscribe,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { db } from "./configs/firebase";
 
 // ─── Types ──────────────────────────────────────────────────────
 export interface RoomHistoryEntry {

@@ -17,7 +17,7 @@ import {
   type ReservationApprovalRecord,
   type ReservationApprovalStep,
 } from "@/lib/reservation-approval";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/lib/configs/firebase";
 import { type RoomCheckInMethod } from "@/lib/roomStatus";
 
 export interface Reservation {
