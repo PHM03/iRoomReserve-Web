@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import RoomCard from '@/components/RoomCard';
+import RoomAssistantWidget from '@/components/RoomAssistantWidget';
 import { useAuth } from '@/context/AuthContext';
 import { getCampusName, getManagedBuildingsForCampus } from '@/lib/campusAssignments';
 import { inferCampusFromBuilding, type ReservationCampus } from '@/lib/campuses';
@@ -17,6 +18,7 @@ import { onRoomsByBuildingIds, type Room } from '@/lib/rooms';
 type CampusFilter = ReservationCampus | 'all';
 type DetailsStep = 2 | 3;
 type RoomFilterKey = 'available' | 'classroom' | 'laboratory';
+type AssistantRoomType = '' | 'glass' | 'lecture' | 'lab';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // TODO: Replace this temporary Digital Campus approver email with the actual configurable building admin source.
@@ -121,6 +123,48 @@ function matchesRoomType(room: Room, filter: Exclude<RoomFilterKey, 'available'>
   return roomType.includes('laboratory');
 }
 
+function mapRoomTypeToRecommendationType(room: Room): AssistantRoomType {
+  const roomType = room.roomType.trim().toLowerCase();
+
+  if (roomType.includes('glass')) {
+    return 'glass';
+  }
+
+  if (roomType.includes('lab')) {
+    return 'lab';
+  }
+
+  return 'lecture';
+}
+
+function buildRecommendationFeatures(room: Room): string[] {
+  const features: string[] = [];
+
+  if (!room.acStatus.trim().toLowerCase().includes('no')) {
+    features.push('AC');
+  }
+
+  if (!room.tvProjectorStatus.trim().toLowerCase().includes('no')) {
+    features.push('Projector');
+  }
+
+  return features;
+}
+
+function toRecommendationRoom(room: Room) {
+  return {
+    roomId: room.id,
+    type: mapRoomTypeToRecommendationType(room),
+    capacity: room.capacity,
+    building: room.buildingName,
+    features: buildRecommendationFeatures(room),
+    // The live reserve page does not expose sentiment yet, so it defaults to neutral.
+    sentimentScore: 0,
+    label: room.name,
+    originalRoom: room,
+  };
+}
+
 export default function ReserveRoomPage() {
   const { firebaseUser, profile } = useAuth();
   const router = useRouter();
@@ -177,6 +221,15 @@ export default function ReserveRoomPage() {
   const selectedRoomCampusName = selectedCampus
     ? getCampusName(selectedCampus)
     : selectedBuildingName || 'Unknown campus';
+  const recommendationRooms = rooms.map(toRecommendationRoom);
+  const selectedRecommendationRoom = selectedRoom
+    ? toRecommendationRoom(selectedRoom)
+    : null;
+  const selectedTimeslot = {
+    date: reservationDate,
+    startTime,
+    endTime,
+  };
   const currentStep = selectedRoomParam ? detailsStep : 1;
   const campusTimeOptions = getCampusTimeOptions(selectedCampus);
   const startTimeOptions = selectedCampus
@@ -647,6 +700,21 @@ export default function ReserveRoomPage() {
                   })}
                 </div>
 
+                <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h5 className="text-sm font-bold text-black">Need help choosing?</h5>
+                      <p className="mt-1 text-xs text-black">
+                        Use the floating assistant in the bottom-right corner for a guided conversation
+                        or instant alternatives when a room is unavailable.
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center rounded-full border border-primary/20 bg-white/80 px-3 py-1 text-[11px] font-bold text-primary">
+                      Messenger-style assistant
+                    </div>
+                  </div>
+                </div>
+
                 {roomsLoading ? (
                   <div className="py-12 text-center">
                     <svg className="mx-auto mb-3 h-6 w-6 animate-spin text-black" fill="none" viewBox="0 0 24 24">
@@ -727,18 +795,22 @@ export default function ReserveRoomPage() {
             )}
 
             {selectedRoom && selectedRoom.status !== 'Available' && (
-              <div className="rounded-2xl border border-orange-500/20 bg-orange-50/80 p-8 text-center">
-                <p className="text-sm font-bold text-black">{selectedRoomName} is currently occupied.</p>
-                <p className="mt-1 text-xs text-black">
-                  Choose another room to continue with your reservation.
+              <div className="rounded-2xl border border-orange-500/20 bg-orange-50/80 p-6 text-center">
+                <p className="text-sm font-bold text-black">
+                  {selectedRoomName} is currently occupied.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleBackToRoomList}
-                  className="mt-4 text-sm font-bold text-primary transition-colors hover:text-primary-hover"
-                >
-                  Back to room list
-                </button>
+                <p className="mt-1 text-xs text-black">
+                  The floating assistant has opened with the top 3 alternatives for this time slot.
+                </p>
+                <div className="mt-4 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleBackToRoomList}
+                    className="text-sm font-bold text-primary transition-colors hover:text-primary-hover"
+                  >
+                    Back to room list
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1136,6 +1208,18 @@ export default function ReserveRoomPage() {
           </>
         )}
       </div>
+
+      <RoomAssistantWidget
+        isAvailable={(roomId) => {
+          const room = rooms.find((nextRoom) => nextRoom.id === roomId);
+          return room?.status === 'Available';
+        }}
+        onSelectRoom={handleRoomSelect}
+        rooms={recommendationRooms}
+        selectedRoom={selectedRecommendationRoom}
+        selectedRoomAvailable={selectedRoom ? selectedRoom.status === 'Available' : null}
+        timeslot={selectedTimeslot}
+      />
     </main>
   );
 }

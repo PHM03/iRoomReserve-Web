@@ -13,6 +13,12 @@
   --font-sans: var(--font-century-gothic), "Century Gothic", "CenturyGothic", "AppleGothic", "Segoe UI", sans-serif;
   --font-sans-bold: var(--font-century-gothic-bold), "Century Gothic", "CenturyGothic", "AppleGothic", "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono);
+  --assistant-accent: #a12124;
+  --assistant-accent-deep: #7a191c;
+  --assistant-outline: rgba(161, 33, 36, 0.16);
+  --assistant-surface: rgba(249, 245, 239, 0.97);
+  --assistant-surface-strong: rgba(255, 255, 255, 0.9);
+  --assistant-shadow: 0 28px 72px rgba(39, 22, 17, 0.22);
 }
 
 * {
@@ -156,6 +162,81 @@ textarea {
 
 .glow-red {
   box-shadow: 0 0 20px rgba(161, 33, 36, 0.3), 0 0 60px rgba(161, 33, 36, 0.1);
+}
+
+@keyframes assistant-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes assistant-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes assistant-typing {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.assistant-chat-shell {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.7), transparent 36%),
+    linear-gradient(180deg, var(--assistant-surface) 0%, rgba(243, 236, 227, 0.96) 100%);
+  box-shadow: var(--assistant-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.assistant-bubble-button {
+  background:
+    radial-gradient(circle at 32% 28%, #ef8d7d 0%, #d8575a 22%, var(--assistant-accent) 55%, var(--assistant-accent-deep) 100%);
+}
+
+.assistant-pop {
+  animation: assistant-pop-in 220ms ease-out;
+}
+
+.assistant-float {
+  animation: assistant-float 5.5s ease-in-out infinite;
+}
+
+.assistant-typing-dot {
+  animation: assistant-typing 1.2s ease-in-out infinite;
+}
+
+.assistant-typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.assistant-typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.assistant-scroll {
+  scrollbar-width: thin;
 }
 
 ::-webkit-scrollbar {
