@@ -1,24 +1,33 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useDeferredValue, useEffect, useState } from 'react';
+
 import { useAuth } from '@/context/AuthContext';
-import {
-  getReservationsByUser,
-  Reservation,
-} from '@/lib/reservations';
-import {
-  createFeedback,
-  getFeedbackByUser,
-  Feedback,
-} from '@/lib/feedback';
+import { Feedback, createFeedback, getAverageSentiment, getFeedbackByUser } from '@/lib/feedback';
+import { Reservation, getReservationsByUser } from '@/lib/reservations';
+import { analyzeSentiment, getSentimentLabel } from '@/lib/sentiment';
+
+function formatSentimentLabel(label: string) {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function getSentimentBadgeClasses(label: string) {
+  if (label === 'positive') {
+    return 'border-green-500/25 bg-green-500/10 text-green-700';
+  }
+
+  if (label === 'negative') {
+    return 'border-red-500/25 bg-red-500/10 text-red-700';
+  }
+
+  return 'border-slate-500/25 bg-slate-500/10 text-slate-700';
+}
 
 export default function FeedbackPage() {
   const { firebaseUser, profile } = useAuth();
 
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
-
-  // Form state
   const [showForm, setShowForm] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [rating, setRating] = useState(0);
@@ -26,9 +35,18 @@ export default function FeedbackPage() {
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [roomAverageSentiment, setRoomAverageSentiment] = useState<number | null>(null);
+  const [loadingRoomAverage, setLoadingRoomAverage] = useState(false);
+
+  const deferredComment = useDeferredValue(comment);
+  const trimmedComment = comment.trim();
+  const sentimentPreview = analyzeSentiment(deferredComment);
+  const sentimentPreviewLabel = getSentimentLabel(sentimentPreview.compound);
 
   useEffect(() => {
-    if (!firebaseUser) return;
+    if (!firebaseUser) {
+      return;
+    }
 
     let cancelled = false;
 
@@ -55,24 +73,81 @@ export default function FeedbackPage() {
     };
   }, [firebaseUser]);
 
-  // Completed reservations that don't have feedback yet
-  const completedReservations = reservations.filter((r) => r.status === 'completed');
-  const feedbackReservationIds = new Set(feedbackList.map((f) => f.reservationId));
-  const pendingFeedback = completedReservations.filter((r) => !feedbackReservationIds.has(r.id));
+  useEffect(() => {
+    if (!selectedReservation) {
+      setRoomAverageSentiment(null);
+      setLoadingRoomAverage(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAverageSentiment = async () => {
+      setLoadingRoomAverage(true);
+
+      try {
+        const average = await getAverageSentiment(selectedReservation.roomId);
+
+        if (!cancelled) {
+          setRoomAverageSentiment(average);
+        }
+      } catch (error) {
+        console.error('Failed to load room sentiment average:', error);
+
+        if (!cancelled) {
+          setRoomAverageSentiment(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingRoomAverage(false);
+        }
+      }
+    };
+
+    loadAverageSentiment();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedReservation]);
+
+  const completedReservations = reservations.filter((reservation) => reservation.status === 'completed');
+  const feedbackReservationIds = new Set(feedbackList.map((feedback) => feedback.reservationId));
+  const pendingFeedback = completedReservations.filter(
+    (reservation) => !feedbackReservationIds.has(reservation.id)
+  );
+
+  const handleCloseFeedback = () => {
+    setShowForm(false);
+    setSelectedReservation(null);
+    setRating(0);
+    setHoverRating(0);
+    setComment('');
+    setSubmitSuccess(false);
+    setRoomAverageSentiment(null);
+    setLoadingRoomAverage(false);
+  };
 
   const handleOpenFeedback = (reservation: Reservation) => {
     setSelectedReservation(reservation);
     setShowForm(true);
     setRating(0);
+    setHoverRating(0);
     setComment('');
     setSubmitSuccess(false);
+    setRoomAverageSentiment(null);
   };
 
   const handleSubmit = async () => {
-    if (!firebaseUser || !selectedReservation || rating === 0 || !comment.trim()) return;
+    if (!firebaseUser || !selectedReservation || rating === 0 || !trimmedComment) {
+      return;
+    }
+
     setSubmitting(true);
+
     try {
       const displayName = firebaseUser.displayName || profile?.firstName || 'User';
+
       await createFeedback({
         roomId: selectedReservation.roomId,
         roomName: selectedReservation.roomName,
@@ -81,34 +156,36 @@ export default function FeedbackPage() {
         reservationId: selectedReservation.id,
         userId: firebaseUser.uid,
         userName: displayName,
-        message: comment.trim(),
+        message: trimmedComment,
         rating,
       });
-      const [nextFeedback, nextReservations] = await Promise.all([
+
+      const [nextFeedback, nextReservations, nextAverage] = await Promise.all([
         getFeedbackByUser(firebaseUser.uid),
         getReservationsByUser(firebaseUser.uid),
+        getAverageSentiment(selectedReservation.roomId),
       ]);
+
       setFeedbackList(nextFeedback);
       setReservations(nextReservations);
+      setRoomAverageSentiment(nextAverage);
       setSubmitSuccess(true);
+
       setTimeout(() => {
-        setShowForm(false);
-        setSubmitSuccess(false);
-        setSelectedReservation(null);
-        setRating(0);
-        setComment('');
+        handleCloseFeedback();
       }, 2000);
-    } catch (err) {
-      console.error('Failed to submit feedback:', err);
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   const renderStars = (count: number, size = 'w-4 h-4') => {
-    return Array.from({ length: 5 }, (_, i) => (
+    return Array.from({ length: 5 }, (_, index) => (
       <svg
-        key={i}
-        className={`${size} ${i < count ? 'ui-text-yellow' : 'text-black'}`}
+        key={index}
+        className={`${size} ${index < count ? 'ui-text-yellow' : 'text-black'}`}
         fill="currentColor"
         viewBox="0 0 20 20"
       >
@@ -124,7 +201,6 @@ export default function FeedbackPage() {
         <p className="text-black mt-1">Rate your experience and help us improve</p>
       </div>
 
-      {/* Pending Feedback Prompt */}
       {pendingFeedback.length > 0 && !showForm && (
         <div className="mb-8">
           <h3 className="text-lg font-bold text-black mb-4 flex items-center gap-2">
@@ -132,14 +208,20 @@ export default function FeedbackPage() {
             Rate Your Experience
           </h3>
           <div className="space-y-3">
-            {pendingFeedback.map((r) => (
-              <div key={r.id} className="glass-card p-4 !rounded-xl flex items-center justify-between">
+            {pendingFeedback.map((reservation) => (
+              <div
+                key={reservation.id}
+                className="glass-card p-4 !rounded-xl flex items-center justify-between"
+              >
                 <div>
-                  <h4 className="text-sm font-bold text-black">{r.roomName}</h4>
-                  <p className="text-xs text-black">{r.buildingName} · {r.date} · {r.startTime} – {r.endTime}</p>
+                  <h4 className="text-sm font-bold text-black">{reservation.roomName}</h4>
+                  <p className="text-xs text-black">
+                    {reservation.buildingName} | {reservation.date} | {reservation.startTime} -{' '}
+                    {reservation.endTime}
+                  </p>
                 </div>
                 <button
-                  onClick={() => handleOpenFeedback(r)}
+                  onClick={() => handleOpenFeedback(reservation)}
                   className="btn-primary px-4 py-2 text-xs"
                 >
                   Rate Now
@@ -150,7 +232,6 @@ export default function FeedbackPage() {
         </div>
       )}
 
-      {/* Feedback Form */}
       {showForm && selectedReservation && (
         <div className="glass-card p-6 !rounded-2xl mb-8">
           {submitSuccess ? (
@@ -169,11 +250,12 @@ export default function FeedbackPage() {
                 <div>
                   <h3 className="text-lg font-bold text-black">Rate Your Experience</h3>
                   <p className="text-xs text-black mt-0.5">
-                    {selectedReservation.roomName} · {selectedReservation.buildingName} · {selectedReservation.date}
+                    {selectedReservation.roomName} | {selectedReservation.buildingName} |{' '}
+                    {selectedReservation.date}
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowForm(false)}
+                  onClick={handleCloseFeedback}
                   className="p-2 rounded-lg text-black hover:text-primary hover:bg-primary/10 transition-all"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -183,7 +265,6 @@ export default function FeedbackPage() {
               </div>
 
               <div className="space-y-6">
-                {/* Star Rating */}
                 <div>
                   <label className="block text-sm font-bold text-black mb-3">Rating</label>
                   <div className="flex gap-2">
@@ -209,26 +290,85 @@ export default function FeedbackPage() {
                   </div>
                   {rating > 0 && (
                     <p className="text-xs text-black mt-1">
-                      {rating === 1 ? 'Poor' : rating === 2 ? 'Fair' : rating === 3 ? 'Good' : rating === 4 ? 'Very Good' : 'Excellent'}
+                      {rating === 1
+                        ? 'Poor'
+                        : rating === 2
+                          ? 'Fair'
+                          : rating === 3
+                            ? 'Good'
+                            : rating === 4
+                              ? 'Very Good'
+                              : 'Excellent'}
                     </p>
                   )}
                 </div>
 
-                {/* Comment */}
                 <div>
                   <label className="block text-sm font-bold text-black mb-1.5">Comments</label>
                   <textarea
                     value={comment}
-                    onChange={(e) => setComment(e.target.value)}
+                    onChange={(event) => setComment(event.target.value)}
                     className="glass-input w-full px-4 py-3 min-h-[120px] resize-none"
                     placeholder="Share your experience with this room..."
                   />
                 </div>
 
-                {/* Submit */}
+                <div className="rounded-xl border border-dark/10 bg-dark/5 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-black">
+                        Sentiment Preview
+                      </p>
+                      <p className="text-sm text-black mt-1">
+                        {trimmedComment
+                          ? `${formatSentimentLabel(sentimentPreviewLabel)} (${sentimentPreview.compound.toFixed(2)})`
+                          : 'Start typing to preview the tone of your feedback.'}
+                      </p>
+                    </div>
+                    {trimmedComment && (
+                      <span
+                        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] ${getSentimentBadgeClasses(
+                          sentimentPreviewLabel
+                        )}`}
+                      >
+                        {formatSentimentLabel(sentimentPreviewLabel)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-black sm:grid-cols-4">
+                    <div>
+                      <p className="font-bold">Compound</p>
+                      <p>{sentimentPreview.compound.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="font-bold">Positive</p>
+                      <p>{Math.round(sentimentPreview.positive * 100)}%</p>
+                    </div>
+                    <div>
+                      <p className="font-bold">Neutral</p>
+                      <p>{Math.round(sentimentPreview.neutral * 100)}%</p>
+                    </div>
+                    <div>
+                      <p className="font-bold">Negative</p>
+                      <p>{Math.round(sentimentPreview.negative * 100)}%</p>
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-xs text-black">
+                    {loadingRoomAverage
+                      ? 'Loading the current room average sentiment...'
+                      : roomAverageSentiment === null
+                        ? 'Average room sentiment will appear when feedback is available.'
+                        : `Current room average: ${formatSentimentLabel(
+                            getSentimentLabel(roomAverageSentiment)
+                          )} (${roomAverageSentiment.toFixed(2)})`}
+                  </p>
+                </div>
+
                 <button
                   onClick={handleSubmit}
-                  disabled={submitting || rating === 0 || !comment.trim()}
+                  disabled={submitting || rating === 0 || !trimmedComment}
                   className="btn-primary w-full py-3 px-4 flex items-center justify-center"
                 >
                   {submitting ? (
@@ -249,7 +389,6 @@ export default function FeedbackPage() {
         </div>
       )}
 
-      {/* Past Feedback */}
       <h3 className="text-xl font-bold text-black mb-4">Your Feedback</h3>
       <div className="space-y-4">
         {feedbackList.length === 0 ? (
@@ -261,26 +400,41 @@ export default function FeedbackPage() {
             <p className="text-xs text-black mt-1">Your submitted feedback will appear here</p>
           </div>
         ) : (
-          feedbackList.map((fb) => (
-            <div key={fb.id} className="glass-card p-5 !rounded-xl">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h4 className="text-sm font-bold text-black">{fb.roomName}</h4>
-                  <p className="text-xs text-black">{fb.buildingName}</p>
+          feedbackList.map((feedback) => {
+            const storedSentimentLabel =
+              feedback.sentimentLabel ??
+              (typeof feedback.compoundScore === 'number'
+                ? getSentimentLabel(feedback.compoundScore)
+                : null);
+
+            return (
+              <div key={feedback.id} className="glass-card p-5 !rounded-xl">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-black">{feedback.roomName}</h4>
+                    <p className="text-xs text-black">{feedback.buildingName}</p>
+                    {storedSentimentLabel && typeof feedback.compoundScore === 'number' && (
+                      <span
+                        className={`mt-2 inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] ${getSentimentBadgeClasses(
+                          storedSentimentLabel
+                        )}`}
+                      >
+                        {formatSentimentLabel(storedSentimentLabel)} ({feedback.compoundScore.toFixed(2)})
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex">{renderStars(feedback.rating)}</div>
                 </div>
-                <div className="flex">
-                  {renderStars(fb.rating)}
-                </div>
+                <p className="text-sm text-black mb-3">{feedback.message}</p>
+                {feedback.adminResponse && (
+                  <div className="bg-dark/5 rounded-xl p-3 border border-dark/10">
+                    <p className="text-xs font-bold text-primary mb-1">Admin Response</p>
+                    <p className="text-sm text-black">{feedback.adminResponse}</p>
+                  </div>
+                )}
               </div>
-              <p className="text-sm text-black mb-3">{fb.message}</p>
-              {fb.adminResponse && (
-                <div className="bg-dark/5 rounded-xl p-3 border border-dark/10">
-                  <p className="text-xs font-bold text-primary mb-1">Admin Response</p>
-                  <p className="text-sm text-black">{fb.adminResponse}</p>
-                </div>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </main>
