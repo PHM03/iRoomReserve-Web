@@ -78,6 +78,15 @@ export type RecurringReservationCreateInput =
   | (Omit<ReservationCreateBaseInput, "date"> & DigiReservationApproverInput)
   | (Omit<ReservationCreateBaseInput, "date"> & MainReservationApproverInput);
 
+function handleReservationListenerError(
+  scope: string,
+  error: unknown,
+  callback: (reservations: Reservation[]) => void
+) {
+  console.warn(`Firestore listener error (${scope}):`, error);
+  callback([]);
+}
+
 function chunkValues<T>(values: T[], size: number) {
   const chunks: T[][] = [];
   for (let index = 0; index < values.length; index += size) {
@@ -197,37 +206,47 @@ export function onPendingReservationsByApprover(
   callback: (reservations: Reservation[]) => void
 ): Unsubscribe {
   const normalizedEmail = normalizeApprovalEmail(userEmail);
-  const reservationsQuery = query(
-    collection(db, "reservations"),
-    where("status", "==", "pending"),
-    orderBy("createdAt", "desc")
-  );
+  try {
+    const reservationsQuery = query(
+      collection(db, "reservations"),
+      where("status", "==", "pending"),
+      orderBy("createdAt", "desc")
+    );
 
-  return onSnapshot(
-    reservationsQuery,
-    (snapshot) => {
-      callback(
-        snapshot.docs
-          .map(
-            (reservationDoc) =>
-              ({
-                id: reservationDoc.id,
-                ...reservationDoc.data(),
-              }) as Reservation
-          )
-          .filter((reservation) => {
-            const currentStep = getCurrentApprovalStep(reservation);
-            return currentStep?.email === normalizedEmail;
-          })
-      );
-    },
-    (error) => {
-      console.warn(
-        "Firestore listener error (pending reservations by approver):",
-        error
-      );
-    }
-  );
+    return onSnapshot(
+      reservationsQuery,
+      (snapshot) => {
+        callback(
+          snapshot.docs
+            .map(
+              (reservationDoc) =>
+                ({
+                  id: reservationDoc.id,
+                  ...reservationDoc.data(),
+                }) as Reservation
+            )
+            .filter((reservation) => {
+              const currentStep = getCurrentApprovalStep(reservation);
+              return currentStep?.email === normalizedEmail;
+            })
+        );
+      },
+      (error) => {
+        handleReservationListenerError(
+          "pending reservations by approver",
+          error,
+          callback
+        );
+      }
+    );
+  } catch (error) {
+    handleReservationListenerError(
+      "pending reservations by approver setup",
+      error,
+      callback
+    );
+    return () => {};
+  }
 }
 
 export function onReservationsByBuilding(

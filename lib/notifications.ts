@@ -28,6 +28,15 @@ export interface Notification {
   createdAt?: Timestamp;
 }
 
+function handleNotificationListenerError(
+  scope: string,
+  error: unknown,
+  callback: (notifications: Notification[]) => void
+) {
+  console.warn(`Firestore listener error (${scope}):`, error);
+  callback([]);
+}
+
 // ─── Create Notification ────────────────────────────────────────
 export async function createNotification(data: {
   recipientUid: string;
@@ -50,21 +59,30 @@ export function onUnreadNotifications(
   uid: string,
   callback: (notifications: Notification[]) => void
 ): Unsubscribe {
-  const q = query(
-    collection(db, "notifications"),
-    where("recipientUid", "==", uid),
-    where("read", "==", false),
-    orderBy("createdAt", "desc")
-  );
-  return onSnapshot(q, (snapshot) => {
-    const notifs: Notification[] = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    } as Notification));
-    callback(notifs);
-  }, (error) => {
-    console.warn('Firestore listener error (unread notifications):', error);
-  });
+  try {
+    const q = query(
+      collection(db, "notifications"),
+      where("recipientUid", "==", uid),
+      where("read", "==", false),
+      orderBy("createdAt", "desc")
+    );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const notifs: Notification[] = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        } as Notification));
+        callback(notifs);
+      },
+      (error) => {
+        handleNotificationListenerError("unread notifications", error, callback);
+      }
+    );
+  } catch (error) {
+    handleNotificationListenerError("unread notifications setup", error, callback);
+    return () => {};
+  }
 }
 
 // ─── Real-time All Notifications for a User ─────────────────────
@@ -72,20 +90,29 @@ export function onAllNotifications(
   uid: string,
   callback: (notifications: Notification[]) => void
 ): Unsubscribe {
-  const q = query(
-    collection(db, "notifications"),
-    where("recipientUid", "==", uid),
-    orderBy("createdAt", "desc")
-  );
-  return onSnapshot(q, (snapshot) => {
-    const notifs: Notification[] = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    } as Notification));
-    callback(notifs);
-  }, (error) => {
-    console.warn('Firestore listener error (all notifications):', error);
-  });
+  try {
+    const q = query(
+      collection(db, "notifications"),
+      where("recipientUid", "==", uid),
+      orderBy("createdAt", "desc")
+    );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const notifs: Notification[] = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        } as Notification));
+        callback(notifs);
+      },
+      (error) => {
+        handleNotificationListenerError("all notifications", error, callback);
+      }
+    );
+  } catch (error) {
+    handleNotificationListenerError("all notifications setup", error, callback);
+    return () => {};
+  }
 }
 
 // ─── Mark Single Notification as Read ───────────────────────────

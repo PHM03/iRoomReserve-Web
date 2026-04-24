@@ -32,6 +32,15 @@ export type AdminRequestInput = Omit<
   "id" | "status" | "adminResponse" | "createdAt"
 >;
 
+function handleAdminRequestListenerError(
+  scope: string,
+  error: unknown,
+  callback: (requests: AdminRequest[]) => void
+) {
+  console.warn(`Firestore listener error (${scope}):`, error);
+  callback([]);
+}
+
 export async function createAdminRequest(
   data: AdminRequestInput
 ): Promise<string> {
@@ -48,28 +57,41 @@ export function onAdminRequestsByUser(
   userId: string,
   callback: (requests: AdminRequest[]) => void
 ): Unsubscribe {
-  const q = query(
-    collection(db, "adminRequests"),
-    where("userId", "==", userId),
-    orderBy("createdAt", "desc")
-  );
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      callback(
-        snapshot.docs.map(
-          (requestDoc) =>
-            ({
-              id: requestDoc.id,
-              ...requestDoc.data(),
-            }) as AdminRequest
-        )
-      );
-    },
-    (error) => {
-      console.warn("Firestore listener error (admin requests by user):", error);
-    }
-  );
+  try {
+    const q = query(
+      collection(db, "adminRequests"),
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc")
+    );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        callback(
+          snapshot.docs.map(
+            (requestDoc) =>
+              ({
+                id: requestDoc.id,
+                ...requestDoc.data(),
+              }) as AdminRequest
+          )
+        );
+      },
+      (error) => {
+        handleAdminRequestListenerError(
+          "admin requests by user",
+          error,
+          callback
+        );
+      }
+    );
+  } catch (error) {
+    handleAdminRequestListenerError(
+      "admin requests by user setup",
+      error,
+      callback
+    );
+    return () => {};
+  }
 }
 
 export async function getAdminRequestsByUser(

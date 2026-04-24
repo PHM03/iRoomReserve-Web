@@ -311,16 +311,6 @@ export async function logout() {
 }
 
 export async function resetPassword(email: string) {
-  const usersQuery = query(
-    collection(db, "users"),
-    where("email", "==", email.toLowerCase())
-  );
-  const snapshot = await getDocs(usersQuery);
-
-  if (snapshot.empty) {
-    throw { code: "auth/user-not-found" };
-  }
-
   await sendPasswordResetEmail(auth, email);
 }
 

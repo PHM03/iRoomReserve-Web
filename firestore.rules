@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isPrivilegedUser() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == "approved" &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["admin", "utility", "super_admin", "Admin", "Utility", "Super Admin"];
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isPrivilegedUser());
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /notifications/{docId} {
+      allow read, update: if isSignedIn() && request.auth.uid == resource.data.recipientUid;
+    }
+
+    match /adminRequests/{docId} {
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    match /feedback/{docId} {
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    match /buildings/{docId} {
+      allow read: if isSignedIn();
+    }
+
+    match /reservations/{docId} {
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
