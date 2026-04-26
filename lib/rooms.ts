@@ -1,9 +1,7 @@
 import {
   collection,
-  doc,
   documentId,
   FieldValue,
-  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -15,6 +13,7 @@ import {
 
 import { apiRequest } from "@/lib/api/client";
 import { db } from "@/lib/configs/firebase";
+import { createGuardedSnapshotCallback } from "@/lib/firestoreListener";
 import {
   normalizeRoomCheckInMethod,
   normalizeRoomStatus,
@@ -174,10 +173,11 @@ export function onRoomsByBuilding(
     orderBy("name")
   );
 
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     roomQuery,
     (snapshot) => {
-      callback(
+      listener.emit(
         snapshot.docs.map((roomDoc) =>
           mapRoom(
             roomDoc.id,
@@ -189,9 +189,13 @@ export function onRoomsByBuilding(
       );
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (rooms):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export function onRoomsByBuildingIds(
@@ -200,21 +204,24 @@ export function onRoomsByBuildingIds(
 ): Unsubscribe {
   const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
   if (uniqueBuildingIds.length === 0) {
-    callback([]);
     return () => {};
   }
 
+  const listener = createGuardedSnapshotCallback(callback);
   const roomsByChunk = new Map<number, Room[]>();
   const buildingChunks = chunkValues(uniqueBuildingIds, 10);
 
   const emit = () => {
-    callback([...roomsByChunk.values()].flat().sort(sortRooms));
+    listener.emit([...roomsByChunk.values()].flat().sort(sortRooms));
   };
 
   const unsubscribers = buildingChunks.map((buildingChunk, chunkIndex) =>
     onSnapshot(
       query(collection(db, "rooms"), where("buildingId", "in", buildingChunk)),
       (snapshot) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         roomsByChunk.set(
           chunkIndex,
           snapshot.docs.map((roomDoc) =>
@@ -229,14 +236,17 @@ export function onRoomsByBuildingIds(
         emit();
       },
       (error) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         console.warn("Firestore listener error (rooms by building ids):", error);
       }
     )
   );
 
-  return () => {
+  return listener.wrap(() => {
     unsubscribers.forEach((unsubscribe) => unsubscribe());
-  };
+  });
 }
 
 export function onAvailableRoomsByBuilding(
@@ -251,10 +261,11 @@ export function onAvailableRoomsByBuilding(
     orderBy("name")
   );
 
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     roomQuery,
     (snapshot) => {
-      callback(
+      listener.emit(
         snapshot.docs.map((roomDoc) =>
           mapRoom(
             roomDoc.id,
@@ -266,9 +277,13 @@ export function onAvailableRoomsByBuilding(
       );
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (available rooms):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export async function getRoomsByBuilding(buildingId: string): Promise<Room[]> {
@@ -357,10 +372,10 @@ export function onRoomsByIds(
 ): Unsubscribe {
   const uniqueRoomIds = [...new Set(roomIds.filter(Boolean))];
   if (uniqueRoomIds.length === 0) {
-    callback([]);
     return () => {};
   }
 
+  const listener = createGuardedSnapshotCallback(callback);
   const roomsByChunk = new Map<number, Room[]>();
   const roomIdChunks = chunkValues(uniqueRoomIds, 10);
 
@@ -368,13 +383,16 @@ export function onRoomsByIds(
     const mergedRooms = [...roomsByChunk.values()]
       .flat()
       .sort(sortRooms);
-    callback(mergedRooms);
+    listener.emit(mergedRooms);
   };
 
   const unsubscribers = roomIdChunks.map((roomIdChunk, chunkIndex) =>
     onSnapshot(
       query(collection(db, "rooms"), where(documentId(), "in", roomIdChunk)),
       (snapshot) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         roomsByChunk.set(
           chunkIndex,
           snapshot.docs.map((roomDoc) =>
@@ -389,14 +407,17 @@ export function onRoomsByIds(
         emit();
       },
       (error) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         console.warn("Firestore listener error (rooms by ids):", error);
       }
     )
   );
 
-  return () => {
+  return listener.wrap(() => {
     unsubscribers.forEach((unsubscribe) => unsubscribe());
-  };
+  });
 }
 
 export function onAllRooms(callback: (rooms: Room[]) => void): Unsubscribe {
@@ -407,10 +428,11 @@ export function onAllRooms(callback: (rooms: Room[]) => void): Unsubscribe {
     orderBy("name")
   );
 
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     roomQuery,
     (snapshot) => {
-      callback(
+      listener.emit(
         snapshot.docs.map((roomDoc) =>
           mapRoom(
             roomDoc.id,
@@ -422,7 +444,11 @@ export function onAllRooms(callback: (rooms: Room[]) => void): Unsubscribe {
       );
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (all rooms):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }

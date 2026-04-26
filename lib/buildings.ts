@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { inferCampusFromBuilding, type ReservationCampus } from "./campuses";
 import { db } from "./configs/firebase";
+import { createGuardedSnapshotCallback } from "./firestoreListener";
 
 // ─── Types ──────────────────────────────────────────────────────
 export interface Building {
@@ -116,15 +117,26 @@ export function onBuildings(
   callback: (buildings: Building[]) => void
 ): Unsubscribe {
   const q = query(collection(db, "buildings"), orderBy("name"));
-  return onSnapshot(q, (snapshot) => {
-    const buildings: Building[] = snapshot.docs.map((d) =>
-      mapBuilding(
-        d.id,
-        d.data() as Omit<Building, "id" | "campus"> & { campus?: string | null }
-      )
-    );
-    callback(buildings);
-  }, (error) => {
-    console.warn('Firestore listener error (buildings):', error);
-  });
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const buildings: Building[] = snapshot.docs.map((d) =>
+        mapBuilding(
+          d.id,
+          d.data() as Omit<Building, "id" | "campus"> & { campus?: string | null }
+        )
+      );
+      listener.emit(buildings);
+    },
+    (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
+
+      console.warn("Firestore listener error (buildings):", error);
+    }
+  );
+
+  return listener.wrap(unsubscribe);
 }

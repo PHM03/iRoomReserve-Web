@@ -118,16 +118,43 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
   useEffect(() => {
     if (!buildingId || !firebaseUser?.uid) return;
 
-    const unsubReservations = onPendingReservationsByBuilding(buildingId, setRequests);
-    const unsubAllReservations = onReservationsByBuilding(buildingId, setAllReservations);
-    const unsubRooms = onRoomsByBuilding(buildingId, setRooms);
-    const unsubFeedback = onFeedbackByBuilding(buildingId, setFeedbackList);
-    const unsubNotifs = onUnreadNotifications(firebaseUser.uid, setNotifications);
-    const unsubSchedules = onSchedulesByBuilding(buildingId, setSchedules);
-    const unsubHistory = onRoomHistoryByBuilding(buildingId, setRoomHistory);
-    const unsubAdminRequests = onAdminRequestsByBuilding(buildingId, setAdminRequests);
+    let cancelled = false;
+
+    const unsubReservations = onPendingReservationsByBuilding(buildingId, (nextRequests) => {
+      if (cancelled) return;
+      setRequests(nextRequests);
+    });
+    const unsubAllReservations = onReservationsByBuilding(buildingId, (nextReservations) => {
+      if (cancelled) return;
+      setAllReservations(nextReservations);
+    });
+    const unsubRooms = onRoomsByBuilding(buildingId, (nextRooms) => {
+      if (cancelled) return;
+      setRooms(nextRooms);
+    });
+    const unsubFeedback = onFeedbackByBuilding(buildingId, (nextFeedback) => {
+      if (cancelled) return;
+      setFeedbackList(nextFeedback);
+    });
+    const unsubNotifs = onUnreadNotifications(firebaseUser.uid, (nextNotifications) => {
+      if (cancelled) return;
+      setNotifications(nextNotifications);
+    });
+    const unsubSchedules = onSchedulesByBuilding(buildingId, (nextSchedules) => {
+      if (cancelled) return;
+      setSchedules(nextSchedules);
+    });
+    const unsubHistory = onRoomHistoryByBuilding(buildingId, (nextHistory) => {
+      if (cancelled) return;
+      setRoomHistory(nextHistory);
+    });
+    const unsubAdminRequests = onAdminRequestsByBuilding(buildingId, (nextAdminRequests) => {
+      if (cancelled) return;
+      setAdminRequests(nextAdminRequests);
+    });
 
     return () => {
+      cancelled = true;
       unsubReservations();
       unsubAllReservations();
       unsubRooms();

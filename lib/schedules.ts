@@ -10,6 +10,7 @@ import {
 
 import { apiRequest } from "@/lib/api/client";
 import { db } from "@/lib/configs/firebase";
+import { createGuardedSnapshotCallback } from "@/lib/firestoreListener";
 
 export interface Schedule {
   id: string;
@@ -96,18 +97,23 @@ export function onSchedulesByBuilding(
     collection(db, "schedules"),
     where("buildingId", "==", buildingId)
   );
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
       const schedules: Schedule[] = snapshot.docs
         .map((d) => ({ id: d.id, ...d.data() }) as Schedule)
         .sort(sortSchedules);
-      callback(schedules);
+      listener.emit(schedules);
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (schedules):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export async function getSchedulesByRoomId(roomId: string): Promise<Schedule[]> {
@@ -128,21 +134,24 @@ export function onSchedulesByBuildingIds(
 ): Unsubscribe {
   const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
   if (uniqueBuildingIds.length === 0) {
-    callback([]);
     return () => {};
   }
 
+  const listener = createGuardedSnapshotCallback(callback);
   const schedulesByChunk = new Map<number, Schedule[]>();
   const buildingChunks = chunkValues(uniqueBuildingIds, 10);
 
   const emit = () => {
-    callback([...schedulesByChunk.values()].flat().sort(sortSchedules));
+    listener.emit([...schedulesByChunk.values()].flat().sort(sortSchedules));
   };
 
   const unsubscribers = buildingChunks.map((buildingChunk, chunkIndex) =>
     onSnapshot(
       query(collection(db, "schedules"), where("buildingId", "in", buildingChunk)),
       (snapshot) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         schedulesByChunk.set(
           chunkIndex,
           snapshot.docs.map((scheduleDoc) => ({
@@ -153,14 +162,17 @@ export function onSchedulesByBuildingIds(
         emit();
       },
       (error) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         console.warn("Firestore listener error (schedules by building ids):", error);
       }
     )
   );
 
-  return () => {
+  return listener.wrap(() => {
     unsubscribers.forEach((unsubscribe) => unsubscribe());
-  };
+  });
 }
 
 export function isRoomInClass(
@@ -189,16 +201,21 @@ export function onAllSchedules(
   callback: (schedules: Schedule[]) => void
 ): Unsubscribe {
   const q = query(collection(db, "schedules"));
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
       const schedules: Schedule[] = snapshot.docs
         .map((d) => ({ id: d.id, ...d.data() }) as Schedule)
         .sort(sortSchedules);
-      callback(schedules);
+      listener.emit(schedules);
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (all schedules):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }

@@ -15,6 +15,7 @@ import {
 
 import { apiRequest } from "@/lib/api/client";
 import { db } from "@/lib/configs/firebase";
+import { createGuardedSnapshotCallback } from "@/lib/firestoreListener";
 import {
   analyzeSentiment,
   averageSentimentScores,
@@ -161,15 +162,20 @@ export function onFeedbackByBuilding(
     where("buildingId", "==", buildingId),
     orderBy("createdAt", "desc")
   );
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      callback(snapshot.docs.map(mapFeedback));
+      listener.emit(snapshot.docs.map(mapFeedback));
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (feedback):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export async function respondToFeedback(
@@ -191,15 +197,20 @@ export function onFeedbackByUser(
     where("userId", "==", userId),
     orderBy("createdAt", "desc")
   );
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      callback(snapshot.docs.map(mapFeedback));
+      listener.emit(snapshot.docs.map(mapFeedback));
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (feedback by user):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export async function getFeedbackByUser(userId: string): Promise<Feedback[]> {

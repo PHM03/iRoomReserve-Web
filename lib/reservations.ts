@@ -19,6 +19,7 @@ import {
 } from "@/lib/reservation-approval";
 import { auth, db } from "@/lib/configs/firebase";
 import { type RoomCheckInMethod } from "@/lib/roomStatus";
+import { createGuardedSnapshotCallback } from "@/lib/firestoreListener";
 
 export interface Reservation {
   id: string;
@@ -185,10 +186,11 @@ export function onPendingReservationsByBuilding(
     orderBy("createdAt", "desc")
   );
 
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     reservationsQuery,
     (snapshot) => {
-      callback(
+      listener.emit(
         snapshot.docs.map(
           (reservationDoc) =>
             ({
@@ -199,9 +201,13 @@ export function onPendingReservationsByBuilding(
       );
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (pending reservations):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export function onPendingReservationsByApprover(
@@ -216,10 +222,11 @@ export function onPendingReservationsByApprover(
       orderBy("createdAt", "desc")
     );
 
-    return onSnapshot(
+    const listener = createGuardedSnapshotCallback(callback);
+    const unsubscribe = onSnapshot(
       reservationsQuery,
       (snapshot) => {
-        callback(
+        listener.emit(
           snapshot.docs
             .map(
               (reservationDoc) =>
@@ -235,6 +242,9 @@ export function onPendingReservationsByApprover(
         );
       },
       (error) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         handleReservationListenerError(
           "pending reservations by approver",
           error,
@@ -242,6 +252,7 @@ export function onPendingReservationsByApprover(
         );
       }
     );
+    return listener.wrap(unsubscribe);
   } catch (error) {
     handleReservationListenerError(
       "pending reservations by approver setup",
@@ -262,10 +273,11 @@ export function onReservationsByBuilding(
     orderBy("createdAt", "desc")
   );
 
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     reservationsQuery,
     (snapshot) => {
-      callback(
+      listener.emit(
         snapshot.docs.map(
           (reservationDoc) =>
             ({
@@ -276,9 +288,13 @@ export function onReservationsByBuilding(
       );
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (reservations by building):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export function onReservationsByBuildingIds(
@@ -287,15 +303,15 @@ export function onReservationsByBuildingIds(
 ): Unsubscribe {
   const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
   if (uniqueBuildingIds.length === 0) {
-    callback([]);
     return () => {};
   }
 
+  const listener = createGuardedSnapshotCallback(callback);
   const reservationsByChunk = new Map<number, Reservation[]>();
   const buildingChunks = chunkValues(uniqueBuildingIds, 10);
 
   const emit = () => {
-    callback([...reservationsByChunk.values()].flat().sort(sortReservations));
+    listener.emit([...reservationsByChunk.values()].flat().sort(sortReservations));
   };
 
   const unsubscribers = buildingChunks.map((buildingChunk, chunkIndex) =>
@@ -305,6 +321,9 @@ export function onReservationsByBuildingIds(
         where("buildingId", "in", buildingChunk)
       ),
       (snapshot) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         reservationsByChunk.set(
           chunkIndex,
           snapshot.docs.map(
@@ -318,6 +337,9 @@ export function onReservationsByBuildingIds(
         emit();
       },
       (error) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         console.warn(
           "Firestore listener error (reservations by building ids):",
           error
@@ -326,9 +348,9 @@ export function onReservationsByBuildingIds(
     )
   );
 
-  return () => {
+  return listener.wrap(() => {
     unsubscribers.forEach((unsubscribe) => unsubscribe());
-  };
+  });
 }
 
 export function onReservationsByUser(
@@ -341,10 +363,11 @@ export function onReservationsByUser(
     orderBy("createdAt", "desc")
   );
 
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     reservationsQuery,
     (snapshot) => {
-      callback(
+      listener.emit(
         snapshot.docs.map(
           (reservationDoc) =>
             ({
@@ -355,9 +378,13 @@ export function onReservationsByUser(
       );
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (reservations by user):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export async function getReservationsByUser(

@@ -14,6 +14,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./configs/firebase";
+import { createGuardedSnapshotCallback } from "./firestoreListener";
 
 // ─── Types ──────────────────────────────────────────────────────
 export interface Notification {
@@ -66,19 +67,24 @@ export function onUnreadNotifications(
       where("read", "==", false),
       orderBy("createdAt", "desc")
     );
-    return onSnapshot(
+    const listener = createGuardedSnapshotCallback(callback);
+    const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
         const notifs: Notification[] = snapshot.docs.map((d) => ({
           id: d.id,
           ...d.data(),
         } as Notification));
-        callback(notifs);
+        listener.emit(notifs);
       },
       (error) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         handleNotificationListenerError("unread notifications", error, callback);
       }
     );
+    return listener.wrap(unsubscribe);
   } catch (error) {
     handleNotificationListenerError("unread notifications setup", error, callback);
     return () => {};
@@ -96,19 +102,24 @@ export function onAllNotifications(
       where("recipientUid", "==", uid),
       orderBy("createdAt", "desc")
     );
-    return onSnapshot(
+    const listener = createGuardedSnapshotCallback(callback);
+    const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
         const notifs: Notification[] = snapshot.docs.map((d) => ({
           id: d.id,
           ...d.data(),
         } as Notification));
-        callback(notifs);
+        listener.emit(notifs);
       },
       (error) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         handleNotificationListenerError("all notifications", error, callback);
       }
     );
+    return listener.wrap(unsubscribe);
   } catch (error) {
     handleNotificationListenerError("all notifications setup", error, callback);
     return () => {};

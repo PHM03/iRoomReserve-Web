@@ -9,6 +9,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./configs/firebase";
+import { createGuardedSnapshotCallback } from "./firestoreListener";
 
 // ─── Types ──────────────────────────────────────────────────────
 export interface RoomHistoryEntry {
@@ -50,7 +51,8 @@ export function onRoomHistoryByBuilding(
     collection(db, "roomHistory"),
     where("buildingId", "==", buildingId)
   );
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
       const entries: RoomHistoryEntry[] = snapshot.docs
@@ -60,10 +62,14 @@ export function onRoomHistoryByBuilding(
           const bTime = b.createdAt?.seconds ?? 0;
           return bTime - aTime;
         });
-      callback(entries);
+      listener.emit(entries);
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (roomHistory):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }

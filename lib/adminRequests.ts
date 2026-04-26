@@ -11,6 +11,7 @@ import {
 
 import { apiRequest } from "@/lib/api/client";
 import { db } from "@/lib/configs/firebase";
+import { createGuardedSnapshotCallback } from "@/lib/firestoreListener";
 
 export interface AdminRequest {
   id: string;
@@ -63,10 +64,11 @@ export function onAdminRequestsByUser(
       where("userId", "==", userId),
       orderBy("createdAt", "desc")
     );
-    return onSnapshot(
+    const listener = createGuardedSnapshotCallback(callback);
+    const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        callback(
+        listener.emit(
           snapshot.docs.map(
             (requestDoc) =>
               ({
@@ -77,6 +79,9 @@ export function onAdminRequestsByUser(
         );
       },
       (error) => {
+        if (listener.isCancelled()) {
+          return;
+        }
         handleAdminRequestListenerError(
           "admin requests by user",
           error,
@@ -84,6 +89,7 @@ export function onAdminRequestsByUser(
         );
       }
     );
+    return listener.wrap(unsubscribe);
   } catch (error) {
     handleAdminRequestListenerError(
       "admin requests by user setup",
@@ -122,10 +128,11 @@ export function onAdminRequestsByBuilding(
     where("buildingId", "==", buildingId),
     orderBy("createdAt", "desc")
   );
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      callback(
+      listener.emit(
         snapshot.docs.map(
           (requestDoc) =>
             ({
@@ -136,12 +143,16 @@ export function onAdminRequestsByBuilding(
       );
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn(
         "Firestore listener error (admin requests by building):",
         error
       );
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export async function respondToAdminRequest(

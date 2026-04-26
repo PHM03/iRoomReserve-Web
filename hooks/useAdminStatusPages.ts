@@ -87,26 +87,38 @@ export function useAdminStatusPages() {
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!buildingId || !firebaseUser) {
+    if (!buildingId || !firebaseUser?.uid) {
       setAllReservations([]);
       setRooms([]);
       setSchedules([]);
       return;
     }
 
+    let cancelled = false;
+
     const unsubAllReservations = onReservationsByBuilding(
       buildingId,
-      setAllReservations
+      (nextReservations) => {
+        if (cancelled) return;
+        setAllReservations(nextReservations);
+      }
     );
-    const unsubRooms = onRoomsByBuilding(buildingId, setRooms);
-    const unsubSchedules = onSchedulesByBuilding(buildingId, setSchedules);
+    const unsubRooms = onRoomsByBuilding(buildingId, (nextRooms) => {
+      if (cancelled) return;
+      setRooms(nextRooms);
+    });
+    const unsubSchedules = onSchedulesByBuilding(buildingId, (nextSchedules) => {
+      if (cancelled) return;
+      setSchedules(nextSchedules);
+    });
 
     return () => {
+      cancelled = true;
       unsubAllReservations();
       unsubRooms();
       unsubSchedules();
     };
-  }, [buildingId, firebaseUser]);
+  }, [buildingId, firebaseUser?.uid]);
 
   const resetScheduleForm = () => {
     setShowScheduleForm(false);

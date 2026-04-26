@@ -12,7 +12,6 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -35,6 +34,7 @@ import {
 import { normalizeRole, USER_ROLES } from "@/lib/domain/roles";
 import { auth, db } from "@/lib/configs/firebase";
 import { type ReservationCampus } from "@/lib/campuses";
+import { createGuardedSnapshotCallback } from "@/lib/firestoreListener";
 
 const MANAGED_ROLE_QUERY_VALUES = [
   USER_ROLES.STUDENT,
@@ -394,19 +394,24 @@ export function onPendingUsers(
   callback: (users: ManagedUser[]) => void
 ): Unsubscribe {
   const q = query(collection(db, "users"), where("status", "==", "pending"));
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      callback(
+      listener.emit(
         snapshot.docs
           .map((userDoc) => mapManagedUser(userDoc.id, userDoc.data()))
           .filter((user) => user.role !== USER_ROLES.SUPER_ADMIN)
       );
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (pending users):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export function onUsersByStatus(
@@ -418,15 +423,20 @@ export function onUsersByStatus(
     where("status", "==", status),
     where("role", "in", MANAGED_ROLE_QUERY_VALUES)
   );
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      callback(snapshot.docs.map((userDoc) => mapManagedUser(userDoc.id, userDoc.data())));
+      listener.emit(snapshot.docs.map((userDoc) => mapManagedUser(userDoc.id, userDoc.data())));
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (users by status):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export async function approveUser(uid: string) {
@@ -489,15 +499,20 @@ export function onAllUsers(
     collection(db, "users"),
     where("role", "in", MANAGED_ROLE_QUERY_VALUES)
   );
-  return onSnapshot(
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      callback(snapshot.docs.map((userDoc) => mapManagedUser(userDoc.id, userDoc.data())));
+      listener.emit(snapshot.docs.map((userDoc) => mapManagedUser(userDoc.id, userDoc.data())));
     },
     (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
       console.warn("Firestore listener error (all users):", error);
     }
   );
+  return listener.wrap(unsubscribe);
 }
 
 export function getAuthErrorMessage(code: string): string {
