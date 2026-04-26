@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import BleAdminMonitor from '@/components/BleAdminMonitor';
 import BleSummaryCard from '@/components/BleSummaryCard';
 import AdminRoomStatusSection from '@/components/admin/AdminRoomStatusSection';
+import MessagesSection from '@/components/messages/MessagesSection';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminTab } from '@/context/AdminTabContext';
 import type { AdminTab } from '@/components/NavBar';
@@ -308,18 +309,45 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
 
   // ─── Real-time Listeners ────────────────────────────────────
   useEffect(() => {
-    if (!buildingId || !firebaseUser) return;
+    if (!buildingId || !firebaseUser?.uid) return;
 
-    const unsubReservations = onPendingReservationsByBuilding(buildingId, setRequests);
-    const unsubAllReservations = onReservationsByBuilding(buildingId, setAllReservations);
-    const unsubRooms = onRoomsByBuilding(buildingId, (r) => setRooms(r));
-    const unsubFeedback = onFeedbackByBuilding(buildingId, setFeedbackList);
-    const unsubNotifs = onUnreadNotifications(firebaseUser.uid, setNotifications);
-    const unsubSchedules = onSchedulesByBuilding(buildingId, setSchedules);
-    const unsubHistory = onRoomHistoryByBuilding(buildingId, setRoomHistory);
-    const unsubAdminRequests = onAdminRequestsByBuilding(buildingId, setAdminRequests);
+    let cancelled = false;
+
+    const unsubReservations = onPendingReservationsByBuilding(buildingId, (nextRequests) => {
+      if (cancelled) return;
+      setRequests(nextRequests);
+    });
+    const unsubAllReservations = onReservationsByBuilding(buildingId, (nextReservations) => {
+      if (cancelled) return;
+      setAllReservations(nextReservations);
+    });
+    const unsubRooms = onRoomsByBuilding(buildingId, (nextRooms) => {
+      if (cancelled) return;
+      setRooms(nextRooms);
+    });
+    const unsubFeedback = onFeedbackByBuilding(buildingId, (nextFeedback) => {
+      if (cancelled) return;
+      setFeedbackList(nextFeedback);
+    });
+    const unsubNotifs = onUnreadNotifications(firebaseUser.uid, (nextNotifications) => {
+      if (cancelled) return;
+      setNotifications(nextNotifications);
+    });
+    const unsubSchedules = onSchedulesByBuilding(buildingId, (nextSchedules) => {
+      if (cancelled) return;
+      setSchedules(nextSchedules);
+    });
+    const unsubHistory = onRoomHistoryByBuilding(buildingId, (nextHistory) => {
+      if (cancelled) return;
+      setRoomHistory(nextHistory);
+    });
+    const unsubAdminRequests = onAdminRequestsByBuilding(buildingId, (nextAdminRequests) => {
+      if (cancelled) return;
+      setAdminRequests(nextAdminRequests);
+    });
 
     return () => {
+      cancelled = true;
       unsubReservations();
       unsubAllReservations();
       unsubRooms();
@@ -329,7 +357,6 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       unsubHistory();
       unsubAdminRequests();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildingId, firebaseUser?.uid]);
 
   // Load building floors when on add-rooms tab
@@ -2045,11 +2072,17 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
 
         return (
           <div>
+            {/* Staff-to-staff messaging (Admin <-> Utility/Faculty) */}
+            <MessagesSection
+              title="Staff Messages"
+              subtitle="Direct conversations with utility staff and faculty."
+            />
+
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-xl font-bold text-black flex items-center gap-3">
-                  Inbox
+                  User Requests
                   {openCount > 0 && (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-blue">
                       {openCount} new
@@ -2057,7 +2090,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                   )}
                 </h3>
                 <p className="text-black mt-1 text-sm">
-                  Messages from users in <span className="ui-text-teal font-bold">{buildingName}</span>
+                  Support requests from users in <span className="ui-text-teal font-bold">{buildingName}</span>
                 </p>
               </div>
             </div>

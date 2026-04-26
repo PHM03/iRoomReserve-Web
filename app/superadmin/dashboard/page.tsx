@@ -53,8 +53,17 @@ export default function SuperAdminDashboard() {
 
   // Real-time listener for ALL users
   useEffect(() => {
-    const unsub = onAllUsers(setAllUsers);
-    return () => unsub();
+    let cancelled = false;
+
+    const unsub = onAllUsers((nextUsers) => {
+      if (cancelled) return;
+      setAllUsers(nextUsers);
+    });
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, []);
 
   // ─── Computed Data ────────────────────────────────────────────

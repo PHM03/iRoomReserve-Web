@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import RoomAvailabilityPicker from '@/components/RoomAvailabilityPicker';
 import RoomCard from '@/components/RoomCard';
 import RoomAssistantWidget from '@/components/RoomAssistantWidget';
 import { useAuth } from '@/context/AuthContext';
@@ -13,6 +14,11 @@ import {
   createRecurringReservation,
   validateReservationApprover,
 } from '@/lib/reservations';
+import {
+  isDateBooked,
+  onBookedDatesByRoom,
+  type BookingDate,
+} from '@/lib/roomAvailability';
 import { getRoomsByBuilding, type Room } from '@/lib/rooms';
 
 type CampusFilter = ReservationCampus | 'all';
@@ -199,6 +205,10 @@ export default function ReserveRoomPage() {
   const [approvalEmails, setApprovalEmails] = useState({
     advisorEmail: '',
   });
+  const [bookedDates, setBookedDates] = useState<BookingDate[]>([]);
+  const [bookedDatesLoading, setBookedDatesLoading] = useState(() =>
+    Boolean(selectedRoomParam)
+  );
 
   useEffect(() => {
     if (!firebaseUser) {
@@ -238,6 +248,24 @@ export default function ReserveRoomPage() {
       active = false;
     };
   }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!selectedRoomParam) {
+      return;
+    }
+
+    let cancelled = false;
+    const unsubscribe = onBookedDatesByRoom(selectedRoomParam, (dates) => {
+      if (cancelled) return;
+      setBookedDates(dates);
+      setBookedDatesLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [selectedRoomParam]);
 
   const selectedRoom = selectedRoomParam
     ? rooms.find((room) => room.id === selectedRoomParam) ?? null
@@ -362,7 +390,11 @@ export default function ReserveRoomPage() {
       return !!reservationDate && !!recurringEndDate && selectedDays.length > 0;
     }
 
-    return !!reservationDate;
+    if (!reservationDate) {
+      return false;
+    }
+
+    return !isDateBooked(reservationDate, bookedDates);
   }
 
   function toggleDay(day: number) {
@@ -400,6 +432,8 @@ export default function ReserveRoomPage() {
   function handleRoomSelect(roomId: string) {
     if (selectedRoomId !== roomId) {
       resetReservationDetails();
+      setBookedDates([]);
+      setBookedDatesLoading(true);
     }
 
     setDetailsStep(2);
@@ -428,6 +462,13 @@ export default function ReserveRoomPage() {
     }
 
     if (!isTimeRangeValid(selectedCampus, startTime, endTime)) {
+      return;
+    }
+
+    if (!isRecurring && isDateBooked(reservationDate, bookedDates)) {
+      setSubmitError(
+        'That date is already reserved for this room. Please pick a green (available) date.'
+      );
       return;
     }
 
@@ -999,14 +1040,36 @@ export default function ReserveRoomPage() {
                     </>
                   ) : (
                     <div>
-                      <label className="mb-1.5 block text-sm font-bold text-black">Date</label>
-                      <input
-                        type="date"
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <label className="block text-sm font-bold text-black">Date</label>
+                        <div className="flex items-center gap-3 text-[11px] font-bold text-black">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                            Available
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+                            Reserved
+                          </span>
+                        </div>
+                      </div>
+                      <RoomAvailabilityPicker
+                        bookedDates={bookedDates}
                         value={reservationDate}
-                        onChange={(event) => setReservationDate(event.target.value)}
-                        className="glass-input w-full px-4 py-3"
-                        min={new Date().toISOString().split('T')[0]}
+                        onChange={(nextDate) => {
+                          setReservationDate(nextDate);
+                          if (submitError) {
+                            setSubmitError('');
+                          }
+                        }}
+                        loading={bookedDatesLoading}
+                        hideLegend
                       />
+                      {reservationDate && isDateBooked(reservationDate, bookedDates) && (
+                        <p className="mt-2 text-xs font-bold ui-text-red">
+                          That date is already reserved for {selectedRoomName}. Pick a green date to continue.
+                        </p>
+                      )}
                     </div>
                   )}
 

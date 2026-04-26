@@ -25,31 +25,45 @@ type FilterTab =
 
 export default function MyReservationsPage() {
   const { firebaseUser } = useAuth();
+  const uid = firebaseUser?.uid;
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!firebaseUser) {
+    if (!uid) {
       return;
     }
 
-    const unsubscribeReservations = onReservationsByUser(
-      firebaseUser.uid,
-      setReservations
-    );
+    let cancelled = false;
+
+    const unsubscribeReservations = onReservationsByUser(uid, (nextReservations) => {
+      if (cancelled) return;
+      setReservations(nextReservations);
+    });
 
     return () => {
+      cancelled = true;
       unsubscribeReservations();
     };
-  }, [firebaseUser]);
+  }, [uid]);
 
   useEffect(() => {
     const roomIds = [...new Set(reservations.map((reservation) => reservation.roomId))];
-    const unsubscribeRooms = onRoomsByIds(roomIds, setRooms);
+    if (roomIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const unsubscribeRooms = onRoomsByIds(roomIds, (nextRooms) => {
+      if (cancelled) return;
+      setRooms(nextRooms);
+    });
 
     return () => {
+      cancelled = true;
       unsubscribeRooms();
     };
   }, [reservations]);

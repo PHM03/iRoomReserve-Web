@@ -39,6 +39,7 @@ export default function UtilityStaffDashboard({
   firstName,
 }: UtilityStaffDashboardProps) {
   const { firebaseUser, profile } = useAuth();
+  const uid = firebaseUser?.uid;
   const managedBuildings = getManagedBuildingsForCampus(profile?.campus);
   const [selectedManagedBuildingId, setSelectedManagedBuildingId] = useState('');
   const effectiveManagedBuildingId = managedBuildings.some(
@@ -58,28 +59,43 @@ export default function UtilityStaffDashboard({
   const [adminRequests, setAdminRequests] = useState<AdminRequest[]>([]);
 
   useEffect(() => {
-    if (!buildingId || !firebaseUser) {
+    if (!buildingId || !uid) {
       return;
     }
 
-    const unsubscribeRooms = onRoomsByBuilding(buildingId, setRooms);
-    const unsubscribeSchedules = onSchedulesByBuilding(buildingId, setSchedules);
+    let cancelled = false;
+
+    const unsubscribeRooms = onRoomsByBuilding(buildingId, (nextRooms) => {
+      if (cancelled) return;
+      setRooms(nextRooms);
+    });
+    const unsubscribeSchedules = onSchedulesByBuilding(buildingId, (nextSchedules) => {
+      if (cancelled) return;
+      setSchedules(nextSchedules);
+    });
     const unsubscribeReservations = onReservationsByBuilding(
       buildingId,
-      setReservations
+      (nextReservations) => {
+        if (cancelled) return;
+        setReservations(nextReservations);
+      }
     );
     const unsubscribeRequests = onAdminRequestsByBuilding(
       buildingId,
-      setAdminRequests
+      (nextAdminRequests) => {
+        if (cancelled) return;
+        setAdminRequests(nextAdminRequests);
+      }
     );
 
     return () => {
+      cancelled = true;
       unsubscribeRooms();
       unsubscribeSchedules();
       unsubscribeReservations();
       unsubscribeRequests();
     };
-  }, [buildingId, firebaseUser]);
+  }, [buildingId, uid]);
 
   const today = new Date();
   const todayDateString = getLocalDateString(today);

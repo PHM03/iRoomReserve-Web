@@ -12,6 +12,26 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["admin", "utility", "super_admin", "Admin", "Utility", "Super Admin"];
     }
 
+    // Helper: caller is one of the staff roles allowed to use the messaging mesh
+    // (Administrator, Utility Staff, Faculty Professor, Super Admin).
+    function isStaffMember() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in [
+          "Administrator",
+          "Utility Staff",
+          "Faculty Professor",
+          "Super Admin",
+          "admin",
+          "utility",
+          "faculty",
+          "super_admin",
+          "Admin",
+          "Utility",
+          "Faculty"
+        ];
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isPrivilegedUser());
       allow create, update: if isSignedIn() && request.auth.uid == userId;
@@ -35,8 +55,48 @@ service cloud.firestore {
       allow read: if isSignedIn();
     }
 
+    // Reservations are private to the owner, except that any signed-in user can
+    // read APPROVED reservations so the room availability date picker can paint
+    // booked days red without leaking other users' pending requests.
     match /reservations/{docId} {
-      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.userId
+        || resource.data.status == "approved"
+      );
+    }
+
+    // Staff-to-staff messaging (Administrator <-> Utility Staff <-> Faculty
+    // Professor). Documents are immutable on create except for the `isRead`
+    // flag, which only the receiver can flip.
+    match /messages/{docId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.senderId
+        || request.auth.uid == resource.data.receiverId
+      );
+
+      allow create: if isStaffMember()
+        && request.auth.uid == request.resource.data.senderId
+        && request.resource.data.senderId != request.resource.data.receiverId
+        && request.resource.data.isRead == false
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() > 0
+        && request.resource.data.subject.size() <= 200
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0
+        && request.resource.data.body.size() <= 5000
+        && request.resource.data.keys().hasAll([
+          "senderId", "senderName", "senderRole",
+          "receiverId", "receiverName", "receiverRole",
+          "subject", "body", "isRead", "createdAt"
+        ]);
+
+      // Only the receiver may mark a message as read; nothing else can change.
+      allow update: if isSignedIn()
+        && request.auth.uid == resource.data.receiverId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["isRead"])
+        && request.resource.data.isRead == true;
+
+      allow delete: if false;
     }
 
     match /{document=**} {

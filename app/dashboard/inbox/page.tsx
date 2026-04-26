@@ -2,12 +2,14 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 
+import MessagesSection from '@/components/messages/MessagesSection';
 import { useAuth } from '@/context/AuthContext';
 import {
   AdminRequest,
   onAdminRequestsByUser,
 } from '@/lib/adminRequests';
 import { USER_ROLES } from '@/lib/domain/roles';
+import { isStaffRole } from '@/lib/messages';
 import {
   Notification,
   onAllNotifications,
@@ -118,8 +120,17 @@ function ReservationApprovals({
 
   useEffect(() => {
     if (!email) return;
-    const unsubscribe = onPendingReservationsByApprover(email, setRequests);
-    return () => unsubscribe();
+    let cancelled = false;
+
+    const unsubscribe = onPendingReservationsByApprover(email, (nextRequests) => {
+      if (cancelled) return;
+      setRequests(nextRequests);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [email]);
 
   const handleApprove = async (reservationId: string) => {
@@ -395,8 +406,17 @@ function AdminMessages({ uid }: { uid: string }) {
 
   useEffect(() => {
     if (!uid) return;
-    const unsub = onAdminRequestsByUser(uid, setRequests);
-    return () => unsub();
+    let cancelled = false;
+
+    const unsub = onAdminRequestsByUser(uid, (nextRequests) => {
+      if (cancelled) return;
+      setRequests(nextRequests);
+    });
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [uid]);
 
   const filteredRequests = filter === 'all' ? requests : requests.filter((request) => request.status === filter);
@@ -518,17 +538,28 @@ function UserInbox({
   uid,
   email,
   isFaculty,
+  showStaffMessages,
 }: {
   uid: string;
   email: string;
   isFaculty: boolean;
+  showStaffMessages: boolean;
 }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
     if (!uid) return;
-    const unsubscribe = onAllNotifications(uid, setNotifications);
-    return () => unsubscribe();
+    let cancelled = false;
+
+    const unsubscribe = onAllNotifications(uid, (nextNotifications) => {
+      if (cancelled) return;
+      setNotifications(nextNotifications);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [uid]);
 
   return (
@@ -541,6 +572,12 @@ function UserInbox({
       </div>
 
       {isFaculty && <ReservationApprovals email={email} />}
+      {showStaffMessages && (
+        <MessagesSection
+          title="Staff Messages"
+          subtitle="Direct conversations with administrators, faculty, and utility staff."
+        />
+      )}
       <ReservationUpdates notifications={notifications} />
       <AdminMessages uid={uid} />
     </main>
@@ -586,6 +623,7 @@ export default function InboxPage() {
       uid={firebaseUser.uid}
       email={profile.email}
       isFaculty={profile.role === USER_ROLES.FACULTY}
+      showStaffMessages={isStaffRole(profile.role)}
     />
   );
 }

@@ -40,6 +40,7 @@ export default function MemberDashboard({
   welcomeEmoji,
 }: MemberDashboardProps) {
   const { firebaseUser } = useAuth();
+  const uid = firebaseUser?.uid;
   const {
     checkInWithBluetooth,
     dismissToast,
@@ -56,24 +57,27 @@ export default function MemberDashboard({
   const [rooms, setRooms] = useState<Room[]>([]);
 
   useEffect(() => {
-    if (!firebaseUser) {
+    if (!uid) {
       return;
     }
 
-    const unsubscribeReservations = onReservationsByUser(
-      firebaseUser.uid,
-      setReservationHistory
-    );
-    const unsubscribeNotifications = onUnreadNotifications(
-      firebaseUser.uid,
-      setNotifications
-    );
+    let cancelled = false;
+
+    const unsubscribeReservations = onReservationsByUser(uid, (nextReservations) => {
+      if (cancelled) return;
+      setReservationHistory(nextReservations);
+    });
+    const unsubscribeNotifications = onUnreadNotifications(uid, (nextNotifications) => {
+      if (cancelled) return;
+      setNotifications(nextNotifications);
+    });
 
     return () => {
+      cancelled = true;
       unsubscribeReservations();
       unsubscribeNotifications();
     };
-  }, [firebaseUser]);
+  }, [uid]);
 
   useEffect(() => {
     const roomIds = [...new Set(reservationHistory.map((reservation) => reservation.roomId))];
@@ -81,10 +85,26 @@ export default function MemberDashboard({
       ...new Set(reservationHistory.map((reservation) => reservation.buildingId)),
     ];
 
-    const unsubscribeRooms = onRoomsByIds(roomIds, setRooms);
-    const unsubscribeSchedules = onSchedulesByBuildingIds(buildingIds, setSchedules);
+    let cancelled = false;
+    let unsubscribeRooms = () => {};
+    let unsubscribeSchedules = () => {};
+
+    if (roomIds.length > 0) {
+      unsubscribeRooms = onRoomsByIds(roomIds, (nextRooms) => {
+        if (cancelled) return;
+        setRooms(nextRooms);
+      });
+    }
+
+    if (buildingIds.length > 0) {
+      unsubscribeSchedules = onSchedulesByBuildingIds(buildingIds, (nextSchedules) => {
+        if (cancelled) return;
+        setSchedules(nextSchedules);
+      });
+    }
 
     return () => {
+      cancelled = true;
       unsubscribeRooms();
       unsubscribeSchedules();
     };

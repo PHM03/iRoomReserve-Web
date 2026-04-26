@@ -29,7 +29,11 @@ import { resolveRoomStatus } from '@/lib/roomStatus';
 
 export default function RoomStatusPage() {
   const { firebaseUser, profile } = useAuth();
-  const managedBuildings = getManagedBuildingsForCampus(profile?.campus);
+  const uid = firebaseUser?.uid;
+  const managedBuildings = useMemo(
+    () => getManagedBuildingsForCampus(profile?.campus),
+    [profile?.campus]
+  );
   const [buildingRecords, setBuildingRecords] = useState<Building[]>([]);
   const [selectedCampusId, setSelectedCampusId] = useState<ReservationCampus | ''>('');
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -42,57 +46,75 @@ export default function RoomStatusPage() {
   );
 
   useEffect(() => {
-    if (!firebaseUser || managedBuildingIds.length === 0) {
+    if (!uid || managedBuildingIds.length === 0) {
       return;
     }
 
+    let cancelled = false;
+
     const unsubscribeBuildings = onBuildings((allBuildings) => {
+      if (cancelled) return;
       setBuildingRecords(
         allBuildings.filter((building) => managedBuildingIds.includes(building.id))
       );
     });
 
     return () => {
+      cancelled = true;
       unsubscribeBuildings();
     };
-  }, [firebaseUser, managedBuildingIds]);
+  }, [managedBuildingIds, uid]);
 
-  const liveById = new Map(buildingRecords.map((building) => [building.id, building]));
-  const fallbackNames = new Map(
-    managedBuildings.map((building) => [building.id, building.name])
+  const liveById = useMemo(
+    () => new Map(buildingRecords.map((building) => [building.id, building])),
+    [buildingRecords]
+  );
+  const fallbackNames = useMemo(
+    () => new Map(managedBuildings.map((building) => [building.id, building.name])),
+    [managedBuildings]
   );
 
-  const managedBuildingOptions = managedBuildingIds.map((buildingId) => {
-    const liveBuilding = liveById.get(buildingId);
-    if (liveBuilding) {
-      return liveBuilding;
-    }
+  const managedBuildingOptions = useMemo(
+    () =>
+      managedBuildingIds.map((buildingId) => {
+        const liveBuilding = liveById.get(buildingId);
+        if (liveBuilding) {
+          return liveBuilding;
+        }
 
-    const fallbackName = fallbackNames.get(buildingId) ?? buildingId;
+        const fallbackName = fallbackNames.get(buildingId) ?? buildingId;
 
-    return {
-      id: buildingId,
-      name: fallbackName,
-      code: '',
-      address: '',
-      floors: 0,
-      campus:
-        inferCampusFromBuilding({
+        return {
           id: buildingId,
           name: fallbackName,
-        }) ?? 'main',
-      assignedAdminUid: null,
-    } satisfies Building;
-  });
+          code: '',
+          address: '',
+          floors: 0,
+          campus:
+            inferCampusFromBuilding({
+              id: buildingId,
+              name: fallbackName,
+            }) ?? 'main',
+          assignedAdminUid: null,
+        } satisfies Building;
+      }),
+    [fallbackNames, liveById, managedBuildingIds]
+  );
 
-  const campusOptions: CampusOption[] = buildCampusOptions(managedBuildingOptions);
+  const campusOptions: CampusOption[] = useMemo(
+    () => buildCampusOptions(managedBuildingOptions),
+    [managedBuildingOptions]
+  );
   const effectiveCampusId =
     campusOptions.some((campus) => campus.id === selectedCampusId)
       ? selectedCampusId
       : campusOptions[0]?.id ?? '';
-  const activeCampus =
-    campusOptions.find((campus) => campus.id === effectiveCampusId) ??
-    campusOptions[0];
+  const activeCampus = useMemo(
+    () =>
+      campusOptions.find((campus) => campus.id === effectiveCampusId) ??
+      campusOptions[0],
+    [campusOptions, effectiveCampusId]
+  );
   const buildingOptions = useMemo(
     () => activeCampus?.buildings ?? [],
     [activeCampus]
@@ -103,29 +125,41 @@ export default function RoomStatusPage() {
   );
 
   useEffect(() => {
-    if (!firebaseUser || activeCampusBuildingIds.length === 0) {
+    if (!uid || activeCampusBuildingIds.length === 0) {
       return;
     }
 
+    let cancelled = false;
+
     const unsubscribeRooms = onRoomsByBuildingIds(
       activeCampusBuildingIds,
-      setRooms
+      (nextRooms) => {
+        if (cancelled) return;
+        setRooms(nextRooms);
+      }
     );
     const unsubscribeReservations = onReservationsByBuildingIds(
       activeCampusBuildingIds,
-      setReservations
+      (nextReservations) => {
+        if (cancelled) return;
+        setReservations(nextReservations);
+      }
     );
     const unsubscribeSchedules = onSchedulesByBuildingIds(
       activeCampusBuildingIds,
-      setSchedules
+      (nextSchedules) => {
+        if (cancelled) return;
+        setSchedules(nextSchedules);
+      }
     );
 
     return () => {
+      cancelled = true;
       unsubscribeRooms();
       unsubscribeReservations();
       unsubscribeSchedules();
     };
-  }, [activeCampusBuildingIds, firebaseUser]);
+  }, [activeCampusBuildingIds, uid]);
 
   const roomStatuses: RoomStatusViewItem[] = rooms.map((room) => ({
     room,
