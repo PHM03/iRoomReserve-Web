@@ -33,6 +33,9 @@ export const STAFF_ROLE_QUERY_VALUES = [
   "Faculty",
   "Utility",
   "Admin",
+  "Building Admin",
+  "building admin",
+  "building_admin",
 ];
 
 export interface Message {

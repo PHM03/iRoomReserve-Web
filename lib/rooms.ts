@@ -177,21 +177,30 @@ export function onRoomsByBuilding(
   const unsubscribe = onSnapshot(
     roomQuery,
     (snapshot) => {
-      listener.emit(
-        snapshot.docs.map((roomDoc) =>
-          mapRoom(
-            roomDoc.id,
-            roomDoc.data() as Omit<Room, "id" | "status"> & {
-              status?: string | null;
-            }
-          )
+      const nextRooms = snapshot.docs.map((roomDoc) =>
+        mapRoom(
+          roomDoc.id,
+          roomDoc.data() as Omit<Room, "id" | "status"> & {
+            status?: string | null;
+          }
         )
       );
+
+      console.log("[rooms] onRoomsByBuilding snapshot", {
+        buildingId,
+        count: nextRooms.length,
+        empty: nextRooms.length === 0,
+      });
+      listener.emit(nextRooms);
     },
     (error) => {
       if (listener.isCancelled()) {
         return;
       }
+      console.log("[rooms] onRoomsByBuilding error", {
+        buildingId,
+        error,
+      });
       console.warn("Firestore listener error (rooms):", error);
     }
   );
@@ -293,9 +302,17 @@ export async function getRoomsByBuilding(buildingId: string): Promise<Room[]> {
     userId: auth.currentUser?.uid,
   });
 
-  return payload.map((room) =>
+  const nextRooms = payload.map((room) =>
     mapRoom(room.id, room as Omit<Room, "id" | "status"> & { status?: string | null })
   );
+
+  console.log("[rooms] getRoomsByBuilding result", {
+    buildingId,
+    count: nextRooms.length,
+    empty: nextRooms.length === 0,
+  });
+
+  return nextRooms;
 }
 
 export async function getAvailableRoomsByBuilding(

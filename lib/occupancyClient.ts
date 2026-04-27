@@ -35,11 +35,20 @@ async function requestOccupancySnapshot() {
     : DEFAULT_OCCUPANCY_PAYLOAD;
 
   if (!response.ok) {
+    console.log('[occupancy] requestOccupancySnapshot error', {
+      status: response.status,
+      payload,
+    });
     throw new Error(getResponseMessage(payload));
   }
 
   cachedPayload = nextPayload;
   cachedAt = Date.now();
+  console.log('[occupancy] requestOccupancySnapshot result', {
+    emptyHistory: nextPayload.history.length === 0,
+    occupancy: nextPayload.occupancy,
+    timestamp: nextPayload.timestamp,
+  });
 
   return nextPayload;
 }

@@ -43,6 +43,9 @@ const MANAGED_ROLE_QUERY_VALUES = [
   USER_ROLES.ADMIN,
   "Faculty",
   "Utility",
+  "Admin",
+  "Building Admin",
+  "building_admin",
 ];
 
 export function isAllowedEmail(email: string): boolean {

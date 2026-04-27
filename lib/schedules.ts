@@ -104,12 +104,21 @@ export function onSchedulesByBuilding(
       const schedules: Schedule[] = snapshot.docs
         .map((d) => ({ id: d.id, ...d.data() }) as Schedule)
         .sort(sortSchedules);
+      console.log("[schedules] onSchedulesByBuilding snapshot", {
+        buildingId,
+        count: schedules.length,
+        empty: schedules.length === 0,
+      });
       listener.emit(schedules);
     },
     (error) => {
       if (listener.isCancelled()) {
         return;
       }
+      console.log("[schedules] onSchedulesByBuilding error", {
+        buildingId,
+        error,
+      });
       console.warn("Firestore listener error (schedules):", error);
     }
   );
@@ -120,12 +129,20 @@ export async function getSchedulesByRoomId(roomId: string): Promise<Schedule[]> 
   const q = query(collection(db, "schedules"), where("roomId", "==", roomId));
   const snapshot = await getDocs(q);
 
-  return snapshot.docs
+  const schedules = snapshot.docs
     .map((scheduleDoc) => ({
       id: scheduleDoc.id,
       ...scheduleDoc.data(),
     }) as Schedule)
     .sort(sortSchedules);
+
+  console.log("[schedules] getSchedulesByRoomId result", {
+    roomId,
+    count: schedules.length,
+    empty: schedules.length === 0,
+  });
+
+  return schedules;
 }
 
 export function onSchedulesByBuildingIds(

@@ -277,20 +277,28 @@ export function onReservationsByBuilding(
   const unsubscribe = onSnapshot(
     reservationsQuery,
     (snapshot) => {
-      listener.emit(
-        snapshot.docs.map(
-          (reservationDoc) =>
-            ({
-              id: reservationDoc.id,
-              ...reservationDoc.data(),
-            }) as Reservation
-        )
+      const reservations = snapshot.docs.map(
+        (reservationDoc) =>
+          ({
+            id: reservationDoc.id,
+            ...reservationDoc.data(),
+          }) as Reservation
       );
+      console.log("[reservations] onReservationsByBuilding snapshot", {
+        buildingId,
+        count: reservations.length,
+        empty: reservations.length === 0,
+      });
+      listener.emit(reservations);
     },
     (error) => {
       if (listener.isCancelled()) {
         return;
       }
+      console.log("[reservations] onReservationsByBuilding error", {
+        buildingId,
+        error,
+      });
       console.warn("Firestore listener error (reservations by building):", error);
     }
   );
