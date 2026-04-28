@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { USER_ROLES } from '@/lib/domain/roles';
-import { saveUserProfile, logout } from '@/lib/auth';
+import { isAllowedEmail, saveUserProfile, logout } from '@/lib/auth';
 import Toast from '@/components/Toast';
 
 export default function RoleSelectionPage() {
@@ -16,17 +16,33 @@ export default function RoleSelectionPage() {
     const [loading, setLoading] = useState(false);
     const [showToast, setShowToast] = useState(false);
     const handleToastClose = useCallback(() => setShowToast(false), []);
+    const email = firebaseUser?.email ?? profile?.email ?? '';
+    const isSchoolEmail = isAllowedEmail(email);
 
-    const roles = [
-        { key: USER_ROLES.STUDENT, label: USER_ROLES.STUDENT, description: 'Browse and reserve rooms for study or group work' },
-        { key: USER_ROLES.FACULTY, label: USER_ROLES.FACULTY, description: 'Reserve rooms for classes or faculty meetings' },
-        { key: USER_ROLES.UTILITY, label: USER_ROLES.UTILITY, description: 'Manage room equipment and facilities' },
-    ];
+    const roles = isSchoolEmail
+      ? [
+          { key: USER_ROLES.STUDENT, label: USER_ROLES.STUDENT, description: 'Browse and reserve rooms for study or group work' },
+          { key: USER_ROLES.FACULTY, label: USER_ROLES.FACULTY, description: 'Reserve rooms for classes or faculty meetings' },
+          { key: USER_ROLES.UTILITY, label: USER_ROLES.UTILITY, description: 'Manage room equipment and facilities' },
+        ]
+      : [
+          { key: USER_ROLES.UTILITY, label: USER_ROLES.UTILITY, description: 'Manage room equipment and facilities' },
+        ];
+
+    useEffect(() => {
+        if (!isSchoolEmail && selectedRole !== USER_ROLES.UTILITY) {
+            setSelectedRole(USER_ROLES.UTILITY);
+        }
+    }, [isSchoolEmail, selectedRole]);
 
     const handleConfirm = async () => {
         if (!firebaseUser) return;
         setLoading(true);
         try {
+        if (!isSchoolEmail && selectedRole !== USER_ROLES.UTILITY) {
+            return;
+        }
+
         const status = selectedRole === USER_ROLES.STUDENT ? 'approved' : 'pending';
 
         await saveUserProfile(firebaseUser.uid, {
@@ -88,6 +104,12 @@ export default function RoleSelectionPage() {
         <div className="glass-card p-8 w-full max-w-md">
           <h2 className="text-2xl font-bold text-black mb-2 text-center">Select Your Role</h2>
           <p className="text-sm text-black text-center mb-6">Choose the role that best describes you</p>
+
+          {!isSchoolEmail ? (
+            <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Personal Google accounts can only register as Utility Staff. Student and Faculty accounts are required to register using an SDCA email.
+            </div>
+          ) : null}
 
           <div className="space-y-3 mb-6">
             {roles.map((role) => (

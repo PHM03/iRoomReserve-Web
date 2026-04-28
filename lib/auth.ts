@@ -143,14 +143,13 @@ export async function registerWithEmail(
 }
 
 const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ hd: ALLOWED_EMAIL_DOMAIN });
 
 export async function loginWithGoogle() {
   const result = await signInWithPopup(auth, googleProvider);
 
-  if (!result.user.email || !isAllowedEmail(result.user.email)) {
+  if (!result.user.email) {
     await signOut(auth);
-    throw { code: "auth/unauthorized-domain" };
+    throw { code: "auth/invalid-email" };
   }
 
   const { uid, displayName, email } = result.user;
@@ -160,6 +159,13 @@ export async function loginWithGoogle() {
   if (existingProfile?.role) {
     const normalizedRole =
       normalizeRole(existingProfile.role) ?? USER_ROLES.STUDENT;
+    const canUsePersonalEmail = normalizedRole === USER_ROLES.UTILITY;
+
+    if (!canUsePersonalEmail && !isAllowedEmail(email)) {
+      await signOut(auth);
+      throw { code: "auth/unauthorized-domain" };
+    }
+
     const status =
       existingProfile.status ||
       (normalizedRole === USER_ROLES.STUDENT ? "approved" : "pending");

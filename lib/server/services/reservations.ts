@@ -67,6 +67,7 @@ interface ReservationRecord {
   adminUid: string | null;
   recurringGroupId?: string;
   checkedInAt?: FirestoreTimestampLike | null;
+  completedAt?: FirestoreTimestampLike | null;
   checkInMethod?: RoomCheckInMethod | null;
 }
 
@@ -1175,7 +1176,7 @@ export async function completeReservationRecord(
 
     batch.update(reservationRef, {
       status: "completed",
-      checkedInAt: null,
+      completedAt: serverTimestamp(),
       checkInMethod: null,
       updatedAt: serverTimestamp(),
     });
