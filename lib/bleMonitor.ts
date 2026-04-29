@@ -71,10 +71,13 @@ export function isBeaconHardwareOnline(
   now: Date = new Date(),
   offlineWindowMs: number = BLE_HARDWARE_OFFLINE_WINDOW_MS
 ) {
+  if (!timestamp) return false;
+
+  // ESP32 sent data but NTP hasn't synced yet — hardware is online
+  if (timestamp.trim() === "TIME_ERROR") return true;
+
   const lastSeenAt = parseBleTimestamp(timestamp);
-  if (!lastSeenAt) {
-    return false;
-  }
+  if (!lastSeenAt) return false;
 
   return now.getTime() - lastSeenAt.getTime() <= offlineWindowMs;
 }
