@@ -14,6 +14,7 @@ import { createRoomRecord } from "@/lib/server/services/rooms";
 
 interface RoomRecord {
   id: string;
+  beaconId?: string | null;
   name: string;
   floor: string;
   roomType: string;
@@ -62,6 +63,8 @@ export async function GET(request: NextRequest) {
       .filter((roomDoc) => roomDoc.exists)
       .map((roomDoc) => {
         const data = roomDoc.data() as {
+          beaconId?: string | null;
+          bleBeaconId?: string | null;
           name?: string;
           floor?: string;
           roomType?: string;
@@ -77,6 +80,12 @@ export async function GET(request: NextRequest) {
 
         return {
           id: roomDoc.id,
+          beaconId:
+            typeof data.bleBeaconId === "string" && data.bleBeaconId.trim().length > 0
+              ? data.bleBeaconId.trim()
+              : typeof data.beaconId === "string" && data.beaconId.trim().length > 0
+                ? data.beaconId.trim()
+                : null,
           name: data.name ?? "",
           floor: data.floor ?? "",
           roomType: data.roomType ?? "",
