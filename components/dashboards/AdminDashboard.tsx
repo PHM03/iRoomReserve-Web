@@ -756,33 +756,37 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[100px] relative z-10 pb-24 md:pb-8">
-      {/* ─── Header with Notification Bell ───────────────────────── */}
+      {/* ─── Header ───────────────────────── */}
       <div className="mb-8 flex items-start justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-black">Welcome, {firstName} 🏛️</h2>
-          <p className="text-black mt-1">
-            Managing: <span className="text-primary font-bold">{buildingName}</span>
-          </p>
-          {managedBuildings.length > 1 && (
-            <div className="mt-4 max-w-xs">
-              <label className="block text-xs font-bold uppercase tracking-wide text-black mb-2">
-                Active Building
-              </label>
-              <select
-                value={buildingId ?? ''}
-                onChange={(event) => setSelectedBuildingId(event.target.value)}
-                className="glass-input w-full px-4 py-3 bg-dark/6 appearance-none cursor-pointer"
-                style={{ backgroundImage: 'none' }}
-              >
-                {managedBuildings.map((building) => (
-                  <option key={building.id} value={building.id} className="bg-white text-black">
-                    {building.name}
-                  </option>
-                ))}
-              </select>
+        {activeTab === 'dashboard' ? (
+          <div>
+            <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+              <h2 className="text-2xl font-bold text-gray-800">Welcome, {firstName} 🏛️</h2>
+              <p className="text-gray-600 mt-1">
+                Managing: <span className="text-primary font-bold">{buildingName}</span>
+              </p>
             </div>
-          )}
-        </div>
+            {managedBuildings.length > 1 && (
+              <div className="mt-4 max-w-xs">
+                <label className="block text-xs font-bold uppercase tracking-wide text-black mb-2">
+                  Active Building
+                </label>
+                <select
+                  value={buildingId ?? ''}
+                  onChange={(event) => setSelectedBuildingId(event.target.value)}
+                  className="glass-input w-full px-4 py-3 bg-dark/6 appearance-none cursor-pointer"
+                  style={{ backgroundImage: 'none' }}
+                >
+                  {managedBuildings.map((building) => (
+                    <option key={building.id} value={building.id} className="bg-white text-black">
+                      {building.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        ) : <div />}
 
         {/* Notification Bell */}
         <div className="relative">
@@ -856,7 +860,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'add-rooms' && (
         <div>
-          <h3 className="text-xl font-bold text-black mb-6">Manage Rooms</h3>
+          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-6">
+            <h3 className="text-xl font-bold text-gray-800">Manage Rooms</h3>
+          </div>
 
           {/* ─── Step 0: New Room Button ─────────────────────────── */}
           {addRoomStep === 0 && (
@@ -1407,9 +1413,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'feedback' && (
         <div>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold text-black">Room Feedback</h3>
-            <span className="text-sm text-black">{feedbackList.length} total</span>
+          <div className="flex items-center justify-between mb-6 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+            <h3 className="text-xl font-bold text-gray-800">Room Feedback</h3>
+            <span className="text-sm text-gray-600">{feedbackList.length} total</span>
           </div>
 
           {feedbackList.length === 0 ? (
@@ -1598,7 +1604,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           </div>
 
           {/* Live Room Status Grid */}
-          <h3 className="text-lg font-bold text-black mb-4">Live Room Status <span className="text-sm text-black font-normal ml-2">({buildingName})</span></h3>
+          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-4">
+            <h3 className="text-lg font-bold text-gray-800">Live Room Status <span className="text-sm text-gray-600 font-normal ml-2">({buildingName})</span></h3>
+          </div>
           {rooms.length === 0 ? (
             <div className="glass-card p-8 text-center mb-8"><p className="text-sm text-black">No rooms configured yet.</p></div>
           ) : (
@@ -1630,9 +1638,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             const todaySchedules = schedules.filter((s) => s.dayOfWeek === new Date().getDay());
             return (
               <>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-black">Today&apos;s Class Schedules <span className="text-sm text-black font-normal ml-1">({DAY_NAMES[new Date().getDay()]})</span></h3>
-                  <span className="text-xs text-black">{todaySchedules.length} class{todaySchedules.length !== 1 ? 'es' : ''}</span>
+                <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+                  <h3 className="text-lg font-bold text-gray-800">Today&apos;s Class Schedules <span className="text-sm text-gray-600 font-normal ml-1">({DAY_NAMES[new Date().getDay()]})</span></h3>
+                  <span className="text-xs text-gray-600">{todaySchedules.length} class{todaySchedules.length !== 1 ? 'es' : ''}</span>
                 </div>
                 {todaySchedules.length === 0 ? (
                   <div className="glass-card p-6 text-center mb-8"><p className="text-sm text-black">No classes scheduled for today.</p></div>
@@ -1662,8 +1670,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           })()}
 
           {/* Pending Requests Preview */}
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-black">Pending Requests</h3>
+          <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+            <h3 className="text-lg font-bold text-gray-800">Pending Requests</h3>
             {requests.length > 0 && (
               <button onClick={() => setActiveTab('pending')} className="text-sm text-primary font-bold hover:text-primary-hover transition-colors">
                 View all ({requests.length}) →
@@ -1763,8 +1771,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           />
 
           <div className="mt-10">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-black">Class Schedules</h3>
+            <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+              <h3 className="text-xl font-bold text-gray-800">Class Schedules</h3>
               <button onClick={() => {
                 if (showScheduleForm) {
                   setShowScheduleForm(false);
@@ -1864,7 +1872,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'room-history' && (
         <div>
-          <h3 className="text-xl font-bold text-black mb-6">Room History</h3>
+          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-6">
+            <h3 className="text-xl font-bold text-gray-800">Room History</h3>
+          </div>
 
           {/* Filters */}
           <div className="glass-card p-4 mb-6">
@@ -1985,9 +1995,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'pending' && (
         <div>
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
             <div>
-              <h3 className="text-xl font-bold text-black flex items-center gap-3">
+              <h3 className="text-xl font-bold text-gray-800 flex items-center gap-3">
                 Pending Reservations
                 {requests.length > 0 && (
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-yellow">
@@ -1995,7 +2005,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                   </span>
                 )}
               </h3>
-              <p className="text-black mt-1 text-sm">
+              <p className="text-gray-600 mt-1 text-sm">
                 Review and approve reservation requests for <span className="ui-text-teal font-bold">{buildingName}</span>
               </p>
             </div>
@@ -2203,9 +2213,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             />
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-6 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
               <div>
-                <h3 className="text-xl font-bold text-black flex items-center gap-3">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-3">
                   User Requests
                   {openCount > 0 && (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-blue">
@@ -2213,7 +2223,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                     </span>
                   )}
                 </h3>
-                <p className="text-black mt-1 text-sm">
+                <p className="text-gray-600 mt-1 text-sm">
                   Support requests from users in <span className="ui-text-teal font-bold">{buildingName}</span>
                 </p>
               </div>

@@ -119,8 +119,8 @@ export default function MessagesSection({
   return (
     <section className="mb-8">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="flex items-center gap-3 text-lg font-bold text-black">
+        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+          <h3 className="flex items-center gap-3 text-lg font-bold text-gray-800">
             {title}
             {unreadCount > 0 && (
               <span className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ui-badge-blue">
@@ -128,7 +128,7 @@ export default function MessagesSection({
               </span>
             )}
           </h3>
-          <p className="mt-1 text-sm text-black">{subtitle}</p>
+          <p className="mt-1 text-sm text-gray-600">{subtitle}</p>
         </div>
         <button
           type="button"
