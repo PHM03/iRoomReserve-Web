@@ -115,6 +115,45 @@ export default function MyReservationsPage() {
     },
   ];
 
+  const filterStyles: Record<FilterTab, { active: string; inactive: string; badge: string; badgeInactive: string }> = {
+    all: {
+      active: 'bg-primary text-white border border-primary shadow-[0_4px_12px_rgba(161,33,36,0.25)]',
+      inactive: 'bg-dark/5 text-black border border-dark/10 hover:bg-primary/10 hover:text-primary',
+      badge: 'bg-white/30 text-white',
+      badgeInactive: 'bg-dark/10 text-black',
+    },
+    pending: {
+      active: 'bg-amber-400 text-white border border-amber-500 shadow-[0_4px_12px_rgba(245,158,11,0.25)]',
+      inactive: 'bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100',
+      badge: 'bg-white/30 text-white',
+      badgeInactive: 'bg-amber-200/60 text-amber-700',
+    },
+    approved: {
+      active: 'bg-green-500 text-white border border-green-600 shadow-[0_4px_12px_rgba(34,197,94,0.25)]',
+      inactive: 'bg-green-50 text-green-600 border border-green-200 hover:bg-green-100',
+      badge: 'bg-white/30 text-white',
+      badgeInactive: 'bg-green-200/60 text-green-700',
+    },
+    rejected: {
+      active: 'bg-red-500 text-white border border-red-600 shadow-[0_4px_12px_rgba(239,68,68,0.25)]',
+      inactive: 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100',
+      badge: 'bg-white/30 text-white',
+      badgeInactive: 'bg-red-200/60 text-red-700',
+    },
+    completed: {
+      active: 'bg-slate-500 text-white border border-slate-600 shadow-[0_4px_12px_rgba(100,116,139,0.25)]',
+      inactive: 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100',
+      badge: 'bg-white/30 text-white',
+      badgeInactive: 'bg-slate-200/60 text-slate-700',
+    },
+    cancelled: {
+      active: 'bg-gray-500 text-white border border-gray-600 shadow-[0_4px_12px_rgba(107,114,128,0.25)]',
+      inactive: 'bg-gray-50 text-gray-500 border border-gray-200 hover:bg-gray-100',
+      badge: 'bg-white/30 text-white',
+      badgeInactive: 'bg-gray-200/60 text-gray-600',
+    },
+  };
+
   const handleCancel = async (reservationId: string) => {
     if (!firebaseUser) {
       return;
@@ -172,39 +211,42 @@ export default function MyReservationsPage() {
   };
 
   return (
-    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-black">My Reservations</h2>
-        <p className="text-black mt-1">
-          View and manage all your room reservations
-        </p>
+        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+          <h2 className="text-2xl font-bold text-gray-800">My Reservations</h2>
+          <p className="text-gray-600 mt-1">
+            View and manage all your room reservations
+          </p>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6">
-        {filters.map((filter) => (
-          <button
-            key={filter.key}
-            onClick={() => setActiveFilter(filter.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-              activeFilter === filter.key
-                ? 'bg-primary/20 text-primary border border-primary/30'
-                : 'bg-dark/5 text-black border border-dark/10 hover:text-primary hover:bg-primary/10'
-            }`}
-          >
-            {filter.label}
-            {filter.count > 0 && (
-              <span
-                className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] ${
-                  activeFilter === filter.key
-                    ? 'bg-primary/30 text-primary'
-                    : 'bg-dark/10 text-black'
-                }`}
-              >
-                {filter.count}
-              </span>
-            )}
-          </button>
-        ))}
+        {filters.map((filter) => {
+          const isActive = activeFilter === filter.key;
+          const styles = filterStyles[filter.key];
+
+          return (
+            <button
+              key={filter.key}
+              onClick={() => setActiveFilter(filter.key)}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                isActive ? styles.active : styles.inactive
+              }`}
+            >
+              {filter.label}
+              {filter.count > 0 && (
+                <span
+                  className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    isActive ? styles.badge : styles.badgeInactive
+                  }`}
+                >
+                  {filter.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <div className="space-y-4">

@@ -126,16 +126,16 @@ export default function ContactAdminPage() {
   };
 
   return (
-    <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
-      <div className="flex items-center justify-between mb-8">
+    <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
+      <div className="flex items-center justify-between gap-4 mb-8 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
         <div>
-          <h2 className="text-2xl font-bold text-black">Contact Admin</h2>
-          <p className="text-black mt-1">Request equipment, supplies, or send a message</p>
+          <h2 className="text-2xl font-bold text-gray-800">Contact Admin</h2>
+          <p className="text-gray-600 mt-1">Request equipment, supplies, or send a message</p>
         </div>
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2"
+            className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2 shrink-0"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -275,7 +275,9 @@ export default function ContactAdminPage() {
       )}
 
       {/* Request History */}
-      <h3 className="text-xl font-bold text-black mb-4">Request History</h3>
+      <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-4">
+        <h3 className="text-xl font-bold text-gray-800">Request History</h3>
+      </div>
       <div className="space-y-4">
         {requests.length === 0 ? (
           <div className="glass-card p-12 !rounded-xl text-center">

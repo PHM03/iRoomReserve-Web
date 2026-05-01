@@ -48,6 +48,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
       "/dashboard/reservations": "my-reservations",
       "/dashboard/contact": "contact",
       "/dashboard/room-status": "room-status",
+      "/dashboard/ble-beacon": "ble-beacon-status",
     };
     const currentTab =
       pathname === "/dashboard" ? activeTab : pathToTab[pathname];

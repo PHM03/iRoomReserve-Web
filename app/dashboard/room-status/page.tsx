@@ -191,27 +191,29 @@ export default function RoomStatusPage() {
 
   if (managedBuildingIds.length === 0) {
     return (
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-black">
-            Room Status &amp; Schedule
-          </h2>
-          <p className="text-black mt-1">
-            No campus is assigned to your account yet.
-          </p>
+          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+            <h2 className="text-2xl font-bold text-gray-800">
+              Room Status &amp; Schedule
+            </h2>
+            <p className="text-gray-600 mt-1">
+              No campus is assigned to your account yet.
+            </p>
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-8 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-black">
+        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+          <h2 className="text-2xl font-bold text-gray-800">
             Room Status &amp; Schedule
           </h2>
-          <p className="text-black mt-1">
+          <p className="text-gray-600 mt-1">
             Expand a floor to render room cards for{' '}
             <span className="ui-text-teal font-bold">
               {activeCampus?.label ?? 'your assigned campus'}

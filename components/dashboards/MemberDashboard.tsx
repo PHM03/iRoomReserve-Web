@@ -196,11 +196,11 @@ export default function MemberDashboard({
       />
 
       <div className="mb-8 flex items-start justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-black">
+        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+          <h2 className="text-2xl font-bold text-gray-800">
             Welcome back, {firstName} {welcomeEmoji}
           </h2>
-          <p className="text-black mt-1">
+          <p className="text-gray-600 mt-1">
             Here&apos;s an overview of your reservations
           </p>
         </div>
@@ -582,11 +582,11 @@ export default function MemberDashboard({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-black">Recent Activity</h3>
+          <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+            <h3 className="text-xl font-bold text-gray-800">Recent Activity</h3>
             <Link
               href="/dashboard/reservations"
-              className="text-sm text-primary font-bold hover:text-primary-hover transition-colors"
+              className="text-sm text-gray-600 font-bold hover:text-gray-800 transition-colors"
             >
               View all -&gt;
             </Link>
@@ -655,12 +655,14 @@ export default function MemberDashboard({
         </div>
 
         <div>
-          <h3 className="text-xl font-bold text-black mb-4">
-            Today&apos;s Class Schedules
-            <span className="text-sm text-black font-normal ml-2">
-              ({DAY_NAMES[todayDay]})
-            </span>
-          </h3>
+          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 mb-4 inline-block border border-white/30">
+            <h3 className="text-xl font-bold text-gray-800">
+              Today&apos;s Class Schedules
+              <span className="text-sm text-gray-600 font-normal ml-2">
+                ({DAY_NAMES[todayDay]})
+              </span>
+            </h3>
+          </div>
           <div className="glass-card !rounded-xl overflow-hidden">
             {todaySchedules.length === 0 ? (
               <div className="p-12 text-center">

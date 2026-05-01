@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import BleAdminMonitor from '@/components/BleAdminMonitor';
+import BleSummaryCard from '@/components/BleSummaryCard';
 import { useAuth } from '@/context/AuthContext';
 import {
   DAY_NAMES,
@@ -168,10 +168,12 @@ export default function UtilityStaffDashboard({
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[100px] relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-black">Hello, {firstName} 🔑</h2>
-        <p className="text-black mt-1">
-          Managing: <span className="ui-text-teal font-bold">{buildingName}</span>
-        </p>
+        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+          <h2 className="text-2xl font-bold text-gray-800">Hello, {firstName} 🔑</h2>
+          <p className="text-gray-600 mt-1">
+            Managing: <span className="ui-text-teal font-bold">{buildingName}</span>
+          </p>
+        </div>
         {managedBuildings.length > 1 && (
           <div className="mt-4 max-w-xs">
             <label className="block text-xs font-bold uppercase tracking-wide text-black mb-2">
@@ -260,13 +262,10 @@ export default function UtilityStaffDashboard({
       </div>
 
       <section className="mb-8">
-        <div className="mb-4">
-          <h3 className="text-xl font-bold text-black">BLE Beacon Status</h3>
-          <p className="text-sm text-black mt-1">
-            Full beacon telemetry, connection history, and refresh controls for {buildingName}.
-          </p>
-        </div>
-        <BleAdminMonitor buildingName={buildingName} rooms={rooms} />
+        <BleSummaryCard
+          buildingName={buildingName}
+          detailsHref="/dashboard/ble-beacon"
+        />
       </section>
 
       <div className="mb-8">

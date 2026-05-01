@@ -207,10 +207,10 @@ function ReservationApprovals({
 
   return (
     <section className="mb-8">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
         <div>
-          <h3 className="text-lg font-bold text-black">Reservation Approvals</h3>
-          <p className="text-sm text-black mt-1">
+          <h3 className="text-lg font-bold text-gray-800">Reservation Approvals</h3>
+          <p className="text-sm text-gray-600 mt-1">
             Review Main Campus reservation requests sent to you for faculty approval.
           </p>
         </div>
@@ -380,10 +380,10 @@ function ReservationUpdates({
 
   return (
     <section className="mb-8">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
         <div>
-          <h3 className="text-lg font-bold text-black">Reservation Updates</h3>
-          <p className="text-sm text-black mt-1">
+          <h3 className="text-lg font-bold text-gray-800">Reservation Updates</h3>
+          <p className="text-sm text-gray-600 mt-1">
             Approval results and reservation-related notices appear here.
           </p>
         </div>
@@ -463,9 +463,9 @@ function AdminMessages({ uid }: { uid: string }) {
 
   return (
     <section>
-      <div className="mb-4">
-        <h3 className="text-lg font-bold text-black">Messages with Administration</h3>
-        <p className="text-sm text-black mt-1">Your support and follow-up conversations stay here.</p>
+      <div className="mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+        <h3 className="text-lg font-bold text-gray-800">Messages with Administration</h3>
+        <p className="text-sm text-gray-600 mt-1">Your support and follow-up conversations stay here.</p>
       </div>
 
       <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
@@ -605,12 +605,14 @@ function UserInbox({
   }, [uid]);
 
   return (
-    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 pb-24 md:pb-8">
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-black">Inbox</h2>
-        <p className="text-black mt-1">
-          Reservation approvals, updates, and admin messages are all available here.
-        </p>
+        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+          <h2 className="text-2xl font-bold text-gray-800">Inbox</h2>
+          <p className="text-gray-600 mt-1">
+            Reservation approvals, updates, and admin messages are all available here.
+          </p>
+        </div>
       </div>
 
       {isFaculty && (
