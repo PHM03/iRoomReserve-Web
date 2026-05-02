@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AuthAlert from '@/components/AuthAlert';
 import Toast from '@/components/Toast';
@@ -8,10 +8,6 @@ import { USER_ROLES } from '@/lib/domain/roles';
 import { registerWithEmail, getAuthErrorMessage } from '@/lib/auth';
 
 function RegisterForm() {
-  type VantaEffectHandle = {
-    destroy: () => void;
-  };
-
   const searchParams = useSearchParams();
   const roleParam = searchParams.get('role') || 'student';
 
@@ -38,71 +34,8 @@ function RegisterForm() {
   const [showToast, setShowToast] = useState(false);
   const [determinedRole, setDeterminedRole] = useState(role);
   const router = useRouter();
-  const vantaRef = useRef<HTMLDivElement | null>(null);
-  const vantaEffectRef = useRef<VantaEffectHandle | null>(null);
 
   const handleToastClose = useCallback(() => setShowToast(false), []);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function setupVanta() {
-      const [birdsModule, THREE] = await Promise.all([
-        import('vanta/dist/vanta.birds.min'),
-        import('three'),
-      ]);
-
-      const BIRDS =
-        (birdsModule as { default?: { default?: unknown } | unknown }).default &&
-        typeof (birdsModule as { default?: { default?: unknown } | unknown }).default === 'object' &&
-        (birdsModule as { default?: { default?: unknown } }).default &&
-        'default' in ((birdsModule as { default?: { default?: unknown } }).default ?? {})
-          ? ((birdsModule as { default?: { default?: unknown } }).default as { default?: unknown }).default
-          : (birdsModule as { default?: unknown }).default ?? birdsModule;
-
-      if (!isMounted || !vantaRef.current || vantaEffectRef.current) {
-        return;
-      }
-
-      if (typeof BIRDS !== 'function') {
-        console.error('Unexpected Vanta Birds module shape:', birdsModule);
-        return;
-      }
-
-      (window as Window & { THREE?: unknown }).THREE = THREE;
-
-      vantaEffectRef.current = BIRDS({
-        el: vantaRef.current,
-        THREE,
-        mouseControls: true,
-        touchControls: true,
-        gyroControls: false,
-        minHeight: 200,
-        minWidth: 200,
-        scale: 1,
-        scaleMobile: 1,
-        backgroundColor: 0xa12124,
-        color2: 0xffffff,
-        colorMode: 'lerpGradient',
-        birdSize: 2,
-        wingSpan: 19,
-        speedLimit: 2,
-        separation: 67,
-        cohesion: 41,
-      });
-    }
-
-    setupVanta();
-
-    return () => {
-      isMounted = false;
-
-      if (vantaEffectRef.current) {
-        vantaEffectRef.current.destroy();
-        vantaEffectRef.current = null;
-      }
-    };
-  }, []);
 
   const validatePassword = (pw: string): string | null => {
     if (pw.length < 8) return 'Password must be at least 8 characters';
@@ -162,9 +95,15 @@ function RegisterForm() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden">
-      <div ref={vantaRef} className="absolute inset-0 z-0" />
-      <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/30 via-black/20 to-black/35" />
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#343434]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-[#343434] via-[#625f5f] to-[#a12124]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_top_left,rgba(161,33,36,0.35),transparent_55%),radial-gradient(circle_at_bottom_right,rgba(52,52,52,0.45),transparent_60%)]"
+      />
 
       <Toast
         message={
