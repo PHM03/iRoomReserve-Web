@@ -231,7 +231,7 @@ export function useAdminStatusPages() {
       return { status: 'Unavailable', detail: 'Manual override' };
     }
 
-    if (room.status === 'Ongoing') {
+    if (room.status === 'Occupied') {
       if (
         normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth' &&
         room.beaconConnected === false
@@ -240,7 +240,7 @@ export function useAdminStatusPages() {
       }
 
       return {
-        status: 'Ongoing',
+        status: 'Occupied',
         detail:
           normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth'
             ? 'Bluetooth beacon connected'
@@ -286,7 +286,7 @@ export function useAdminStatusPages() {
       }
 
       return activeReservation.checkedInAt
-        ? { status: 'Ongoing', detail: `Checked in: ${activeReservation.userName}` }
+        ? { status: 'Occupied', detail: `Checked in: ${activeReservation.userName}` }
         : { status: 'Reserved', detail: `Reserved: ${activeReservation.userName}` };
     }
 

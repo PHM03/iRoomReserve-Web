@@ -350,7 +350,7 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
 
   const computeEffectiveStatus = (room: Room): { status: string; detail: string } => {
     if (room.status === 'Unavailable') return { status: 'Unavailable', detail: 'Manual override' };
-    if (room.status === 'Ongoing') return { status: 'Ongoing', detail: 'Checked in' };
+    if (room.status === 'Occupied') return { status: 'Occupied', detail: 'Checked in' };
     if (room.status === 'Reserved') return { status: 'Reserved', detail: 'Reserved' };
 
     const activeClass = isRoomInClass(schedules, room.id);

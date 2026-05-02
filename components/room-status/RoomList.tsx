@@ -14,8 +14,7 @@ function getAccentClass(status: RoomStatusValue) {
       return 'border-green-500/45';
     case 'Reserved':
       return 'border-blue-500/45';
-    case 'Ongoing':
-      return 'border-orange-500/45';
+    case 'Occupied':
     case 'Unavailable':
       return 'border-red-500/45';
     default:

@@ -71,7 +71,7 @@ function RoleBadge({ role }: { role: string }) {
 function StatusBadge({ status }: { status: string }) {
   const style = (() => {
     switch (status) {
-      case 'Ongoing': return 'ui-badge-orange';
+      case 'Occupied': return 'ui-badge-red';
       case 'Reserved': return 'ui-badge-blue';
       case 'Unavailable': return 'ui-badge-red';
       case 'Available': return 'ui-badge-green';
@@ -636,7 +636,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   const computeEffectiveStatus = (room: Room): { status: string; detail: string } => {
     // Manual overrides take priority
     if (room.status === 'Unavailable') return { status: 'Unavailable', detail: 'Manual override' };
-    if (room.status === 'Ongoing') {
+    if (room.status === 'Occupied') {
       if (
         normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth' &&
         room.beaconConnected === false
@@ -1600,7 +1600,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             <div className="glass-card p-4"><p className="text-xs text-black font-bold">Reserved</p><p className="text-2xl font-bold ui-text-blue mt-1">{reservedCount}</p></div>
             <div className="glass-card p-4"><p className="text-xs text-black font-bold">Available</p><p className="text-2xl font-bold ui-text-green mt-1">{availableCount}</p></div>
             <button onClick={() => setActiveTab('pending')} className="glass-card p-4 text-left hover:!border-yellow-500/40 transition-all cursor-pointer"><p className="text-xs text-black font-bold">Pending Requests</p><p className="text-2xl font-bold ui-text-yellow mt-1">{pendingCount}</p><p className="text-[10px] text-black mt-0.5">Click to review →</p></button>
-            <div className="glass-card p-4"><p className="text-xs text-black font-bold">Ongoing</p><p className="text-2xl font-bold ui-text-orange mt-1">{ongoingCount}</p></div>
+            <div className="glass-card p-4"><p className="text-xs text-black font-bold">Occupied</p><p className="text-2xl font-bold ui-text-orange mt-1">{ongoingCount}</p></div>
           </div>
 
           {/* Live Room Status Grid */}
@@ -1613,7 +1613,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
               {rooms.map((room) => {
                 const effective = computeEffectiveStatus(room);
-                const borderColor = effective.status === 'Ongoing' ? 'border-orange-500/40' : effective.status === 'Reserved' ? 'border-blue-500/40' : effective.status === 'Unavailable' ? 'border-red-500/40' : 'border-green-500/40';
+                const borderColor = effective.status === 'Occupied' ? 'border-orange-500/40' : effective.status === 'Reserved' ? 'border-blue-500/40' : effective.status === 'Unavailable' ? 'border-red-500/40' : 'border-green-500/40';
                 return (
                   <div key={room.id} className={`glass-card p-4 border-l-4 ${borderColor}`}>
                     <div className="flex justify-between items-start">

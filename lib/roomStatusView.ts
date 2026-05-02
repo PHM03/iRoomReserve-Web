@@ -36,7 +36,7 @@ export const ROOM_STATUS_FILTER_OPTIONS = [
   { value: "all", label: "All Statuses" },
   { value: "Available", label: "Available" },
   { value: "Reserved", label: "Reserved" },
-  { value: "Ongoing", label: "Ongoing" },
+  { value: "Occupied", label: "Occupied" },
   { value: "Unavailable", label: "Unavailable" },
 ] as const satisfies ReadonlyArray<{
   value: RoomStatusFilter;

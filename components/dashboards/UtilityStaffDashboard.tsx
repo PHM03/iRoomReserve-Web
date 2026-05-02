@@ -127,7 +127,7 @@ export default function UtilityStaffDashboard({
     ({ resolved }) => resolved.status === 'Reserved'
   ).length;
   const ongoingCount = roomStatuses.filter(
-    ({ resolved }) => resolved.status === 'Ongoing'
+    ({ resolved }) => resolved.status === 'Occupied'
   ).length;
 
   if (!buildingId || !buildingName) {
@@ -210,7 +210,7 @@ export default function UtilityStaffDashboard({
         </div>
         <div className="glass-card p-5 border-l-4 border-orange-500/60">
           <p className="text-2xl font-bold ui-text-orange">{ongoingCount}</p>
-          <p className="text-xs text-black font-bold">Ongoing</p>
+          <p className="text-xs text-black font-bold">Occupied</p>
         </div>
         <div className="glass-card p-5 border-l-4 border-yellow-500/60">
           <p className="text-2xl font-bold ui-text-yellow">{openRequests.length}</p>

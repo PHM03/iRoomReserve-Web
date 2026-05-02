@@ -5,7 +5,6 @@ import React from 'react';
 export type StatusBadgeValue =
   | 'Available'
   | 'Reserved'
-  | 'Ongoing'
   | 'Unavailable'
   | 'Occupied'
   | 'Vacant'
@@ -30,12 +29,11 @@ interface StatusBadgeProps {
 function getBadgeStyle(status: string): string {
   switch (status) {
     case 'Available':
+    case 'open':
       return 'ui-badge-green';
     case 'Reserved':
       return 'ui-badge-blue';
-    case 'Ongoing':
     case 'Occupied':
-      return 'ui-badge-orange';
     case 'Unavailable':
       return 'ui-badge-red';
     case 'approved':
@@ -43,12 +41,11 @@ function getBadgeStyle(status: string): string {
     case 'Connected':
       return 'ui-badge-green';
     case 'pending':
-    case 'open':
-      return 'ui-badge-blue';
+      return 'ui-badge-yellow';
     case 'Connecting...':
       return 'ui-badge-orange';
     case 'completed':
-      return 'ui-badge-yellow';
+      return 'ui-badge-blue';
     case 'rejected':
     case 'Disconnected':
       return 'ui-badge-red';
@@ -64,7 +61,7 @@ function getBadgeStyle(status: string): string {
 function getBadgeLabel(status: string): string {
   switch (status) {
     case 'Occupied':
-      return 'Ongoing';
+      return 'Occupied';
     case 'Vacant':
       return 'Available';
     default:

@@ -1,6 +1,6 @@
 import type { FirestoreTimestampLike } from "@/lib/firestore-types";
 
-export const ROOM_STATUS_VALUES = ["Available", "Reserved", "Ongoing"] as const;
+export const ROOM_STATUS_VALUES = ["Available", "Reserved", "Occupied"] as const;
 export const ROOM_CHECK_IN_METHODS = ["manual", "bluetooth"] as const;
 export const DEFAULT_RESERVATION_TIME_ZONE = "Asia/Manila";
 
@@ -62,9 +62,8 @@ export function normalizeRoomStatus(status?: string | null): RoomStatusValue {
   switch (status) {
     case "Reserved":
       return "Reserved";
-    case "Ongoing":
     case "Occupied":
-      return "Ongoing";
+      return "Occupied";
     case "Unavailable":
       return "Unavailable";
     default:
@@ -229,7 +228,7 @@ export function getReservationRoomStatus(
     room?.beaconConnected === false;
 
   if (reservation.checkedInAt && !bluetoothDisconnected) {
-    return "Ongoing";
+    return "Occupied";
   }
 
   if (roomStatus === "Unavailable") {
@@ -281,9 +280,9 @@ export function resolveRoomStatus(
     };
   }
 
-  if (roomStatus === "Ongoing") {
+  if (roomStatus === "Occupied") {
     return {
-      status: "Ongoing",
+      status: "Occupied",
       reservation,
       detail: reservation?.userName
         ? `Checked in: ${reservation.userName}`
@@ -314,12 +313,12 @@ export function resolveRoomStatus(
   }
 
   if (reservation) {
-    const status = reservation.checkedInAt ? "Ongoing" : "Reserved";
+    const status = reservation.checkedInAt ? "Occupied" : "Reserved";
     return {
       status,
       reservation,
       detail:
-        status === "Ongoing"
+        status === "Occupied"
           ? reservation.userName
             ? `Checked in: ${reservation.userName}`
             : "Room is currently in use"

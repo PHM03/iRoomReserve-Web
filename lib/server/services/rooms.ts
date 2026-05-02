@@ -174,7 +174,7 @@ export async function updateRoomStatusRecord(
       ? { checkInMethod: normalizedCheckInMethod }
       : {}),
     status: normalizeRoomStatus(data.status),
-    ...(data.status !== "Ongoing" && data.beaconConnected === undefined
+    ...(data.status !== "Occupied" && data.beaconConnected === undefined
       ? {
           beaconConnected: false,
           beaconDeviceName: null,

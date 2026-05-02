@@ -186,7 +186,7 @@ export default function RoomStatusPage() {
     ({ resolved }) => resolved.status === 'Reserved'
   ).length;
   const ongoingCount = roomStatuses.filter(
-    ({ resolved }) => resolved.status === 'Ongoing'
+    ({ resolved }) => resolved.status === 'Occupied'
   ).length;
 
   if (managedBuildingIds.length === 0) {
@@ -260,7 +260,7 @@ export default function RoomStatusPage() {
           </p>
         </div>
         <div className="glass-card p-5">
-          <p className="text-xs text-black font-bold">Ongoing</p>
+          <p className="text-xs text-black font-bold">Occupied</p>
           <p className="text-2xl font-bold ui-text-orange mt-1">
             {ongoingCount}
           </p>

@@ -441,7 +441,7 @@ function getRoomStatusPayload(
   );
 
   return {
-    status: selectedReservation.checkedInAt ? "Ongoing" : "Reserved",
+    status: selectedReservation.checkedInAt ? "Occupied" : "Reserved",
     beaconConnected:
       Boolean(selectedReservation.checkedInAt) &&
       selectedCheckInMethod === "bluetooth",
@@ -1028,7 +1028,7 @@ export async function checkInReservationRecord(
     });
 
     batch.update(roomRef, {
-      status: "Ongoing",
+      status: "Occupied",
       beaconConnected: normalizedMethod === "bluetooth",
       beaconDeviceName:
         normalizedMethod === "bluetooth" ? roomBeaconId : null,
