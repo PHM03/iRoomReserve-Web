@@ -11,8 +11,8 @@ export default function ForgotPasswordPage() {
   const [success, setSuccess] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.SubmitEvent) => {
+    event.preventDefault();
     setErrorMessage('');
     setSuccess(false);
 
@@ -26,8 +26,8 @@ export default function ForgotPasswordPage() {
     try {
       await resetPassword(email);
       setSuccess(true);
-    } catch (err: unknown) {
-      const firebaseError = err as { code?: string };
+    } catch (error: unknown) {
+      const firebaseError = error as { code?: string };
       setErrorMessage(getAuthErrorMessage(firebaseError.code || ''));
     } finally {
       setLoading(false);
@@ -133,7 +133,7 @@ export default function ForgotPasswordPage() {
                     type="email"
                     id="reset-email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(event) => setEmail(event.target.value)}
                     className="glass-input w-full px-4 py-3"
                     placeholder="Please enter your email"
                     autoComplete="email"

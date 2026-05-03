@@ -378,10 +378,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     try {
       await approveReservation(id, approverEmail);
       await reloadDashboard();
-    } catch (err) {
-      console.warn('Failed to approve:', err);
+    } catch (error) {
+      console.warn('Failed to approve:', error);
       setReservationActionError(
-        err instanceof Error ? err.message : 'Failed to approve reservation.'
+        error instanceof Error ? error.message : 'Failed to approve reservation.'
       );
     }
     setActionLoading(null);
@@ -401,10 +401,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       setRejectingReservationId(null);
       setRejectReason('');
       await reloadDashboard();
-    } catch (err) {
-      console.warn('Failed to reject:', err);
+    } catch (error) {
+      console.warn('Failed to reject:', error);
       setReservationActionError(
-        err instanceof Error ? err.message : 'Failed to reject reservation.'
+        error instanceof Error ? error.message : 'Failed to reject reservation.'
       );
     }
     setActionLoading(null);
@@ -486,8 +486,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       await addRoom(data);
       resetAddRoomWizard();
       await reloadDashboard();
-    } catch (err) {
-      console.warn('Failed to add room:', err);
+    } catch (error) {
+      console.warn('Failed to add room:', error);
     }
     setAddingRoom(false);
   };
@@ -510,8 +510,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       await updateRoom(roomId, payload);
       resetEditRoomForm();
       await reloadDashboard();
-    } catch (err) {
-      console.warn('Failed to update room:', err);
+    } catch (error) {
+      console.warn('Failed to update room:', error);
       alert('Failed to update room. Please try again.');
     } finally {
       setSavingRoomId(null);
@@ -532,11 +532,11 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
         setSchedRoomId('');
       }
       await reloadDashboard();
-    } catch (err) {
-      console.warn('Failed to delete:', err);
+    } catch (error) {
+      console.warn('Failed to delete:', error);
       alert(
-        err instanceof Error
-          ? err.message
+        error instanceof Error
+          ? error.message
           : 'Failed to delete room. Please try again.'
       );
     } finally {
@@ -548,8 +548,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     try {
       await updateRoomStatus(roomId, status);
       await reloadDashboard();
-    } catch (err) {
-      console.warn('Failed to update status:', err);
+    } catch (error) {
+      console.warn('Failed to update status:', error);
       alert('Failed to update room status. Check the console for details.');
     }
   };
@@ -561,8 +561,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       setRespondingId(null);
       setResponseText('');
       await reloadDashboard();
-    } catch (err) {
-      console.warn('Failed to respond:', err);
+    } catch (error) {
+      console.warn('Failed to respond:', error);
     }
   };
 
@@ -604,8 +604,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       setSchedStart('');
       setSchedEnd('');
       await reloadDashboard();
-    } catch (err) {
-      console.warn('Failed to save schedule:', err);
+    } catch (error) {
+      console.warn('Failed to save schedule:', error);
       alert('Failed to save schedule. Check the console for details.');
     }
     setAddingSchedule(false);
@@ -627,8 +627,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     try {
       await deleteSchedule(id);
       await reloadDashboard();
-    } catch (err) {
-      console.warn('Failed to delete schedule:', err);
+    } catch (error) {
+      console.warn('Failed to delete schedule:', error);
     }
   };
 
@@ -1033,7 +1033,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                     <input
                       type="text"
                       value={newRoomName}
-                      onChange={(e) => setNewRoomName(e.target.value)}
+                      onChange={(event) => setNewRoomName(event.target.value)}
                       placeholder="e.g. Room 312"
                       className="glass-input w-full px-4 py-2.5 text-sm"
                     />
@@ -1042,7 +1042,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                     <label className="block text-xs font-bold text-black mb-1.5">Room Type *</label>
                     <select
                       value={newRoomType}
-                      onChange={(e) => setNewRoomType(e.target.value)}
+                      onChange={(event) => setNewRoomType(event.target.value)}
                       className="glass-input w-full px-4 py-2.5 text-sm appearance-none cursor-pointer"
                     >
                       <option value="" disabled>Select room type</option>
@@ -1062,7 +1062,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                   <input
                     type="text"
                     value={newRoomBeaconId}
-                    onChange={(e) => setNewRoomBeaconId(e.target.value)}
+                    onChange={(event) => setNewRoomBeaconId(event.target.value)}
                     placeholder="e.g. ESP32_ROOM_301"
                     className="glass-input w-full px-4 py-2.5 text-sm"
                   />
@@ -1122,7 +1122,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                     <input
                       type="number"
                       value={newRoomCapacity}
-                      onChange={(e) => setNewRoomCapacity(e.target.value)}
+                      onChange={(event) => setNewRoomCapacity(event.target.value)}
                       placeholder="30"
                       className="glass-input w-full sm:w-40 px-4 py-2.5 text-sm"
                       min={1}
@@ -1156,7 +1156,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                 <input
                   type="text"
                   value={roomSearch}
-                  onChange={(e) => setRoomSearch(e.target.value)}
+                  onChange={(event) => setRoomSearch(event.target.value)}
                   placeholder="Search rooms by name..."
                   className="glass-input w-full pl-10 pr-4 py-2.5 text-sm"
                 />
@@ -1226,7 +1226,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           <input
                             type="text"
                             value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
+                            onChange={(event) => setEditName(event.target.value)}
                             className="glass-input w-full px-4 py-2.5 text-sm"
                             placeholder="e.g. Room 312"
                           />
@@ -1237,7 +1237,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           </label>
                           <select
                             value={editFloor}
-                            onChange={(e) => setEditFloor(e.target.value)}
+                            onChange={(event) => setEditFloor(event.target.value)}
                             className="glass-input w-full cursor-pointer appearance-none px-4 py-2.5 text-sm"
                           >
                             <option value="" disabled>Select floor</option>
@@ -1254,7 +1254,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           </label>
                           <select
                             value={editRoomType}
-                            onChange={(e) => setEditRoomType(e.target.value)}
+                            onChange={(event) => setEditRoomType(event.target.value)}
                             className="glass-input w-full cursor-pointer appearance-none px-4 py-2.5 text-sm"
                           >
                             <option value="" disabled>Select room type</option>
@@ -1272,7 +1272,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           <input
                             type="text"
                             value={editBeaconId}
-                            onChange={(e) => setEditBeaconId(e.target.value)}
+                            onChange={(event) => setEditBeaconId(event.target.value)}
                             className="glass-input w-full px-4 py-2.5 text-sm"
                             placeholder="e.g. ESP32_ROOM_301"
                           />
@@ -1338,7 +1338,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           <input
                             type="number"
                             value={editCapacity}
-                            onChange={(e) => setEditCapacity(e.target.value)}
+                            onChange={(event) => setEditCapacity(event.target.value)}
                             className="glass-input w-full px-4 py-2.5 text-sm sm:w-40"
                             placeholder="30"
                             min={1}
@@ -1548,7 +1548,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                         <div className="mt-3 space-y-2">
                           <textarea
                             value={responseText}
-                            onChange={(e) => setResponseText(e.target.value)}
+                            onChange={(event) => setResponseText(event.target.value)}
                             placeholder="Type your response..."
                             className="glass-input w-full px-4 py-3 text-sm resize-none"
                             rows={3}
@@ -1796,32 +1796,32 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-black mb-1">Room</label>
-                    <select value={schedRoomId} onChange={(e) => setSchedRoomId(e.target.value)} className="glass-input w-full px-4 py-2.5 text-sm">
+                    <select value={schedRoomId} onChange={(event) => setSchedRoomId(event.target.value)} className="glass-input w-full px-4 py-2.5 text-sm">
                       <option value="">Select room...</option>
                       {rooms.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.floor})</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-black mb-1">Day</label>
-                    <select value={schedDay} onChange={(e) => setSchedDay(Number(e.target.value))} className="glass-input w-full px-4 py-2.5 text-sm">
+                    <select value={schedDay} onChange={(event) => setSchedDay(Number(event.target.value))} className="glass-input w-full px-4 py-2.5 text-sm">
                       {DAY_NAMES.map((name, i) => <option key={i} value={i}>{name}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-black mb-1">Subject</label>
-                    <input value={schedSubject} onChange={(e) => setSchedSubject(e.target.value)} placeholder="e.g. IT 101" className="glass-input w-full px-4 py-2.5 text-sm" />
+                    <input value={schedSubject} onChange={(event) => setSchedSubject(event.target.value)} placeholder="e.g. IT 101" className="glass-input w-full px-4 py-2.5 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-black mb-1">Instructor</label>
-                    <input value={schedInstructor} onChange={(e) => setSchedInstructor(e.target.value)} placeholder="e.g. Prof. Santos" className="glass-input w-full px-4 py-2.5 text-sm" />
+                    <input value={schedInstructor} onChange={(event) => setSchedInstructor(event.target.value)} placeholder="e.g. Prof. Santos" className="glass-input w-full px-4 py-2.5 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-black mb-1">Start Time</label>
-                    <input type="time" value={schedStart} onChange={(e) => setSchedStart(e.target.value)} className="glass-input w-full px-4 py-2.5 text-sm" />
+                    <input type="time" value={schedStart} onChange={(event) => setSchedStart(event.target.value)} className="glass-input w-full px-4 py-2.5 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-black mb-1">End Time</label>
-                    <input type="time" value={schedEnd} onChange={(e) => setSchedEnd(e.target.value)} className="glass-input w-full px-4 py-2.5 text-sm" />
+                    <input type="time" value={schedEnd} onChange={(event) => setSchedEnd(event.target.value)} className="glass-input w-full px-4 py-2.5 text-sm" />
                   </div>
                 </div>
                 <button onClick={handleAddSchedule} disabled={addingSchedule || !schedRoomId || !schedSubject.trim()} className="btn-primary px-6 py-2.5 text-sm disabled:opacity-50">
@@ -1880,7 +1880,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           <div className="glass-card p-4 mb-6">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
-                <input type="text" value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} placeholder="Search by name or room..." className="glass-input w-full px-4 py-2.5 text-sm" />
+                <input type="text" value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder="Search by name or room..." className="glass-input w-full px-4 py-2.5 text-sm" />
               </div>
               <div className="flex gap-2 flex-wrap items-center">
                 {['all', 'approved', 'rejected', 'active', 'completed', 'cancelled'].map((filter) => (
@@ -2134,7 +2134,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                         </label>
                         <textarea
                           value={rejectReason}
-                          onChange={(e) => setRejectReason(e.target.value)}
+                          onChange={(event) => setRejectReason(event.target.value)}
                           className="glass-input w-full px-4 py-3 min-h-[110px] resize-none"
                           placeholder="Explain why this reservation request is being rejected."
                         />
@@ -2183,8 +2183,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             setInboxReplyingTo(null);
             setInboxReplyText('');
             await reloadDashboard();
-          } catch (err) {
-            console.error('Failed to respond:', err);
+          } catch (error) {
+            console.error('Failed to respond:', error);
           }
           setInboxSubmitting(false);
         };
@@ -2323,7 +2323,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                                 <div className="space-y-3 mt-4 pt-4 border-t border-dark/5">
                                   <textarea
                                     value={inboxReplyText}
-                                    onChange={(e) => setInboxReplyText(e.target.value)}
+                                    onChange={(event) => setInboxReplyText(event.target.value)}
                                     className="glass-input w-full px-4 py-3 min-h-[100px] resize-none"
                                     placeholder="Type your response..."
                                     autoFocus

@@ -99,8 +99,8 @@ export default function SuperAdminDashboard() {
     setModalLoading(true);
     try {
       await approveAdmin(selectedUser.uid, selectedCampus, selectedUser.role);
-    } catch (err) {
-      console.warn('Failed to approve admin:', err);
+    } catch (error) {
+      console.warn('Failed to approve admin:', error);
     }
     setModalLoading(false);
     setShowApprovalModal(false);
@@ -110,25 +110,25 @@ export default function SuperAdminDashboard() {
 
   const handleApprove = async (uid: string) => {
     setActionLoading(uid);
-    try { await approveUser(uid); } catch (err) { console.warn('Failed to approve:', err); }
+    try { await approveUser(uid); } catch (error) { console.warn('Failed to approve:', error); }
     setActionLoading(null);
   };
 
   const handleReject = async (uid: string) => {
     setActionLoading(uid);
-    try { await rejectUser(uid); } catch (err) { console.warn('Failed to reject:', err); }
+    try { await rejectUser(uid); } catch (error) { console.warn('Failed to reject:', error); }
     setActionLoading(null);
   };
 
   const handleDisable = async (uid: string) => {
     setActionLoading(uid);
-    try { await disableUserAccount(uid); } catch (err) { console.warn('Failed to disable:', err); }
+    try { await disableUserAccount(uid); } catch (error) { console.warn('Failed to disable:', error); }
     setActionLoading(null);
   };
 
   const handleEnable = async (uid: string) => {
     setActionLoading(uid);
-    try { await enableUserAccount(uid); } catch (err) { console.warn('Failed to enable:', err); }
+    try { await enableUserAccount(uid); } catch (error) { console.warn('Failed to enable:', error); }
     setActionLoading(null);
   };
 
@@ -137,8 +137,8 @@ export default function SuperAdminDashboard() {
     setActionLoading(deletingUser.uid);
     try {
       await deleteUserAccount(deletingUser.uid);
-    } catch (err) {
-      console.warn('Failed to delete:', err);
+    } catch (error) {
+      console.warn('Failed to delete:', error);
     }
     setActionLoading(null);
     setShowDeleteModal(false);
@@ -149,8 +149,8 @@ export default function SuperAdminDashboard() {
     setActionLoading(user.uid);
     try {
       await rejectUser(user.uid);
-    } catch (err) {
-      console.warn('Failed to revoke admin:', err);
+    } catch (error) {
+      console.warn('Failed to revoke admin:', error);
     }
     setActionLoading(null);
   };
@@ -166,8 +166,8 @@ export default function SuperAdminDashboard() {
       const result = await seedBuildings();
       setSeedResult(result);
       seeded.current = true;
-    } catch (err) {
-      console.warn('Failed to seed buildings:', err);
+    } catch (error) {
+      console.warn('Failed to seed buildings:', error);
     }
     setSeedingBuildings(false);
   };
