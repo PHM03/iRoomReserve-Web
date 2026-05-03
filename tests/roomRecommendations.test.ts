@@ -81,8 +81,12 @@ describe('roomRecommendations', () => {
   it('prevents duplicate room ids in recommendation results', () => {
     const duplicatedRooms = [
       ...exampleRooms,
-      { ...exampleRooms[1] },
-      { ...exampleRooms[2] },
+      {
+        ...exampleRooms[1]
+      },
+      {
+        ...exampleRooms[2]
+      },
     ];
 
     const result = recommendationEngine.findBestRooms(

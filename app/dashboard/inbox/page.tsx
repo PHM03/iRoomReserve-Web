@@ -435,7 +435,11 @@ function ReservationUpdates({
 }
 
 function TypeIcon({ type }: { type: string }) {
-  const icons: Record<string, string> = { equipment: '🔧', general: '💬', other: '📋' };
+  const icons: Record<string, string> = {
+    equipment: '🔧',
+    general: '💬',
+    other: '📋'
+  };
   return <span className="mr-1">{icons[type] || '📋'}</span>;
 }
 

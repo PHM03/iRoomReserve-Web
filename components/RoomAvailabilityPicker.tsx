@@ -61,12 +61,16 @@ export default function RoomAvailabilityPicker({
 
   const disabledMatcher = useMemo(() => {
     const matchers: Array<Date | { before: Date } | { after: Date }> = [
-      { before: minSelectable },
+      {
+        before: minSelectable
+      },
       ...bookedDateObjects,
     ];
 
     if (maxDate) {
-      matchers.push({ after: maxDate });
+      matchers.push({
+        after: maxDate
+      });
     }
 
     return matchers;

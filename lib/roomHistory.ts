@@ -56,7 +56,10 @@ export function onRoomHistoryByBuilding(
     q,
     (snapshot) => {
       const entries: RoomHistoryEntry[] = snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() } as RoomHistoryEntry))
+        .map((d) => ({
+          id: d.id,
+          ...d.data()
+        } as RoomHistoryEntry))
         .sort((a, b) => {
           const aTime = a.createdAt?.seconds ?? 0;
           const bTime = b.createdAt?.seconds ?? 0;

@@ -64,7 +64,9 @@ function reviveRecordTimestamps<T extends object>(
   record: T,
   fields: string[]
 ) {
-  const nextRecord = { ...record } as T;
+  const nextRecord = {
+    ...record
+  } as T;
   const mutableRecord = nextRecord as Record<string, unknown>;
 
   fields.forEach((field) => {
@@ -81,7 +83,9 @@ export async function fetchAdminDashboardSnapshot(buildingId: string) {
     "/api/admin/dashboard",
     {
       method: "GET",
-      params: { buildingId },
+      params: {
+        buildingId
+      },
     }
   );
 

@@ -198,9 +198,18 @@ function RegisterForm() {
           {/* Role Tabs */}
           <div className="flex mb-4 bg-dark/5 rounded-xl p-1 border border-dark/10">
             {[
-              { key: 'student', label: 'Student' },
-              { key: 'faculty', label: 'Faculty' },
-              { key: 'utility_staff', label: 'Utility Staff' },
+              {
+                key: 'student',
+                label: 'Student'
+              },
+              {
+                key: 'faculty',
+                label: 'Faculty'
+              },
+              {
+                key: 'utility_staff',
+                label: 'Utility Staff'
+              },
             ].map((tab) => (
               <button
                 key={tab.key}

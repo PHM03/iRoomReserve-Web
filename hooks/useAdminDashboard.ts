@@ -349,12 +349,24 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
   };
 
   const computeEffectiveStatus = (room: Room): { status: string; detail: string } => {
-    if (room.status === 'Unavailable') return { status: 'Unavailable', detail: 'Manual override' };
-    if (room.status === 'Occupied') return { status: 'Occupied', detail: 'Checked in' };
-    if (room.status === 'Reserved') return { status: 'Reserved', detail: 'Reserved' };
+    if (room.status === 'Unavailable') return {
+      status: 'Unavailable',
+      detail: 'Manual override'
+    };
+    if (room.status === 'Occupied') return {
+      status: 'Occupied',
+      detail: 'Checked in'
+    };
+    if (room.status === 'Reserved') return {
+      status: 'Reserved',
+      detail: 'Reserved'
+    };
 
     const activeClass = isRoomInClass(schedules, room.id);
-    if (activeClass) return { status: 'Reserved', detail: `Class: ${activeClass.subjectName}` };
+    if (activeClass) return {
+      status: 'Reserved',
+      detail: `Class: ${activeClass.subjectName}`
+    };
 
     const now = new Date();
     const today = now.toISOString().split('T')[0];
@@ -370,11 +382,20 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
 
     if (activeReservation) {
       return activeReservation.checkedInAt
-        ? { status: 'Ongoing', detail: `Checked in: ${activeReservation.userName}` }
-        : { status: 'Reserved', detail: `Reserved: ${activeReservation.userName}` };
+        ? {
+          status: 'Ongoing',
+          detail: `Checked in: ${activeReservation.userName}`
+        }
+        : {
+          status: 'Reserved',
+          detail: `Reserved: ${activeReservation.userName}`
+        };
     }
 
-    return { status: 'Available', detail: '' };
+    return {
+      status: 'Available',
+      detail: ''
+    };
   };
 
   const ongoingCount = rooms.filter((room) => computeEffectiveStatus(room).status === 'Ongoing').length;

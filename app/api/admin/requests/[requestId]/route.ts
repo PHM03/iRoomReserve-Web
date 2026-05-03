@@ -41,7 +41,9 @@ export async function PATCH(
     assertCanManageBuilding(authContext, buildingId);
     await respondToAdminRequestRecord(requestId, payload.responseText);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true
+    });
   } catch (error) {
     return handleApiError(error);
   }

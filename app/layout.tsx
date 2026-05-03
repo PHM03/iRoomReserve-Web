@@ -36,7 +36,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "iRoomReserve - Smart Room Reservation System",
+  title: {
+    default: "iRoomReserve",
+    template: "%s | iRoomReserve",
+  },
+  applicationName: "iRoomReserve",
   description: "Smart Room Reservation and Occupancy Monitoring System for St. Dominic College of Asia",
   manifest: "/manifest.json",
 };

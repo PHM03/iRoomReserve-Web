@@ -4,7 +4,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 async function getFiles(directory: string): Promise<string[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
+  const entries = await readdir(directory, {
+    withFileTypes: true
+  });
   const files = await Promise.all(
     entries.map(async (entry) => {
       const fullPath = path.join(directory, entry.name);

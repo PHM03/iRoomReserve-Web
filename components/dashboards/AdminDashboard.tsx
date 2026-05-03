@@ -141,20 +141,28 @@ function getBuildingFloorOptions(buildingId?: string, buildingFloors?: number) {
       return [
         'Basement Floor',
         'Ground Floor',
-        ...Array.from({ length: 7 }, (_, index) => formatOrdinalFloor(index + 2)),
+        ...Array.from({
+          length: 7
+        }, (_, index) => formatOrdinalFloor(index + 2)),
       ];
     case 'gd2':
       return [
         'Ground Floor',
-        ...Array.from({ length: 9 }, (_, index) => formatOrdinalFloor(index + 2)),
+        ...Array.from({
+          length: 9
+        }, (_, index) => formatOrdinalFloor(index + 2)),
       ];
     case 'gd3':
       return [
         'Ground Floor',
-        ...Array.from({ length: 10 }, (_, index) => formatOrdinalFloor(index + 2)),
+        ...Array.from({
+          length: 10
+        }, (_, index) => formatOrdinalFloor(index + 2)),
       ];
     default:
-      return Array.from({ length: buildingFloors || 5 }, (_, index) => {
+      return Array.from({
+        length: buildingFloors || 5
+      }, (_, index) => {
         if (index === 0) return 'Ground Floor';
         return formatOrdinalFloor(index);
       });
@@ -635,13 +643,19 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
   // ─── Computed Values ────────────────────────────────────────
   const computeEffectiveStatus = (room: Room): { status: string; detail: string } => {
     // Manual overrides take priority
-    if (room.status === 'Unavailable') return { status: 'Unavailable', detail: 'Manual override' };
+    if (room.status === 'Unavailable') return {
+      status: 'Unavailable',
+      detail: 'Manual override'
+    };
     if (room.status === 'Occupied') {
       if (
         normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth' &&
         room.beaconConnected === false
       ) {
-        return { status: 'Available', detail: 'Bluetooth beacon disconnected' };
+        return {
+          status: 'Available',
+          detail: 'Bluetooth beacon disconnected'
+        };
       }
 
       return {
@@ -652,10 +666,16 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             : 'Checked in',
       };
     }
-    if (room.status === 'Reserved') return { status: 'Reserved', detail: 'Reserved' };
+    if (room.status === 'Reserved') return {
+      status: 'Reserved',
+      detail: 'Reserved'
+    };
     // Check active class schedules
     const activeClass = isRoomInClass(schedules, room.id);
-    if (activeClass) return { status: 'Reserved', detail: `Class: ${activeClass.subjectName}` };
+    if (activeClass) return {
+      status: 'Reserved',
+      detail: `Class: ${activeClass.subjectName}`
+    };
     // Check active reservations
     const now = new Date();
     const today = now.toISOString().split('T')[0];
@@ -673,14 +693,26 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
         activeCheckInMethod === 'bluetooth' &&
         room.beaconConnected === false
       ) {
-        return { status: 'Available', detail: 'Bluetooth beacon disconnected' };
+        return {
+          status: 'Available',
+          detail: 'Bluetooth beacon disconnected'
+        };
       }
 
       return activeReservation.checkedInAt
-        ? { status: 'Ongoing', detail: `Checked in: ${activeReservation.userName}` }
-        : { status: 'Reserved', detail: `Reserved: ${activeReservation.userName}` };
+        ? {
+          status: 'Ongoing',
+          detail: `Checked in: ${activeReservation.userName}`
+        }
+        : {
+          status: 'Reserved',
+          detail: `Reserved: ${activeReservation.userName}`
+        };
     }
-    return { status: 'Available', detail: '' };
+    return {
+      status: 'Available',
+      detail: ''
+    };
   };
 
   const ongoingCount = rooms.filter((r) => computeEffectiveStatus(r).status === 'Ongoing').length;
@@ -775,7 +807,9 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                   value={buildingId ?? ''}
                   onChange={(event) => setSelectedBuildingId(event.target.value)}
                   className="glass-input w-full px-4 py-3 bg-dark/6 appearance-none cursor-pointer"
-                  style={{ backgroundImage: 'none' }}
+                  style={{
+                    backgroundImage: 'none'
+                  }}
                 >
                   {managedBuildings.map((building) => (
                     <option key={building.id} value={building.id} className="bg-white text-black">
@@ -806,7 +840,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
 
           {/* Notification Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 !rounded-xl overflow-hidden z-50 border border-dark/12 shadow-2xl shadow-black/20" style={{ background: 'rgba(248, 246, 242, 0.98)', backdropFilter: 'blur(20px)' }}>
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 !rounded-xl overflow-hidden z-50 border border-dark/12 shadow-2xl shadow-black/20" style={{
+              background: 'rgba(248, 246, 242, 0.98)',
+              backdropFilter: 'blur(20px)'
+            }}>
               <div className="flex items-center justify-between p-4 border-b border-dark/10">
                 <h4 className="font-bold text-black text-sm">Notifications</h4>
                 {notifications.length > 0 && (
@@ -2200,8 +2237,15 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
         const formatDate = (ts: { toDate?: () => Date } | undefined): string => {
           if (!ts || typeof ts.toDate !== 'function') return '';
           const d = ts.toDate();
-          return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-            ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          return d.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          }) +
+            ' at ' + d.toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit'
+            });
         };
 
         return (

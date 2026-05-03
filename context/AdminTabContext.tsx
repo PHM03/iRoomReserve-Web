@@ -22,7 +22,12 @@ export function AdminTabProvider({ children }: { children: React.ReactNode }) {
   const [selectedBuildingId, setSelectedBuildingId] = useState('');
   return (
     <AdminTabContext.Provider
-      value={{ activeTab, setActiveTab, selectedBuildingId, setSelectedBuildingId }}
+      value={{
+        activeTab,
+        setActiveTab,
+        selectedBuildingId,
+        setSelectedBuildingId
+      }}
     >
       {children}
     </AdminTabContext.Provider>

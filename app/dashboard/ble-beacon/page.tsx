@@ -80,7 +80,9 @@ export default function BleBeaconPage() {
               value={buildingId ?? ''}
               onChange={(event) => setSelectedManagedBuildingId(event.target.value)}
               className="glass-input w-full px-4 py-3 bg-dark/6 appearance-none cursor-pointer"
-              style={{ backgroundImage: 'none' }}
+              style={{
+                backgroundImage: 'none'
+              }}
             >
               {managedBuildings.map((building) => (
                 <option key={building.id} value={building.id} className="bg-white text-black">

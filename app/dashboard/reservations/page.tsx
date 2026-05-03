@@ -78,7 +78,11 @@ export default function MyReservationsPage() {
       : reservations.filter((reservation) => reservation.status === activeFilter);
 
   const filters: { key: FilterTab; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: reservations.length },
+    {
+      key: 'all',
+      label: 'All',
+      count: reservations.length
+    },
     {
       key: 'pending',
       label: 'Pending',

@@ -67,7 +67,9 @@ export async function PATCH(
         break;
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -85,7 +87,9 @@ export async function DELETE(
     const { uid } = await params;
     await deleteUserProfile(uid);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true
+    });
   } catch (error) {
     return handleApiError(error);
   }

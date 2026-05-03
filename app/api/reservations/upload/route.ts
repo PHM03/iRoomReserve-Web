@@ -38,7 +38,9 @@ export async function POST(request: NextRequest) {
       userId: authContext.uid,
     });
 
-    return NextResponse.json(upload, { status: 201 });
+    return NextResponse.json(upload, {
+      status: 201
+    });
   } catch (error) {
     return handleApiError(error);
   }

@@ -35,11 +35,19 @@ export async function apiRequest<T>(
     method,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(userId ? { "x-user-id": userId } : {}),
-      ...(role ? { "x-user-role": role } : {}),
+      ...(token ? {
+        Authorization: `Bearer ${token}`
+      } : {}),
+      ...(userId ? {
+        "x-user-id": userId
+      } : {}),
+      ...(role ? {
+        "x-user-role": role
+      } : {}),
     },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(body !== undefined ? {
+      body: JSON.stringify(body)
+    } : {}),
   });
 
   const responseText = await response.text();

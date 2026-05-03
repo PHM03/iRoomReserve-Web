@@ -39,7 +39,9 @@ export default function AdminPageHeader({
             value={buildingId ?? ''}
             onChange={(event) => onBuildingChange(event.target.value)}
             className="glass-input mt-3 w-full px-4 py-3 bg-dark/6 appearance-none cursor-pointer"
-            style={{ backgroundImage: 'none' }}
+            style={{
+              backgroundImage: 'none'
+            }}
           >
             {managedBuildings.map((building) => (
               <option key={building.id} value={building.id}>

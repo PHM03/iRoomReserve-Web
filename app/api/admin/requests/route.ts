@@ -15,7 +15,9 @@ export async function POST(request: NextRequest) {
     assertOwnsResource(authContext, payload.userId);
 
     const id = await createAdminRequestRecord(payload);
-    return NextResponse.json({ id });
+    return NextResponse.json({
+      id
+    });
   } catch (error) {
     return handleApiError(error);
   }

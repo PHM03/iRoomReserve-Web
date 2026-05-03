@@ -25,7 +25,10 @@ function normalizeAssignedBuildingReference(
     return null;
   }
 
-  return { id, name };
+  return {
+    id,
+    name
+  };
 }
 
 export function normalizeAssignedBuildings(

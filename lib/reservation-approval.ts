@@ -52,7 +52,10 @@ export function buildApprovalFlow(
   }
 
   return [
-    { role: "advisor", email: normalizeApprovalEmail(approvers.advisorEmail) },
+    {
+      role: "advisor",
+      email: normalizeApprovalEmail(approvers.advisorEmail)
+    },
     {
       role: "building_admin",
       email: normalizeApprovalEmail(approvers.buildingAdminEmail ?? ""),

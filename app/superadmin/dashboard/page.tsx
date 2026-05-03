@@ -207,12 +207,36 @@ export default function SuperAdminDashboard() {
   };
 
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'pending', label: 'Pending', count: pendingUsers.length },
-    { key: 'all', label: 'All Users', count: allUsers.length },
-    { key: 'students', label: 'Students', count: students.length },
-    { key: 'faculty', label: 'Faculty Professor', count: facultyProfessors.length },
-    { key: 'utility', label: 'Utility Staff', count: utilityUsers.length },
-    { key: 'admins', label: 'Admins', count: administrators.length },
+    {
+      key: 'pending',
+      label: 'Pending',
+      count: pendingUsers.length
+    },
+    {
+      key: 'all',
+      label: 'All Users',
+      count: allUsers.length
+    },
+    {
+      key: 'students',
+      label: 'Students',
+      count: students.length
+    },
+    {
+      key: 'faculty',
+      label: 'Faculty Professor',
+      count: facultyProfessors.length
+    },
+    {
+      key: 'utility',
+      label: 'Utility Staff',
+      count: utilityUsers.length
+    },
+    {
+      key: 'admins',
+      label: 'Admins',
+      count: administrators.length
+    },
   ];
 
   // Helper to check if a user needs campus assignment during approval
