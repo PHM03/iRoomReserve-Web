@@ -30,7 +30,7 @@ function getReservationMeta(item: RoomStatusViewItem) {
   return 'No active reservation';
 }
 
-export default function RoomList({ items }: RoomListProps) {
+export default function RoomList({ items }: Readonly<RoomListProps>) {
   if (items.length === 0) {
     return (
       <div className="rounded-2xl border border-dark/10 bg-dark/5 p-6 text-center">

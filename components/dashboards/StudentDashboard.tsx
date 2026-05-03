@@ -9,6 +9,6 @@ interface StudentDashboardProps {
 
 export default function StudentDashboard({
   firstName,
-}: StudentDashboardProps) {
+}: Readonly<StudentDashboardProps>) {
   return <MemberDashboard firstName={firstName} welcomeEmoji="🎓" />;
 }

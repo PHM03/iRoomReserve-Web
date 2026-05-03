@@ -8,7 +8,7 @@ interface AdminNoBuildingAssignedProps {
 export default function AdminNoBuildingAssigned({
   title = 'No Building Assigned',
   description = 'Your account has been approved, but the Super Admin has not yet assigned a building to you. Please contact the Super Admin to get a building assignment.',
-}: AdminNoBuildingAssignedProps) {
+}: Readonly<AdminNoBuildingAssignedProps>) {
   return (
     <div className="glass-card p-12 text-center">
       <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">

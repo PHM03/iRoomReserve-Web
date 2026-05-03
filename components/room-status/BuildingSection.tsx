@@ -12,7 +12,7 @@ interface BuildingSectionProps {
 export default function BuildingSection({
   building,
   floors,
-}: BuildingSectionProps) {
+}: Readonly<BuildingSectionProps>) {
   return (
     <section className="glass-card p-4 sm:p-5">
       <div className="mb-4">

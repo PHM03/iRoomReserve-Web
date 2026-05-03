@@ -10,7 +10,7 @@ interface ToastProps {
   duration?: number;
 }
 
-export default function Toast({ message, type = 'success', show, onClose, duration = 3000 }: ToastProps) {
+export default function Toast({ message, type = 'success', show, onClose, duration = 3000 }: Readonly<ToastProps>) {
   const [visible, setVisible] = useState(false);
   const [animating, setAnimating] = useState(false);
 

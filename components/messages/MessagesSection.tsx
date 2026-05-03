@@ -53,7 +53,7 @@ function getInitials(name: string): string {
 export default function MessagesSection({
   title = 'Messages',
   subtitle = 'Direct messages with other building staff and administrators.',
-}: MessagesSectionProps) {
+}: Readonly<MessagesSectionProps>) {
   const { firebaseUser, profile } = useAuth();
   const [folder, setFolder] = useState<MessageFolder>('inbox');
   const [inbox, setInbox] = useState<Message[]>([]);

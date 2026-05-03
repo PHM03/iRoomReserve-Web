@@ -49,7 +49,7 @@ export default function BleSummaryCard({
   pollIntervalMs = BLE_MONITOR_REFRESH_INTERVAL_MS,
   detailsHref = '/dashboard/room-status',
   onViewDetails,
-}: BleSummaryCardProps) {
+}: Readonly<BleSummaryCardProps>) {
   const [occupancyData, setOccupancyData] = useState<OccupancyPayload>(
     DEFAULT_OCCUPANCY_PAYLOAD
   );

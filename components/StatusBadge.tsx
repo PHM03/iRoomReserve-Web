@@ -71,7 +71,7 @@ function getBadgeLabel(status: string): string {
   }
 }
 
-const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = '' }) => {
+const StatusBadge: React.FC<Readonly<StatusBadgeProps>> = ({ status, className = '' }) => {
   return (
     <span
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border leading-5 ${getBadgeStyle(status)} ${className}`.trim()}

@@ -302,7 +302,7 @@ export default function RoomAssistantWidget({
   selectedRoom = null,
   selectedRoomAvailable = null,
   timeslot,
-}: RoomAssistantWidgetProps) {
+}: Readonly<RoomAssistantWidgetProps>) {
   const welcomeMessage = useMemo(() => createWelcomeMessage(), []);
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<AssistantMessage[]>([welcomeMessage]);

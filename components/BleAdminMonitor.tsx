@@ -66,7 +66,7 @@ export default function BleAdminMonitor({
   rooms,
   className = '',
   pollIntervalMs = BLE_MONITOR_REFRESH_INTERVAL_MS,
-}: BleAdminMonitorProps) {
+}: Readonly<BleAdminMonitorProps>) {
   const [occupancyData, setOccupancyData] = useState<OccupancyPayload>(
     DEFAULT_OCCUPANCY_PAYLOAD
   );

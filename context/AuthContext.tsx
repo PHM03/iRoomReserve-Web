@@ -24,6 +24,10 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
+interface AuthProviderProps {
+  children: React.ReactNode;
+}
+
 const AuthContext = createContext<AuthContextType>({
   firebaseUser: null,
   profile: null,
@@ -33,7 +37,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);

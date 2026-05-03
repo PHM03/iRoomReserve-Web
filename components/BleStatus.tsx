@@ -79,7 +79,7 @@ export default function BleStatus({
   room,
   className = '',
   pollIntervalMs = BLE_MONITOR_REFRESH_INTERVAL_MS,
-}: BleStatusProps) {
+}: Readonly<BleStatusProps>) {
   const { firebaseUser, loading } = useAuth();
   const [occupancyStatus, setOccupancyStatus] = useState<OccupancyPayload>(
     DEFAULT_OCCUPANCY_PAYLOAD

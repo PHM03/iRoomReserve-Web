@@ -10,6 +10,10 @@ interface AdminTabContextType {
   setSelectedBuildingId: (buildingId: string) => void;
 }
 
+interface AdminTabProviderProps {
+  children: React.ReactNode;
+}
+
 const AdminTabContext = createContext<AdminTabContextType>({
   activeTab: 'dashboard',
   setActiveTab: () => {},
@@ -17,7 +21,7 @@ const AdminTabContext = createContext<AdminTabContextType>({
   setSelectedBuildingId: () => {},
 });
 
-export function AdminTabProvider({ children }: { children: React.ReactNode }) {
+export function AdminTabProvider({ children }: Readonly<AdminTabProviderProps>) {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [selectedBuildingId, setSelectedBuildingId] = useState('');
   return (

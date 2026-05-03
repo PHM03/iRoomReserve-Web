@@ -27,7 +27,7 @@ export default function ComposeModal({
   initialRecipientId = '',
   initialSubject = '',
   initialBody = '',
-}: ComposeModalProps) {
+}: Readonly<ComposeModalProps>) {
   const { firebaseUser, profile } = useAuth();
   const [recipients, setRecipients] = useState<MessageRecipient[]>([]);
   const [recipientsError, setRecipientsError] = useState('');

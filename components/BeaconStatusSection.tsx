@@ -18,7 +18,7 @@ export default function BeaconStatusSection({
   buildingName,
   rooms,
   title = 'Beacon Status',
-}: BeaconStatusSectionProps) {
+}: Readonly<BeaconStatusSectionProps>) {
   const sortedRooms = [...rooms].sort(compareRooms);
   const occupiedCount = rooms.filter((room) => room.beaconConnected).length;
   const availableCount = rooms.length - occupiedCount;

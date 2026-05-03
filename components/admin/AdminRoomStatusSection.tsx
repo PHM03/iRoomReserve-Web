@@ -18,7 +18,11 @@ interface AdminRoomStatusSectionProps {
   className?: string;
 }
 
-function StatusBadge({ status }: { status: string }) {
+interface StatusBadgeProps {
+  status: string;
+}
+
+function StatusBadge({ status }: Readonly<StatusBadgeProps>) {
   const style = (() => {
     switch (status) {
       case 'Ongoing':
@@ -50,7 +54,7 @@ export default function AdminRoomStatusSection({
   computeEffectiveStatus,
   onStatusChange,
   className = '',
-}: AdminRoomStatusSectionProps) {
+}: Readonly<AdminRoomStatusSectionProps>) {
   return (
     <section className={className}>
       <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-6">

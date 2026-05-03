@@ -49,7 +49,7 @@ export default function BleStatusBadge({
   status,
   label,
   className = '',
-}: BleStatusBadgeProps) {
+}: Readonly<BleStatusBadgeProps>) {
   const theme = getBleBadgeTheme(status);
 
   return (

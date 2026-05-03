@@ -22,7 +22,7 @@ export default function AdminPageHeader({
   buildingName,
   activeBuildingLabel,
   onBuildingChange,
-}: AdminPageHeaderProps) {
+}: Readonly<AdminPageHeaderProps>) {
   return (
     <section className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
       <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">

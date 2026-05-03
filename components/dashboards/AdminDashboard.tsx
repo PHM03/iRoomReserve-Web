@@ -56,8 +56,20 @@ import { fetchAdminDashboardSnapshot } from '@/lib/adminDashboard';
 import { getManagedBuildingsForCampus } from '@/lib/campusAssignments';
 import { normalizeRoomCheckInMethod } from '@/lib/roomStatus';
 
+interface RoleBadgeProps {
+  role: string;
+}
+
+interface StatusBadgeProps {
+  status: string;
+}
+
+interface StarRatingProps {
+  rating: number;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────
-function RoleBadge({ role }: { role: string }) {
+function RoleBadge({ role }: Readonly<RoleBadgeProps>) {
   const style = role === 'Faculty'
     ? 'ui-badge-green'
     : 'ui-badge-blue';
@@ -68,7 +80,7 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: Readonly<StatusBadgeProps>) {
   const style = (() => {
     switch (status) {
       case 'Occupied': return 'ui-badge-red';
@@ -105,7 +117,7 @@ function getSentimentBadgeClasses(label: string) {
   return 'border-slate-500/25 bg-slate-500/10 text-slate-700';
 }
 
-function StarRating({ rating }: { rating: number }) {
+function StarRating({ rating }: Readonly<StarRatingProps>) {
   return (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => (
@@ -221,7 +233,7 @@ interface AdminDashboardProps {
   activeTab: AdminTab;
 }
 
-export default function AdminDashboard({ firstName, activeTab }: AdminDashboardProps) {
+export default function AdminDashboard({ firstName, activeTab }: Readonly<AdminDashboardProps>) {
   const { firebaseUser, profile } = useAuth();
   const { setActiveTab, selectedBuildingId, setSelectedBuildingId } = useAdminTab();
   const managedBuildings = useMemo(
