@@ -168,7 +168,7 @@ export default function UtilityStaffDashboard({
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[100px] relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
-        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+        <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block">
           <h2 className="text-2xl font-bold text-gray-800">Hello, {firstName} 🔑</h2>
           <p className="text-gray-600 mt-1">
             Managing: <span className="ui-text-teal font-bold">{buildingName}</span>
@@ -269,14 +269,14 @@ export default function UtilityStaffDashboard({
       </section>
 
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold text-black">
+        <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-800">
             Today&apos;s Class Schedules
-            <span className="text-sm text-black font-normal ml-2">
+            <span className="text-sm text-gray-600 font-normal ml-2">
               ({DAY_NAMES[currentDay]})
             </span>
           </h3>
-          <span className="text-xs text-black">
+          <span className="text-xs text-gray-600">
             {todaySchedules.length} class{todaySchedules.length !== 1 ? 'es' : ''}
           </span>
         </div>
@@ -328,11 +328,11 @@ export default function UtilityStaffDashboard({
       </div>
 
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold text-black">
+        <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-800">
             Today&apos;s Room Reservations
           </h3>
-          <span className="text-xs text-black">
+          <span className="text-xs text-gray-600">
             {todayReservations.length} reservation
             {todayReservations.length !== 1 ? 's' : ''}
           </span>
@@ -399,8 +399,8 @@ export default function UtilityStaffDashboard({
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold text-black">Admin Requests</h3>
+        <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-800">Admin Requests</h3>
           {openRequests.length > 0 && (
             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-blue">
               {openRequests.length} open

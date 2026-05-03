@@ -180,7 +180,7 @@ export default function BleAdminMonitor({
   return (
     <section className={`glass-card p-5 ${className}`.trim()}>
       <div className="flex flex-col gap-4 border-b border-dark/10 pb-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+        <div className="bg-white rounded-xl px-6 py-4 border border-white/30">
           <h3 className="text-lg font-bold text-gray-800">BLE Beacon Status</h3>
           <p className="mt-1 text-sm text-gray-600">
             Live ESP32 beacon telemetry for{' '}

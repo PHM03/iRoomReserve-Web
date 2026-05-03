@@ -136,7 +136,6 @@ const NavBar: React.FC<NavBarProps> = ({
         { label: 'Room Status', href: '/dashboard/room-status' },
         { label: 'BLE Beacon', href: '/dashboard/ble-beacon' },
         { label: 'Inbox', href: '/dashboard/inbox' },
-        { label: 'Contact', href: '/dashboard/contact' },
       ]
     : [
         { label: 'Dashboard', href: '/dashboard' },

@@ -119,7 +119,7 @@ export default function MessagesSection({
   return (
     <section className="mb-8">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+        <div className="bg-white rounded-xl px-6 py-4 border border-white/30">
           <h3 className="flex items-center gap-3 text-lg font-bold text-gray-800">
             {title}
             {unreadCount > 0 && (
@@ -153,8 +153,8 @@ export default function MessagesSection({
             }}
             className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold capitalize transition-all ${
               folder === value
-                ? 'border border-primary/30 bg-primary/20 text-primary'
-                : 'border border-dark/10 bg-dark/5 text-black hover:text-primary'
+                ? 'border border-primary bg-primary text-white'
+                : 'border border-gray-200 bg-white text-gray-700 hover:text-primary'
             }`}
           >
             {value === 'inbox'

@@ -197,7 +197,7 @@ export default function FeedbackPage() {
   return (
     <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
-        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+        <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block">
           <h2 className="text-2xl font-bold text-gray-800">Feedback</h2>
           <p className="text-gray-600 mt-1">Rate your experience and help us improve</p>
         </div>
@@ -205,7 +205,7 @@ export default function FeedbackPage() {
 
       {pendingFeedback.length > 0 && !showForm && (
         <div className="mb-8">
-          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-4">
+          <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block mb-4">
             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
               Rate Your Experience
@@ -393,7 +393,7 @@ export default function FeedbackPage() {
         </div>
       )}
 
-      <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-4">
+      <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block mb-4">
         <h3 className="text-xl font-bold text-gray-800">Your Feedback</h3>
       </div>
       <div className="space-y-4">

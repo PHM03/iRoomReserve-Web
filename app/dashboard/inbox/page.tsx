@@ -207,7 +207,7 @@ function ReservationApprovals({
 
   return (
     <section className="mb-8">
-      <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+      <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-white/30">
         <div>
           <h3 className="text-lg font-bold text-gray-800">Reservation Approvals</h3>
           <p className="text-sm text-gray-600 mt-1">
@@ -380,7 +380,7 @@ function ReservationUpdates({
 
   return (
     <section className="mb-8">
-      <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+      <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-white/30">
         <div>
           <h3 className="text-lg font-bold text-gray-800">Reservation Updates</h3>
           <p className="text-sm text-gray-600 mt-1">
@@ -463,7 +463,7 @@ function AdminMessages({ uid }: { uid: string }) {
 
   return (
     <section>
-      <div className="mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+      <div className="mb-4 bg-white rounded-xl px-6 py-4 border border-white/30">
         <h3 className="text-lg font-bold text-gray-800">Messages with Administration</h3>
         <p className="text-sm text-gray-600 mt-1">Your support and follow-up conversations stay here.</p>
       </div>
@@ -475,8 +475,8 @@ function AdminMessages({ uid }: { uid: string }) {
             onClick={() => setFilter(value)}
             className={`px-4 py-2 rounded-xl text-sm font-bold capitalize transition-all whitespace-nowrap ${
               filter === value
-                ? 'bg-primary/20 text-primary border border-primary/30'
-                : 'bg-dark/5 text-black border border-dark/10 hover:text-primary'
+                ? 'bg-primary text-white border border-primary'
+                : 'bg-white text-gray-700 border border-gray-200 hover:text-primary'
             }`}
           >
             {value === 'all'
@@ -607,7 +607,7 @@ function UserInbox({
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-6">
-        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+        <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block">
           <h2 className="text-2xl font-bold text-gray-800">Inbox</h2>
           <p className="text-gray-600 mt-1">
             Reservation approvals, updates, and admin messages are all available here.

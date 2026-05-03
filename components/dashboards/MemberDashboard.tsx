@@ -196,7 +196,7 @@ export default function MemberDashboard({
       />
 
       <div className="mb-8 flex items-start justify-between">
-        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+        <div className="bg-white rounded-xl px-6 py-4 border border-white/30">
           <h2 className="text-2xl font-bold text-gray-800">
             Welcome back, {firstName} {welcomeEmoji}
           </h2>
@@ -582,7 +582,7 @@ export default function MemberDashboard({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div>
-          <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+          <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-white/30">
             <h3 className="text-xl font-bold text-gray-800">Recent Activity</h3>
             <Link
               href="/dashboard/reservations"
@@ -655,7 +655,7 @@ export default function MemberDashboard({
         </div>
 
         <div>
-          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 mb-4 inline-block border border-white/30">
+          <div className="bg-white rounded-xl px-6 py-4 mb-4 inline-block border border-white/30">
             <h3 className="text-xl font-bold text-gray-800">
               Today&apos;s Class Schedules
               <span className="text-sm text-gray-600 font-normal ml-2">

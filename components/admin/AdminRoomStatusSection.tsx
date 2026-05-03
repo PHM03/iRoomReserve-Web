@@ -53,7 +53,7 @@ export default function AdminRoomStatusSection({
 }: AdminRoomStatusSectionProps) {
   return (
     <section className={className}>
-      <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-6">
+      <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block mb-6">
         <h3 className="text-xl font-bold text-gray-800">
           Room Status Monitor
           {buildingName ? (

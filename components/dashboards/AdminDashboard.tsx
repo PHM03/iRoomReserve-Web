@@ -760,7 +760,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       <div className="mb-8 flex items-start justify-between">
         {activeTab === 'dashboard' ? (
           <div>
-            <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+            <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block">
               <h2 className="text-2xl font-bold text-gray-800">Welcome, {firstName} 🏛️</h2>
               <p className="text-gray-600 mt-1">
                 Managing: <span className="text-primary font-bold">{buildingName}</span>
@@ -860,7 +860,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'add-rooms' && (
         <div>
-          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-6">
+          <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block mb-6">
             <h3 className="text-xl font-bold text-gray-800">Manage Rooms</h3>
           </div>
 
@@ -879,7 +879,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                 </span>
               </button>
 
-              <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+              <div className="rounded-xl border border-[#d9a3a4] bg-[#f9eded] px-4 py-3">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-black">
                   Active Building
                 </p>
@@ -1167,8 +1167,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                   onClick={() => setRoomFloorFilter('all')}
                   className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
                     roomFloorFilter === 'all'
-                      ? 'bg-primary/20 text-primary border border-primary/40'
-                      : 'bg-dark/5 text-black border border-dark/10 hover:bg-primary/10 hover:text-primary'
+                      ? 'bg-[#a12124] text-white border border-[#a12124]'
+                      : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
                   }`}
                 >
                   All ({rooms.length})
@@ -1181,8 +1181,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                       onClick={() => setRoomFloorFilter(floor)}
                       className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
                         roomFloorFilter === floor
-                          ? 'bg-primary/20 text-primary border border-primary/40'
-                          : 'bg-dark/5 text-black border border-dark/10 hover:bg-primary/10 hover:text-primary'
+                          ? 'bg-[#a12124] text-white border border-[#a12124]'
+                          : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
                       }`}
                     >
                       {floor} ({count})
@@ -1413,7 +1413,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'feedback' && (
         <div>
-          <div className="flex items-center justify-between mb-6 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+          <div className="flex items-center justify-between mb-6 bg-white rounded-xl px-6 py-4 border border-white/30">
             <h3 className="text-xl font-bold text-gray-800">Room Feedback</h3>
             <span className="text-sm text-gray-600">{feedbackList.length} total</span>
           </div>
@@ -1604,7 +1604,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           </div>
 
           {/* Live Room Status Grid */}
-          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-4">
+          <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block mb-4">
             <h3 className="text-lg font-bold text-gray-800">Live Room Status <span className="text-sm text-gray-600 font-normal ml-2">({buildingName})</span></h3>
           </div>
           {rooms.length === 0 ? (
@@ -1638,7 +1638,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             const todaySchedules = schedules.filter((s) => s.dayOfWeek === new Date().getDay());
             return (
               <>
-                <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+                <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-white/30">
                   <h3 className="text-lg font-bold text-gray-800">Today&apos;s Class Schedules <span className="text-sm text-gray-600 font-normal ml-1">({DAY_NAMES[new Date().getDay()]})</span></h3>
                   <span className="text-xs text-gray-600">{todaySchedules.length} class{todaySchedules.length !== 1 ? 'es' : ''}</span>
                 </div>
@@ -1670,7 +1670,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           })()}
 
           {/* Pending Requests Preview */}
-          <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+          <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-white/30">
             <h3 className="text-lg font-bold text-gray-800">Pending Requests</h3>
             {requests.length > 0 && (
               <button onClick={() => setActiveTab('pending')} className="text-sm text-primary font-bold hover:text-primary-hover transition-colors">
@@ -1771,7 +1771,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           />
 
           <div className="mt-10">
-            <div className="flex items-center justify-between mb-4 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+            <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-white/30">
               <h3 className="text-xl font-bold text-gray-800">Class Schedules</h3>
               <button onClick={() => {
                 if (showScheduleForm) {
@@ -1872,7 +1872,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'room-history' && (
         <div>
-          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block mb-6">
+          <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block mb-6">
             <h3 className="text-xl font-bold text-gray-800">Room History</h3>
           </div>
 
@@ -1884,7 +1884,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
               </div>
               <div className="flex gap-2 flex-wrap items-center">
                 {['all', 'approved', 'rejected', 'active', 'completed', 'cancelled'].map((filter) => (
-                  <button key={filter} onClick={() => setHistoryFilter(filter)} className={`px-3 py-2 rounded-lg text-xs font-bold capitalize transition-all ${historyFilter === filter ? 'bg-primary/20 text-primary border border-primary/30' : 'bg-dark/5 text-black border border-dark/10 hover:bg-primary/10'}`}>
+                  <button key={filter} onClick={() => setHistoryFilter(filter)} className={`px-3 py-2 rounded-lg text-xs font-bold capitalize transition-all ${historyFilter === filter ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-700 border border-gray-200 hover:text-primary'}`}>
                     {filter === 'all' ? 'All Status' : filter}
                   </button>
                 ))}
@@ -1995,7 +1995,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
       {/* ════════════════════════════════════════════════════════════ */}
       {activeTab === 'pending' && (
         <div>
-          <div className="flex items-center justify-between mb-6 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+          <div className="flex items-center justify-between mb-6 bg-white rounded-xl px-6 py-4 border border-white/30">
             <div>
               <h3 className="text-xl font-bold text-gray-800 flex items-center gap-3">
                 Pending Reservations
@@ -2213,7 +2213,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             />
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-6 backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30">
+            <div className="flex items-center justify-between mb-6 bg-white rounded-xl px-6 py-4 border border-white/30">
               <div>
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-3">
                   User Requests
@@ -2237,8 +2237,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                   onClick={() => setInboxFilter(f)}
                   className={`px-4 py-2 rounded-xl text-sm font-bold capitalize transition-all whitespace-nowrap ${
                     inboxFilter === f
-                      ? 'bg-primary/20 text-primary border border-primary/30'
-                      : 'bg-dark/5 text-black border border-dark/10 hover:text-primary'
+                      ? 'bg-primary text-white border border-primary'
+                      : 'bg-white text-gray-700 border border-gray-200 hover:text-primary'
                   }`}
                 >
                   {f === 'all' ? `All (${adminRequests.length})` : `${f} (${adminRequests.filter(r => r.status === f).length})`}

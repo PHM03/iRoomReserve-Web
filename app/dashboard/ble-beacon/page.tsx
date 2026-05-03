@@ -50,7 +50,7 @@ export default function BleBeaconPage() {
     return (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
         <div className="mb-8">
-          <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+          <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block">
             <h2 className="text-2xl font-bold text-gray-800">BLE Beacon Status</h2>
             <p className="text-gray-600 mt-1">
               No campus is assigned to your account yet.
@@ -64,7 +64,7 @@ export default function BleBeaconPage() {
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
-        <div className="backdrop-blur-md bg-white/40 rounded-xl px-6 py-4 border border-white/30 inline-block">
+        <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block">
           <h2 className="text-2xl font-bold text-gray-800">BLE Beacon Status</h2>
           <p className="text-gray-600 mt-1">
             Full beacon telemetry, connection history, and refresh controls for{' '}
