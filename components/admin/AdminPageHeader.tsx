@@ -30,7 +30,7 @@ export default function AdminPageHeader({
         <div className="mt-2 text-sm text-gray-600">{description}</div>
       </div>
 
-      <div className="w-full max-w-sm rounded-2xl border border-primary/20 bg-primary/5 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-[#d9a3a4] bg-[#f9eded] p-4">
         <p className="text-[11px] font-bold uppercase tracking-wide text-black">
           Active Building
         </p>
