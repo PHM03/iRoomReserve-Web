@@ -74,7 +74,9 @@ export async function POST(request: Request) {
         message:
           error instanceof Error ? error.message : "Invalid occupancy payload.",
       },
-      { status: 400 }
+      {
+        status: 400
+      }
     );
   }
 }
@@ -84,7 +86,9 @@ export async function GET() {
     occupancyData = await fetchRemoteOccupancy();
 
     return toNoStoreResponse(occupancyData, {
-      headers: { "x-occupancy-source": "esp32" },
+      headers: {
+        "x-occupancy-source": "esp32"
+      },
     });
   } catch (error) {
     if (occupancyData.timestamp) {
@@ -98,7 +102,9 @@ export async function GET() {
           stale: true,
         },
         {
-          headers: { "x-occupancy-source": "cache" },
+          headers: {
+            "x-occupancy-source": "cache"
+          },
         }
       );
     }
@@ -113,7 +119,9 @@ export async function GET() {
       },
       {
         status: 503,
-        headers: { "x-occupancy-source": "unavailable" },
+        headers: {
+          "x-occupancy-source": "unavailable"
+        },
       }
     );
   }

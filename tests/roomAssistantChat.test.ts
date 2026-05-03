@@ -52,10 +52,22 @@ describe('roomAssistantChat', () => {
     expect(state.step).toBe(CHAT_STEPS.ASK_TYPE);
     expect(firstMessage.text).toBe('Sure 👍 What kind of room are you looking for?');
     expect(firstMessage.options).toEqual([
-      { label: 'Glass', value: 'glass' },
-      { label: 'Lecture', value: 'lecture' },
-      { label: 'Lab', value: 'lab' },
-      { label: 'No preference', value: '' },
+      {
+        label: 'Glass',
+        value: 'glass'
+      },
+      {
+        label: 'Lecture',
+        value: 'lecture'
+      },
+      {
+        label: 'Lab',
+        value: 'lab'
+      },
+      {
+        label: 'No preference',
+        value: ''
+      },
     ]);
   });
 

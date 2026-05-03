@@ -5,9 +5,21 @@ import { useESP32Bluetooth } from '@/hooks/useESP32Bluetooth';
 import { formatStatusLabel } from '@/lib/esp32Data';
 
 const COMMAND_BUTTONS = [
-  { label: 'Get Count', command: 'COUNT', className: 'ui-button-blue' },
-  { label: 'Get Status', command: 'STATUS', className: 'ui-button-gray' },
-  { label: 'Reset', command: 'RESET', className: 'ui-button-red' },
+  {
+    label: 'Get Count',
+    command: 'COUNT',
+    className: 'ui-button-blue'
+  },
+  {
+    label: 'Get Status',
+    command: 'STATUS',
+    className: 'ui-button-gray'
+  },
+  {
+    label: 'Reset',
+    command: 'RESET',
+    className: 'ui-button-red'
+  },
 ];
 
 const CONNECTION_BADGE_CLASSES = {

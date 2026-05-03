@@ -249,7 +249,9 @@ export async function respondToFeedback(
   response: string
 ): Promise<void> {
   await apiRequest(`/api/feedback/${feedbackId}`, {
-    body: { response },
+    body: {
+      response
+    },
     method: "PATCH",
   });
 }
@@ -284,7 +286,9 @@ export async function getFeedbackByUser(userId: string): Promise<Feedback[]> {
     "/api/feedback",
     {
       method: "GET",
-      params: { userId },
+      params: {
+        userId
+      },
       userId,
     }
   );
@@ -300,7 +304,9 @@ export async function getFeedbackByBuilding(
     summary: FeedbackSentimentSummary;
   }>("/api/feedback", {
     method: "GET",
-    params: { buildingId },
+    params: {
+      buildingId
+    },
   });
 
   return {
@@ -318,7 +324,9 @@ export async function getAverageSentiment(roomId: string): Promise<number> {
 
   const payload = await apiRequest<{ average: number }>("/api/feedback/average", {
     method: "GET",
-    params: { roomId: normalizedRoomId },
+    params: {
+      roomId: normalizedRoomId
+    },
   });
 
   return payload.average;

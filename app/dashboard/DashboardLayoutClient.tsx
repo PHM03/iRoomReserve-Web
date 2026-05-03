@@ -117,27 +117,97 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
   // Student mobile bottom nav items
   const studentMobileNav = [
-    { label: 'Home', href: '/dashboard', active: pathname === '/dashboard', icon: navIcons.home },
-    { label: 'Reserve', href: '/dashboard/reserve', active: pathname === '/dashboard/reserve', icon: navIcons.reserve },
-    { label: 'History', href: '/dashboard/reservations', active: pathname === '/dashboard/reservations', icon: navIcons.history },
-    { label: 'Inbox', href: '/dashboard/inbox', active: pathname === '/dashboard/inbox', icon: navIcons.inbox },
-    { label: 'Contact', href: '/dashboard/contact', active: pathname === '/dashboard/contact', icon: navIcons.contact },
+    {
+      label: 'Home',
+      href: '/dashboard',
+      active: pathname === '/dashboard',
+      icon: navIcons.home
+    },
+    {
+      label: 'Reserve',
+      href: '/dashboard/reserve',
+      active: pathname === '/dashboard/reserve',
+      icon: navIcons.reserve
+    },
+    {
+      label: 'History',
+      href: '/dashboard/reservations',
+      active: pathname === '/dashboard/reservations',
+      icon: navIcons.history
+    },
+    {
+      label: 'Inbox',
+      href: '/dashboard/inbox',
+      active: pathname === '/dashboard/inbox',
+      icon: navIcons.inbox
+    },
+    {
+      label: 'Contact',
+      href: '/dashboard/contact',
+      active: pathname === '/dashboard/contact',
+      icon: navIcons.contact
+    },
   ];
 
   // Faculty mobile bottom nav items (same as student, no feedback)
   const facultyMobileNav = [
-    { label: 'Home', href: '/dashboard', active: pathname === '/dashboard', icon: navIcons.home },
-    { label: 'Reserve', href: '/dashboard/reserve', active: pathname === '/dashboard/reserve', icon: navIcons.reserve },
-    { label: 'History', href: '/dashboard/reservations', active: pathname === '/dashboard/reservations', icon: navIcons.history },
-    { label: 'Inbox', href: '/dashboard/inbox', active: pathname === '/dashboard/inbox', icon: navIcons.inbox },
-    { label: 'Contact', href: '/dashboard/contact', active: pathname === '/dashboard/contact', icon: navIcons.contact },
+    {
+      label: 'Home',
+      href: '/dashboard',
+      active: pathname === '/dashboard',
+      icon: navIcons.home
+    },
+    {
+      label: 'Reserve',
+      href: '/dashboard/reserve',
+      active: pathname === '/dashboard/reserve',
+      icon: navIcons.reserve
+    },
+    {
+      label: 'History',
+      href: '/dashboard/reservations',
+      active: pathname === '/dashboard/reservations',
+      icon: navIcons.history
+    },
+    {
+      label: 'Inbox',
+      href: '/dashboard/inbox',
+      active: pathname === '/dashboard/inbox',
+      icon: navIcons.inbox
+    },
+    {
+      label: 'Contact',
+      href: '/dashboard/contact',
+      active: pathname === '/dashboard/contact',
+      icon: navIcons.contact
+    },
   ];
 
   const utilityMobileNav = [
-    { label: 'Home', href: '/dashboard', active: pathname === '/dashboard', icon: navIcons.home },
-    { label: 'Status', href: '/dashboard/room-status', active: pathname === '/dashboard/room-status', icon: navIcons.status },
-    { label: 'Inbox', href: '/dashboard/inbox', active: pathname === '/dashboard/inbox', icon: navIcons.inbox },
-    { label: 'Contact', href: '/dashboard/contact', active: pathname === '/dashboard/contact', icon: navIcons.contact },
+    {
+      label: 'Home',
+      href: '/dashboard',
+      active: pathname === '/dashboard',
+      icon: navIcons.home
+    },
+    {
+      label: 'Status',
+      href: '/dashboard/room-status',
+      active: pathname === '/dashboard/room-status',
+      icon: navIcons.status
+    },
+    {
+      label: 'Inbox',
+      href: '/dashboard/inbox',
+      active: pathname === '/dashboard/inbox',
+      icon: navIcons.inbox
+    },
+    {
+      label: 'Contact',
+      href: '/dashboard/contact',
+      active: pathname === '/dashboard/contact',
+      icon: navIcons.contact
+    },
   ];
 
   return (
@@ -166,7 +236,10 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
         <NavBar
           user={user}
           onLogout={logout}
-          {...(isAdmin ? { activeTab, onTabChange: setActiveTab } : {})}
+          {...(isAdmin ? {
+            activeTab,
+            onTabChange: setActiveTab
+          } : {})}
         />
 
         {children}

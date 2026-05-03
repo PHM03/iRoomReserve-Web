@@ -231,7 +231,10 @@ export default function MemberDashboard({
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 !rounded-xl overflow-hidden z-50 border border-dark/12 shadow-2xl shadow-black/20" style={{ background: 'rgba(248, 246, 242, 0.98)', backdropFilter: 'blur(20px)' }}>
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 !rounded-xl overflow-hidden z-50 border border-dark/12 shadow-2xl shadow-black/20" style={{
+              background: 'rgba(248, 246, 242, 0.98)',
+              backdropFilter: 'blur(20px)'
+            }}>
               <div className="flex items-center justify-between p-4 border-b border-dark/10">
                 <h4 className="font-bold text-black text-sm">Notifications</h4>
                 {notifications.length > 0 && (

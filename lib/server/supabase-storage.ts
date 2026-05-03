@@ -146,7 +146,9 @@ export async function createReservationDocumentSignedUrl(input: {
         apikey: getSupabaseServiceRoleKey(),
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ expiresIn: expiresInSeconds }),
+      body: JSON.stringify({
+        expiresIn: expiresInSeconds
+      }),
     }
   );
 
@@ -181,7 +183,10 @@ export async function createReservationDocumentSignedUrl(input: {
     return `${getSupabaseStorageBaseUrl()}${signedUrl}`;
   }
 
-  return `${buildStorageObjectUrl({ bucket, path })}?${signedUrl}`;
+  return `${buildStorageObjectUrl({
+    bucket,
+    path
+  })}?${signedUrl}`;
 }
 
 export async function uploadReservationDocument(input: {

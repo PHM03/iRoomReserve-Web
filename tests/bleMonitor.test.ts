@@ -66,8 +66,14 @@ describe('bleMonitor helpers', () => {
   it('uses a shared label when multiple beacon rooms are configured', () => {
     expect(
       getTelemetryRoomLabel([
-        { id: 'room-1', name: 'Room 101' },
-        { id: 'room-2', name: 'Room 102' },
+        {
+          id: 'room-1',
+          name: 'Room 101'
+        },
+        {
+          id: 'room-2',
+          name: 'Room 102'
+        },
       ])
     ).toBe('Shared Test Feed');
   });

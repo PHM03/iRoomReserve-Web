@@ -30,17 +30,32 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // TODO: Replace this temporary Digital Campus approver email with the actual configurable building admin source.
 const DIGITAL_CAMPUS_BUILDING_ADMIN_EMAIL = 'kenjimwill.baltero@sdca.edu.ph';
 const CAMPUS_TIME_RANGES: Record<ReservationCampus, { endMinutes: number; startMinutes: number }> = {
-  digi: { startMinutes: 7 * 60, endMinutes: 17 * 60 },
-  main: { startMinutes: 7 * 60, endMinutes: 21 * 60 },
+  digi: {
+    startMinutes: 7 * 60,
+    endMinutes: 17 * 60
+  },
+  main: {
+    startMinutes: 7 * 60,
+    endMinutes: 21 * 60
+  },
 };
 const ALL_MANAGED_BUILDING_IDS = [
   ...getManagedBuildingsForCampus('main'),
   ...getManagedBuildingsForCampus('digi'),
 ].map((building) => building.id);
 const FILTER_CHIPS: Array<{ key: RoomFilterKey; label: string }> = [
-  { key: 'classroom', label: 'Classroom' },
-  { key: 'laboratory', label: 'Laboratory' },
-  { key: 'available', label: 'Available' },
+  {
+    key: 'classroom',
+    label: 'Classroom'
+  },
+  {
+    key: 'laboratory',
+    label: 'Laboratory'
+  },
+  {
+    key: 'available',
+    label: 'Available'
+  },
 ];
 const INITIAL_EQUIPMENT = {
   fans: 0,
@@ -350,7 +365,9 @@ export default function ReserveRoomPage() {
     setIsRecurring(false);
     setSelectedDays([]);
     setRecurringEndDate('');
-    setEquipment({ ...INITIAL_EQUIPMENT });
+    setEquipment({
+      ...INITIAL_EQUIPMENT
+    });
     setApprovalEmails({
       advisorEmail: '',
     });
@@ -544,7 +561,10 @@ export default function ReserveRoomPage() {
           );
           setCreatedCount(ids.length);
         } else {
-          await createReservation({ ...reservationData, date: reservationDate });
+          await createReservation({
+            ...reservationData,
+            date: reservationDate
+          });
           setCreatedCount(1);
         }
       } else {
@@ -563,7 +583,10 @@ export default function ReserveRoomPage() {
           );
           setCreatedCount(ids.length);
         } else {
-          await createReservation({ ...reservationData, date: reservationDate });
+          await createReservation({
+            ...reservationData,
+            date: reservationDate
+          });
           setCreatedCount(1);
         }
       }
@@ -1202,12 +1225,30 @@ export default function ReserveRoomPage() {
                 <div className="space-y-6">
                   <div className="space-y-3">
                     {[
-                      { key: 'fans', label: 'Fans' },
-                      { key: 'speakers', label: 'Speakers with Microphones' },
-                      { key: 'televisions', label: 'Televisions' },
-                      { key: 'hdmiCables', label: 'HDMI Cables' },
-                      { key: 'monoblockChairs', label: 'Monoblock Chairs' },
-                      { key: 'tables', label: 'Tables' },
+                      {
+                        key: 'fans',
+                        label: 'Fans'
+                      },
+                      {
+                        key: 'speakers',
+                        label: 'Speakers with Microphones'
+                      },
+                      {
+                        key: 'televisions',
+                        label: 'Televisions'
+                      },
+                      {
+                        key: 'hdmiCables',
+                        label: 'HDMI Cables'
+                      },
+                      {
+                        key: 'monoblockChairs',
+                        label: 'Monoblock Chairs'
+                      },
+                      {
+                        key: 'tables',
+                        label: 'Tables'
+                      },
                     ].map((item) => (
                       <div
                         key={item.key}

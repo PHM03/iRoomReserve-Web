@@ -15,7 +15,10 @@ describe('reservation approval helpers', () => {
     });
 
     expect(approvalFlow).toEqual([
-      { role: 'building_admin', email: 'buildingadmin@sdca.edu.ph' },
+      {
+        role: 'building_admin',
+        email: 'buildingadmin@sdca.edu.ph'
+      },
     ]);
   });
 
@@ -26,7 +29,10 @@ describe('reservation approval helpers', () => {
     });
 
     expect(approvalFlow).toEqual([
-      { role: 'advisor', email: 'advisor@sdca.edu.ph' },
+      {
+        role: 'advisor',
+        email: 'advisor@sdca.edu.ph'
+      },
     ]);
   });
 

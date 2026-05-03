@@ -81,7 +81,9 @@ function normalizeReservationPayload(
     return value;
   }
 
-  const nextValue = { ...(value as Record<string, unknown>) };
+  const nextValue = {
+    ...(value as Record<string, unknown>)
+  };
 
   if (typeof nextValue.campus === "string") {
     nextValue.campus =
@@ -102,7 +104,9 @@ function normalizeRoomPayload(value: unknown): unknown {
     return value;
   }
 
-  const nextValue = { ...(value as Record<string, unknown>) };
+  const nextValue = {
+    ...(value as Record<string, unknown>)
+  };
   const beaconId =
     typeof nextValue.bleBeaconId === "string" &&
     nextValue.bleBeaconId.trim().length > 0

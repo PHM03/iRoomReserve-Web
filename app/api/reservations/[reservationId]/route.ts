@@ -124,7 +124,9 @@ export async function PATCH(
         throw new ApiError(400, "invalid_action", "Unsupported reservation action.");
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true
+    });
   } catch (error) {
     return handleApiError(error);
   }

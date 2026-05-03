@@ -542,23 +542,35 @@ export async function createReservationRecord(data: ReservationCreateInput) {
       programDepartmentOrganization: data.programDepartmentOrganization,
       purpose: data.purpose,
       ...(data.approvalDocumentName
-        ? { approvalDocumentName: data.approvalDocumentName }
+        ? {
+          approvalDocumentName: data.approvalDocumentName
+        }
         : {}),
       ...(data.approvalDocumentPath
-        ? { approvalDocumentPath: data.approvalDocumentPath }
+        ? {
+          approvalDocumentPath: data.approvalDocumentPath
+        }
         : {}),
       ...(data.approvalDocumentMimeType
-        ? { approvalDocumentMimeType: data.approvalDocumentMimeType }
+        ? {
+          approvalDocumentMimeType: data.approvalDocumentMimeType
+        }
         : {}),
       ...(typeof data.approvalDocumentSize === "number" &&
       Number.isFinite(data.approvalDocumentSize) &&
       data.approvalDocumentSize > 0
-        ? { approvalDocumentSize: data.approvalDocumentSize }
+        ? {
+          approvalDocumentSize: data.approvalDocumentSize
+        }
         : {}),
       ...(data.approvalDocumentUrl
-        ? { approvalDocumentUrl: data.approvalDocumentUrl }
+        ? {
+          approvalDocumentUrl: data.approvalDocumentUrl
+        }
         : {}),
-      ...(data.equipment ? { equipment: data.equipment } : {}),
+      ...(data.equipment ? {
+        equipment: data.equipment
+      } : {}),
       approvalFlow,
       currentStep: 0,
       approvals: [],
@@ -640,23 +652,35 @@ export async function createRecurringReservationRecord(
         programDepartmentOrganization: data.programDepartmentOrganization,
         purpose: data.purpose,
         ...(data.approvalDocumentName
-          ? { approvalDocumentName: data.approvalDocumentName }
+          ? {
+            approvalDocumentName: data.approvalDocumentName
+          }
           : {}),
         ...(data.approvalDocumentPath
-          ? { approvalDocumentPath: data.approvalDocumentPath }
+          ? {
+            approvalDocumentPath: data.approvalDocumentPath
+          }
           : {}),
         ...(data.approvalDocumentMimeType
-          ? { approvalDocumentMimeType: data.approvalDocumentMimeType }
+          ? {
+            approvalDocumentMimeType: data.approvalDocumentMimeType
+          }
           : {}),
         ...(typeof data.approvalDocumentSize === "number" &&
         Number.isFinite(data.approvalDocumentSize) &&
         data.approvalDocumentSize > 0
-          ? { approvalDocumentSize: data.approvalDocumentSize }
+          ? {
+            approvalDocumentSize: data.approvalDocumentSize
+          }
           : {}),
         ...(data.approvalDocumentUrl
-          ? { approvalDocumentUrl: data.approvalDocumentUrl }
+          ? {
+            approvalDocumentUrl: data.approvalDocumentUrl
+          }
           : {}),
-        ...(data.equipment ? { equipment: data.equipment } : {}),
+        ...(data.equipment ? {
+          equipment: data.equipment
+        } : {}),
         approvalFlow,
         currentStep: 0,
         approvals: [],

@@ -21,12 +21,28 @@ export default function RoleSelectionPage() {
 
     const roles = isSchoolEmail
       ? [
-          { key: USER_ROLES.STUDENT, label: USER_ROLES.STUDENT, description: 'Browse and reserve rooms for study or group work' },
-          { key: USER_ROLES.FACULTY, label: USER_ROLES.FACULTY, description: 'Reserve rooms for classes or faculty meetings' },
-          { key: USER_ROLES.UTILITY, label: USER_ROLES.UTILITY, description: 'Manage room equipment and facilities' },
+          {
+            key: USER_ROLES.STUDENT,
+            label: USER_ROLES.STUDENT,
+            description: 'Browse and reserve rooms for study or group work'
+          },
+          {
+            key: USER_ROLES.FACULTY,
+            label: USER_ROLES.FACULTY,
+            description: 'Reserve rooms for classes or faculty meetings'
+          },
+          {
+            key: USER_ROLES.UTILITY,
+            label: USER_ROLES.UTILITY,
+            description: 'Manage room equipment and facilities'
+          },
         ]
       : [
-          { key: USER_ROLES.UTILITY, label: USER_ROLES.UTILITY, description: 'Manage room equipment and facilities' },
+          {
+            key: USER_ROLES.UTILITY,
+            label: USER_ROLES.UTILITY,
+            description: 'Manage room equipment and facilities'
+          },
         ];
 
     useEffect(() => {

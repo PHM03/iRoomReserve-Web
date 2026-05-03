@@ -73,7 +73,10 @@ function getLegacyCampus(input: CampusAssignmentInput): ReservationCampus | null
 
   if (
     candidates.some(
-      (candidate) => inferCampusFromBuilding({ id: candidate, name: candidate }) === "main"
+      (candidate) => inferCampusFromBuilding({
+        id: candidate,
+        name: candidate
+      }) === "main"
     )
   ) {
     return "main";
@@ -81,7 +84,10 @@ function getLegacyCampus(input: CampusAssignmentInput): ReservationCampus | null
 
   if (
     candidates.some(
-      (candidate) => inferCampusFromBuilding({ id: candidate, name: candidate }) === "digi"
+      (candidate) => inferCampusFromBuilding({
+        id: candidate,
+        name: candidate
+      }) === "digi"
     )
   ) {
     return "digi";
@@ -101,7 +107,10 @@ export function resolveCampusAssignment(
   campusName: CampusName | null;
 } {
   if (!input) {
-    return { campus: null, campusName: null };
+    return {
+      campus: null,
+      campusName: null
+    };
   }
 
   const explicitCampus =
@@ -143,6 +152,8 @@ export function isCampusManagedBuilding(
 
   return (
     getManagedBuildingIdsForCampus(campus).includes(normalizedBuildingId) ||
-    inferCampusFromBuilding({ id: normalizedBuildingId }) === campus
+    inferCampusFromBuilding({
+      id: normalizedBuildingId
+    }) === campus
   );
 }

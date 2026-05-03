@@ -23,9 +23,18 @@ describe("feedback sentiment helpers", () => {
 
   it("builds an aggregate sentiment summary for a building", () => {
     const summary = summarizeFeedbackSentiment([
-      { compoundScore: 0.8, sentimentLabel: "positive" },
-      { compoundScore: -0.5, sentimentLabel: "negative" },
-      { compoundScore: 0.0, sentimentLabel: "neutral" },
+      {
+        compoundScore: 0.8,
+        sentimentLabel: "positive"
+      },
+      {
+        compoundScore: -0.5,
+        sentimentLabel: "negative"
+      },
+      {
+        compoundScore: 0.0,
+        sentimentLabel: "neutral"
+      },
     ]);
 
     expect(summary).toEqual({

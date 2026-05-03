@@ -155,8 +155,15 @@ export async function GET(request: NextRequest) {
 
     if (!buildingId) {
       return NextResponse.json(
-        { error: { code: "missing_building_id", message: "buildingId is required." } },
-        { status: 400 }
+        {
+          error: {
+                    code: "missing_building_id",
+                    message: "buildingId is required."
+                  }
+        },
+        {
+          status: 400
+        }
       );
     }
 
@@ -190,7 +197,10 @@ export async function GET(request: NextRequest) {
     ]);
 
     const rooms = roomsSnapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }) as DashboardRoom)
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }) as DashboardRoom)
       .sort(sortRooms);
     const allReservations = (
       await Promise.all(
@@ -216,16 +226,28 @@ export async function GET(request: NextRequest) {
       isVisiblePendingReservationForBuildingAdmin
     );
     const notifications = notificationsSnapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }) as DashboardNotification)
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }) as DashboardNotification)
       .sort(sortByCreatedAtDesc);
     const schedules = schedulesSnapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }) as DashboardSchedule)
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }) as DashboardSchedule)
       .sort(sortSchedules);
     const roomHistory = roomHistorySnapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }) as DashboardRoomHistoryEntry)
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }) as DashboardRoomHistoryEntry)
       .sort(sortByCreatedAtDesc);
     const adminRequests = adminRequestsSnapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }) as DashboardAdminRequest)
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }) as DashboardAdminRequest)
       .sort(sortByCreatedAtDesc);
 
     return NextResponse.json({

@@ -114,7 +114,9 @@ export async function PATCH(
     assertCanManageBuilding(authContext, buildingId);
     await updateRoomRecord(roomId, payload);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -139,7 +141,9 @@ export async function DELETE(
     assertCanManageBuilding(authContext, buildingId);
     await deleteRoomRecord(roomId);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true
+    });
   } catch (error) {
     return handleApiError(error);
   }

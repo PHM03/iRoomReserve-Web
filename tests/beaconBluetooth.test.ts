@@ -28,10 +28,14 @@ describe('beaconBluetooth', () => {
   });
 
   it('maps common Web Bluetooth errors to user-friendly messages', () => {
-    expect(getBluetoothErrorMessage({ name: 'NotFoundError' })).toContain(
+    expect(getBluetoothErrorMessage({
+      name: 'NotFoundError'
+    })).toContain(
       'not found'
     );
-    expect(getBluetoothErrorMessage({ name: 'NotAllowedError' })).toContain(
+    expect(getBluetoothErrorMessage({
+      name: 'NotAllowedError'
+    })).toContain(
       'permission'
     );
   });
@@ -52,7 +56,9 @@ describe('roomStatus bluetooth handling', () => {
       startTime: '08:00',
       endTime: '09:00',
       status: 'approved',
-      checkedInAt: { seconds: 1 } as never,
+      checkedInAt: {
+        seconds: 1
+      } as never,
       checkInMethod: 'bluetooth' as const,
     };
     const room = {

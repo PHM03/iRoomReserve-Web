@@ -33,11 +33,26 @@ export interface CampusOption {
 }
 
 export const ROOM_STATUS_FILTER_OPTIONS = [
-  { value: "all", label: "All Statuses" },
-  { value: "Available", label: "Available" },
-  { value: "Reserved", label: "Reserved" },
-  { value: "Occupied", label: "Occupied" },
-  { value: "Unavailable", label: "Unavailable" },
+  {
+    value: "all",
+    label: "All Statuses"
+  },
+  {
+    value: "Available",
+    label: "Available"
+  },
+  {
+    value: "Reserved",
+    label: "Reserved"
+  },
+  {
+    value: "Occupied",
+    label: "Occupied"
+  },
+  {
+    value: "Unavailable",
+    label: "Unavailable"
+  },
 ] as const satisfies ReadonlyArray<{
   value: RoomStatusFilter;
   label: string;

@@ -182,7 +182,9 @@ export default function FeedbackPage() {
   };
 
   const renderStars = (count: number, size = 'w-4 h-4') => {
-    return Array.from({ length: 5 }, (_, index) => (
+    return Array.from({
+      length: 5
+    }, (_, index) => (
       <svg
         key={index}
         className={`${size} ${index < count ? 'ui-text-yellow' : 'text-black'}`}

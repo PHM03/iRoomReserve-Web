@@ -73,8 +73,14 @@ const BOT_REPLY_GAP_MS = 760;
 const DEFAULT_CAPACITY_CHOICES = [8, 12, 20, 40, 60];
 const DEFAULT_FEATURE_OPTIONS = ['AC', 'Projector', 'Whiteboard'];
 const ENTRY_OPTIONS: AssistantOption[] = [
-  { label: 'Help me choose', value: 'help-me-choose' },
-  { label: 'Check this room', value: 'check-selected-room' },
+  {
+    label: 'Help me choose',
+    value: 'help-me-choose'
+  },
+  {
+    label: 'Check this room',
+    value: 'check-selected-room'
+  },
 ];
 
 let messageCounter = 0;
@@ -117,10 +123,22 @@ function createTypePromptMessage() {
     'buttons',
     {
       options: [
-        { label: 'Glass', value: 'glass' },
-        { label: 'Lecture', value: 'lecture' },
-        { label: 'Lab', value: 'lab' },
-        { label: 'No preference', value: '' },
+        {
+          label: 'Glass',
+          value: 'glass'
+        },
+        {
+          label: 'Lecture',
+          value: 'lecture'
+        },
+        {
+          label: 'Lab',
+          value: 'lab'
+        },
+        {
+          label: 'No preference',
+          value: ''
+        },
       ],
     }
   );
@@ -159,7 +177,10 @@ function createCapacityAcknowledgementMessage(minCapacity?: number) {
 function createFeaturePromptMessage(options: AssistantOption[]) {
   return createMessage('Any features I should prioritize?', 'system', 'feature-picker', {
     allowMultiple: true,
-    options: [...options, { label: 'Done', value: '__done__' }],
+    options: [...options, {
+      label: 'Done',
+      value: '__done__'
+    }],
   });
 }
 
@@ -260,7 +281,10 @@ function buildCapacityOptions(rooms: RecommendationRoom[]): AssistantOption[] {
       label: `${capacity} people`,
       value: capacity,
     })),
-    { label: 'Any size', value: '' },
+    {
+      label: 'Any size',
+      value: ''
+    },
   ];
 }
 
@@ -346,7 +370,9 @@ export default function RoomAssistantWidget({
 
     clearReplyTimers();
     setMessages([nextWelcomeMessage]);
-    setPreferences({ requiredFeatures: [] });
+    setPreferences({
+      requiredFeatures: []
+    });
     setSelectedFeatures([]);
     setStep('entry');
     setActivePromptId(nextWelcomeMessage.id);
@@ -387,7 +413,9 @@ export default function RoomAssistantWidget({
   }
 
   function startGuidedFlow() {
-    setPreferences({ requiredFeatures: [] });
+    setPreferences({
+      requiredFeatures: []
+    });
     setSelectedFeatures([]);
     setStep('type');
     appendUserMessage('Help me choose');
@@ -596,7 +624,9 @@ export default function RoomAssistantWidget({
 
     const frameId = window.requestAnimationFrame(() => {
       clearReplyTimers();
-      setPreferences({ requiredFeatures: [] });
+      setPreferences({
+        requiredFeatures: []
+      });
       setSelectedFeatures([]);
       setStep('results');
       setIsOpen(true);

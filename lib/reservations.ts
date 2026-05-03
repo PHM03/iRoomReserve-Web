@@ -173,7 +173,10 @@ export async function validateReservationApprover(
   email: string
 ): Promise<{ email: string; ok: true }> {
   return apiRequest("/api/reservation-approvers/validate", {
-    body: { campus, email },
+    body: {
+      campus,
+      email
+    },
     method: "POST",
     userId: auth.currentUser?.uid,
   });
@@ -432,7 +435,10 @@ export async function approveReservation(
   userEmail: string
 ): Promise<void> {
   await apiRequest(`/api/reservations/${reservationId}`, {
-    body: { action: "approve", userEmail },
+    body: {
+      action: "approve",
+      userEmail
+    },
     method: "PATCH",
     userId: auth.currentUser?.uid,
   });
@@ -444,7 +450,11 @@ export async function rejectReservation(
   reason: string
 ): Promise<void> {
   await apiRequest(`/api/reservations/${reservationId}`, {
-    body: { action: "reject", userEmail, reason },
+    body: {
+      action: "reject",
+      userEmail,
+      reason
+    },
     method: "PATCH",
     userId: auth.currentUser?.uid,
   });
