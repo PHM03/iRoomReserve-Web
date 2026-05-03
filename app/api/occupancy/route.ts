@@ -10,8 +10,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const ESP32_OCCUPANCY_API_URL =
-  process.env.ESP32_OCCUPANCY_API_URL?.trim() ||
-  "http://192.168.100.165:3000/api/occupancy";
+  process.env.ESP32_OCCUPANCY_API_URL?.trim();
 const OCCUPANCY_HISTORY_LIMIT = 50;
 const OCCUPANCY_FETCH_TIMEOUT_MS = 4_000;
 
@@ -37,8 +36,18 @@ function trimOccupancyHistory(payload: OccupancyPayload): OccupancyPayload {
   };
 }
 
+function getOccupancyApiUrl() {
+  if (!ESP32_OCCUPANCY_API_URL) {
+    throw new Error(
+      "ESP32 occupancy API is not configured. Set ESP32_OCCUPANCY_API_URL."
+    );
+  }
+
+  return ESP32_OCCUPANCY_API_URL;
+}
+
 async function fetchRemoteOccupancy() {
-  const response = await fetch(ESP32_OCCUPANCY_API_URL, {
+  const response = await fetch(getOccupancyApiUrl(), {
     cache: "no-store",
     signal: AbortSignal.timeout(OCCUPANCY_FETCH_TIMEOUT_MS),
   });
