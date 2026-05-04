@@ -10,11 +10,22 @@ interface AuthAlertProps {
   className?: string;
 }
 
-const alertToneStyles: Record<AuthAlertTone, string> = {
-  error:
-    'border-red-200 bg-red-50/95 text-red-900 shadow-[0_10px_25px_rgba(127,29,29,0.08)]',
-  warning:
-    'border-amber-200 bg-amber-50/95 text-amber-900 shadow-[0_10px_25px_rgba(146,64,14,0.08)]',
+type AuthAlertToneStyle = {
+  container: string;
+  icon: string;
+};
+
+const alertToneStyles: Record<AuthAlertTone, AuthAlertToneStyle> = {
+  error: {
+    container:
+      'border-red-300 bg-red-50/95 text-[#343434] shadow-[0_10px_25px_rgba(127,29,29,0.08)]',
+    icon: 'text-red-700',
+  },
+  warning: {
+    container:
+      'border-amber-400 bg-amber-100/95 text-[#343434] shadow-[0_10px_25px_rgba(146,64,14,0.08)]',
+    icon: 'text-amber-700',
+  },
 };
 
 const alertToneIcons: Record<AuthAlertTone, React.ReactNode> = {
@@ -59,13 +70,16 @@ export default function AuthAlert({
   tone = 'error',
   className = '',
 }: AuthAlertProps) {
+  const toneStyle = alertToneStyles[tone];
   return (
     <div
       role="alert"
       aria-live="polite"
-      className={`mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-medium ${alertToneStyles[tone]} ${className}`.trim()}
+      className={`mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold ${toneStyle.container} ${className}`.trim()}
     >
-      <span className="mt-0.5 shrink-0">{alertToneIcons[tone]}</span>
+      <span className={`mt-0.5 shrink-0 ${toneStyle.icon}`}>
+        {alertToneIcons[tone]}
+      </span>
       <div className="min-w-0">{message}</div>
     </div>
   );
