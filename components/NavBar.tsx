@@ -26,6 +26,10 @@ interface NavBarProps {
   onTabChange?: (tab: AdminTab) => void;
 }
 
+interface ChevronDownIconProps {
+  open: boolean;
+}
+
 const adminLinks: Array<{ label: string; tab: AdminTab }> = [
   { label: 'Dashboard', tab: 'dashboard' },
   { label: 'Pending', tab: 'pending' },
@@ -47,7 +51,7 @@ const navItemActiveClasses = 'bg-transparent text-[#a12124] shadow-none';
 const navItemInactiveClasses =
   'bg-transparent text-[#343434] hover:bg-transparent hover:text-[#a12124] hover:shadow-none';
 
-function ChevronDownIcon({ open }: { open: boolean }) {
+function ChevronDownIcon({ open }: Readonly<ChevronDownIconProps>) {
   return (
     <svg
       className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -65,7 +69,7 @@ function ChevronDownIcon({ open }: { open: boolean }) {
   );
 }
 
-const NavBar: React.FC<NavBarProps> = ({
+const NavBar: React.FC<Readonly<NavBarProps>> = ({
   user,
   onLogout,
   activeTab,

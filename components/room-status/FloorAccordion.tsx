@@ -12,7 +12,7 @@ export default function FloorAccordion({
   floor,
   roomCount,
   renderContent,
-}: FloorAccordionProps) {
+}: Readonly<FloorAccordionProps>) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (

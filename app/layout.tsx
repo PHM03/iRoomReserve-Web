@@ -41,11 +41,13 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
 };
 
+interface RootLayoutProps {
+  children: React.ReactNode;
+}
+
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<RootLayoutProps>) {
   return (
     <html lang="en" className="bg-[#f8f9fa]">
       <body className={`min-h-screen bg-[#f8f9fa] ${centuryGothicRegular.variable} ${centuryGothicBold.variable}`}>

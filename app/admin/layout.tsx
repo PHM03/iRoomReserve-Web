@@ -8,6 +8,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useAdminTab } from '@/context/AdminTabContext';
 import { normalizeRole, USER_ROLES } from '@/lib/domain/roles';
 
+interface AdminLayoutProps {
+  children: React.ReactNode;
+}
+
 function LoadingState() {
   return (
     <div className="min-h-screen flex items-center justify-center">
@@ -38,7 +42,7 @@ function LoadingState() {
   );
 }
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({ children }: Readonly<AdminLayoutProps>) {
   const { firebaseUser, profile, loading, logout } = useAuth();
   const { activeTab, setActiveTab } = useAdminTab();
   const router = useRouter();

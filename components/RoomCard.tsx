@@ -32,7 +32,7 @@ export default function RoomCard({
   name,
   onClick,
   roomType,
-}: RoomCardProps) {
+}: Readonly<RoomCardProps>) {
   const isAvailable = availability === 'Available';
 
   return (

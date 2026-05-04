@@ -37,7 +37,7 @@ interface UtilityStaffDashboardProps {
 
 export default function UtilityStaffDashboard({
   firstName,
-}: UtilityStaffDashboardProps) {
+}: Readonly<UtilityStaffDashboardProps>) {
   const { firebaseUser, profile } = useAuth();
   const uid = firebaseUser?.uid;
   const managedBuildings = getManagedBuildingsForCampus(profile?.campus);

@@ -8,7 +8,11 @@ import { useAdminTab } from '@/context/AdminTabContext';
 import { USER_ROLES } from '@/lib/domain/roles';
 import Link from 'next/link';
 
-function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
   const { firebaseUser, profile, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -234,6 +238,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({ children }: Readonly<DashboardLayoutProps>) {
   return <DashboardLayoutInner>{children}</DashboardLayoutInner>;
 }

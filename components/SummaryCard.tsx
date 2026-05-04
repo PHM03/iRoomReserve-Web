@@ -9,7 +9,7 @@ interface SummaryCardProps {
   color: string;
 }
 
-const SummaryCard: React.FC<SummaryCardProps> = ({ icon, number, label, color }) => {
+const SummaryCard: React.FC<Readonly<SummaryCardProps>> = ({ icon, number, label, color }) => {
   return (
     <div className={`glass-card p-6 border-l-4 ${color}`}>
       <div className="flex items-center">

@@ -58,7 +58,7 @@ export default function AuthAlert({
   message,
   tone = 'error',
   className = '',
-}: AuthAlertProps) {
+}: Readonly<AuthAlertProps>) {
   return (
     <div
       role="alert"

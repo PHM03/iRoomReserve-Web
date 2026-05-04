@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: "IRoomReserve | Dashboard",
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+export default function DashboardLayout({ children }: Readonly<DashboardLayoutProps>) {
   return <DashboardLayoutClient>{children}</DashboardLayoutClient>
 }

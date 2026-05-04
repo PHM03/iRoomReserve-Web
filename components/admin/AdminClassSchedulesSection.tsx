@@ -52,7 +52,7 @@ export default function AdminClassSchedulesSection({
   onEditSchedule,
   onDeleteSchedule,
   className = '',
-}: AdminClassSchedulesSectionProps) {
+}: Readonly<AdminClassSchedulesSectionProps>) {
   return (
     <section className={className}>
       <div className="flex items-center justify-between mb-4">

@@ -46,7 +46,7 @@ export default function RoomAvailabilityPicker({
   loading = false,
   hideLegend = false,
   className = '',
-}: RoomAvailabilityPickerProps) {
+}: Readonly<RoomAvailabilityPickerProps>) {
   const minSelectable = minDate ?? todayAtMidnight;
 
   const bookedDateObjects = useMemo(

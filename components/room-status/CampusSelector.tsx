@@ -13,7 +13,7 @@ export default function CampusSelector({
   onChange,
   options,
   value,
-}: CampusSelectorProps) {
+}: Readonly<CampusSelectorProps>) {
   if (options.length === 0) {
     return null;
   }

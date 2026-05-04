@@ -3,7 +3,11 @@
 import { AuthProvider } from '@/context/AuthContext';
 import { AdminTabProvider } from '@/context/AdminTabContext';
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+interface ProvidersProps {
+  children: React.ReactNode;
+}
+
+export default function Providers({ children }: Readonly<ProvidersProps>) {
   return (
     <AuthProvider>
       <AdminTabProvider>{children}</AdminTabProvider>

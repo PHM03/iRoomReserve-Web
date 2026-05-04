@@ -24,7 +24,35 @@ import {
 } from '@/lib/reservations';
 import { useAdminTab } from '@/context/AdminTabContext';
 
-function StatusBadge({ status }: { status: string }) {
+interface StatusBadgeProps {
+  status: string;
+}
+
+interface ReservationApprovalsProps {
+  email: string;
+  targetReservationId: string | null;
+}
+
+interface ReservationUpdatesProps {
+  notifications: Notification[];
+}
+
+interface TypeIconProps {
+  type: string;
+}
+
+interface AdminMessagesProps {
+  uid: string;
+}
+
+interface UserInboxProps {
+  uid: string;
+  email: string;
+  isFaculty: boolean;
+  showStaffMessages: boolean;
+}
+
+function StatusBadge({ status }: Readonly<StatusBadgeProps>) {
   const style = (() => {
     switch (status) {
       case 'open':
@@ -76,10 +104,7 @@ function formatEquipment(equipment?: Record<string, number>) {
 function ReservationApprovals({
   email,
   targetReservationId,
-}: {
-  email: string;
-  targetReservationId: string | null;
-}) {
+}: Readonly<ReservationApprovalsProps>) {
   const { firebaseUser, profile } = useAuth();
   const [requests, setRequests] = useState<Reservation[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -360,9 +385,7 @@ function ReservationApprovals({
 
 function ReservationUpdates({
   notifications,
-}: {
-  notifications: Notification[];
-}) {
+}: Readonly<ReservationUpdatesProps>) {
   const reservationNotifications = useMemo(
     () =>
       notifications.filter((notification) =>
@@ -434,12 +457,12 @@ function ReservationUpdates({
   );
 }
 
-function TypeIcon({ type }: { type: string }) {
+function TypeIcon({ type }: Readonly<TypeIconProps>) {
   const icons: Record<string, string> = { equipment: '🔧', general: '💬', other: '📋' };
   return <span className="mr-1">{icons[type] || '📋'}</span>;
 }
 
-function AdminMessages({ uid }: { uid: string }) {
+function AdminMessages({ uid }: Readonly<AdminMessagesProps>) {
   const [requests, setRequests] = useState<AdminRequest[]>([]);
   const [filter, setFilter] = useState<'all' | 'open' | 'responded' | 'closed'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -579,12 +602,7 @@ function UserInbox({
   email,
   isFaculty,
   showStaffMessages,
-}: {
-  uid: string;
-  email: string;
-  isFaculty: boolean;
-  showStaffMessages: boolean;
-}) {
+}: Readonly<UserInboxProps>) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const searchParams = useSearchParams();
   const targetReservationId = searchParams.get('reservationId');
