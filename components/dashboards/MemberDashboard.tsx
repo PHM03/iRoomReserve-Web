@@ -2,27 +2,21 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import Toast from '@/components/Toast';
 import { useAuth } from '@/context/AuthContext';
+import { getManagedBuildingIdsForCampus } from '@/lib/campusAssignments';
+import { normalizeRole, USER_ROLES } from '@/lib/domain/roles';
 import {
   onReservationsByUser,
   Reservation,
 } from '@/lib/reservations';
 import { useBluetoothReservationCheckIn } from '@/hooks/useBluetoothReservationCheckIn';
 import {
-  markAllNotificationsRead,
-  markNotificationRead,
-  Notification,
-  onUnreadNotifications,
-} from '@/lib/notifications';
-import {
-  DAY_NAMES,
   formatTime12h,
-  onSchedulesByBuildingIds,
+  getSchedulesByRoomId,
   Schedule,
 } from '@/lib/schedules';
-import { onRoomsByIds, Room } from '@/lib/rooms';
+import { onRoomsByBuilding, onRoomsByIds, Room } from '@/lib/rooms';
 import StatusBadge from '@/components/StatusBadge';
 import {
   canReservationCheckIn,
@@ -36,13 +30,88 @@ interface MemberDashboardProps {
   welcomeEmoji: string;
 }
 
+type ScheduleCampusFilter = 'SDCA Digi Campus' | 'SDCA Main Campus';
+type ScheduleBuildingFilter = 'gd1' | 'gd2' | 'gd3';
+
+const SCHEDULE_DAY_OPTIONS = [
+  { label: 'Monday', value: 1 },
+  { label: 'Tuesday', value: 2 },
+  { label: 'Wednesday', value: 3 },
+  { label: 'Thursday', value: 4 },
+  { label: 'Friday', value: 5 },
+  { label: 'Saturday', value: 6 },
+] as const;
+
+const DIGI_FLOOR_OPTIONS = [
+  { label: 'Ground Floor', value: 'Ground Floor' },
+  { label: '2nd Floor', value: '2nd Floor' },
+  { label: '3rd Floor', value: '3rd Floor' },
+  { label: '4th Floor', value: '4th Floor' },
+] as const;
+
+const MAIN_BUILDING_OPTIONS = [
+  { label: 'GD1', value: 'gd1' },
+  { label: 'GD2', value: 'gd2' },
+  { label: 'GD3', value: 'gd3' },
+] as const;
+
+const MAIN_FLOOR_OPTIONS_BY_BUILDING: Record<
+  ScheduleBuildingFilter,
+  ReadonlyArray<{ label: string; value: string }>
+> = {
+  gd1: [
+    { label: 'Basement', value: 'Basement Floor' },
+    { label: 'Ground Floor', value: 'Ground Floor' },
+    { label: '1st Floor', value: '1st Floor' },
+    { label: '2nd Floor', value: '2nd Floor' },
+    { label: '3rd Floor', value: '3rd Floor' },
+    { label: '4th Floor', value: '4th Floor' },
+    { label: '5th Floor', value: '5th Floor' },
+    { label: '6th Floor', value: '6th Floor' },
+    { label: '7th Floor', value: '7th Floor' },
+    { label: '8th Floor', value: '8th Floor' },
+  ],
+  gd2: [
+    { label: 'Ground Floor', value: 'Ground Floor' },
+    { label: '1st Floor', value: '1st Floor' },
+    { label: '2nd Floor', value: '2nd Floor' },
+    { label: '3rd Floor', value: '3rd Floor' },
+    { label: '4th Floor', value: '4th Floor' },
+    { label: '5th Floor', value: '5th Floor' },
+    { label: '6th Floor', value: '6th Floor' },
+    { label: '7th Floor', value: '7th Floor' },
+    { label: '8th Floor', value: '8th Floor' },
+    { label: '9th Floor', value: '9th Floor' },
+    { label: '10th Floor', value: '10th Floor' },
+  ],
+  gd3: [
+    { label: 'Ground Floor', value: 'Ground Floor' },
+    { label: '1st Floor', value: '1st Floor' },
+    { label: '2nd Floor', value: '2nd Floor' },
+    { label: '3rd Floor', value: '3rd Floor' },
+    { label: '4th Floor', value: '4th Floor' },
+    { label: '5th Floor', value: '5th Floor' },
+    { label: '6th Floor', value: '6th Floor' },
+    { label: '7th Floor', value: '7th Floor' },
+    { label: '8th Floor', value: '8th Floor' },
+    { label: '9th Floor', value: '9th Floor' },
+    { label: '10th Floor', value: '10th Floor' },
+    { label: '11th Floor', value: '11th Floor' },
+  ],
+};
+
+function getDefaultSelectedDay(): string {
+  const currentDay = new Date().getDay();
+  return SCHEDULE_DAY_OPTIONS.find((option) => option.value === currentDay)?.label ?? 'Monday';
+}
+
 export default function MemberDashboard({
   firstName,
   welcomeEmoji,
 }: MemberDashboardProps) {
-  const { firebaseUser } = useAuth();
-  const router = useRouter();
+  const { firebaseUser, profile } = useAuth();
   const uid = firebaseUser?.uid;
+  const isStudent = normalizeRole(profile?.role ?? '') === USER_ROLES.STUDENT;
   const {
     checkInWithBluetooth,
     dismissToast,
@@ -53,10 +122,16 @@ export default function MemberDashboard({
     toastType,
   } = useBluetoothReservationCheckIn();
   const [reservationHistory, setReservationHistory] = useState<Reservation[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomOptions, setRoomOptions] = useState<Room[]>([]);
+  const [loadedRoomFilterKey, setLoadedRoomFilterKey] = useState<string>('');
+  const [loadedScheduleKey, setLoadedScheduleKey] = useState<string>('');
+  const [selectedDay, setSelectedDay] = useState<string>(getDefaultSelectedDay);
+  const [selectedCampus, setSelectedCampus] = useState<ScheduleCampusFilter | null>(null);
+  const [selectedBuilding, setSelectedBuilding] = useState<ScheduleBuildingFilter | null>(null);
+  const [selectedFloor, setSelectedFloor] = useState<string | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
 
   useEffect(() => {
     if (!uid) {
@@ -69,27 +144,18 @@ export default function MemberDashboard({
       if (cancelled) return;
       setReservationHistory(nextReservations);
     });
-    const unsubscribeNotifications = onUnreadNotifications(uid, (nextNotifications) => {
-      if (cancelled) return;
-      setNotifications(nextNotifications);
-    });
 
     return () => {
       cancelled = true;
       unsubscribeReservations();
-      unsubscribeNotifications();
     };
   }, [uid]);
 
   useEffect(() => {
-    const roomIds = [...new Set(reservationHistory.map((reservation) => reservation.roomId))];
-    const buildingIds = [
-      ...new Set(reservationHistory.map((reservation) => reservation.buildingId)),
-    ];
-
     let cancelled = false;
+    const roomIds = [...new Set(reservationHistory.map((reservation) => reservation.roomId))];
+
     let unsubscribeRooms = () => {};
-    let unsubscribeSchedules = () => {};
 
     if (roomIds.length > 0) {
       unsubscribeRooms = onRoomsByIds(roomIds, (nextRooms) => {
@@ -98,23 +164,93 @@ export default function MemberDashboard({
       });
     }
 
-    if (buildingIds.length > 0) {
-      unsubscribeSchedules = onSchedulesByBuildingIds(buildingIds, (nextSchedules) => {
-        if (cancelled) return;
-        setSchedules(nextSchedules);
-      });
-    }
-
     return () => {
       cancelled = true;
       unsubscribeRooms();
-      unsubscribeSchedules();
     };
   }, [reservationHistory]);
+
+  useEffect(() => {
+    if (!selectedFloor) {
+      return;
+    }
+
+    const targetBuildingId =
+      selectedCampus === 'SDCA Digi Campus'
+        ? getManagedBuildingIdsForCampus('digi')[0] ?? null
+        : selectedCampus === 'SDCA Main Campus'
+          ? selectedBuilding
+          : null;
+
+    if (!targetBuildingId) {
+      return;
+    }
+
+    const roomFilterKey = `${selectedCampus}:${targetBuildingId}:${selectedFloor}`;
+    let cancelled = false;
+    const unsubscribe = onRoomsByBuilding(targetBuildingId, (nextRooms) => {
+      if (cancelled) return;
+      const filteredRooms = nextRooms
+        .filter((room) => room.floor === selectedFloor)
+        .sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }));
+      setRoomOptions(filteredRooms);
+      setLoadedRoomFilterKey(roomFilterKey);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [selectedCampus, selectedBuilding, selectedFloor]);
+
+  useEffect(() => {
+    if (!selectedRoom) {
+      return;
+    }
+
+    const scheduleKey = `${selectedRoom}:${selectedDay}`;
+    let cancelled = false;
+
+    void getSchedulesByRoomId(selectedRoom)
+      .then((nextSchedules) => {
+        if (cancelled) return;
+        setSchedules(nextSchedules);
+        setLoadedScheduleKey(scheduleKey);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.warn('Failed to load room schedules:', error);
+        setSchedules([]);
+        setLoadedScheduleKey(scheduleKey);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRoom, selectedDay]);
 
   const roomLookup = Object.fromEntries(
     rooms.map((room) => [room.id, room] as const)
   ) as Record<string, Room | undefined>;
+  const selectedDayOptionIndex = SCHEDULE_DAY_OPTIONS.findIndex(
+    (option) => option.label === selectedDay
+  );
+  const selectedDayValue =
+    SCHEDULE_DAY_OPTIONS[selectedDayOptionIndex]?.value ?? SCHEDULE_DAY_OPTIONS[0].value;
+  const selectedFloorOptions =
+    selectedCampus === 'SDCA Digi Campus'
+      ? DIGI_FLOOR_OPTIONS
+      : selectedCampus === 'SDCA Main Campus' && selectedBuilding
+        ? MAIN_FLOOR_OPTIONS_BY_BUILDING[selectedBuilding]
+        : [];
+  const roomFilterKey =
+    selectedFloor && selectedCampus
+      ? `${selectedCampus}:${selectedCampus === 'SDCA Digi Campus' ? getManagedBuildingIdsForCampus('digi')[0] ?? '' : selectedBuilding ?? ''}:${selectedFloor}`
+      : '';
+  const isRoomOptionsLoading = Boolean(
+    selectedFloor && roomFilterKey && loadedRoomFilterKey !== roomFilterKey
+  );
+  const availableRooms = loadedRoomFilterKey === roomFilterKey ? roomOptions : [];
   const getBluetoothConnectionStatus = (reservation: Reservation) => {
     const room = roomLookup[reservation.roomId];
     const localStatus = getConnectionStatus(reservation.id);
@@ -142,26 +278,6 @@ export default function MemberDashboard({
   const shouldShowBluetoothAction = (reservation: Reservation) =>
     getConnectionStatus(reservation.id) === 'connecting' || canCheckIn(reservation);
 
-  const handleMarkAllRead = async () => {
-    if (!firebaseUser) {
-      return;
-    }
-
-    await markAllNotificationsRead(firebaseUser.uid);
-  };
-
-  const handleNotificationClick = async (notification: Notification) => {
-    await markNotificationRead(notification.id);
-    setShowNotifications(false);
-
-    if (notification.reservationId) {
-      router.push(`/dashboard/inbox?reservationId=${encodeURIComponent(notification.reservationId)}`);
-      return;
-    }
-
-    router.push('/dashboard/inbox');
-  };
-
   const pendingCount = reservationHistory.filter(
     (reservation) => reservation.status === 'pending'
   ).length;
@@ -181,10 +297,18 @@ export default function MemberDashboard({
     .slice(0, 3);
   const recentActivity = reservationHistory.slice(0, 5);
 
-  const todayDay = new Date().getDay();
   const todaySchedules = schedules.filter(
-    (schedule) => schedule.dayOfWeek === todayDay
+    (schedule) => schedule.dayOfWeek === selectedDayValue
   );
+  const currentScheduleKey = selectedRoom ? `${selectedRoom}:${selectedDay}` : '';
+  const isScheduleLoaded = currentScheduleKey !== '' && loadedScheduleKey === currentScheduleKey;
+
+  const handleDayStep = (direction: -1 | 1) => {
+    const baseIndex = selectedDayOptionIndex >= 0 ? selectedDayOptionIndex : 0;
+    const nextIndex =
+      (baseIndex + direction + SCHEDULE_DAY_OPTIONS.length) % SCHEDULE_DAY_OPTIONS.length;
+    setSelectedDay(SCHEDULE_DAY_OPTIONS[nextIndex].label);
+  };
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[100px] relative z-10 pb-24 md:pb-8">
@@ -205,141 +329,19 @@ export default function MemberDashboard({
           </p>
         </div>
 
-        <div className="relative">
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2.5 rounded-xl glass-card !p-2.5 hover:!border-primary/40 transition-all"
-          >
-            <svg
-              className="w-5 h-5 text-black"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-              />
-            </svg>
-            {notifications.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
-                {notifications.length}
-              </span>
-            )}
-          </button>
-
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 !rounded-xl overflow-hidden z-50 border border-dark/12 shadow-2xl shadow-black/20" style={{ background: 'rgba(248, 246, 242, 0.98)', backdropFilter: 'blur(20px)' }}>
-              <div className="flex items-center justify-between p-4 border-b border-dark/10">
-                <h4 className="font-bold text-black text-sm">Notifications</h4>
-                {notifications.length > 0 && (
-                  <button
-                    onClick={handleMarkAllRead}
-                    className="text-xs text-primary font-bold hover:text-primary-hover transition-colors"
-                  >
-                    Mark all read
-                  </button>
-                )}
-              </div>
-              <div className="max-h-64 overflow-y-auto">
-                {notifications.length === 0 ? (
-                  <div className="p-6 text-center">
-                    <p className="text-sm text-black/80">No new notifications</p>
-                  </div>
-                ) : (
-                  notifications.map((notification) => (
-                    <div
-                      key={notification.id}
-                      className="p-3 border-b border-dark/5 hover:bg-primary/8 transition-colors flex items-start gap-3 cursor-pointer"
-                      onClick={() => void handleNotificationClick(notification)}
-                    >
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                          notification.type === 'reservation_approved'
-                            ? 'bg-green-500/20'
-                            : notification.type === 'reservation_rejected'
-                              ? 'bg-red-500/20'
-                              : 'bg-primary/20'
-                        }`}
-                      >
-                        <svg
-                          className={`w-4 h-4 ${
-                            notification.type === 'reservation_approved'
-                              ? 'ui-text-green'
-                              : notification.type === 'reservation_rejected'
-                                ? 'ui-text-red'
-                                : 'text-primary'
-                          }`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          {notification.type === 'reservation_approved' ? (
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 13l4 4L19 7"
-                            />
-                          ) : notification.type === 'reservation_rejected' ? (
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M6 18L18 6M6 6l12 12"
-                            />
-                          ) : (
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                            />
-                          )}
-                        </svg>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-black">
-                          {notification.title}
-                        </p>
-                        <p className="text-[11px] text-black/80 mt-0.5 leading-relaxed">
-                          {notification.message}
-                        </p>
-                      </div>
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void markNotificationRead(notification.id);
-                        }}
-                        className="text-black/70 hover:text-primary transition-colors shrink-0"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <Link
+          href="/dashboard/reserve"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#a12124] text-white text-sm font-bold shadow-md hover:bg-[#8e1d20] transition-all hover:-translate-y-0.5"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          <span>New Reservation</span>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="glass-card p-5">
+        <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
               <svg
@@ -416,7 +418,7 @@ export default function MemberDashboard({
           )}
         </div>
 
-        <div className="glass-card p-5">
+        <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
               <svg
@@ -441,7 +443,7 @@ export default function MemberDashboard({
           <p className="text-xs text-black mt-0.5">Awaiting approval</p>
         </div>
 
-        <div className="glass-card p-5">
+        <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
               <svg
@@ -465,37 +467,18 @@ export default function MemberDashboard({
         </div>
       </div>
 
-      <Link
-        href="/dashboard/reserve"
-        className="group mb-8 flex w-full items-center justify-center gap-3 rounded-2xl border border-[#a12124]/90 bg-[#a12124] px-5 py-5 text-white shadow-[0_14px_32px_rgba(161,33,36,0.16)] transition-all duration-300 ease-in-out hover:-translate-y-0.5 hover:bg-[#8e1d20] hover:shadow-[0_18px_34px_rgba(142,29,32,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a12124]/25 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f5f5f5]"
-      >
-        <svg
-          className="h-6 w-6 text-white transition-transform duration-300 ease-in-out group-hover:scale-105"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 4v16m8-8H4"
-          />
-        </svg>
-        <span className="text-lg font-bold text-white">
-          New Reservation
-        </span>
-      </Link>
-
       {upcomingReservations.length > 0 && (
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold text-black">Upcoming Reservations</h3>
             <Link
               href="/dashboard/reservations"
-              className="text-sm text-primary font-bold hover:text-primary-hover transition-colors"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-primary hover:text-primary-hover hover:bg-primary/10 transition-colors"
+              title="View all activity"
             >
-              View all -&gt;
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -580,18 +563,21 @@ export default function MemberDashboard({
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={`grid grid-cols-1 gap-6 ${!isStudent ? 'lg:grid-cols-2' : ''}`}>
         <div>
           <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-white/30">
             <h3 className="text-xl font-bold text-gray-800">Recent Activity</h3>
             <Link
               href="/dashboard/reservations"
-              className="text-sm text-gray-600 font-bold hover:text-gray-800 transition-colors"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-primary hover:bg-primary/10 transition-colors"
+              title="View all activity"
             >
-              View all -&gt;
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </Link>
           </div>
-          <div className="glass-card !rounded-xl overflow-hidden">
+          <div className="bg-white border border-gray-200 shadow-sm !rounded-xl overflow-hidden">
             {recentActivity.length === 0 ? (
               <div className="p-12 text-center">
                 <svg
@@ -654,68 +640,196 @@ export default function MemberDashboard({
           </div>
         </div>
 
-        <div>
-          <div className="bg-white rounded-xl px-6 py-4 mb-4 inline-block border border-white/30">
-            <h3 className="text-xl font-bold text-gray-800">
-              Today&apos;s Class Schedules
-              <span className="text-sm text-gray-600 font-normal ml-2">
-                ({DAY_NAMES[todayDay]})
-              </span>
-            </h3>
-          </div>
-          <div className="glass-card !rounded-xl overflow-hidden">
-            {todaySchedules.length === 0 ? (
-              <div className="p-12 text-center">
-                <svg
-                  className="w-14 h-14 text-black mx-auto mb-3"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+        {!isStudent && (
+          <div>
+            <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-white/30">
+              <h3 className="text-xl font-bold text-gray-800">Today&apos;s Class Schedules</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDayStep(-1)}
+                  className="w-9 h-9 rounded-xl border border-gray-200 bg-white text-gray-600 hover:text-primary hover:border-primary/30 transition-colors flex items-center justify-center"
+                  title="Previous day"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-                <p className="text-sm text-black font-bold">No classes today</p>
-                <p className="text-xs text-black mt-1">
-                  No scheduled classes for today
-                </p>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <select
+                  aria-label="Select day"
+                  className="text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={selectedDay}
+                  onChange={(e) => setSelectedDay(e.target.value)}
+                >
+                  {SCHEDULE_DAY_OPTIONS.map((option) => (
+                    <option key={option.label} value={option.label}>{option.label}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => handleDayStep(1)}
+                  className="w-9 h-9 rounded-xl border border-gray-200 bg-white text-gray-600 hover:text-primary hover:border-primary/30 transition-colors flex items-center justify-center"
+                  title="Next day"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
-            ) : (
-              <div className="divide-y divide-dark/5">
-                {todaySchedules.map((schedule) => (
-                  <div
-                    key={schedule.id}
-                    className="p-4 hover:bg-primary/10 transition-colors"
+            </div>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <select
+                aria-label="Select Campus"
+                className="text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                value={selectedCampus ?? ''}
+                onChange={(e) => {
+                  const nextCampus = e.target.value ? (e.target.value as ScheduleCampusFilter) : null;
+                  setSelectedCampus(nextCampus);
+                  setSelectedBuilding(null);
+                  setSelectedFloor(null);
+                  setSelectedRoom(null);
+                }}
+              >
+                <option value="">Select Building</option>
+                <option value="SDCA Digi Campus">SDCA Digi Campus</option>
+                <option value="SDCA Main Campus">SDCA Main Campus</option>
+              </select>
+
+              {selectedCampus === 'SDCA Main Campus' && (
+                <select
+                  aria-label="Select building"
+                  className="text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={selectedBuilding ?? ''}
+                  onChange={(e) => {
+                    const nextBuilding = e.target.value ? (e.target.value as ScheduleBuildingFilter) : null;
+                    setSelectedBuilding(nextBuilding);
+                    setSelectedFloor(null);
+                    setSelectedRoom(null);
+                  }}
+                >
+                  <option value="">Select Building</option>
+                  {MAIN_BUILDING_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              )}
+
+              {(selectedCampus === 'SDCA Digi Campus' || (selectedCampus === 'SDCA Main Campus' && selectedBuilding)) && (
+                <select
+                  aria-label="Select Floor"
+                  className="text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={selectedFloor ?? ''}
+                  onChange={(e) => {
+                    setSelectedFloor(e.target.value || null);
+                    setSelectedRoom(null);
+                  }}
+                >
+                  <option value="">Select Floor</option>
+                  {selectedFloorOptions.map((floor) => (
+                    <option key={floor.value} value={floor.value}>{floor.label}</option>
+                  ))}
+                </select>
+              )}
+
+              {selectedFloor && (
+                <select
+                  aria-label="Select Room"
+                  className="text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={selectedRoom ?? ''}
+                  onChange={(e) => setSelectedRoom(e.target.value || null)}
+                  disabled={isRoomOptionsLoading || availableRooms.length === 0}
+                >
+                  <option value="">
+                    {isRoomOptionsLoading
+                      ? 'Loading rooms...'
+                      : availableRooms.length === 0
+                        ? 'No rooms available'
+                        : 'Select Room'}
+                  </option>
+                  {availableRooms.map((room) => (
+                    <option key={room.id} value={room.id}>{room.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="bg-white border border-gray-200 shadow-sm !rounded-xl overflow-hidden">
+              {!selectedRoom ? (
+                <div className="p-12 text-center">
+                  <svg
+                    className="w-14 h-14 text-black mx-auto mb-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-bold text-black">
-                          {schedule.subjectName}
-                        </h4>
-                        <p className="text-xs text-black mt-0.5">
-                          {schedule.instructorName}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-primary">
-                          {formatTime12h(schedule.startTime)} -{' '}
-                          {formatTime12h(schedule.endTime)}
-                        </p>
-                        <p className="text-[10px] text-black">
-                          {schedule.roomName}
-                        </p>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <p className="text-sm text-black font-bold">Select a room to view its schedule</p>
+                </div>
+              ) : !isScheduleLoaded ? (
+                <div className="p-12 text-center">
+                  <svg
+                    className="w-14 h-14 text-black mx-auto mb-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <p className="text-sm text-black font-bold">Loading classes</p>
+                  <p className="text-xs text-black mt-1">Fetching {selectedDay}&apos;s schedule for the selected room</p>
+                </div>
+              ) : todaySchedules.length === 0 ? (
+                <div className="p-12 text-center">
+                  <svg
+                    className="w-14 h-14 text-black mx-auto mb-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <p className="text-sm text-black font-bold">No classes today</p>
+                  <p className="text-xs text-black mt-1">No scheduled classes for the selected room on {selectedDay}</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-dark/5">
+                  {todaySchedules.map((schedule) => (
+                    <div key={schedule.id} className="p-4 hover:bg-primary/10 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-bold text-black">{schedule.subjectName}</h4>
+                          <p className="text-xs text-black mt-0.5">{schedule.instructorName}</p>
+                          <p className="text-xs text-black mt-0.5">{schedule.roomName}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-primary">
+                            {formatTime12h(schedule.startTime)} - {formatTime12h(schedule.endTime)}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </main>
   );

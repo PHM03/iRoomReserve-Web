@@ -4,6 +4,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
+import { useAuth } from '@/context/AuthContext';
+import {
+  markAllNotificationsRead,
+  markNotificationRead,
+  Notification,
+  onUnreadNotifications,
+} from '@/lib/notifications';
 import { normalizeRole, USER_ROLES } from '@/lib/domain/roles';
 
 export type AdminTab =
@@ -18,6 +25,7 @@ export type AdminTab =
 interface NavBarProps {
   user: {
     name: string;
+    email?: string;
     initials: string;
     role: string;
   };
@@ -74,9 +82,23 @@ const NavBar: React.FC<NavBarProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [isMobileStatusMenuOpen, setIsMobileStatusMenuOpen] = useState(false);
+  const { firebaseUser } = useAuth();
+  const uid = firebaseUser?.uid;
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserTooltip, setShowUserTooltip] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const notificationRef = useRef<HTMLDivElement | null>(null);
+  const normalizedRole = normalizeRole(user.role);
+  const isFacultyRole = normalizedRole === USER_ROLES.FACULTY;
+  const isUtilityRole = normalizedRole === USER_ROLES.UTILITY;
+  const isStudentRole = normalizedRole === USER_ROLES.STUDENT;
+  const isAdmin = normalizedRole === USER_ROLES.ADMIN;
+  const isAdminRoute = pathname.startsWith('/admin');
+  const isStatusSchedulingActive =
+    isAdminRoute || activeTab === 'status-scheduling';
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -96,38 +118,38 @@ const NavBar: React.FC<NavBarProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (!uid || isAdmin) return;
+
+    const unsubscribe = onUnreadNotifications(uid, (next) => setNotifications(next));
+
+    return () => unsubscribe();
+  }, [uid, isAdmin]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        notificationRef.current &&
+        event.target instanceof Node &&
+        !notificationRef.current.contains(event.target)
+      ) {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, []);
+
   const handleLogout = () => {
     if (onLogout) {
       onLogout();
     }
 
     router.push('/');
-  };
-
-  const normalizedRole = normalizeRole(user.role);
-  const isFacultyRole = normalizedRole === USER_ROLES.FACULTY;
-  const isUtilityRole = normalizedRole === USER_ROLES.UTILITY;
-  const isStudentRole = normalizedRole === USER_ROLES.STUDENT;
-  const isAdmin = normalizedRole === USER_ROLES.ADMIN;
-  const isAdminRoute = pathname.startsWith('/admin');
-  const isStatusSchedulingActive =
-    isAdminRoute || activeTab === 'status-scheduling';
-
-  const getRoleBadgeStyle = () => {
-    switch (normalizedRole) {
-      case USER_ROLES.STUDENT:
-        return 'bg-blue-100/90 text-blue-800 border-blue-300/80';
-      case USER_ROLES.FACULTY:
-        return 'bg-green-100/90 text-green-800 border-green-300/80';
-      case USER_ROLES.UTILITY:
-        return 'bg-teal-100/90 text-teal-800 border-teal-300/80';
-      case USER_ROLES.ADMIN:
-        return 'bg-red-100/90 text-red-800 border-red-300/80';
-      case USER_ROLES.SUPER_ADMIN:
-        return 'bg-purple-100/90 text-purple-800 border-purple-300/80';
-      default:
-        return 'bg-dark/10 text-black border-dark/20';
-    }
   };
 
   const defaultLinks = isUtilityRole
@@ -173,8 +195,25 @@ const NavBar: React.FC<NavBarProps> = ({
     }
   };
 
+  const handleMarkAllRead = async () => {
+    if (!firebaseUser) return;
+    await markAllNotificationsRead(firebaseUser.uid);
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    await markNotificationRead(notification.id);
+    setShowNotifications(false);
+
+    if (notification.reservationId) {
+      router.push(`/dashboard/inbox?reservationId=${encodeURIComponent(notification.reservationId)}`);
+      return;
+    }
+
+    router.push('/dashboard/inbox');
+  };
+
   return (
-    <nav className="glass-nav fixed top-0 left-0 right-0 z-50">
+    <nav className="bg-white border-b border-gray-200 shadow-sm fixed top-0 left-0 right-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between py-5">
           <div className="flex items-center">
@@ -258,18 +297,158 @@ const NavBar: React.FC<NavBarProps> = ({
           <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-2">
               <div
-                className="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm"
-                style={navbarBoldStyle}
+                className="relative"
+                onMouseEnter={() => setShowUserTooltip(true)}
+                onMouseLeave={() => setShowUserTooltip(false)}
               >
-                {user.initials}
+                <div
+                  className="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm cursor-default"
+                  style={navbarBoldStyle}
+                >
+                  {user.initials}
+                </div>
+                {showUserTooltip && (
+                  <div className="absolute right-0 top-full mt-2 w-52 glass-card !rounded-xl p-3 shadow-xl z-50">
+                    <p className="text-xs font-bold text-black capitalize">{user.role}</p>
+                    {user.email && (
+                      <p className="text-[11px] text-black/70 mt-0.5 truncate">{user.email}</p>
+                    )}
+                  </div>
+                )}
               </div>
-              <span
-                className={`hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs border ${getRoleBadgeStyle()}`}
-                style={navbarBoldStyle}
-              >
-                {user.role}
-              </span>
             </div>
+            {!isAdmin && (
+              <div ref={notificationRef} className="relative">
+                <button
+                  onClick={() => setShowNotifications((prev) => !prev)}
+                  className={`${navIconButtonClasses} relative`}
+                  title="Notifications"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                    />
+                  </svg>
+                  {notifications.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                      {notifications.length}
+                    </span>
+                  )}
+                </button>
+                {showNotifications && (
+                  <div
+                    className="absolute right-0 top-full mt-2 w-80 sm:w-96 !rounded-xl overflow-hidden z-50 border border-dark/12 shadow-2xl shadow-black/20"
+                    style={{
+                      background: 'rgba(248, 246, 242, 0.98)',
+                      backdropFilter: 'blur(20px)',
+                    }}
+                  >
+                    <div className="flex items-center justify-between p-4 border-b border-dark/10">
+                      <h4 className="font-bold text-black text-sm">Notifications</h4>
+                      {notifications.length > 0 && (
+                        <button
+                          onClick={handleMarkAllRead}
+                          className="text-xs text-primary font-bold hover:text-primary-hover transition-colors"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="p-6 text-center">
+                          <p className="text-sm text-black/80">No new notifications</p>
+                        </div>
+                      ) : (
+                        notifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            className="p-3 border-b border-dark/5 hover:bg-primary/8 transition-colors flex items-start gap-3 cursor-pointer"
+                            onClick={() => void handleNotificationClick(notification)}
+                          >
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                                notification.type === 'reservation_approved'
+                                  ? 'bg-green-500/20'
+                                  : notification.type === 'reservation_rejected'
+                                    ? 'bg-red-500/20'
+                                    : 'bg-primary/20'
+                              }`}
+                            >
+                              <svg
+                                className={`w-4 h-4 ${
+                                  notification.type === 'reservation_approved'
+                                    ? 'ui-text-green'
+                                    : notification.type === 'reservation_rejected'
+                                      ? 'ui-text-red'
+                                      : 'text-primary'
+                                }`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                {notification.type === 'reservation_approved' ? (
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                ) : notification.type === 'reservation_rejected' ? (
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M6 18L18 6M6 6l12 12"
+                                  />
+                                ) : (
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                                  />
+                                )}
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-black">{notification.title}</p>
+                              <p className="text-[11px] text-black/80 mt-0.5 leading-relaxed">
+                                {notification.message}
+                              </p>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void markNotificationRead(notification.id);
+                              }}
+                              className="text-black/70 hover:text-primary transition-colors shrink-0"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <button onClick={handleLogout} className={navIconButtonClasses} title="Logout">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path

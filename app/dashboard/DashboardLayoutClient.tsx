@@ -84,6 +84,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
   const user = {
     name: displayName,
+    email: firebaseUser?.email ?? undefined,
     initials,
     role: profile?.role || USER_ROLES.STUDENT,
   };
