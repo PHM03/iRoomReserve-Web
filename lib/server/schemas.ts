@@ -118,28 +118,31 @@ function normalizeRoomPayload(value: unknown): unknown {
   return nextValue;
 }
 
-const reservationCommonSchema = z
-  .object({
-    userId: nonEmptyString,
-    userName: nonEmptyString,
-    userRole: userRoleSchema,
-    roomId: nonEmptyString,
-    roomName: nonEmptyString,
-    buildingId: nonEmptyString,
-    buildingName: nonEmptyString,
-    campus: reservationCampusSchema,
-    startTime: timeString,
-    endTime: timeString,
-    programDepartmentOrganization: nonEmptyString,
-    purpose: nonEmptyString,
-    approvalDocumentName: nonEmptyString.optional(),
-    approvalDocumentUrl: z.string().trim().url().optional(),
-    approvalDocumentPath: nonEmptyString.optional(),
-    approvalDocumentMimeType: nonEmptyString.optional(),
-    approvalDocumentSize: positiveInteger.optional(),
-    equipment: equipmentSchema.optional(),
-  })
-  .superRefine((value, context) => {
+const reservationCommonSchema = z.object({
+  userId: nonEmptyString,
+  userName: nonEmptyString,
+  userRole: userRoleSchema,
+  roomId: nonEmptyString,
+  roomName: nonEmptyString,
+  buildingId: nonEmptyString,
+  buildingName: nonEmptyString,
+  campus: reservationCampusSchema,
+  startTime: timeString,
+  endTime: timeString,
+  programDepartmentOrganization: nonEmptyString,
+  purpose: nonEmptyString,
+  approvalDocumentName: nonEmptyString.optional(),
+  approvalDocumentUrl: z.string().trim().url().optional(),
+  approvalDocumentPath: nonEmptyString.optional(),
+  approvalDocumentMimeType: nonEmptyString.optional(),
+  approvalDocumentSize: positiveInteger.optional(),
+  equipment: equipmentSchema.optional(),
+});
+
+function withStudentApprovalDocumentRequirement<
+  T extends z.ZodObject<z.core.$ZodShape>
+>(schema: T) {
+  return schema.superRefine((value, context) => {
     if (value.userRole !== "Student") {
       return;
     }
@@ -176,17 +179,22 @@ const reservationCommonSchema = z
       });
     }
   });
+}
 
-export const digiReservationBaseSchema = reservationCommonSchema.extend({
+export const digiReservationBaseSchema = withStudentApprovalDocumentRequirement(
+  reservationCommonSchema.extend({
   campus: z.literal("digi"),
   buildingAdminEmail: emailString.optional(),
-});
+  })
+);
 
-export const mainReservationBaseSchema = reservationCommonSchema.extend({
+export const mainReservationBaseSchema = withStudentApprovalDocumentRequirement(
+  reservationCommonSchema.extend({
   campus: z.literal("main"),
   advisorEmail: emailString.optional(),
   buildingAdminEmail: emailString.optional(),
-});
+  })
+);
 
 export const reservationBaseSchema = z.union([
   digiReservationBaseSchema,
