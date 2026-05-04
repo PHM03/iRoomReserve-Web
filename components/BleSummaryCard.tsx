@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { formatClockTime } from '@/lib/dateTime';
 import { useCallback, useEffect, useState } from 'react';
 
 import BleStatusBadge from '@/components/BleStatusBadge';
@@ -29,11 +30,7 @@ function formatRefreshTime(value: Date | null) {
     return 'Not refreshed yet';
   }
 
-  return value.toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  return formatClockTime(value, { includeSeconds: true });
 }
 
 function formatRefreshCountdown(milliseconds: number) {

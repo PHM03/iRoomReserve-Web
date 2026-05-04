@@ -6,6 +6,7 @@ import {
   normalizeCampus,
   type ReservationCampus,
 } from "@/lib/campuses";
+import { formatDate, formatTimeRange } from "../../dateTime";
 import { normalizeRole, USER_ROLES } from "@/lib/domain/roles";
 import type { FirestoreTimestampLike } from "@/lib/firestore-types";
 import {
@@ -91,6 +92,17 @@ interface ReservationCreateBaseInput {
   approvalDocumentMimeType?: string;
   approvalDocumentSize?: number;
   equipment?: Record<string, number>;
+}
+
+function formatReservationScheduleLabel(input: {
+  date: string;
+  startTime: string;
+  endTime: string;
+}) {
+  return `${formatDate(input.date)} (${formatTimeRange(
+    input.startTime,
+    input.endTime
+  )})`;
 }
 
 export type ReservationCreateInput =
@@ -589,7 +601,9 @@ export async function createReservationRecord(data: ReservationCreateInput) {
         recipientUid,
         type: "new_reservation",
         title: "New Reservation Request",
-        message: `${data.userName} reserved ${data.roomName} on ${data.date} (${data.startTime} - ${data.endTime}). Review is requested for the ${firstApprovalStep?.role ?? "current"} step.`,
+        message: `${data.userName} reserved ${data.roomName} on ${formatReservationScheduleLabel(
+          data
+        )}. Review is requested for the ${firstApprovalStep?.role ?? "current"} step.`,
         buildingId: data.buildingId,
         reservationId: reservationRef.id,
       });
@@ -693,7 +707,12 @@ export async function createRecurringReservationRecord(
         recipientUid,
         type: "new_reservation",
         title: "New Recurring Reservation",
-        message: `${data.userName} reserved ${data.roomName} every ${dayNames} from ${startDate} to ${endDate} (${data.startTime} - ${data.endTime}) - ${dates.length} dates. Review is requested for the ${firstApprovalStep?.role ?? "current"} step.`,
+        message: `${data.userName} reserved ${data.roomName} every ${dayNames} from ${formatDate(
+          startDate
+        )} to ${formatDate(endDate)} (${formatTimeRange(
+          data.startTime,
+          data.endTime
+        )}) - ${dates.length} dates. Review is requested for the ${firstApprovalStep?.role ?? "current"} step.`,
         buildingId: data.buildingId,
         reservationId: createdIds[0],
       });
@@ -784,7 +803,9 @@ export async function approveReservationRecord(
           recipientUid,
           type: "new_reservation",
           title: "Reservation Approval Required",
-          message: `${approvalResult.reservation.userName} reserved ${approvalResult.reservation.roomName} on ${approvalResult.reservation.date} (${approvalResult.reservation.startTime} - ${approvalResult.reservation.endTime}). Your ${approvalResult.nextApprovalStep?.role ?? "next"} approval is required.`,
+          message: `${approvalResult.reservation.userName} reserved ${approvalResult.reservation.roomName} on ${formatReservationScheduleLabel(
+            approvalResult.reservation
+          )}. Your ${approvalResult.nextApprovalStep?.role ?? "next"} approval is required.`,
           buildingId: approvalResult.reservation.buildingId,
           reservationId,
         });
@@ -803,7 +824,9 @@ export async function approveReservationRecord(
       recipientUid: approvalResult.reservation.userId,
       type: "reservation_approved",
       title: "Reservation Approved",
-      message: `Your reservation for ${approvalResult.reservation.roomName} on ${approvalResult.reservation.date} has been fully approved.`,
+      message: `Your reservation for ${approvalResult.reservation.roomName} on ${formatDate(
+        approvalResult.reservation.date
+      )} has been fully approved.`,
       buildingId: approvalResult.reservation.buildingId,
       reservationId,
     });
@@ -876,7 +899,9 @@ export async function rejectReservationRecord(
       recipientUid: rejectionResult.reservation.userId,
       type: "reservation_rejected",
       title: "Reservation Rejected",
-      message: `Your reservation for ${rejectionResult.reservation.roomName} on ${rejectionResult.reservation.date} was rejected during the ${rejectionResult.currentApprovalStep.role} step. Reason: ${reason.trim()}`,
+      message: `Your reservation for ${rejectionResult.reservation.roomName} on ${formatDate(
+        rejectionResult.reservation.date
+      )} was rejected during the ${rejectionResult.currentApprovalStep.role} step. Reason: ${reason.trim()}`,
       buildingId: rejectionResult.reservation.buildingId,
       reservationId,
     });
@@ -934,7 +959,9 @@ export async function cancelReservationRecord(
         recipientUid: managerUid,
         type: "reservation_cancelled",
         title: "Reservation Cancelled",
-        message: `${reservation.userName} cancelled their reservation for ${reservation.roomName} on ${reservation.date} (${reservation.startTime} - ${reservation.endTime})`,
+        message: `${reservation.userName} cancelled their reservation for ${reservation.roomName} on ${formatReservationScheduleLabel(
+          reservation
+        )}`,
         buildingId: reservation.buildingId,
         reservationId,
       });
@@ -1061,7 +1088,9 @@ export async function checkInReservationRecord(
         recipientUid: managerUid,
         type: "system",
         title: "Room Checked In",
-        message: `${reservation.userName} checked in to ${reservation.roomName} on ${reservation.date} (${reservation.startTime} - ${reservation.endTime}).`,
+        message: `${reservation.userName} checked in to ${reservation.roomName} on ${formatReservationScheduleLabel(
+          reservation
+        )}.`,
         buildingId: reservation.buildingId,
         reservationId,
       });
@@ -1200,7 +1229,9 @@ export async function completeReservationRecord(
         recipientUid: managerUid,
         type: "system",
         title: "Reservation Completed",
-        message: `${reservation.userName} marked their reservation for ${reservation.roomName} on ${reservation.date} as completed.`,
+        message: `${reservation.userName} marked their reservation for ${reservation.roomName} on ${formatDate(
+          reservation.date
+        )} as completed.`,
         buildingId: reservation.buildingId,
         reservationId,
       });

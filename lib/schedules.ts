@@ -10,6 +10,7 @@ import {
 
 import { apiRequest } from "@/lib/api/client";
 import { db } from "@/lib/configs/firebase";
+import { formatTime } from "./dateTime";
 import { createGuardedSnapshotCallback } from "@/lib/firestoreListener";
 
 export interface Schedule {
@@ -56,12 +57,7 @@ function chunkValues<T>(values: T[], size: number) {
 }
 
 export function formatTime12h(time24: string): string {
-  const [hStr, mStr] = time24.split(":");
-  let h = parseInt(hStr, 10);
-  const suffix = h >= 12 ? "PM" : "AM";
-  if (h === 0) h = 12;
-  else if (h > 12) h -= 12;
-  return `${h}:${mStr} ${suffix}`;
+  return formatTime(time24);
 }
 
 export async function addSchedule(data: ScheduleInput): Promise<string> {

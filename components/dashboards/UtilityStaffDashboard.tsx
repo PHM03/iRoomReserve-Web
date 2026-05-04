@@ -30,6 +30,7 @@ import {
   resolveRoomStatus,
 } from '@/lib/roomStatus';
 import { getManagedBuildingsForCampus } from '@/lib/campusAssignments';
+import { formatTimeRange } from '@/lib/dateTime';
 
 interface UtilityStaffDashboardProps {
   firstName: string;
@@ -381,8 +382,7 @@ export default function UtilityStaffDashboard({
                           <StatusBadge status={roomStatus.status} />
                         </div>
                         <p className="text-xs text-black mt-0.5">
-                          {reservation.roomName} | {reservation.startTime} -{' '}
-                          {reservation.endTime}
+                          {reservation.roomName} | {formatTimeRange(reservation.startTime, reservation.endTime)}
                         </p>
                         <p className="text-xs text-black mt-0.5">
                           Purpose: {reservation.purpose}

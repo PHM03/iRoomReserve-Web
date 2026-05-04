@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Toast from '@/components/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { getManagedBuildingIdsForCampus } from '@/lib/campusAssignments';
+import { DIGITAL_CAMPUS_FLOOR_OPTIONS } from '@/lib/floorLabels';
 import { normalizeRole, USER_ROLES } from '@/lib/domain/roles';
 import {
   onReservationsByUser,
@@ -24,6 +25,7 @@ import {
   getLocalDateString,
   getReservationRoomStatus,
 } from '@/lib/roomStatus';
+import { formatDate, formatTimeRange } from '@/lib/dateTime';
 
 interface MemberDashboardProps {
   firstName: string;
@@ -42,12 +44,7 @@ const SCHEDULE_DAY_OPTIONS = [
   { label: 'Saturday', value: 6 },
 ] as const;
 
-const DIGI_FLOOR_OPTIONS = [
-  { label: 'Ground Floor', value: 'Ground Floor' },
-  { label: '2nd Floor', value: '2nd Floor' },
-  { label: '3rd Floor', value: '3rd Floor' },
-  { label: '4th Floor', value: '4th Floor' },
-] as const;
+const DIGI_FLOOR_OPTIONS = DIGITAL_CAMPUS_FLOOR_OPTIONS;
 
 const MAIN_BUILDING_OPTIONS = [
   { label: 'GD1', value: 'gd1' },
@@ -381,8 +378,7 @@ export default function MemberDashboard({
                 {activeReservation.buildingName}
               </p>
               <p className="text-[10px] text-black mt-0.5">
-                {activeReservation.date} | {activeReservation.startTime} -{' '}
-                {activeReservation.endTime}
+                {formatDate(activeReservation.date)} | {formatTimeRange(activeReservation.startTime, activeReservation.endTime)}
               </p>
               <div className="flex items-center gap-2 flex-wrap mt-3">
                 <StatusBadge status={activeReservation.status} />
@@ -534,7 +530,7 @@ export default function MemberDashboard({
                       d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                     />
                   </svg>
-                  <span className="text-xs text-black">{reservation.date}</span>
+                  <span className="text-xs text-black">{formatDate(reservation.date)}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <svg
@@ -551,7 +547,7 @@ export default function MemberDashboard({
                     />
                   </svg>
                   <span className="text-xs text-black">
-                    {reservation.startTime} - {reservation.endTime}
+                    {formatTimeRange(reservation.startTime, reservation.endTime)}
                   </span>
                 </div>
                     </>
@@ -625,8 +621,7 @@ export default function MemberDashboard({
                         {reservation.roomName} | {reservation.buildingName}
                       </h4>
                       <p className="text-xs text-black mt-0.5">
-                        {reservation.date} | {reservation.startTime} -{' '}
-                        {reservation.endTime}
+                        {formatDate(reservation.date)} | {formatTimeRange(reservation.startTime, reservation.endTime)}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-2">

@@ -1,4 +1,5 @@
 import { type OccupancyRecord } from "@/lib/occupancy";
+import { formatDateTime } from "./dateTime";
 import { type Room } from "@/lib/rooms";
 
 export const BLE_MONITOR_REFRESH_INTERVAL_MS = 600_000;
@@ -49,7 +50,9 @@ export function formatBleTimestamp(value?: string | null) {
   }
 
   const parsedDate = parseBleTimestamp(value);
-  return parsedDate ? parsedDate.toLocaleString() : value;
+  return parsedDate
+    ? formatDateTime(parsedDate, { includeSeconds: true, separator: " " })
+    : value;
 }
 
 export function formatBleLabel(value?: string | null) {

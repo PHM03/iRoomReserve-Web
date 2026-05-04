@@ -21,6 +21,8 @@ import {
   type BookingDate,
 } from '@/lib/roomAvailability';
 import { getRoomsByBuilding, type Room } from '@/lib/rooms';
+import { formatDate, formatTime } from '@/lib/dateTime';
+import { getFloorDisplayLabel } from '@/lib/floorLabels';
 
 type CampusFilter = ReservationCampus | 'all';
 type DetailsStep = 2 | 3;
@@ -62,12 +64,7 @@ function minutesToTimeString(value: number): string {
 }
 
 function formatTimeLabel(value: string): string {
-  const minutes = timeStringToMinutes(value);
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  const suffix = hours >= 12 ? 'PM' : 'AM';
-  const normalizedHour = hours % 12 === 0 ? 12 : hours % 12;
-  return `${normalizedHour}:${mins.toString().padStart(2, '0')} ${suffix}`;
+  return formatTime(value);
 }
 
 function getCampusTimeOptions(campus: ReservationCampus | null): string[] {
@@ -902,7 +899,10 @@ export default function ReserveRoomPage() {
                             campusName={
                               roomCampus ? getCampusName(roomCampus) : room.buildingName || 'Unknown campus'
                             }
-                            floor={room.floor}
+                            floor={getFloorDisplayLabel(room.floor, {
+                              id: room.buildingId,
+                              name: room.buildingName,
+                            })}
                             name={room.name}
                             onClick={() => handleRoomSelect(room.id)}
                             roomType={room.roomType}
@@ -980,7 +980,10 @@ export default function ReserveRoomPage() {
                     <div>
                       <p className="text-lg font-bold text-black">{selectedRoomName}</p>
                       <p className="mt-1 text-sm text-black">
-                        {selectedBuildingName} | {selectedRoom.floor}
+                        {selectedBuildingName} | {getFloorDisplayLabel(selectedRoom.floor, {
+                          id: selectedRoom.buildingId,
+                          name: selectedRoom.buildingName,
+                        })}
                       </p>
                     </div>
                     <span className="inline-flex items-center rounded-full border border-primary/20 bg-white/80 px-3 py-1 text-xs font-bold text-primary">
@@ -1093,7 +1096,7 @@ export default function ReserveRoomPage() {
                                 key={date}
                                 className="rounded-lg border border-dark/10 bg-dark/5 px-2 py-0.5 text-[10px] font-bold text-black"
                               >
-                                {date}
+                                {formatDate(date)}
                               </span>
                             ))}
                             {previewDates.length >= 20 && (

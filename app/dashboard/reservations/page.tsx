@@ -14,6 +14,7 @@ import {
   Reservation,
 } from '@/lib/reservations';
 import { getReservationRoomStatus } from '@/lib/roomStatus';
+import { formatDate, formatTimeRange } from '@/lib/dateTime';
 
 type FilterTab =
   | 'all'
@@ -304,9 +305,7 @@ export default function MyReservationsPage() {
                               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                             />
                           </svg>
-                          <span className="text-xs text-black">
-                            {reservation.date}
-                          </span>
+                          <span className="text-xs text-black">{formatDate(reservation.date)}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <svg
@@ -323,7 +322,7 @@ export default function MyReservationsPage() {
                             />
                           </svg>
                           <span className="text-xs text-black">
-                            {reservation.startTime} - {reservation.endTime}
+                            {formatTimeRange(reservation.startTime, reservation.endTime)}
                           </span>
                         </div>
                       </div>

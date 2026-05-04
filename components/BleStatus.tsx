@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
+import { formatClockTime, formatTimeRange } from '@/lib/dateTime';
 import {
   BLE_MONITOR_REFRESH_INTERVAL_MS,
   formatBleLabel,
@@ -34,11 +35,7 @@ function formatRefreshTime(value: Date | null) {
     return 'Not refreshed yet';
   }
 
-  return value.toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  return formatClockTime(value, { includeSeconds: true });
 }
 
 function formatRefreshCountdown(milliseconds: number) {
@@ -236,8 +233,7 @@ export default function BleStatus({
             Bluetooth access for {room?.name ?? reservation.roomName}
           </h4>
           <p className="mt-1 text-xs text-black/70">
-            Available only during your active slot: {reservation.startTime} -{' '}
-            {reservation.endTime}
+            Available only during your active slot: {formatTimeRange(reservation.startTime, reservation.endTime)}
           </p>
         </div>
 

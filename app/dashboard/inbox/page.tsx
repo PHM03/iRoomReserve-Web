@@ -23,6 +23,7 @@ import {
   Reservation,
 } from '@/lib/reservations';
 import { useAdminTab } from '@/context/AdminTabContext';
+import { formatDate, formatDateTime, formatTimeRange } from '@/lib/dateTime';
 
 function StatusBadge({ status }: { status: string }) {
   const style = (() => {
@@ -51,17 +52,8 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function formatDate(ts: { toDate?: () => Date } | undefined): string {
-  if (!ts || typeof ts.toDate !== 'function') return '';
-  const d = ts.toDate();
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }) + ' at ' + d.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+function formatTimestampLabel(ts: { toDate?: () => Date } | undefined): string {
+  return formatDateTime(ts);
 }
 
 function formatEquipment(equipment?: Record<string, number>) {
@@ -256,7 +248,7 @@ function ReservationApprovals({
                         {request.roomName} in {request.buildingName}
                       </p>
                       <p className="text-xs text-black mt-1">
-                        {request.date} • {request.startTime} - {request.endTime}
+                        {formatDate(request.date)} | {formatTimeRange(request.startTime, request.endTime)}
                       </p>
                     </div>
                     <svg className={`w-5 h-5 text-black transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -414,7 +406,7 @@ function ReservationUpdates({
                   </div>
                   <p className="text-sm text-black leading-relaxed">{notification.message}</p>
                   {notification.createdAt && (
-                    <p className="text-xs text-black mt-2">{formatDate(notification.createdAt)}</p>
+                    <p className="text-xs text-black mt-2">{formatTimestampLabel(notification.createdAt)}</p>
                   )}
                 </div>
                 {!notification.read && (
@@ -520,7 +512,7 @@ function AdminMessages({ uid }: { uid: string }) {
                         <p className="text-xs text-black">
                           <TypeIcon type={request.type} />
                           {request.type} • {request.buildingName}
-                          {request.createdAt && <span className="ml-2">• {formatDate(request.createdAt)}</span>}
+                          {request.createdAt && <span className="ml-2"> | {formatTimestampLabel(request.createdAt)}</span>}
                         </p>
                       </div>
                     </div>

@@ -12,6 +12,7 @@ import {
   AdminRequest,
 } from '@/lib/adminRequests';
 import { getBuildings, Building } from '@/lib/buildings';
+import { formatDate } from '@/lib/dateTime';
 
 export default function ContactAdminPage() {
   const { firebaseUser, profile } = useAuth();
@@ -204,7 +205,7 @@ export default function ContactAdminPage() {
                     <option value="">None — General Request</option>
                     {activeReservations.map((r) => (
                       <option key={r.id} value={r.id}>
-                        {r.roomName} · {r.date} ({r.status})
+                        {r.roomName} | {formatDate(r.date)} ({r.status})
                       </option>
                     ))}
                   </select>

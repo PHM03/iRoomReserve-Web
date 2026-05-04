@@ -1,5 +1,6 @@
 'use client';
 
+import { getFloorDisplayLabel } from '@/lib/floorLabels';
 import type { Schedule } from '@/lib/schedules';
 import { DAY_NAMES, formatTime12h } from '@/lib/schedules';
 import type { Room } from '@/lib/rooms';
@@ -75,7 +76,10 @@ export default function AdminClassSchedulesSection({
                 <option value="">Select room...</option>
                 {rooms.map((room) => (
                   <option key={room.id} value={room.id}>
-                    {room.name} ({room.floor})
+                    {room.name} ({getFloorDisplayLabel(room.floor, {
+                      id: room.buildingId,
+                      name: room.buildingName,
+                    })})
                   </option>
                 ))}
               </select>

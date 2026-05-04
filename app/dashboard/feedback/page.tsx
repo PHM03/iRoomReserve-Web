@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Feedback, createFeedback, getAverageSentiment, getFeedbackByUser } from '@/lib/feedback';
 import { Reservation, getReservationsByUser } from '@/lib/reservations';
 import { analyzeSentiment, getSentimentLabel } from '@/lib/sentiment';
+import { formatDate, formatTimeRange } from '@/lib/dateTime';
 
 function formatSentimentLabel(label: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
@@ -220,8 +221,7 @@ export default function FeedbackPage() {
                 <div>
                   <h4 className="text-sm font-bold text-black">{reservation.roomName}</h4>
                   <p className="text-xs text-black">
-                    {reservation.buildingName} | {reservation.date} | {reservation.startTime} -{' '}
-                    {reservation.endTime}
+                    {reservation.buildingName} | {formatDate(reservation.date)} | {formatTimeRange(reservation.startTime, reservation.endTime)}
                   </p>
                 </div>
                 <button
@@ -255,7 +255,7 @@ export default function FeedbackPage() {
                   <h3 className="text-lg font-bold text-black">Rate Your Experience</h3>
                   <p className="text-xs text-black mt-0.5">
                     {selectedReservation.roomName} | {selectedReservation.buildingName} |{' '}
-                    {selectedReservation.date}
+                    {formatDate(selectedReservation.date)}
                   </p>
                 </div>
                 <button

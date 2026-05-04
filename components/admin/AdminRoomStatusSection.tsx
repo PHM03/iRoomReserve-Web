@@ -1,6 +1,7 @@
 'use client';
 
 import FloorAccordion from '@/components/room-status/FloorAccordion';
+import { getFloorDisplayLabel } from '@/lib/floorLabels';
 import type { Room } from '@/lib/rooms';
 
 interface AdminRoomStatusSectionProps {
@@ -8,6 +9,7 @@ interface AdminRoomStatusSectionProps {
   rooms: Room[];
   statusMonitorFloorGroups: Array<{
     floor: string;
+    label: string;
     rooms: Room[];
   }>;
   computeEffectiveStatus: (room: Room) => {
@@ -71,7 +73,7 @@ export default function AdminRoomStatusSection({
           {statusMonitorFloorGroups.map((floorGroup) => (
             <FloorAccordion
               key={floorGroup.floor}
-              floor={floorGroup.floor}
+              floor={floorGroup.label}
               roomCount={floorGroup.rooms.length}
               renderContent={() => (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -92,7 +94,10 @@ export default function AdminRoomStatusSection({
                           <div>
                             <h4 className="text-lg font-bold text-black">{room.name}</h4>
                             <p className="text-sm text-black">
-                              {room.floor} | Cap: {room.capacity}
+                              {getFloorDisplayLabel(room.floor, {
+                                id: room.buildingId,
+                                name: room.buildingName,
+                              })} | Cap: {room.capacity}
                             </p>
                           </div>
                           <StatusBadge status={effective.status} />

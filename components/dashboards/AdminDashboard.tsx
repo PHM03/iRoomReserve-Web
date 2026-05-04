@@ -55,6 +55,8 @@ import {
 import { fetchAdminDashboardSnapshot } from '@/lib/adminDashboard';
 import { getManagedBuildingsForCampus } from '@/lib/campusAssignments';
 import { normalizeRoomCheckInMethod } from '@/lib/roomStatus';
+import { formatDate, formatDateTime, formatTimeRange } from '@/lib/dateTime';
+import { getBuildingFloorOptions, getFloorDisplayLabel } from '@/lib/floorLabels';
 
 // ─── Helpers ────────────────────────────────────────────────────
 function RoleBadge({ role }: { role: string }) {
@@ -120,45 +122,6 @@ function StarRating({ rating }: { rating: number }) {
       ))}
     </div>
   );
-}
-
-function formatOrdinalFloor(level: number) {
-  switch (level) {
-    case 1:
-      return '1st Floor';
-    case 2:
-      return '2nd Floor';
-    case 3:
-      return '3rd Floor';
-    default:
-      return `${level}th Floor`;
-  }
-}
-
-function getBuildingFloorOptions(buildingId?: string, buildingFloors?: number) {
-  switch (buildingId) {
-    case 'gd1':
-      return [
-        'Basement Floor',
-        'Ground Floor',
-        ...Array.from({ length: 7 }, (_, index) => formatOrdinalFloor(index + 2)),
-      ];
-    case 'gd2':
-      return [
-        'Ground Floor',
-        ...Array.from({ length: 9 }, (_, index) => formatOrdinalFloor(index + 2)),
-      ];
-    case 'gd3':
-      return [
-        'Ground Floor',
-        ...Array.from({ length: 10 }, (_, index) => formatOrdinalFloor(index + 2)),
-      ];
-    default:
-      return Array.from({ length: buildingFloors || 5 }, (_, index) => {
-        if (index === 0) return 'Ground Floor';
-        return formatOrdinalFloor(index);
-      });
-  }
 }
 
 const ROOM_TYPE_OPTIONS = [
@@ -717,10 +680,14 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     return uniqueFloors
       .map((floor) => ({
         floor,
+        label: getFloorDisplayLabel(floor, {
+          id: buildingId,
+          name: buildingName,
+        }),
         rooms: roomsByFloor.get(floor) ?? [],
       }))
       .filter((floorGroup) => floorGroup.rooms.length > 0);
-  }, [rooms, uniqueFloors]);
+  }, [buildingId, buildingName, rooms, uniqueFloors]);
 
   const filteredHistory = roomHistory.filter((r) => {
     if (historyFilter !== 'all' && r.status !== historyFilter) return false;
@@ -728,7 +695,11 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
     if (historySearch && !r.userName.toLowerCase().includes(historySearch.toLowerCase()) && !r.roomName.toLowerCase().includes(historySearch.toLowerCase())) return false;
     return true;
   });
-  const addRoomFloorOptions = getBuildingFloorOptions(buildingId, buildingFloors);
+  const addRoomFloorOptions = getBuildingFloorOptions({
+    id: buildingId,
+    name: buildingName,
+    floors: buildingFloors,
+  });
 
   // ─── No Building Assigned State ─────────────────────────────
   if (!buildingId || !buildingName) {
@@ -939,25 +910,25 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                 )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {addRoomFloorOptions.map((floorLabel, index) => (
+                {addRoomFloorOptions.map((floorOption, index) => (
                   <button
-                    key={floorLabel}
+                    key={floorOption.value}
                     onClick={() => {
-                      setNewRoomFloor(floorLabel);
+                      setNewRoomFloor(floorOption.value);
                       setAddRoomStep(2);
                     }}
                     className="glass-card !bg-dark/5 p-4 !rounded-xl text-center group hover:!border-primary/40 transition-all cursor-pointer"
                   >
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
                       <span className="text-primary font-bold text-sm">
-                        {floorLabel === 'Basement Floor'
+                        {floorOption.label === 'Basement Floor'
                           ? 'B'
-                          : floorLabel === 'Ground Floor'
+                          : floorOption.label === 'Ground Floor'
                             ? 'G'
-                            : index}
+                            : floorOption.label.match(/(\d+)/)?.[1] ?? index}
                       </span>
                     </div>
-                    <p className="text-sm font-bold text-black group-hover:text-primary transition-colors">{floorLabel}</p>
+                    <p className="text-sm font-bold text-black group-hover:text-primary transition-colors">{floorOption.label}</p>
                   </button>
                 ))}
               </div>
@@ -971,7 +942,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                 <div>
                   <h4 className="text-lg font-bold text-black">Room Information</h4>
                   <p className="text-xs text-black mt-0.5">
-                    Step 2 of 2 — <span className="text-primary">{newRoomFloor}</span>
+                    Step 2 of 2 — <span className="text-primary">{getFloorDisplayLabel(newRoomFloor, {
+                      id: buildingId,
+                      name: buildingName,
+                    })}</span>
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1185,7 +1159,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
                       }`}
                     >
-                      {floor} ({count})
+                      {getFloorDisplayLabel(floor, {
+                        id: buildingId,
+                        name: buildingName,
+                      })} ({count})
                     </button>
                   );
                 })}
@@ -1242,8 +1219,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                           >
                             <option value="" disabled>Select floor</option>
                             {addRoomFloorOptions.map((floorOption) => (
-                              <option key={floorOption} value={floorOption}>
-                                {floorOption}
+                              <option key={floorOption.value} value={floorOption.value}>
+                                {floorOption.label}
                               </option>
                             ))}
                           </select>
@@ -1378,7 +1355,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                         <div>
                           <h4 className="font-bold text-black text-sm">{room.name}</h4>
                           <p className="text-xs text-black">
-                            {room.floor} · {room.roomType || 'Room'} · Capacity: {room.capacity}
+                            {getFloorDisplayLabel(room.floor, {
+                              id: room.buildingId,
+                              name: room.buildingName,
+                            })} · {room.roomType || 'Room'} · Capacity: {room.capacity}
                           </p>
                         </div>
                       </div>
@@ -1617,7 +1597,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                 return (
                   <div key={room.id} className={`glass-card p-4 border-l-4 ${borderColor}`}>
                     <div className="flex justify-between items-start">
-                      <div><h4 className="font-bold text-black">{room.name}</h4><p className="text-xs text-black">{room.floor} · Cap: {room.capacity}</p></div>
+                      <div><h4 className="font-bold text-black">{room.name}</h4><p className="text-xs text-black">{getFloorDisplayLabel(room.floor, {
+                        id: room.buildingId,
+                        name: room.buildingName,
+                      })} · Cap: {room.capacity}</p></div>
                       <StatusBadge status={effective.status} />
                     </div>
                     {effective.detail && <p className="text-xs text-black mt-2">{effective.detail}</p>}
@@ -1697,7 +1680,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                         <h4 className="font-bold text-black text-sm">{req.userName}</h4>
                         <RoleBadge role={req.userRole} />
                       </div>
-                      <p className="text-xs text-black mt-0.5">{req.roomName} · {req.date} · {req.startTime} – {req.endTime}</p>
+                      <p className="text-xs text-black mt-0.5">{req.roomName} | {formatDate(req.date)} | {formatTimeRange(req.startTime, req.endTime)}</p>
                     </div>
                     <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1798,7 +1781,10 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                     <label className="block text-xs font-bold text-black mb-1">Room</label>
                     <select value={schedRoomId} onChange={(e) => setSchedRoomId(e.target.value)} className="glass-input w-full px-4 py-2.5 text-sm">
                       <option value="">Select room...</option>
-                      {rooms.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.floor})</option>)}
+                      {rooms.map((r) => <option key={r.id} value={r.id}>{r.name} ({getFloorDisplayLabel(r.floor, {
+                        id: r.buildingId,
+                        name: r.buildingName,
+                      })})</option>)}
                     </select>
                   </div>
                   <div>
@@ -1933,8 +1919,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                             {res.type === 'reservation' ? 'Reservation' : 'Class'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{res.date}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{res.startTime} – {res.endTime}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{formatDate(res.date)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{formatTimeRange(res.startTime, res.endTime)}</td>
                         <td className="px-6 py-4 text-sm text-black max-w-[200px] truncate">{res.purpose}</td>
                         <td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={res.status} /></td>
                       </tr>
@@ -1967,11 +1953,11 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                       </div>
                       <div className="flex justify-between">
                         <span className="text-black">Date:</span>
-                        <span className="text-black">{res.date}</span>
+                        <span className="text-black">{formatDate(res.date)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-black">Time:</span>
-                        <span className="text-black">{res.startTime} – {res.endTime}</span>
+                        <span className="text-black">{formatTimeRange(res.startTime, res.endTime)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-black">Purpose:</span>
@@ -2055,11 +2041,11 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                       </div>
                       <div className="bg-dark/3 rounded-xl p-3 border border-dark/5">
                         <p className="text-[10px] text-black font-bold uppercase tracking-wider mb-1">Date</p>
-                        <p className="text-sm font-bold text-black">{req.date}</p>
+                        <p className="text-sm font-bold text-black">{formatDate(req.date)}</p>
                       </div>
                       <div className="bg-dark/3 rounded-xl p-3 border border-dark/5">
                         <p className="text-[10px] text-black font-bold uppercase tracking-wider mb-1">Time</p>
-                        <p className="text-sm font-bold text-black">{req.startTime} – {req.endTime}</p>
+                        <p className="text-sm font-bold text-black">{formatTimeRange(req.startTime, req.endTime)}</p>
                       </div>
                       <div className="bg-dark/3 rounded-xl p-3 border border-dark/5">
                         <p className="text-[10px] text-black font-bold uppercase tracking-wider mb-1">Purpose</p>
@@ -2197,11 +2183,8 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
           }
         };
 
-        const formatDate = (ts: { toDate?: () => Date } | undefined): string => {
-          if (!ts || typeof ts.toDate !== 'function') return '';
-          const d = ts.toDate();
-          return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-            ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const formatRequestTimestamp = (ts: { toDate?: () => Date } | undefined): string => {
+          return formatDateTime(ts);
         };
 
         return (
@@ -2287,7 +2270,7 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
                               <p className="text-xs text-black">
                                 <span className="mr-1">{typeIcon(req.type)}</span>
                                 {req.type} · {req.subject}
-                                {req.createdAt && <span className="ml-2 text-black">· {formatDate(req.createdAt)}</span>}
+                                {req.createdAt && <span className="ml-2 text-black"> | {formatRequestTimestamp(req.createdAt)}</span>}
                               </p>
                             </div>
                           </div>

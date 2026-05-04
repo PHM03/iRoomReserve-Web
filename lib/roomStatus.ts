@@ -1,4 +1,5 @@
 import type { FirestoreTimestampLike } from "@/lib/firestore-types";
+import { formatDate, formatTimeRange } from "./dateTime";
 
 export const ROOM_STATUS_VALUES = ["Available", "Reserved", "Occupied"] as const;
 export const ROOM_CHECK_IN_METHODS = ["manual", "bluetooth"] as const;
@@ -162,7 +163,10 @@ export function canReservationCheckIn(
 export function formatReservationWindow(
   reservation: Pick<RoomStatusReservationLike, "date" | "startTime" | "endTime">
 ): string {
-  return `${reservation.date} | ${reservation.startTime} - ${reservation.endTime}`;
+  return `${formatDate(reservation.date)} | ${formatTimeRange(
+    reservation.startTime,
+    reservation.endTime
+  )}`;
 }
 
 export function getPrimaryRoomReservation(

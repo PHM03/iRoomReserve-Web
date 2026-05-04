@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchOccupancySnapshot } from "@/lib/occupancyClient";
+import { formatBleTimestamp } from "@/lib/bleMonitor";
+import { formatClockTime } from "@/lib/dateTime";
 
 const AUTO_REFRESH_INTERVAL_MS = 600000;
 
@@ -30,11 +32,7 @@ function formatRefreshTime(value: Date | null) {
     return "Not refreshed yet";
   }
 
-  return value.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  return formatClockTime(value, { includeSeconds: true });
 }
 
 function formatRefreshCountdown(milliseconds: number) {
@@ -192,7 +190,7 @@ export default function OccupancyPage() {
         <p>
           Last Event: <strong>{data.eventType}</strong>
         </p>
-        <p>Last Update: {data.timestamp || "No data yet"}</p>
+        <p>Last Update: {formatBleTimestamp(data.timestamp)}</p>
       </div>
 
       <h2>Connection History</h2>
@@ -235,7 +233,7 @@ export default function OccupancyPage() {
                 }}
               >
                 <td style={{ padding: "8px", border: "1px solid #ddd" }}>
-                  {item.timestamp}
+                  {formatBleTimestamp(item.timestamp)}
                 </td>
                 <td style={{ padding: "8px", border: "1px solid #ddd" }}>
                   {item.connectionStatus}

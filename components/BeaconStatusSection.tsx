@@ -1,5 +1,6 @@
 'use client';
 
+import { getFloorDisplayLabel } from '@/lib/floorLabels';
 import type { Room } from '@/lib/rooms';
 
 interface BeaconStatusSectionProps {
@@ -69,7 +70,10 @@ export default function BeaconStatusSection({
                   <div>
                     <h4 className="text-sm font-bold text-black">{room.name}</h4>
                     <p className="text-xs text-black mt-0.5">
-                      {room.floor}
+                      {getFloorDisplayLabel(room.floor, {
+                        id: room.buildingId,
+                        name: room.buildingName,
+                      })}
                       {room.beaconId ? ` | ${room.beaconId}` : ' | No beacon ID'}
                     </p>
                   </div>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import BleStatusBadge from '@/components/BleStatusBadge';
+import { formatClockTime } from '@/lib/dateTime';
 import {
   BLE_MONITOR_REFRESH_INTERVAL_MS,
   formatBleLabel,
@@ -47,11 +48,7 @@ function formatRefreshTime(value: Date | null) {
     return 'Not refreshed yet';
   }
 
-  return value.toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  return formatClockTime(value, { includeSeconds: true });
 }
 
 function formatRefreshCountdown(milliseconds: number) {

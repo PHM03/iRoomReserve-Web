@@ -12,6 +12,7 @@ import {
 } from '@/lib/messages';
 
 import ComposeModal from './ComposeModal';
+import { formatDateTime } from '@/lib/dateTime';
 
 type MessageFolder = 'inbox' | 'sent';
 
@@ -23,20 +24,7 @@ interface MessagesSectionProps {
 }
 
 function formatTimestamp(timestamp?: { toDate?: () => Date }): string {
-  if (!timestamp || typeof timestamp.toDate !== 'function') return '';
-  const date = timestamp.toDate();
-  return (
-    date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }) +
-    ' · ' +
-    date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-  );
+  return formatDateTime(timestamp);
 }
 
 function getInitials(name: string): string {

@@ -1,6 +1,7 @@
 import type { Building } from "@/lib/buildings";
 import { getCampusName } from "./campusAssignments";
 import type { ReservationCampus } from "@/lib/campuses";
+import { getFloorDisplayLabel } from "./floorLabels";
 import type { Room } from "@/lib/rooms";
 import type { ResolvedRoomStatus, RoomStatusValue } from "@/lib/roomStatus";
 
@@ -173,7 +174,10 @@ export function groupRoomStatusesByFloor(
     .sort(([leftFloor], [rightFloor]) => compareFloors(leftFloor, rightFloor))
     .map(([floor, floorRooms]) => ({
       id: floor,
-      label: floor,
+      label: getFloorDisplayLabel(floor, {
+        id: floorRooms[0]?.room.buildingId,
+        name: floorRooms[0]?.room.buildingName,
+      }),
       rooms: floorRooms,
     }));
 }
