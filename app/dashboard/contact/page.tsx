@@ -110,8 +110,8 @@ export default function ContactAdminPage() {
         setSubject('');
         setMessage('');
       }, 2000);
-    } catch (err) {
-      console.error('Failed to send request:', err);
+    } catch (error) {
+      console.error('Failed to send request:', error);
     }
     setSubmitting(false);
   };
@@ -198,7 +198,7 @@ export default function ContactAdminPage() {
                   <label className="block text-sm font-bold text-black mb-1.5">Link to Reservation (optional)</label>
                   <select
                     value={linkedReservationId || ''}
-                    onChange={(e) => handleLinkReservation(e.target.value)}
+                    onChange={(event) => handleLinkReservation(event.target.value)}
                     className="glass-input w-full px-4 py-3"
                   >
                     <option value="">None — General Request</option>
@@ -216,7 +216,7 @@ export default function ContactAdminPage() {
                     <label className="block text-sm font-bold text-black mb-1.5">Building</label>
                     <select
                       value={selectedBuildingId}
-                      onChange={(e) => handleBuildingChange(e.target.value)}
+                      onChange={(event) => handleBuildingChange(event.target.value)}
                       className="glass-input w-full px-4 py-3"
                     >
                       <option value="">Select a building</option>
@@ -233,7 +233,7 @@ export default function ContactAdminPage() {
                   <input
                     type="text"
                     value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
+                    onChange={(event) => setSubject(event.target.value)}
                     className="glass-input w-full px-4 py-3"
                     placeholder="e.g., Need additional speakers"
                   />
@@ -244,7 +244,7 @@ export default function ContactAdminPage() {
                   <label className="block text-sm font-bold text-black mb-1.5">Message</label>
                   <textarea
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(event) => setMessage(event.target.value)}
                     className="glass-input w-full px-4 py-3 min-h-[120px] resize-none"
                     placeholder="Describe your request in detail..."
                   />

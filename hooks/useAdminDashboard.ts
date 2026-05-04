@@ -180,8 +180,8 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
     setActionLoading(id);
     try {
       await approveReservation(id, approverEmail);
-    } catch (err) {
-      console.warn('Failed to approve:', err);
+    } catch (error) {
+      console.warn('Failed to approve:', error);
     }
     setActionLoading(null);
   };
@@ -194,8 +194,8 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
     setActionLoading(id);
     try {
       await rejectReservation(id, approverEmail, reason.trim());
-    } catch (err) {
-      console.warn('Failed to reject:', err);
+    } catch (error) {
+      console.warn('Failed to reject:', error);
     }
     setActionLoading(null);
   };
@@ -236,8 +236,8 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
       };
       await addRoom(data);
       resetAddRoomWizard();
-    } catch (err) {
-      console.warn('Failed to add room:', err);
+    } catch (error) {
+      console.warn('Failed to add room:', error);
     }
     setAddingRoom(false);
   };
@@ -250,8 +250,8 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
         capacity: parseInt(editCapacity) || 30,
       });
       setEditingRoomId(null);
-    } catch (err) {
-      console.warn('Failed to update room:', err);
+    } catch (error) {
+      console.warn('Failed to update room:', error);
     }
   };
 
@@ -259,16 +259,16 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
     if (!confirm('Are you sure you want to delete this room?')) return;
     try {
       await deleteRoom(roomId);
-    } catch (err) {
-      console.warn('Failed to delete:', err);
+    } catch (error) {
+      console.warn('Failed to delete:', error);
     }
   };
 
   const handleStatusChange = async (roomId: string, status: Room['status']) => {
     try {
       await updateRoomStatus(roomId, status);
-    } catch (err) {
-      console.warn('Failed to update status:', err);
+    } catch (error) {
+      console.warn('Failed to update status:', error);
       alert('Failed to update room status. Check the console for details.');
     }
   };
@@ -279,8 +279,8 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
       await respondToFeedback(feedbackId, responseText.trim());
       setRespondingId(null);
       setResponseText('');
-    } catch (err) {
-      console.warn('Failed to respond:', err);
+    } catch (error) {
+      console.warn('Failed to respond:', error);
     }
   };
 
@@ -321,8 +321,8 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
       setSchedDay(1);
       setSchedStart('');
       setSchedEnd('');
-    } catch (err) {
-      console.warn('Failed to save schedule:', err);
+    } catch (error) {
+      console.warn('Failed to save schedule:', error);
       alert('Failed to save schedule. Check the console for details.');
     }
     setAddingSchedule(false);
@@ -343,8 +343,8 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
     if (!confirm('Delete this schedule?')) return;
     try {
       await deleteSchedule(id);
-    } catch (err) {
-      console.warn('Failed to delete schedule:', err);
+    } catch (error) {
+      console.warn('Failed to delete schedule:', error);
     }
   };
 

@@ -111,8 +111,8 @@ function RegisterForm() {
     return null;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.SubmitEvent) => {
+    event.preventDefault();
     setErrorMessage('');
 
     if (!firstName || !lastName || !email || !password || !confirmPassword) {
@@ -142,8 +142,8 @@ function RegisterForm() {
       setTimeout(() => {
         router.push('/');
       }, determinedRole === 'Student' ? 1500 : 3000);
-    } catch (err: unknown) {
-      const firebaseError = err as { code?: string };
+    } catch (error: unknown) {
+      const firebaseError = error as { code?: string };
       setErrorMessage(getAuthErrorMessage(firebaseError.code || ''));
     } finally {
       setLoading(false);
@@ -229,7 +229,7 @@ function RegisterForm() {
                   type="text"
                   id="firstName"
                   value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
+                  onChange={(event) => setFirstName(event.target.value)}
                   className="glass-input w-full px-4 py-3"
                   placeholder="First name"
                   autoComplete="given-name"
@@ -243,7 +243,7 @@ function RegisterForm() {
                   type="text"
                   id="lastName"
                   value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
+                  onChange={(event) => setLastName(event.target.value)}
                   className="glass-input w-full px-4 py-3"
                   placeholder="Last name"
                   autoComplete="family-name"
@@ -259,7 +259,7 @@ function RegisterForm() {
                 type="email"
                 id="registerEmail"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 className="glass-input w-full px-4 py-3"
                 placeholder="Enter your email"
                 autoComplete="email"
@@ -275,7 +275,7 @@ function RegisterForm() {
                   type={showPassword ? 'text' : 'password'}
                   id="registerPassword"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => setPassword(event.target.value)}
                   className="glass-input w-full px-4 py-3 pr-12"
                   placeholder="Create a password"
                   autoComplete="new-password"
@@ -300,7 +300,7 @@ function RegisterForm() {
                   type={showConfirmPassword ? 'text' : 'password'}
                   id="confirmPassword"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
                   className="glass-input w-full px-4 py-3 pr-12"
                   placeholder="Confirm your password"
                   autoComplete="new-password"

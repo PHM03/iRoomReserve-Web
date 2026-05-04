@@ -59,8 +59,8 @@ export default function ComposeModal({
           setRecipients(list);
         }
       })
-      .catch((err) => {
-        console.error('Failed to load recipients:', err);
+      .catch((error) => {
+        console.error('Failed to load recipients:', error);
         if (active) {
           setRecipients([]);
           setRecipientsError(
@@ -123,11 +123,11 @@ export default function ComposeModal({
       await sendMessage(payload);
       onSent?.();
       onClose();
-    } catch (err) {
-      console.error('Failed to send message:', err);
+    } catch (error) {
+      console.error('Failed to send message:', error);
       setError(
-        err instanceof Error
-          ? err.message
+        error instanceof Error
+          ? error.message
           : 'Failed to send message. Please try again.'
       );
     } finally {
