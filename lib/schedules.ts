@@ -1,6 +1,5 @@
 import {
   collection,
-  getDocs,
   onSnapshot,
   query,
   Unsubscribe,
@@ -9,7 +8,7 @@ import {
 } from "firebase/firestore";
 
 import { apiRequest } from "@/lib/api/client";
-import { db } from "@/lib/configs/firebase";
+import { auth, db } from "@/lib/configs/firebase";
 import { formatTime } from "./dateTime";
 import { createGuardedSnapshotCallback } from "@/lib/firestoreListener";
 
@@ -122,14 +121,22 @@ export function onSchedulesByBuilding(
 }
 
 export async function getSchedulesByRoomId(roomId: string): Promise<Schedule[]> {
-  const q = query(collection(db, "schedules"), where("roomId", "==", roomId));
-  const snapshot = await getDocs(q);
+  const payload = await apiRequest<Schedule[]>("/api/schedules", {
+    method: "GET",
+    params: { roomId },
+    userId: auth.currentUser?.uid,
+  });
 
-  const schedules = snapshot.docs
-    .map((scheduleDoc) => ({
-      id: scheduleDoc.id,
-      ...scheduleDoc.data(),
-    }) as Schedule)
+  console.log("[schedules] Schedule API response:", payload);
+
+  const schedules = payload
+    .map((schedule) => ({
+      ...schedule,
+      dayOfWeek:
+        typeof schedule.dayOfWeek === "number"
+          ? schedule.dayOfWeek
+          : Number(schedule.dayOfWeek) || 0,
+    }))
     .sort(sortSchedules);
 
   console.log("[schedules] getSchedulesByRoomId result", {

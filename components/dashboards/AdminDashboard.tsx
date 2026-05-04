@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import BleAdminMonitor from '@/components/BleAdminMonitor';
 import BleSummaryCard from '@/components/BleSummaryCard';
 import AdminRoomStatusSection from '@/components/admin/AdminRoomStatusSection';
+import TodayClassSchedulesPanel from '@/components/dashboards/TodayClassSchedulesPanel';
 import MessagesSection from '@/components/messages/MessagesSection';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminTab } from '@/context/AdminTabContext';
@@ -1616,8 +1617,16 @@ export default function AdminDashboard({ firstName, activeTab }: AdminDashboardP
             detailsHref="/admin/ble-status"
           />
 
+          <TodayClassSchedulesPanel
+            buildingId={buildingId}
+            buildingName={buildingName}
+            className="mb-8"
+            key={buildingId}
+            scope="building"
+          />
+
           {/* Today's Class Schedules */}
-          {(() => {
+          {false && (() => {
             const todaySchedules = schedules.filter((s) => s.dayOfWeek === new Date().getDay());
             return (
               <>

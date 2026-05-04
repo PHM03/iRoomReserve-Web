@@ -3,34 +3,32 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import BleSummaryCard from '@/components/BleSummaryCard';
+import StatusBadge from '@/components/StatusBadge';
+import TodayClassSchedulesPanel from '@/components/dashboards/TodayClassSchedulesPanel';
 import { useAuth } from '@/context/AuthContext';
 import {
-  DAY_NAMES,
-  formatTime12h,
-  isRoomInClass,
-  onSchedulesByBuilding,
-  Schedule,
-} from '@/lib/schedules';
+  AdminRequest,
+  onAdminRequestsByBuilding,
+} from '@/lib/adminRequests';
+import { getManagedBuildingsForCampus } from '@/lib/campusAssignments';
+import { formatTimeRange } from '@/lib/dateTime';
 import {
   onReservationsByBuilding,
   Reservation,
 } from '@/lib/reservations';
 import {
-  AdminRequest,
-  onAdminRequestsByBuilding,
-} from '@/lib/adminRequests';
-import {
   onRoomsByBuilding,
   Room,
 } from '@/lib/rooms';
-import StatusBadge from '@/components/StatusBadge';
 import {
-  getCurrentTimeString,
+  isRoomInClass,
+  onSchedulesByBuilding,
+  Schedule,
+} from '@/lib/schedules';
+import {
   getLocalDateString,
   resolveRoomStatus,
 } from '@/lib/roomStatus';
-import { getManagedBuildingsForCampus } from '@/lib/campusAssignments';
-import { formatTimeRange } from '@/lib/dateTime';
 
 interface UtilityStaffDashboardProps {
   firstName: string;
@@ -100,12 +98,6 @@ export default function UtilityStaffDashboard({
 
   const today = new Date();
   const todayDateString = getLocalDateString(today);
-  const currentDay = today.getDay();
-  const currentTime = getCurrentTimeString(today);
-
-  const todaySchedules = schedules.filter(
-    (schedule) => schedule.dayOfWeek === currentDay
-  );
   const todayReservations = reservations.filter(
     (reservation) =>
       reservation.date === todayDateString &&
@@ -135,7 +127,9 @@ export default function UtilityStaffDashboard({
     return (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-black">Hello, {firstName} 🔑</h2>
+          <h2 className="text-2xl font-bold text-black">
+            Hello, {firstName} {'\u{1F511}'}
+          </h2>
           <p className="text-black mt-1">Utility Staff Dashboard</p>
         </div>
         <div className="glass-card p-12 text-center">
@@ -170,7 +164,9 @@ export default function UtilityStaffDashboard({
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[100px] relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
         <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block">
-          <h2 className="text-2xl font-bold text-gray-800">Hello, {firstName} 🔑</h2>
+          <h2 className="text-2xl font-bold text-gray-800">
+            Hello, {firstName} {'\u{1F511}'}
+          </h2>
           <p className="text-gray-600 mt-1">
             Managing: <span className="ui-text-teal font-bold">{buildingName}</span>
           </p>
@@ -269,64 +265,13 @@ export default function UtilityStaffDashboard({
         />
       </section>
 
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-gray-200">
-          <h3 className="text-xl font-bold text-gray-800">
-            Today&apos;s Class Schedules
-            <span className="text-sm text-gray-600 font-normal ml-2">
-              ({DAY_NAMES[currentDay]})
-            </span>
-          </h3>
-          <span className="text-xs text-gray-600">
-            {todaySchedules.length} class{todaySchedules.length !== 1 ? 'es' : ''}
-          </span>
-        </div>
-
-        {todaySchedules.length === 0 ? (
-          <div className="glass-card p-8 text-center">
-            <div className="text-3xl mb-2">📚</div>
-            <p className="text-sm text-black">No classes scheduled for today.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {todaySchedules.map((schedule) => {
-              const isActive =
-                schedule.startTime <= currentTime && schedule.endTime > currentTime;
-              const isUpcoming = schedule.startTime > currentTime;
-
-              return (
-                <div
-                  key={schedule.id}
-                  className={`glass-card p-4 border-l-4 ${
-                    isActive
-                      ? 'border-orange-500/60'
-                      : isUpcoming
-                        ? 'border-teal-500/40'
-                        : 'border-dark/10'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-sm font-bold text-black">
-                        {schedule.subjectName}
-                      </p>
-                      <p className="text-xs text-black mt-0.5">
-                        {schedule.roomName} | {schedule.instructorName}
-                      </p>
-                      <p className="text-xs text-black mt-1">
-                        {formatTime12h(schedule.startTime)} -{' '}
-                        {formatTime12h(schedule.endTime)}
-                      </p>
-                    </div>
-                    {isActive && <StatusBadge status="Reserved" />}
-                    {isUpcoming && !isActive && <StatusBadge status="Available" />}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <TodayClassSchedulesPanel
+        buildingId={buildingId}
+        buildingName={buildingName}
+        className="mb-8"
+        key={buildingId}
+        scope="building"
+      />
 
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4 bg-white rounded-xl px-6 py-4 border border-gray-200">
@@ -341,7 +286,7 @@ export default function UtilityStaffDashboard({
 
         {todayReservations.length === 0 ? (
           <div className="glass-card p-8 text-center">
-            <div className="text-3xl mb-2">📋</div>
+            <div className="text-3xl mb-2">{'\u{1F4CB}'}</div>
             <p className="text-sm text-black">No reservations for today.</p>
           </div>
         ) : (
@@ -410,7 +355,7 @@ export default function UtilityStaffDashboard({
 
         {adminRequests.length === 0 ? (
           <div className="glass-card p-8 text-center">
-            <div className="text-3xl mb-2">💬</div>
+            <div className="text-3xl mb-2">{'\u{1F4AC}'}</div>
             <p className="text-sm text-black">
               No admin requests for this building.
             </p>
@@ -426,10 +371,10 @@ export default function UtilityStaffDashboard({
                     : 'ui-badge-gray';
               const requestTypeIcon =
                 request.type === 'equipment'
-                  ? '🔧'
+                  ? '\u{1F527}'
                   : request.type === 'general'
-                    ? '💬'
-                    : '📋';
+                    ? '\u{1F4AC}'
+                    : '\u{1F4CB}';
 
               return (
                 <div key={request.id} className="glass-card p-4 sm:p-5">

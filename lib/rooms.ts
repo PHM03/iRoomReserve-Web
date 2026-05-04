@@ -315,6 +315,37 @@ export async function getRoomsByBuilding(buildingId: string): Promise<Room[]> {
   return nextRooms;
 }
 
+export async function getRoomsByBuildingAndFloor(
+  buildingId: string,
+  floor: string
+): Promise<Room[]> {
+  const payload = await apiRequest<Room[]>("/api/rooms", {
+    method: "GET",
+    params: { buildingId, floor },
+    userId: auth.currentUser?.uid,
+  });
+
+  const nextRooms = payload
+    .map((room) =>
+      mapRoom(
+        room.id,
+        room as Omit<Room, "id" | "status"> & {
+          status?: string | null;
+        }
+      )
+    )
+    .sort(sortRooms);
+
+  console.log("[rooms] getRoomsByBuildingAndFloor result", {
+    buildingId,
+    count: nextRooms.length,
+    empty: nextRooms.length === 0,
+    floor,
+  });
+
+  return nextRooms;
+}
+
 export async function getAvailableRoomsByBuilding(
   buildingId: string
 ): Promise<Room[]> {
