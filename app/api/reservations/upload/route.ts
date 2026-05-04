@@ -20,6 +20,10 @@ export async function POST(request: NextRequest) {
       includeProfile: false,
     });
     assertAuthenticated(authContext);
+    const userId = authContext.uid;
+    if (!userId) {
+      throw new ApiError(401, "unauthenticated", "Authentication is required.");
+    }
 
     const formData = await request.formData();
     const fileEntry = formData.get("file");
@@ -35,7 +39,7 @@ export async function POST(request: NextRequest) {
     const upload = await uploadReservationDocument({
       file: fileEntry,
       reservationId: getOptionalString(formData.get("reservationId")),
-      userId: authContext.uid,
+      userId,
     });
 
     return NextResponse.json(upload, { status: 201 });

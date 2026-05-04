@@ -22,12 +22,12 @@ export interface ReservationApprovalRecord extends ReservationApprovalStep {
 
 export interface DigiReservationApproverInput {
   campus: "digi";
-  buildingAdminEmail: string;
+  buildingAdminEmail?: string;
 }
 
 export interface MainReservationApproverInput {
   campus: "main";
-  advisorEmail: string;
+  advisorEmail?: string;
   buildingAdminEmail?: string;
 }
 
@@ -46,7 +46,16 @@ export function buildApprovalFlow(
     return [
       {
         role: "building_admin",
-        email: normalizeApprovalEmail(approvers.buildingAdminEmail),
+        email: normalizeApprovalEmail(approvers.buildingAdminEmail ?? ""),
+      },
+    ];
+  }
+
+  if (!approvers.advisorEmail?.trim()) {
+    return [
+      {
+        role: "building_admin",
+        email: normalizeApprovalEmail(approvers.buildingAdminEmail ?? ""),
       },
     ];
   }

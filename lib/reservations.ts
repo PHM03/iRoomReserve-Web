@@ -11,6 +11,7 @@ import {
 
 import { apiRequest } from "@/lib/api/client";
 import { type ReservationCampus } from "@/lib/campuses";
+import { buildUrl } from "@/lib/utils/buildUrl";
 import {
   type DigiReservationApproverInput,
   getCurrentApprovalStep as getReservationApprovalCurrentStep,
@@ -82,6 +83,14 @@ export type ReservationCreateInput =
 export type RecurringReservationCreateInput =
   | (Omit<ReservationCreateBaseInput, "date"> & DigiReservationApproverInput)
   | (Omit<ReservationCreateBaseInput, "date"> & MainReservationApproverInput);
+
+export interface UploadedReservationDocument {
+  bucket: string;
+  contentType: string;
+  name: string;
+  path: string;
+  size: number;
+}
 
 function handleReservationListenerError(
   scope: string,
@@ -177,6 +186,51 @@ export async function validateReservationApprover(
     method: "POST",
     userId: auth.currentUser?.uid,
   });
+}
+
+export async function uploadReservationDocument(
+  file: File,
+  reservationId?: string
+): Promise<UploadedReservationDocument> {
+  const currentUser = auth.currentUser;
+  const token = currentUser ? await currentUser.getIdToken() : null;
+  const formData = new FormData();
+
+  formData.append("file", file);
+  if (reservationId?.trim()) {
+    formData.append("reservationId", reservationId.trim());
+  }
+
+  const response = await fetch(buildUrl("/api/reservations/upload"), {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(auth.currentUser?.uid ? { "x-user-id": auth.currentUser.uid } : {}),
+    },
+    body: formData,
+  });
+
+  const responseText = await response.text();
+  const payload = responseText
+    ? ((() => {
+        try {
+          return JSON.parse(responseText) as
+            | { error?: { message?: string } }
+            | UploadedReservationDocument;
+        } catch {
+          return null;
+        }
+      })())
+    : null;
+
+  if (!response.ok) {
+    throw new Error(
+      (payload as { error?: { message?: string } } | null)?.error?.message ??
+        `The request failed (status ${response.status}).`
+    );
+  }
+
+  return payload as UploadedReservationDocument;
 }
 
 export async function fetchPendingReservationsForApprover(): Promise<Reservation[]> {

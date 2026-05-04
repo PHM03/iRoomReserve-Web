@@ -12,6 +12,7 @@ import { normalizeRole, USER_ROLES } from '@/lib/domain/roles';
 import {
   createReservation,
   createRecurringReservation,
+  uploadReservationDocument,
   validateReservationApprover,
 } from '@/lib/reservations';
 import {
@@ -27,8 +28,6 @@ type RoomFilterKey = 'available' | 'classroom' | 'laboratory';
 type AssistantRoomType = '' | 'glass' | 'lecture' | 'lab';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-// TODO: Replace this temporary Digital Campus approver email with the actual configurable building admin source.
-const DIGITAL_CAMPUS_BUILDING_ADMIN_EMAIL = 'kenjimwill.baltero@sdca.edu.ph';
 const CAMPUS_TIME_RANGES: Record<ReservationCampus, { endMinutes: number; startMinutes: number }> = {
   digi: { startMinutes: 7 * 60, endMinutes: 17 * 60 },
   main: { startMinutes: 7 * 60, endMinutes: 21 * 60 },
@@ -201,6 +200,15 @@ export default function ReserveRoomPage() {
   const [equipment, setEquipment] = useState<Record<string, number>>({
     ...INITIAL_EQUIPMENT,
   });
+  const [approvalDocument, setApprovalDocument] = useState<File | null>(null);
+  const [uploadedApprovalDocument, setUploadedApprovalDocument] = useState<{
+    contentType: string;
+    name: string;
+    path: string;
+    size: number;
+  } | null>(null);
+  const [documentUploading, setDocumentUploading] = useState(false);
+  const [approvalDocumentError, setApprovalDocumentError] = useState('');
   const [approvalEmailError, setApprovalEmailError] = useState('');
   const [approvalEmails, setApprovalEmails] = useState({
     advisorEmail: '',
@@ -275,6 +283,9 @@ export default function ReserveRoomPage() {
   const selectedRoomName = selectedRoom?.name ?? '';
   const selectedBuildingId = selectedRoom?.buildingId ?? '';
   const selectedBuildingName = selectedRoom?.buildingName ?? '';
+  const normalizedProfileRole = normalizeRole(profile?.role) ?? USER_ROLES.STUDENT;
+  const isStudentReservation = normalizedProfileRole === USER_ROLES.STUDENT;
+  const isFacultyReservation = normalizedProfileRole === USER_ROLES.FACULTY;
   const selectedRoomCampusName = selectedCampus
     ? getCampusName(selectedCampus)
     : selectedBuildingName || 'Unknown campus';
@@ -351,6 +362,9 @@ export default function ReserveRoomPage() {
     setSelectedDays([]);
     setRecurringEndDate('');
     setEquipment({ ...INITIAL_EQUIPMENT });
+    setApprovalDocument(null);
+    setUploadedApprovalDocument(null);
+    setApprovalDocumentError('');
     setApprovalEmails({
       advisorEmail: '',
     });
@@ -408,6 +422,41 @@ export default function ReserveRoomPage() {
       ...prev,
       [key]: Math.max(0, (prev[key] || 0) + delta),
     }));
+  }
+
+  async function handleApprovalDocumentChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const nextFile = event.target.files?.[0] ?? null;
+    setApprovalDocument(nextFile);
+    setUploadedApprovalDocument(null);
+    setApprovalDocumentError('');
+    setSubmitError('');
+
+    if (!nextFile) {
+      return;
+    }
+
+    setDocumentUploading(true);
+
+    try {
+      const uploadedDocument = await uploadReservationDocument(nextFile);
+      setUploadedApprovalDocument({
+        contentType: uploadedDocument.contentType,
+        name: uploadedDocument.name,
+        path: uploadedDocument.path,
+        size: uploadedDocument.size,
+      });
+    } catch (error) {
+      setApprovalDocumentError(
+        error instanceof Error
+          ? error.message
+          : 'We could not upload the concept paper right now.'
+      );
+    } finally {
+      setDocumentUploading(false);
+      event.target.value = '';
+    }
   }
 
   function validateEmail(email: string): boolean {
@@ -474,47 +523,54 @@ export default function ReserveRoomPage() {
 
     setSubmitError('');
     setSubmitPhase('idle');
+    setApprovalDocumentError('');
 
-    const approvalEmail =
-      selectedCampus === 'digi'
-        ? DIGITAL_CAMPUS_BUILDING_ADMIN_EMAIL
-        : approvalEmails.advisorEmail.trim().toLowerCase();
-
-    if (!approvalEmail || !validateEmail(approvalEmail)) {
-      setApprovalEmailError(
-        selectedCampus === 'digi'
-          ? 'Enter a valid iRoomReserve email for the Digital Campus building admin.'
-          : 'Enter a valid email for your adviser, department head, or professor.'
+    if (isStudentReservation && !uploadedApprovalDocument) {
+      setApprovalDocumentError(
+        'Upload the concept paper or letter of approval before submitting this reservation.'
       );
       return;
     }
 
-    setValidatingApprover(true);
-    setSubmitPhase('validating-email');
+    const requiresFacultyApproval = selectedCampus === 'main' && !isFacultyReservation;
+    const approvalEmail = requiresFacultyApproval
+      ? approvalEmails.advisorEmail.trim().toLowerCase()
+      : '';
 
-    try {
-      await validateReservationApprover(selectedCampus, approvalEmail);
-    } catch (error) {
-      setApprovalEmailError(
-        error instanceof Error
-          ? error.message
-          : 'We could not validate that approval email right now.'
-      );
+    if (requiresFacultyApproval) {
+      if (!approvalEmail || !validateEmail(approvalEmail)) {
+        setApprovalEmailError(
+          'Enter a valid email for your adviser, department head, or professor.'
+        );
+        return;
+      }
+
+      setValidatingApprover(true);
+      setSubmitPhase('validating-email');
+
+      try {
+        await validateReservationApprover(selectedCampus, approvalEmail);
+      } catch (error) {
+        setApprovalEmailError(
+          error instanceof Error
+            ? error.message
+            : 'We could not validate that approval email right now.'
+        );
+        setValidatingApprover(false);
+        setSubmitPhase('idle');
+        return;
+      }
+
       setValidatingApprover(false);
-      setSubmitPhase('idle');
-      return;
     }
-
-    setValidatingApprover(false);
     setSubmitting(true);
 
     try {
       const displayName = firebaseUser.displayName || 'Student';
-      const normalizedUserRole = normalizeRole(profile?.role) ?? USER_ROLES.STUDENT;
       const sharedData = {
         userId: firebaseUser.uid,
         userName: displayName,
-        userRole: normalizedUserRole,
+        userRole: normalizedProfileRole,
         roomId: selectedRoomId,
         roomName: selectedRoomName,
         buildingId: selectedBuildingId,
@@ -523,6 +579,14 @@ export default function ReserveRoomPage() {
         endTime,
         programDepartmentOrganization,
         purpose,
+        ...(uploadedApprovalDocument
+          ? {
+              approvalDocumentMimeType: uploadedApprovalDocument.contentType,
+              approvalDocumentName: uploadedApprovalDocument.name,
+              approvalDocumentPath: uploadedApprovalDocument.path,
+              approvalDocumentSize: uploadedApprovalDocument.size,
+            }
+          : {}),
         equipment,
       };
 
@@ -531,7 +595,7 @@ export default function ReserveRoomPage() {
       if (selectedCampus === 'main') {
         const reservationData = {
           ...sharedData,
-          advisorEmail: approvalEmail,
+          ...(approvalEmail ? { advisorEmail: approvalEmail } : {}),
           campus: 'main' as const,
         };
 
@@ -550,7 +614,6 @@ export default function ReserveRoomPage() {
       } else {
         const reservationData = {
           ...sharedData,
-          buildingAdminEmail: approvalEmail,
           campus: 'digi' as const,
         };
 
@@ -609,11 +672,11 @@ export default function ReserveRoomPage() {
             <p className="mb-6 text-sm text-black">
               {createdCount > 1
                 ? `${createdCount} recurring reservations have been created. Each one will follow the ${
-                    selectedCampus === 'digi'
-                      ? 'Digital Campus building admin review'
+                    selectedCampus === 'digi' || isFacultyReservation
+                      ? 'building admin review'
                       : 'faculty review step for Main Campus'
                   }.`
-                : selectedCampus === 'digi'
+                : selectedCampus === 'digi' || isFacultyReservation
                   ? 'Your request will go directly to the building admin for approval.'
                   : 'Your request will first be sent to the faculty reviewer you entered for approval.'}
             </p>
@@ -1238,7 +1301,46 @@ export default function ReserveRoomPage() {
                     ))}
                   </div>
 
-                  {selectedCampus !== 'digi' && (
+                  {isStudentReservation && (
+                    <div>
+                      <h5 className="mb-3 text-sm font-bold uppercase tracking-wider text-black">
+                        Concept Paper / Letter of Approval
+                      </h5>
+                      <div className="rounded-xl border border-dark/10 bg-dark/5 p-4">
+                        <label className="mb-2 block text-xs font-bold text-black">
+                          Upload a PDF, JPG, or PNG copy of your concept paper
+                        </label>
+                        <input
+                          type="file"
+                          accept=".pdf,image/jpeg,image/png"
+                          onChange={handleApprovalDocumentChange}
+                          disabled={documentUploading}
+                          className="glass-input w-full px-4 py-3"
+                        />
+                        <p className="mt-2 text-[11px] text-black">
+                          Students must attach a concept paper for both Main Campus and Digital Campus reservations.
+                        </p>
+                        {documentUploading && (
+                          <p className="mt-1.5 text-xs font-bold text-black">Uploading concept paper...</p>
+                        )}
+                        {uploadedApprovalDocument && (
+                          <p className="mt-1.5 text-xs font-bold text-primary">
+                            Uploaded: {uploadedApprovalDocument.name}
+                          </p>
+                        )}
+                        {!uploadedApprovalDocument && approvalDocument && !documentUploading && !approvalDocumentError && (
+                          <p className="mt-1.5 text-xs font-bold text-black">
+                            Waiting for upload to finish for {approvalDocument.name}.
+                          </p>
+                        )}
+                        {approvalDocumentError && (
+                          <p className="mt-1.5 text-xs font-bold ui-text-red">{approvalDocumentError}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedCampus !== 'digi' && !isFacultyReservation && (
                     <div>
                       <h5 className="mb-3 text-sm font-bold uppercase tracking-wider text-black">
                         Approval Routing

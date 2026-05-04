@@ -233,29 +233,43 @@ async function getApprovedUsersByEmail(email: string) {
 export async function validateReservationApprover(input: {
   campus: ReservationCampus;
   email: string;
+  approverRole?: ReservationApprovalStep["role"];
 }) {
   try {
     const normalizedEmail = normalizeApprovalEmail(input.email);
     const approvedUsers = await getApprovedUsersByEmail(normalizedEmail);
+    const expectedRole =
+      input.approverRole ?? (input.campus === "main" ? "advisor" : "building_admin");
 
     if (approvedUsers.length === 0) {
       throw new ApiError(
         400,
         "approver_not_found",
-        input.campus === "main"
+        expectedRole === "advisor"
           ? "The adviser, department head, or professor email must belong to an approved iRoomReserve faculty account."
-          : "The Digital Campus building admin email must belong to an approved iRoomReserve account."
+          : "The building admin email must belong to an approved iRoomReserve administrator account."
       );
     }
 
     if (
-      input.campus === "main" &&
+      expectedRole === "advisor" &&
       !approvedUsers.some((user) => user.role === USER_ROLES.FACULTY)
     ) {
       throw new ApiError(
         400,
         "invalid_approver_role",
         "The adviser, department head, or professor email must belong to an approved faculty iRoomReserve account."
+      );
+    }
+
+    if (
+      expectedRole === "building_admin" &&
+      !approvedUsers.some((user) => user.role === USER_ROLES.ADMIN)
+    ) {
+      throw new ApiError(
+        400,
+        "invalid_approver_role",
+        "The building admin email must belong to an approved iRoomReserve administrator account."
       );
     }
 
@@ -323,26 +337,25 @@ async function getReservationApproverInput(
   input: ReservationCreateInput | Omit<ReservationCreateInput, "date">,
   campus: ReservationCampus
 ): Promise<ReservationApproverInput> {
-  if (campus === "digi") {
-    const buildingAdminEmail =
-      "buildingAdminEmail" in input ? input.buildingAdminEmail?.trim() : "";
+  const normalizedRole = normalizeRole(input.userRole);
 
-    if (!buildingAdminEmail) {
-      throw new ApiError(
-        400,
-        "missing_approvers",
-        "Digital Campus reservations require a building admin email."
-      );
-    }
-
+  if (normalizedRole === USER_ROLES.FACULTY) {
     return {
       campus,
-      buildingAdminEmail,
+      buildingAdminEmail: await getPrimaryBuildingManagerEmail(input.buildingId),
+    };
+  }
+
+  if (campus === "digi") {
+    return {
+      campus,
+      buildingAdminEmail: await getPrimaryBuildingManagerEmail(input.buildingId),
     };
   }
 
   if (
-    !("advisorEmail" in input)
+    !("advisorEmail" in input) ||
+    !input.advisorEmail?.trim()
   ) {
     throw new ApiError(
       400,
@@ -374,6 +387,7 @@ async function getInitialApproverIdsOrThrow(
   const validation = await validateReservationApprover({
     campus,
     email: firstApprovalStep.email,
+    approverRole: firstApprovalStep.role,
   });
 
   return {

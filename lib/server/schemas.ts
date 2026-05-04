@@ -118,35 +118,74 @@ function normalizeRoomPayload(value: unknown): unknown {
   return nextValue;
 }
 
-const reservationCommonSchema = z.object({
-  userId: nonEmptyString,
-  userName: nonEmptyString,
-  userRole: userRoleSchema,
-  roomId: nonEmptyString,
-  roomName: nonEmptyString,
-  buildingId: nonEmptyString,
-  buildingName: nonEmptyString,
-  campus: reservationCampusSchema,
-  startTime: timeString,
-  endTime: timeString,
-  programDepartmentOrganization: nonEmptyString,
-  purpose: nonEmptyString,
-  approvalDocumentName: nonEmptyString.optional(),
-  approvalDocumentUrl: z.string().trim().url().optional(),
-  approvalDocumentPath: nonEmptyString.optional(),
-  approvalDocumentMimeType: nonEmptyString.optional(),
-  approvalDocumentSize: positiveInteger.optional(),
-  equipment: equipmentSchema.optional(),
-});
+const reservationCommonSchema = z
+  .object({
+    userId: nonEmptyString,
+    userName: nonEmptyString,
+    userRole: userRoleSchema,
+    roomId: nonEmptyString,
+    roomName: nonEmptyString,
+    buildingId: nonEmptyString,
+    buildingName: nonEmptyString,
+    campus: reservationCampusSchema,
+    startTime: timeString,
+    endTime: timeString,
+    programDepartmentOrganization: nonEmptyString,
+    purpose: nonEmptyString,
+    approvalDocumentName: nonEmptyString.optional(),
+    approvalDocumentUrl: z.string().trim().url().optional(),
+    approvalDocumentPath: nonEmptyString.optional(),
+    approvalDocumentMimeType: nonEmptyString.optional(),
+    approvalDocumentSize: positiveInteger.optional(),
+    equipment: equipmentSchema.optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.userRole !== "Student") {
+      return;
+    }
+
+    if (!value.approvalDocumentName) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Student reservations require a concept paper or letter of approval.",
+        path: ["approvalDocumentName"],
+      });
+    }
+
+    if (!value.approvalDocumentPath) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Student reservations require an uploaded approval document.",
+        path: ["approvalDocumentPath"],
+      });
+    }
+
+    if (!value.approvalDocumentMimeType) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Student reservations require an uploaded approval document type.",
+        path: ["approvalDocumentMimeType"],
+      });
+    }
+
+    if (typeof value.approvalDocumentSize !== "number") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Student reservations require an uploaded approval document size.",
+        path: ["approvalDocumentSize"],
+      });
+    }
+  });
 
 export const digiReservationBaseSchema = reservationCommonSchema.extend({
   campus: z.literal("digi"),
-  buildingAdminEmail: emailString,
+  buildingAdminEmail: emailString.optional(),
 });
 
 export const mainReservationBaseSchema = reservationCommonSchema.extend({
   campus: z.literal("main"),
-  advisorEmail: emailString,
+  advisorEmail: emailString.optional(),
+  buildingAdminEmail: emailString.optional(),
 });
 
 export const reservationBaseSchema = z.union([
