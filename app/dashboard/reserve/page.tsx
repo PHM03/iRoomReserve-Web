@@ -24,9 +24,14 @@ import { getRoomsByBuilding, type Room } from '@/lib/rooms';
 import { formatDate, formatTime } from '@/lib/dateTime';
 import { getFloorDisplayLabel } from '@/lib/floorLabels';
 
-type CampusFilter = ReservationCampus | 'all';
 type DetailsStep = 2 | 3;
-type RoomFilterKey = 'available' | 'classroom' | 'laboratory';
+type RoomFilterKey =
+  | 'available'
+  | 'classroom'
+  | 'glass-room'
+  | 'conference-room'
+  | 'specialized-room'
+  | 'gymnasium';
 type AssistantRoomType = '' | 'glass' | 'lecture' | 'lab';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -34,15 +39,22 @@ const CAMPUS_TIME_RANGES: Record<ReservationCampus, { endMinutes: number; startM
   digi: { startMinutes: 7 * 60, endMinutes: 17 * 60 },
   main: { startMinutes: 7 * 60, endMinutes: 21 * 60 },
 };
-const ALL_MANAGED_BUILDING_IDS = [
-  ...getManagedBuildingsForCampus('main'),
-  ...getManagedBuildingsForCampus('digi'),
-].map((building) => building.id);
 const FILTER_CHIPS: Array<{ key: RoomFilterKey; label: string }> = [
   { key: 'classroom', label: 'Classroom' },
-  { key: 'laboratory', label: 'Laboratory' },
+  { key: 'glass-room', label: 'Glass Room' },
+  { key: 'conference-room', label: 'Conference Room' },
+  { key: 'specialized-room', label: 'Specialized Room' },
+  { key: 'gymnasium', label: 'Gymnasium' },
   { key: 'available', label: 'Available' },
 ];
+const BUILDING_FLOORS: Record<string, string[]> = {
+  // SDCA Digi Campus — single building, use its actual buildingId from getManagedBuildingsForCampus('digi')
+  digi: ['Ground Floor', '2nd Floor', '3rd Floor', '4th Floor'],
+  // SDCA Main Campus buildings
+  gd1: ['Basement', 'Ground Floor', '2nd Floor', '3rd Floor', '4th Floor', '5th Floor', '6th Floor', '7th Floor', '8th Floor'],
+  gd2: ['Ground Floor', '2nd Floor', '3rd Floor', '4th Floor', '5th Floor', '6th Floor', '7th Floor', '8th Floor', '9th Floor', '10th Floor'],
+  gd3: ['Ground Floor', '2nd Floor', '3rd Floor', '4th Floor', '5th Floor', '6th Floor', '7th Floor', '8th Floor', '9th Floor', '10th Floor', '11th Floor'],
+};
 const INITIAL_EQUIPMENT = {
   fans: 0,
   speakers: 0,
@@ -117,12 +129,20 @@ function getRoomAvailability(room: Room): 'Available' | 'Occupied' {
 
 function matchesRoomType(room: Room, filter: Exclude<RoomFilterKey, 'available'>): boolean {
   const roomType = room.roomType.trim().toLowerCase();
-
-  if (filter === 'classroom') {
-    return roomType.includes('classroom');
+  switch (filter) {
+    case 'classroom':
+      return roomType.includes('classroom');
+    case 'glass-room':
+      return roomType.includes('glass');
+    case 'conference-room':
+      return roomType.includes('conference');
+    case 'specialized-room':
+      return roomType.includes('specialized');
+    case 'gymnasium':
+      return roomType.includes('gymnasium') || roomType.includes('gym');
+    default:
+      return false;
   }
-
-  return roomType.includes('laboratory');
 }
 
 function mapRoomTypeToRecommendationType(room: Room): AssistantRoomType {
@@ -176,9 +196,11 @@ export default function ReserveRoomPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [roomsError, setRoomsError] = useState('');
-  const [activeCampusFilter, setActiveCampusFilter] = useState<CampusFilter>('all');
+  const [activeCampus, setActiveCampus] = useState<ReservationCampus | null>(null);
+  const [activeBuilding, setActiveBuilding] = useState<{ id: string; name: string } | null>(null);
+  const [activeFloor, setActiveFloor] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeRoomFilters, setActiveRoomFilters] = useState<RoomFilterKey[]>([]);
+  const [activeRoomFilters, setActiveRoomFilters] = useState<RoomFilterKey[]>(['classroom']);
   const [detailsStep, setDetailsStep] = useState<DetailsStep>(2);
   const [reservationDate, setReservationDate] = useState('');
   const [startTime, setStartTime] = useState('');
@@ -216,7 +238,9 @@ export default function ReserveRoomPage() {
   );
 
   useEffect(() => {
-    if (!firebaseUser) {
+    if (!firebaseUser || !activeBuilding) {
+      setRooms([]);
+      setRoomsLoading(false);
       return;
     }
 
@@ -225,13 +249,13 @@ export default function ReserveRoomPage() {
     setRoomsLoading(true);
     setRoomsError('');
 
-    Promise.all(ALL_MANAGED_BUILDING_IDS.map((buildingId) => getRoomsByBuilding(buildingId)))
-      .then((roomGroups) => {
+    getRoomsByBuilding(activeBuilding.id)
+      .then((loadedRooms) => {
         if (!active) {
           return;
         }
 
-        setRooms(roomGroups.flat());
+        setRooms(loadedRooms);
       })
       .catch((error) => {
         if (!active) {
@@ -252,7 +276,7 @@ export default function ReserveRoomPage() {
     return () => {
       active = false;
     };
-  }, [firebaseUser]);
+  }, [firebaseUser, activeBuilding]);
 
   useEffect(() => {
     if (!selectedRoomParam) {
@@ -316,19 +340,30 @@ export default function ReserveRoomPage() {
         );
       })
     : [];
+
+  function getFloorsForActiveBuilding(): string[] {
+    if (!activeCampus) return [];
+    if (activeCampus === 'digi') return BUILDING_FLOORS.digi;
+    if (!activeBuilding) return [];
+    const name = activeBuilding.name.toLowerCase();
+    if (name.includes('gd1') || name.includes('g.d. 1') || name.includes('gd 1')) return BUILDING_FLOORS.gd1;
+    if (name.includes('gd2') || name.includes('g.d. 2') || name.includes('gd 2')) return BUILDING_FLOORS.gd2;
+    if (name.includes('gd3') || name.includes('g.d. 3') || name.includes('gd 3')) return BUILDING_FLOORS.gd3;
+    return [];
+  }
+
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const hasTypeFilters =
-    activeRoomFilters.includes('classroom') || activeRoomFilters.includes('laboratory');
+  const hasTypeFilters = activeRoomFilters.some((f) => f !== 'available');
   const filteredRooms = rooms.filter((room) => {
-    const roomCampus = getRoomCampus(room);
-    const matchesCampus =
-      activeCampusFilter === 'all' ? true : roomCampus === activeCampusFilter;
-    const searchableText = [
-      room.name,
-      room.buildingName,
-      room.floor,
-      room.roomType,
-    ]
+    // Floor filter — match the selected floor label against room.floor
+    if (activeFloor) {
+      const floorLabel = getFloorDisplayLabel(room.floor, {
+        id: room.buildingId,
+        name: room.buildingName,
+      }).toLowerCase();
+      if (!floorLabel.includes(activeFloor.toLowerCase())) return false;
+    }
+    const searchableText = [room.name, room.buildingName, room.floor, room.roomType]
       .join(' ')
       .toLowerCase();
     const matchesSearch =
@@ -336,12 +371,12 @@ export default function ReserveRoomPage() {
     const matchesType =
       !hasTypeFilters ||
       activeRoomFilters
-        .filter((filter): filter is Exclude<RoomFilterKey, 'available'> => filter !== 'available')
-        .some((filter) => matchesRoomType(room, filter));
+        .filter((f): f is Exclude<RoomFilterKey, 'available'> => f !== 'available')
+        .some((f) => matchesRoomType(room, f));
     const matchesAvailability =
       !activeRoomFilters.includes('available') || room.status === 'Available';
 
-    return matchesCampus && matchesSearch && matchesType && matchesAvailability;
+    return matchesSearch && matchesType && matchesAvailability;
   });
   const previewDates = isRecurring ? getPreviewDates() : [];
   const canContinueToEquipment = canProceedToEquipment();
@@ -465,8 +500,42 @@ export default function ReserveRoomPage() {
     return regex.test(email);
   }
 
-  function handleCampusFilterChange(nextCampus: CampusFilter) {
-    setActiveCampusFilter(nextCampus);
+  function handleCampusSelect(nextCampus: ReservationCampus) {
+    const nextBuilding =
+      nextCampus === 'digi' ? getManagedBuildingsForCampus('digi')[0] ?? null : null;
+
+    setActiveCampus(nextCampus);
+    setActiveBuilding(
+      nextBuilding ? { id: nextBuilding.id, name: nextBuilding.name } : null
+    );
+    setActiveFloor(null);
+    setRooms([]);
+    setRoomsError('');
+    setRoomsLoading(Boolean(nextBuilding && firebaseUser));
+    setSearchQuery('');
+    setActiveRoomFilters([]);
+  }
+
+  function handleBuildingSelect(nextBuilding: { id: string; name: string }) {
+    setActiveBuilding(nextBuilding);
+    setActiveFloor(null);
+    setRooms([]);
+    setRoomsError('');
+    setRoomsLoading(Boolean(firebaseUser));
+    setSearchQuery('');
+    setActiveRoomFilters([]);
+  }
+
+  function handleFloorSelect(nextFloor: string) {
+    setActiveFloor(nextFloor);
+    setActiveRoomFilters(['classroom']);
+    setSearchQuery('');
+  }
+
+  function clearFloorSelection() {
+    setActiveFloor(null);
+    setSearchQuery('');
+    setActiveRoomFilters([]);
   }
 
   function toggleRoomFilter(filter: RoomFilterKey) {
@@ -729,186 +798,291 @@ export default function ReserveRoomPage() {
 
             {currentStep === 1 && (
               <div className="space-y-5">
+                {/* Header */}
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <h4 className="text-sm font-bold text-black">Choose a room</h4>
                     <p className="mt-1 text-xs text-black">
-                      Campus tabs, search, and filter chips work together on this page.
+                      Select a campus, then building and floor to browse available rooms.
                     </p>
                   </div>
-                  <div className="glass-badge inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-black">
-                    Showing {filteredRooms.length} of {rooms.length} rooms
+                  {activeFloor && (
+                    <div className="glass-badge inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-black">
+                      Showing {filteredRooms.length} of {rooms.length} rooms
+                    </div>
+                  )}
+                </div>
+
+                {/* STEP A - Campus Selection */}
+                <div>
+                  <p className="mb-2 text-xs font-bold text-black/60 uppercase tracking-wider">
+                    1. Choose Campus
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(['main', 'digi'] as ReservationCampus[]).map((campus) => (
+                      <button
+                        key={campus}
+                        type="button"
+                        onClick={() => handleCampusSelect(campus)}
+                        className={`rounded-xl px-4 py-3 text-sm font-bold transition-all text-left ${
+                          activeCampus === campus
+                            ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
+                            : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
+                        }`}
+                      >
+                        <span className="block text-base">{getCampusName(campus)}</span>
+                        <span
+                          className={`block text-[11px] mt-0.5 ${
+                            activeCampus === campus ? 'text-white/70' : 'text-black/50'
+                          }`}
+                        >
+                          {campus === 'main'
+                            ? 'GD1 / GD2 / GD3'
+                            : 'Ground Floor to 4th Floor'}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveCampusFilter('all')}
-                    className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${
-                      activeCampusFilter === 'all'
-                        ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
-                        : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
-                    }`}
-                  >
-                    All Rooms
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleCampusFilterChange('main')}
-                    className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${
-                      activeCampusFilter === 'main'
-                        ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
-                        : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
-                    }`}
-                  >
-                    {getCampusName('main')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleCampusFilterChange('digi')}
-                    className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${
-                      activeCampusFilter === 'digi'
-                        ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
-                        : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
-                    }`}
-                  >
-                    {getCampusName('digi')}
-                  </button>
-                </div>
+                {/* STEP B - Building Selection (Main Campus only) */}
+                {activeCampus === 'main' && (
+                  <div>
+                    <p className="mb-2 text-xs font-bold text-black/60 uppercase tracking-wider">
+                      2. Choose Building
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {getManagedBuildingsForCampus('main').map((building) => (
+                        <button
+                          key={building.id}
+                          type="button"
+                          onClick={() =>
+                            handleBuildingSelect({
+                              id: building.id,
+                              name: building.name,
+                            })
+                          }
+                          className={`rounded-xl px-3 py-3 text-sm font-bold transition-all ${
+                            activeBuilding?.id === building.id
+                              ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
+                              : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
+                          }`}
+                        >
+                          {building.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                <div className="relative">
-                  <svg
-                    className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/60"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                    />
-                  </svg>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    className="glass-input w-full px-12 py-3"
-                    placeholder="Search by room name or number"
-                  />
-                </div>
+                {/* STEP C - Floor Selection */}
+                {(activeCampus === 'digi' ? activeBuilding : activeBuilding) &&
+                  getFloorsForActiveBuilding().length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-bold text-black/60 uppercase tracking-wider">
+                        {activeCampus === 'main' ? '3. Choose Floor' : '2. Choose Floor'}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {getFloorsForActiveBuilding().map((floor) => (
+                          <button
+                            key={floor}
+                            type="button"
+                            onClick={() => handleFloorSelect(floor)}
+                            className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+                              activeFloor === floor
+                                ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
+                                : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
+                            }`}
+                          >
+                            {floor}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveRoomFilters([])}
-                    className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
-                      activeRoomFilters.length === 0
-                        ? 'border border-primary/25 bg-primary/15 text-primary'
-                        : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
-                    }`}
-                  >
-                    All
-                  </button>
-                  {FILTER_CHIPS.map((chip) => {
-                    const isActive = activeRoomFilters.includes(chip.key);
-
-                    return (
+                {/* STEP D - Search + Filter + Room List (only after floor is selected) */}
+                {activeFloor && (
+                  <>
+                    {/* Breadcrumb */}
+                    <div className="flex items-center gap-1.5 text-xs text-black/50 font-bold">
+                      <span>{getCampusName(activeCampus!)}</span>
+                      {activeBuilding && activeCampus === 'main' && (
+                        <>
+                          <span>&gt;</span>
+                          <span>{activeBuilding.name}</span>
+                        </>
+                      )}
+                      <span>&gt;</span>
+                      <span className="text-primary">{activeFloor}</span>
                       <button
-                        key={chip.key}
                         type="button"
-                        onClick={() => toggleRoomFilter(chip.key)}
+                        onClick={clearFloorSelection}
+                        className="ml-2 text-black/40 hover:text-primary transition-colors"
+                        title="Clear floor"
+                      >
+                          x
+                      </button>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative">
+                      <svg
+                        className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/60"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                        />
+                      </svg>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="glass-input w-full px-12 py-3"
+                        placeholder="Search by room name or number"
+                      />
+                    </div>
+
+                    {/* Filter chips */}
+                    <div className="flex flex-wrap gap-2">
+                      {FILTER_CHIPS.map((chip) => {
+                        const isActive = activeRoomFilters.includes(chip.key);
+
+                        return (
+                          <button
+                            key={chip.key}
+                            type="button"
+                            onClick={() => toggleRoomFilter(chip.key)}
+                            className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                              isActive
+                                ? 'border border-primary/25 bg-primary/15 text-primary'
+                                : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
+                            }`}
+                          >
+                            {chip.label}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setActiveRoomFilters([])}
                         className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
-                          isActive
+                          activeRoomFilters.length === 0
                             ? 'border border-primary/25 bg-primary/15 text-primary'
                             : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
                         }`}
                       >
-                        {chip.label}
+                        All Rooms
                       </button>
-                    );
-                  })}
-                </div>
-
-                <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h5 className="text-sm font-bold text-black">Need help choosing?</h5>
-                      <p className="mt-1 text-xs text-black">
-                        Use the floating assistant in the bottom-right corner for a guided conversation
-                        or instant alternatives when a room is unavailable.
-                      </p>
                     </div>
-                    <div className="inline-flex items-center rounded-full border border-primary/20 bg-white/80 px-3 py-1 text-[11px] font-bold text-primary">
-                      Messenger-style assistant
-                    </div>
-                  </div>
-                </div>
 
-                {roomsLoading ? (
-                  <div className="py-12 text-center">
-                    <svg className="mx-auto mb-3 h-6 w-6 animate-spin text-black" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    <p className="text-sm text-black">Loading rooms...</p>
-                  </div>
-                ) : roomsError ? (
-                  <div className="rounded-2xl border border-red-500/20 bg-red-50/80 p-8 text-center">
-                    <p className="text-sm font-bold text-black">Rooms could not be loaded.</p>
-                    <p className="mt-1 text-xs text-black">{roomsError}</p>
-                    <button
-                      type="button"
-                      onClick={() => window.location.reload()}
-                      className="mt-4 text-sm font-bold text-primary transition-colors hover:text-primary-hover"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                ) : filteredRooms.length === 0 ? (
-                  <div className="rounded-2xl border border-dark/10 bg-dark/5 p-8 text-center">
-                    <p className="text-sm font-bold text-black">No rooms match the current filters.</p>
-                    <p className="mt-1 text-xs text-black">
-                      Try switching campuses, clearing chips, or searching for another room.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveCampusFilter('all');
-                        setSearchQuery('');
-                        setActiveRoomFilters([]);
-                      }}
-                      className="mt-4 text-sm font-bold text-primary transition-colors hover:text-primary-hover"
-                    >
-                      Clear filters
-                    </button>
-                  </div>
-                ) : (
-                  <div className="max-h-[34rem] overflow-y-auto pr-1">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      {filteredRooms.map((room) => {
-                        const roomCampus = getRoomCampus(room);
-
-                        return (
-                          <RoomCard
-                            key={room.id}
-                            availability={getRoomAvailability(room)}
-                            buildingName={room.buildingName}
-                            campusName={
-                              roomCampus ? getCampusName(roomCampus) : room.buildingName || 'Unknown campus'
-                            }
-                            floor={getFloorDisplayLabel(room.floor, {
-                              id: room.buildingId,
-                              name: room.buildingName,
-                            })}
-                            name={room.name}
-                            onClick={() => handleRoomSelect(room.id)}
-                            roomType={room.roomType}
+                    {/* Room grid */}
+                    {roomsLoading ? (
+                      <div className="py-12 text-center">
+                        <svg
+                          className="mx-auto mb-3 h-6 w-6 animate-spin text-black"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
                           />
-                        );
-                      })}
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                          />
+                        </svg>
+                        <p className="text-sm text-black">Loading rooms...</p>
+                      </div>
+                    ) : roomsError ? (
+                      <div className="rounded-2xl border border-red-500/20 bg-red-50/80 p-8 text-center">
+                        <p className="text-sm font-bold text-black">Rooms could not be loaded.</p>
+                        <p className="mt-1 text-xs text-black">{roomsError}</p>
+                        <button
+                          type="button"
+                          onClick={() => window.location.reload()}
+                          className="mt-4 text-sm font-bold text-primary transition-colors hover:text-primary-hover"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : filteredRooms.length === 0 ? (
+                      <div className="rounded-2xl border border-dark/10 bg-dark/5 p-8 text-center">
+                        <p className="text-sm font-bold text-black">
+                          No rooms match the current filters.
+                        </p>
+                        <p className="mt-1 text-xs text-black">
+                          Try clearing the search or filters, or choose a different floor.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchQuery('');
+                            setActiveRoomFilters([]);
+                          }}
+                          className="mt-4 text-sm font-bold text-primary transition-colors hover:text-primary-hover"
+                        >
+                          Clear filters
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="max-h-[34rem] overflow-y-auto pr-1">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          {filteredRooms.map((room) => {
+                            const roomCampus = getRoomCampus(room);
+
+                            return (
+                              <RoomCard
+                                key={room.id}
+                                availability={getRoomAvailability(room)}
+                                buildingName={room.buildingName}
+                                campusName={
+                                  roomCampus
+                                    ? getCampusName(roomCampus)
+                                    : room.buildingName || 'Unknown campus'
+                                }
+                                floor={getFloorDisplayLabel(room.floor, {
+                                  id: room.buildingId,
+                                  name: room.buildingName,
+                                })}
+                                name={room.name}
+                                onClick={() => handleRoomSelect(room.id)}
+                                roomType={room.roomType}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Assistant hint */}
+                {activeFloor && (
+                  <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h5 className="text-sm font-bold text-black">Need help choosing?</h5>
+                        <p className="mt-1 text-xs text-black">
+                          Use the floating assistant in the bottom-right corner for guided
+                          suggestions.
+                        </p>
+                      </div>
+                      <div className="inline-flex items-center rounded-full border border-primary/20 bg-white/80 px-3 py-1 text-[11px] font-bold text-primary">
+                        Messenger-style assistant
+                      </div>
                     </div>
                   </div>
                 )}
