@@ -29,6 +29,7 @@ import {
 } from "@/lib/roomStatus";
 import { ApiError } from "@/lib/server/api-error";
 import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
+import { stopReservationPresenceMonitorRecord } from "@/lib/server/services/reservation-presence";
 
 type ReservationStatus =
   | "pending"
@@ -952,6 +953,7 @@ export async function cancelReservationRecord(
     }
 
     await batch.commit();
+    await stopReservationPresenceMonitorRecord({ reservationId });
   } catch (error) {
     logReservationServiceError("cancelReservationRecord", error, {
       reservationId,
@@ -1144,6 +1146,7 @@ export async function disconnectReservationBeaconRecord(
     }
 
     await batch.commit();
+    await stopReservationPresenceMonitorRecord({ reservationId });
   } catch (error) {
     logReservationServiceError("disconnectReservationBeaconRecord", error, {
       reservationId,
@@ -1218,6 +1221,7 @@ export async function completeReservationRecord(
     });
 
     await batch.commit();
+    await stopReservationPresenceMonitorRecord({ reservationId });
   } catch (error) {
     logReservationServiceError("completeReservationRecord", error, {
       reservationId,
@@ -1266,6 +1270,7 @@ export async function deleteReservationRecord(
     }
 
     await batch.commit();
+    await stopReservationPresenceMonitorRecord({ reservationId });
   } catch (error) {
     logReservationServiceError("deleteReservationRecord", error, {
       reservationId,

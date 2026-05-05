@@ -15,6 +15,10 @@ import {
   createRecurringReservationRecord,
   createReservationRecord,
 } from "@/lib/server/services/reservations";
+import {
+  evaluateExpiredPresenceMonitors,
+  getReservationPresenceMonitorsByReservationIds,
+} from "@/lib/server/services/reservation-presence";
 
 export const runtime = "nodejs";
 
@@ -127,6 +131,7 @@ export async function GET(request: NextRequest) {
       campus === "main" || campus === "digi"
         ? getManagedBuildingIdsForCampus(campus)
         : [];
+    await evaluateExpiredPresenceMonitors();
     const snapshot = await reservationsQuery.get();
     const reservations = snapshot.docs
       .map(
@@ -147,8 +152,30 @@ export async function GET(request: NextRequest) {
           : statuses.includes((reservation.status ?? "").toLowerCase())
       )
       .sort(sortReservations);
+    const presenceMonitorsByReservationId =
+      await getReservationPresenceMonitorsByReservationIds(
+        reservations.map((reservation) => reservation.id)
+      );
 
-    return NextResponse.json(reservations);
+    const enrichedReservations = reservations.map((reservation) => {
+      const presenceMonitor = presenceMonitorsByReservationId.get(reservation.id);
+      if (!presenceMonitor) {
+        return reservation;
+      }
+
+      return {
+        ...reservation,
+        presenceBeaconId: presenceMonitor.beaconId ?? null,
+        presenceLastHeartbeatAt: presenceMonitor.lastHeartbeatAt ?? null,
+        presenceLastHealthyHeartbeatAt:
+          presenceMonitor.lastHealthyHeartbeatAt ?? null,
+        presenceMonitoringActive: presenceMonitor.monitoringActive,
+        presenceMonitoringStatus: presenceMonitor.currentStatus,
+        presenceTimedOutAt: presenceMonitor.timedOutAt ?? null,
+      };
+    });
+
+    return NextResponse.json(enrichedReservations);
   } catch (error) {
     return handleApiError(error);
   }
