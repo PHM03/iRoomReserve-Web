@@ -62,7 +62,7 @@ export default function AdminRoomStatusPage() {
       {!buildingId || !buildingName ? (
         <AdminNoBuildingAssigned />
       ) : (
-        <>
+        <div className="flex w-full flex-col gap-4">
           <AdminPageHeader
             title="Room Status Monitor"
             description={
@@ -76,6 +76,7 @@ export default function AdminRoomStatusPage() {
             buildingName={buildingName}
             activeBuildingLabel={activeBuildingLabel}
             onBuildingChange={setSelectedBuildingId}
+            integratedBuildingField
           />
 
           <AdminRoomStatusSection
@@ -87,7 +88,7 @@ export default function AdminRoomStatusPage() {
             feedbackList={feedbackList}
             roomHistory={roomHistory}
           />
-        </>
+        </div>
       )}
     </main>
   );

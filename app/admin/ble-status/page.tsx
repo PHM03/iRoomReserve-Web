@@ -20,7 +20,7 @@ export default function AdminBleStatusPage() {
       {!buildingId || !buildingName ? (
         <AdminNoBuildingAssigned />
       ) : (
-        <>
+        <div className="flex w-full flex-col gap-4">
           <AdminPageHeader
             title="BLE Beacon Status"
             description={
@@ -34,10 +34,11 @@ export default function AdminBleStatusPage() {
             buildingName={buildingName}
             activeBuildingLabel={activeBuildingLabel}
             onBuildingChange={setSelectedBuildingId}
+            integratedBuildingField
           />
 
           <BleAdminMonitor buildingName={buildingName} rooms={rooms} />
-        </>
+        </div>
       )}
     </main>
   );
