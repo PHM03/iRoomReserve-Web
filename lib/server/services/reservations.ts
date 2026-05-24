@@ -6,7 +6,7 @@ import {
   normalizeCampus,
   type ReservationCampus,
 } from "@/lib/buildings/campuses";
-import { formatDate, formatTimeRange } from "../../utils/dateTime";
+import { formatTimeRange } from "../../utils/dateTime";
 import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
 import type { FirestoreTimestampLike } from "@/lib/types/firestore-types";
 import {
@@ -102,10 +102,40 @@ function formatReservationScheduleLabel(input: {
   startTime: string;
   endTime: string;
 }) {
-  return `${formatDate(input.date)} (${formatTimeRange(
+  return `${formatNotificationDate(input.date)} (${formatTimeRange(
     input.startTime,
     input.endTime
   )})`;
+}
+
+function formatNotificationDate(dateString: string) {
+  const trimmedValue = dateString.trim();
+  const isoMatch = trimmedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (isoMatch) {
+    const parsedDate = new Date(
+      Number(isoMatch[1]),
+      Number(isoMatch[2]) - 1,
+      Number(isoMatch[3])
+    );
+
+    return new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }).format(parsedDate);
+  }
+
+  const parsedDate = new Date(trimmedValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return trimmedValue;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsedDate);
 }
 
 export type ReservationCreateInput =
@@ -777,8 +807,10 @@ export async function createReservationRecord(data: ReservationCreateInput) {
     const approvalFlow = buildApprovalFlow(
       await getReservationApproverInput(data, campus)
     );
-    const { firstApprovalStep, firstApproverIds } =
-      await getInitialApproverIdsOrThrow(approvalFlow, campus);
+    const { firstApproverIds } = await getInitialApproverIdsOrThrow(
+      approvalFlow,
+      campus
+    );
     const reservationRef = db.collection("reservations").doc();
     const batch = db.batch();
 
@@ -832,7 +864,7 @@ export async function createReservationRecord(data: ReservationCreateInput) {
         title: "New Reservation Request",
         message: `${data.userName} reserved ${data.roomName} on ${formatReservationScheduleLabel(
           data
-        )}. Review is requested for the ${firstApprovalStep?.role ?? "current"} step.`,
+        )}.`,
         buildingId: data.buildingId,
         reservationId: reservationRef.id,
       });
@@ -865,8 +897,10 @@ export async function createRecurringReservationRecord(
     const approvalFlow = buildApprovalFlow(
       await getReservationApproverInput(data, campus)
     );
-    const { firstApprovalStep, firstApproverIds } =
-      await getInitialApproverIdsOrThrow(approvalFlow, campus);
+    const { firstApproverIds } = await getInitialApproverIdsOrThrow(
+      approvalFlow,
+      campus
+    );
     const recurringGroupId = `recurring_${Date.now()}_${Math.random()
       .toString(36)
       .slice(2, 8)}`;
@@ -931,12 +965,12 @@ export async function createRecurringReservationRecord(
         recipientUid,
         type: "new_reservation",
         title: "New Recurring Reservation",
-        message: `${data.userName} reserved ${data.roomName} every ${dayNames} from ${formatDate(
+        message: `${data.userName} reserved ${data.roomName} every ${dayNames} from ${formatNotificationDate(
           startDate
-        )} to ${formatDate(endDate)} (${formatTimeRange(
+        )} to ${formatNotificationDate(endDate)} (${formatTimeRange(
           data.startTime,
           data.endTime
-        )}) - ${dates.length} dates. Review is requested for the ${firstApprovalStep?.role ?? "current"} step.`,
+        )}) - ${dates.length} dates.`,
         buildingId: data.buildingId,
         reservationId: createdIds[0],
       });
