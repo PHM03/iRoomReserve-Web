@@ -1,13 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
+import {
+  sortFloorOptions,
+  type FloorOption,
+} from '@/lib/buildings/floorLabels';
 import {
   approveReservation,
   deleteReservation,
   rejectReservation,
   type Reservation,
 } from '@/lib/reservations/reservations';
+import { getRoomsByBuilding, type Room } from '@/lib/rooms/rooms';
 import { DAY_NAMES, getSchedulesByRoomId, type Schedule } from '@/lib/schedules/schedules';
 import { extractTimeString, formatTimeRange } from '@/lib/utils/dateTime';
 import { formatReservationDates, RoleBadge, getManagedBuildingOptionLabel } from './shared';
@@ -174,28 +179,106 @@ export default function AdminPendingTab({
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmModal, setConfirmModal] = useState<ConfirmModal | null>(null);
   const [userTypeFilter, setUserTypeFilter] = useState<string[]>([]);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [floorFilter, setFloorFilter] = useState('');
   const [roomFilter, setRoomFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [buildingRooms, setBuildingRooms] = useState<Room[]>([]);
 
   const isAnyFilterActive =
-    userTypeFilter.length > 0 || dateFrom !== '' || dateTo !== '' || roomFilter !== '' || statusFilter !== '';
+    userTypeFilter.length > 0 ||
+    floorFilter !== '' ||
+    roomFilter !== '';
 
-  const uniqueRooms = useMemo(() => {
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!buildingId) {
+      setBuildingRooms([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void getRoomsByBuilding(buildingId)
+      .then((rooms) => {
+        if (!cancelled) {
+          setBuildingRooms(rooms);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.warn('Failed to load rooms for pending filters:', error);
+          setBuildingRooms([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [buildingId]);
+
+  const floorOptions = useMemo<FloorOption[]>(
+    () =>
+      sortFloorOptions(
+        Array.from(new Set(buildingRooms.map((room) => room.floor).filter(Boolean))).map(
+          (floor) => ({
+            value: floor,
+            label: floor,
+          })
+        )
+      ),
+    [buildingRooms]
+  );
+
+  useEffect(() => {
+    if (floorOptions.length === 0) {
+      if (floorFilter) {
+        setFloorFilter('');
+      }
+      return;
+    }
+
+    const hasMatchingFloor = floorOptions.some((option) => option.value === floorFilter);
+    if (!floorFilter || !hasMatchingFloor) {
+      setFloorFilter('');
+    }
+  }, [floorFilter, floorOptions]);
+
+  const roomOptions = useMemo(() => {
+    const matchingRoomIds = new Set(
+      buildingRooms
+        .filter((room) => !floorFilter || room.floor === floorFilter)
+        .map((room) => room.id)
+    );
     const seen = new Set<string>();
+
     return requests
-      .map((r) => r.roomName)
-      .filter((name) => { if (seen.has(name)) return false; seen.add(name); return true; })
+      .filter((request) => matchingRoomIds.size === 0 || matchingRoomIds.has(request.roomId))
+      .map((request) => request.roomName)
+      .filter((name) => {
+        if (seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      })
       .sort();
-  }, [requests]);
+  }, [buildingRooms, floorFilter, requests]);
+
+  useEffect(() => {
+    if (roomOptions.length === 0) {
+      if (roomFilter) {
+        setRoomFilter('');
+      }
+      return;
+    }
+
+    if (!roomFilter || !roomOptions.includes(roomFilter)) {
+      setRoomFilter('');
+    }
+  }, [roomFilter, roomOptions]);
 
   const clearFilters = () => {
     setUserTypeFilter([]);
-    setDateFrom('');
-    setDateTo('');
+    setFloorFilter('');
     setRoomFilter('');
-    setStatusFilter('');
   };
 
   const toggleUserType = (type: string) => {
@@ -311,7 +394,7 @@ export default function AdminPendingTab({
     }
   };
 
-  // ─── Filtered list ────────────────────────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Filtered list Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   const q = searchQuery.trim().toLowerCase();
   const filteredRequests = requests.filter((r) => {
     if (q && !(
@@ -325,16 +408,16 @@ export default function AdminPendingTab({
       if (!userTypeFilter.some((t) => role.includes(t.toLowerCase()))) return false;
     }
 
-    const rDate = r.dates?.[0] ?? r.date;
-    if (dateFrom && rDate < dateFrom) return false;
-    if (dateTo && rDate > dateTo) return false;
+    if (floorFilter) {
+      const matchingRoom = buildingRooms.find((room) => room.id === r.roomId);
+      if (!matchingRoom || matchingRoom.floor !== floorFilter) return false;
+    }
     if (roomFilter && r.roomName !== roomFilter) return false;
-    if (statusFilter && statusFilter !== 'all' && r.status !== statusFilter) return false;
 
     return true;
   });
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   const avatarColor = (name: string) => {
     const colors = ['#8B0000', '#1a6b3a', '#1a3a6b', '#6b1a6b', '#6b4e1a', '#1a5c6b'];
     let h = 0;
@@ -371,7 +454,7 @@ export default function AdminPendingTab({
 
   return (
     <div>
-      {/* ── Header with building switcher ────────────────────────────────── */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Header with building switcher Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
       <div className="mb-6 flex w-full flex-col gap-3 rounded-xl border border-white/70 bg-white px-6 py-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3 min-w-0">
@@ -408,7 +491,7 @@ export default function AdminPendingTab({
         )}
       </div>
 
-      {/* ── Search bar ───────────────────────────────────────────────────── */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Search bar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
       <div
         className="mb-5 w-full"
         style={{
@@ -445,7 +528,7 @@ export default function AdminPendingTab({
         </div>
       </div>
 
-      {/* ── Filters ──────────────────────────────────────────────────────── */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Filters Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
       <div
         className="mb-5 w-full"
         style={{
@@ -486,42 +569,29 @@ export default function AdminPendingTab({
               );
             })}
           </div>
-
-          <div style={{
-            width: '1px',
-            height: '24px',
-            background: '#e8e8e8',
-            flexShrink: 0
-          }} />
-
-          {/* Date range */}
+          {/* Floor */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-500 shrink-0">Date</span>
-            <input id="filter-date-from" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="text-sm text-gray-700" style={{
-              border: '1px solid #e0e0e0',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              outline: 'none',
-              background: '#fff',
-              color: dateFrom ? '#222' : '#aaa'
-            }} title="From date" aria-label="From date" />
-            <span className="text-xs text-gray-400">—</span>
-            <input id="filter-date-to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="text-sm text-gray-700" style={{
-              border: '1px solid #e0e0e0',
-              borderRadius: '8px',
-              padding: '6px 12px',
-              outline: 'none',
-              background: '#fff',
-              color: dateTo ? '#222' : '#aaa'
-            }} title="To date" aria-label="To date" />
+            <span className="text-xs font-bold text-gray-500 shrink-0">Floor</span>
+            <select
+              id="filter-floor"
+              value={floorFilter}
+              onChange={(e) => {
+                setFloorFilter(e.target.value);
+              }}
+              className="glass-input text-sm"
+              style={{
+                padding: '6px 12px',
+                minWidth: '150px'
+              }}
+            >
+              <option value="">All Floors</option>
+              {floorOptions.map((floor) => (
+                <option key={floor.value} value={floor.value}>
+                  {floor.label}
+                </option>
+              ))}
+            </select>
           </div>
-
-          <div style={{
-            width: '1px',
-            height: '24px',
-            background: '#e8e8e8',
-            flexShrink: 0
-          }} />
 
           {/* Room */}
           <div className="flex items-center gap-2">
@@ -530,30 +600,8 @@ export default function AdminPendingTab({
               padding: '6px 12px',
               minWidth: '140px'
             }}>
-              <option value="">Select Room</option>
-              {uniqueRooms.map((room) => <option key={room} value={room}>{room}</option>)}
-            </select>
-          </div>
-
-          <div style={{
-            width: '1px',
-            height: '24px',
-            background: '#e8e8e8',
-            flexShrink: 0
-          }} />
-
-          {/* Status */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-500 shrink-0">Status</span>
-            <select id="filter-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="glass-input text-sm" style={{
-              padding: '6px 12px',
-              minWidth: '130px'
-            }}>
-              <option value="">Select Status</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="all">All</option>
+              <option value="">All Rooms</option>
+              {roomOptions.map((room) => <option key={room} value={room}>{room}</option>)}
             </select>
           </div>
 
@@ -580,7 +628,7 @@ export default function AdminPendingTab({
         </div>
       </div>
 
-      {/* ── Empty states ─────────────────────────────────────────────────── */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Empty states Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
       {requests.length === 0 ? (
         <div style={{
           background: '#ffffff',
@@ -650,7 +698,7 @@ export default function AdminPendingTab({
         <>
           <style>{`@keyframes fadeInCard{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}`}</style>
 
-          {/* ── Confirm modal ──────────────────────────────────────────── */}
+          {/* Ã¢â€â‚¬Ã¢â€â‚¬ Confirm modal Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
           {confirmModal && (
             <div
                   style={{
@@ -688,7 +736,7 @@ export default function AdminPendingTab({
                     )}
                     {confirmModal.step === 'conflict-reminder' && confirmModal.conflict && (
                       <p style={{ fontSize: '13px', color: '#666', marginBottom: '24px' }}>
-                        Just a reminder — there may be no class held on {formatReservationDates([confirmModal.conflict.date], confirmModal.conflict.date)} but a schedule exists. Still approve?
+                        Just a reminder Ã¢â‚¬â€ there may be no class held on {formatReservationDates([confirmModal.conflict.date], confirmModal.conflict.date)} but a schedule exists. Still approve?
                       </p>
                     )}
                   </>
@@ -705,7 +753,7 @@ export default function AdminPendingTab({
                     <textarea
                       value={rejectReason}
                       onChange={(e) => setRejectReason(e.target.value)}
-                      placeholder="Explain why this request is being rejected…"
+                      placeholder="Explain why this request is being rejectedÃ¢â‚¬Â¦"
                           style={{
                             width: '100%',
                             border: '1px solid #e0e0e0',
@@ -766,7 +814,7 @@ export default function AdminPendingTab({
             </div>
           )}
 
-          {/* ── Cards list ─────────────────────────────────────────────── */}
+          {/* Ã¢â€â‚¬Ã¢â€â‚¬ Cards list Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
               <div style={{
                 background: '#ffffff',
                 borderRadius: '12px',
