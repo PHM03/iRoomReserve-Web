@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 
+import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import { getManagedBuildingOptionLabel } from '@/hooks/useAdminStatusPages';
 
 interface AdminPageHeaderProps {
@@ -39,17 +40,18 @@ export default function AdminPageHeader({
               Active Building
             </label>
             {managedBuildings.length > 1 ? (
-              <select
+              <AdminBuildingSelect
+                label=""
+                options={managedBuildings.map((building) => ({
+                  value: building.id,
+                  label: getManagedBuildingOptionLabel(building),
+                }))}
                 value={buildingId ?? ''}
-                onChange={(event) => onBuildingChange(event.target.value)}
-                className="w-full rounded-lg border border-[#e0e0e0] bg-white px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                {managedBuildings.map((building) => (
-                  <option key={building.id} value={building.id}>
-                    {getManagedBuildingOptionLabel(building)}
-                  </option>
-                ))}
-              </select>
+                onChange={onBuildingChange}
+                className="w-full"
+                menuAlign="right"
+                fullWidth
+              />
             ) : (
               <input
                 value={activeBuildingLabel}

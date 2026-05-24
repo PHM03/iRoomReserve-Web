@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import {
   resolveFeedbackSentimentLabel,
   type FeedbackSentimentSummary,
@@ -9,13 +10,23 @@ import { respondToFeedback, type Feedback } from '@/lib/feedback/feedback';
 import type { Room } from '@/lib/rooms/rooms';
 import {
   formatSentimentLabel,
+  getManagedBuildingOptionLabel,
   getSentimentBadgeClasses,
   StarRating,
 } from './shared';
 
+interface BuildingOption {
+  id: string;
+  name: string;
+}
+
 interface AdminFeedbackTabProps {
+  activeBuildingLabel: string;
+  buildingId: string;
   feedbackList: Feedback[];
   feedbackSummary: FeedbackSentimentSummary | null;
+  managedBuildings: BuildingOption[];
+  onBuildingChange: (buildingId: string) => void;
   onReload: () => Promise<void>;
   rooms?: Room[];
 }
@@ -36,8 +47,12 @@ function sortFloors(floors: string[]): string[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AdminFeedbackTab({
+  activeBuildingLabel,
+  buildingId,
   feedbackList,
   feedbackSummary,
+  managedBuildings,
+  onBuildingChange,
   onReload,
   rooms = [],
 }: Readonly<AdminFeedbackTabProps>) {
@@ -146,9 +161,29 @@ export default function AdminFeedbackTab({
   return (
     <div>
       {/* Header — unchanged */}
-      <div className="flex items-center justify-between mb-6 bg-white rounded-xl px-6 py-4 border border-white/30">
-        <h3 className="text-xl font-bold text-gray-800">Room Feedback</h3>
-        <span className="text-sm text-gray-600">{feedbackList.length} total</span>
+      <div className="mb-6 flex flex-col gap-3 bg-white rounded-xl px-6 py-4 border border-white/30 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-xl font-bold text-gray-800">Room Feedback</h3>
+          <span className="text-sm text-gray-600">{feedbackList.length} total</span>
+        </div>
+        {managedBuildings.length > 1 ? (
+          <div className="w-full sm:ml-auto sm:w-72">
+            <AdminBuildingSelect
+              label="Active Building:"
+              options={managedBuildings.map((building) => ({
+                value: building.id,
+                label: getManagedBuildingOptionLabel(building),
+              }))}
+              value={buildingId}
+              onChange={onBuildingChange}
+              fullWidth
+            />
+          </div>
+        ) : (
+          <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#a12124]/30 bg-[#a12124]/10 px-3 py-1 text-xs font-bold text-[#7f1d1d] shadow-sm sm:ml-auto">
+            <span>Active Building: {activeBuildingLabel}</span>
+          </div>
+        )}
       </div>
 
       {feedbackList.length === 0 ? (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
 import { getBuildingFloorOptions } from '@/lib/buildings/floorLabels';
 import { getRoomsByBuildingAndFloor, type Room } from '@/lib/rooms/rooms';
@@ -414,13 +415,16 @@ export default function TodayClassSchedulesPanel(
             </select>
 
             {selectedCampus === 'SDCA Main Campus' ? (
-              <select
-                aria-label="Select building"
-                className="text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              <AdminBuildingSelect
+                label="Building:"
+                options={MAIN_BUILDING_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
                 value={selectedBuilding ?? ''}
-                onChange={(event) => {
-                  const nextBuilding = event.target.value
-                    ? (event.target.value as ScheduleBuildingFilter)
+                onChange={(value) => {
+                  const nextBuilding = value
+                    ? (value as ScheduleBuildingFilter)
                     : null;
                   setSelectedBuilding(nextBuilding);
                   setSelectedFloor(null);
@@ -430,14 +434,8 @@ export default function TodayClassSchedulesPanel(
                   setSchedules([]);
                   setScheduleLoadState('idle');
                 }}
-              >
-                <option value="">Select Building</option>
-                {MAIN_BUILDING_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                placeholder="Select Building"
+              />
             ) : null}
           </>
         ) : (

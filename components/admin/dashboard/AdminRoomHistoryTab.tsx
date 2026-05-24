@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
 import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
-import { RoleBadge, StatusBadge } from './shared';
+import { getManagedBuildingOptionLabel, RoleBadge, StatusBadge } from './shared';
 
 type HistoryStatusFilter = 'approved' | 'rejectedCancelled' | 'active' | 'completed' | 'all';
 type HistoryDateSortDirection = 'asc' | 'desc';
@@ -47,6 +48,10 @@ const MONTH_FILTER_OPTIONS = [
 ];
 
 interface AdminRoomHistoryTabProps {
+  activeBuildingLabel: string;
+  buildingId: string;
+  managedBuildings: Array<{ id: string; name: string }>;
+  onBuildingChange: (buildingId: string) => void;
   roomHistory: RoomHistoryEntry[];
 }
 
@@ -56,6 +61,10 @@ function getHistoryDateValue(date: string) {
 }
 
 export default function AdminRoomHistoryTab({
+  activeBuildingLabel,
+  buildingId,
+  managedBuildings,
+  onBuildingChange,
   roomHistory,
 }: Readonly<AdminRoomHistoryTabProps>) {
   const currentDate = new Date();
@@ -131,8 +140,26 @@ export default function AdminRoomHistoryTab({
 
   return (
     <div>
-      <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block mb-6">
+      <div className="mb-6 flex flex-col gap-3 bg-white rounded-xl px-6 py-4 border border-white/30 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-xl font-bold text-gray-800">Reservation History</h3>
+        {managedBuildings.length > 1 ? (
+          <div className="w-full sm:ml-auto sm:w-72">
+            <AdminBuildingSelect
+              label="Active Building:"
+              options={managedBuildings.map((building) => ({
+                value: building.id,
+                label: getManagedBuildingOptionLabel(building),
+              }))}
+              value={buildingId}
+              onChange={onBuildingChange}
+              fullWidth
+            />
+          </div>
+        ) : (
+          <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#a12124]/30 bg-[#a12124]/10 px-3 py-1 text-xs font-bold text-[#7f1d1d] shadow-sm sm:ml-auto">
+            <span>Active Building: {activeBuildingLabel}</span>
+          </div>
+        )}
       </div>
 
       <div className="glass-card p-4 mb-6">

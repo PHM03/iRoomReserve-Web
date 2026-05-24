@@ -28,6 +28,13 @@ function getManagedBuildingDisplayLabel(input: {
 }) {
   const searchValue = `${input.id ?? ''} ${input.name ?? ''}`.toLowerCase();
 
+  if (
+    searchValue.includes('sdca digital campus') ||
+    searchValue.includes('sdca-digital-campus')
+  ) {
+    return 'Digital Campus';
+  }
+
   if (/\bgd[\s-]?1\b/.test(searchValue)) {
     return 'GD1';
   }

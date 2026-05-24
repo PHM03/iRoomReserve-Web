@@ -1195,7 +1195,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
   return (
     <section className="mb-8">
       {(props.title || props.subtitle) && (
-        <div className="mb-5 rounded-2xl border border-white/40 bg-white p-5 shadow-sm">
+        <div className="mb-5 rounded-xl border border-white/70 bg-white px-6 py-4 shadow-sm">
           {props.title && (
             <h2 className="text-xl font-bold text-black">{props.title}</h2>
           )}

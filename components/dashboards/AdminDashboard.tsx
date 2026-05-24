@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import type { AdminTab } from '@/components/layout/NavBar';
 import AdminNoBuildingAssigned from '@/components/admin/AdminNoBuildingAssigned';
 import AdminFeedbackTab from '@/components/admin/dashboard/AdminFeedbackTab';
@@ -9,7 +10,10 @@ import AdminOverviewTab from '@/components/admin/dashboard/AdminOverviewTab';
 import AdminPendingTab from '@/components/admin/dashboard/AdminPendingTab';
 import AdminRoomHistoryTab from '@/components/admin/dashboard/AdminRoomHistoryTab';
 import AdminManageRoomsTab from '@/components/admin/dashboard/AdminManageRoomsTab';
-import { getManagedBuildingDisplayLabel } from '@/components/admin/dashboard/shared';
+import {
+  getManagedBuildingDisplayLabel,
+  getManagedBuildingOptionLabel,
+} from '@/components/admin/dashboard/shared';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminTab } from '@/context/AdminTabContext';
 import { fetchAdminDashboardSnapshot } from '@/lib/admin/adminDashboard';
@@ -277,45 +281,40 @@ export default function AdminDashboard({
     <main
       className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 ${
         activeTab === 'dashboard'
-          ? 'py-4 pt-[88px] pb-6'
+          ? 'py-4 pt-[100px] pb-6'
           : 'py-8 pt-[100px] pb-24 md:pb-8'
       }`}
     >
-      <div className={activeTab === 'dashboard' ? 'mb-3' : 'mb-8'}>
-        {activeTab === 'dashboard' ? (
-          <div className="flex flex-col gap-3 rounded-xl border border-white/40 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-              <div>
-                <h2 className="text-lg font-extrabold text-gray-800">
-                  Welcome, {firstName}
-                </h2>
-              </div>
-              <p className="text-xs font-bold text-gray-600">
-                Managing: <span className="text-primary font-bold">{buildingName}</span>
-              </p>
+      {activeTab === 'dashboard' ? (
+        <div className="mb-3">
+          <div className="flex flex-col gap-3 rounded-xl border border-white/70 bg-white px-6 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-gray-800">
+                Welcome, {firstName}
+              </h2>
             </div>
-            {managedBuildings.length > 1 && (
-              <div className="w-full sm:w-64">
-                <label className="sr-only">
-                  Active Building
-                </label>
-                <select
+            {managedBuildings.length > 1 ? (
+              <div className="w-full sm:ml-auto sm:w-72">
+                <AdminBuildingSelect
+                  label="Active Building:"
+                  options={managedBuildings.map((building) => ({
+                    value: building.id,
+                    label: getManagedBuildingOptionLabel(building),
+                  }))}
                   value={buildingId}
-                  onChange={(event) => setSelectedBuildingId(event.target.value)}
-                  className="glass-input w-full appearance-none bg-dark/6 px-3 py-1.5 text-xs font-bold"
-                  style={{ backgroundImage: 'none' }}
-                >
-                  {managedBuildings.map((building) => (
-                    <option key={building.id} value={building.id} className="bg-white text-black">
-                      {building.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedBuildingId}
+                  className="w-full"
+                  fullWidth
+                />
+              </div>
+            ) : (
+              <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#a12124]/30 bg-[#a12124]/10 px-3 py-1 text-xs font-bold text-[#7f1d1d] shadow-sm sm:ml-auto">
+                <span>Active Building: {activeBuildingLabel}</span>
               </div>
             )}
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {activeTab === 'dashboard' && (
         <AdminOverviewTab
@@ -351,15 +350,25 @@ export default function AdminDashboard({
 
       {activeTab === 'feedback' && (
         <AdminFeedbackTab
+          activeBuildingLabel={activeBuildingLabel}
+          buildingId={buildingId}
           feedbackList={feedbackList}
           feedbackSummary={feedbackSummary}
+          managedBuildings={managedBuildings}
+          onBuildingChange={setSelectedBuildingId}
           onReload={reloadDashboard}
           rooms={rooms}
         />
       )}
 
       {activeTab === 'reservation-history' && (
-        <AdminRoomHistoryTab roomHistory={roomHistory} />
+        <AdminRoomHistoryTab
+          activeBuildingLabel={activeBuildingLabel}
+          buildingId={buildingId}
+          managedBuildings={managedBuildings}
+          onBuildingChange={setSelectedBuildingId}
+          roomHistory={roomHistory}
+        />
       )}
 
       {activeTab === 'pending' && (

@@ -14,6 +14,7 @@ interface AdminFloorFilterProps {
   disabled?: boolean;
   elevated?: boolean;
   menuAlign?: 'left' | 'right';
+  fullWidth?: boolean;
 }
 
 export default function AdminFloorFilter({
@@ -26,6 +27,7 @@ export default function AdminFloorFilter({
   disabled = false,
   elevated = true,
   menuAlign = 'left',
+  fullWidth = false,
 }: Readonly<AdminFloorFilterProps>) {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -59,16 +61,18 @@ export default function AdminFloorFilter({
   }, []);
 
   return (
-    <div className={`flex items-center gap-2 ${className}`.trim()}>
-      <label
-        htmlFor={buttonId}
-        className={`shrink-0 text-sm font-bold text-gray-700 ${
-          disabled ? 'opacity-60' : ''
-        }`}
-      >
-        {label}
-      </label>
-      <div ref={rootRef} className="relative">
+    <div className={`flex items-center gap-2 ${fullWidth ? 'w-full' : ''} ${className}`.trim()}>
+      {label ? (
+        <label
+          htmlFor={buttonId}
+          className={`shrink-0 text-sm font-bold text-gray-700 ${
+            disabled ? 'opacity-60' : ''
+          }`}
+        >
+          {label}
+        </label>
+      ) : null}
+      <div ref={rootRef} className={`relative ${fullWidth ? 'w-full' : ''}`.trim()}>
         <button
           type="button"
           id={buttonId}
@@ -78,7 +82,7 @@ export default function AdminFloorFilter({
               setIsOpen((current) => !current);
             }
           }}
-          className={`flex min-w-44 items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/30 disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`flex ${fullWidth ? 'w-full' : 'min-w-44'} items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/30 disabled:cursor-not-allowed disabled:opacity-60 ${
             elevated && isOpen ? 'shadow-[0_8px_24px_rgba(161,33,36,0.12)]' : ''
           }`}
           aria-haspopup="listbox"

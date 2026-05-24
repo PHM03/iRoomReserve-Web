@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useMemo, useState } from 'react';
+import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import {
   approveReservation,
   rejectReservation,
@@ -23,10 +24,6 @@ interface AdminPendingTabProps {
   managedBuildings: BuildingOption[];
   onBuildingChange: (buildingId: string) => void;
   onReload: () => Promise<void>;
-}
-
-interface IconProps {
-  className: string;
 }
 
 type ApproveConfirmStep = 'no-conflict' | 'conflict-warning' | 'conflict-reminder';
@@ -54,14 +51,6 @@ function ChevronDownIcon({ className }: { className: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className }: Readonly<IconProps>) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 12.75l6 6 9-13.5" />
     </svg>
   );
 }
@@ -156,10 +145,8 @@ export default function AdminPendingTab({
   const [rejectingReservationId, setRejectingReservationId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [reservationActionError, setReservationActionError] = useState('');
-  const [isBuildingSwitcherOpen, setIsBuildingSwitcherOpen] = useState(false);
   const [expandedReservationIds, setExpandedReservationIds] = useState<string[]>([]);
   const [approveCheckLoading, setApproveCheckLoading] = useState<string | null>(null);
-  const buildingSwitcherRef = useRef<HTMLDivElement | null>(null);
 
   // Search & filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -285,28 +272,6 @@ export default function AdminPendingTab({
     }
   };
 
-  useEffect(() => {
-    const handleDocumentClick = (event: MouseEvent) => {
-      if (!buildingSwitcherRef.current?.contains(event.target as Node)) {
-        setIsBuildingSwitcherOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsBuildingSwitcherOpen(false);
-    };
-    document.addEventListener('click', handleDocumentClick);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('click', handleDocumentClick);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
-  const handleBuildingSwitcherSelect = (nextBuildingId: string) => {
-    onBuildingChange(nextBuildingId);
-    setIsBuildingSwitcherOpen(false);
-  };
-
   // ─── Filtered list ────────────────────────────────────────────────────────
   const q = searchQuery.trim().toLowerCase();
   const filteredRequests = requests.filter((r) => {
@@ -362,71 +327,40 @@ export default function AdminPendingTab({
   return (
     <div>
       {/* ── Header with building switcher ────────────────────────────────── */}
-      <div
-        className="mb-6 w-full"
-        style={{
-          background: '#ffffff',
-          borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          padding: '20px 24px',
-        }}
-      >
-        <div className="flex items-start gap-3 flex-wrap">
-          <h3 className="text-xl font-bold text-gray-900">Pending Reservations</h3>
-          <span
-            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
-            style={{
-              background: '#fef9c3',
-              color: '#92400e',
-              border: '1px solid #fde68a'
-            }}
-          >
-            {requests.length} pending
-          </span>
-        </div>
-        <div className="mt-2" ref={buildingSwitcherRef} style={{
-          position: 'relative',
-          width: 'fit-content'
-        }}>
-          <button
-            type="button"
-            onClick={() => setIsBuildingSwitcherOpen((prev) => !prev)}
-            className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#a12124]/30 bg-[#a12124]/10 px-3 py-1 text-xs font-bold text-[#7f1d1d] shadow-sm transition-all hover:border-[#a12124]/45 hover:bg-[#a12124]/15 hover:shadow focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
-            aria-haspopup="menu"
-            aria-expanded={isBuildingSwitcherOpen}
-          >
-            <span>Active Building: {activeBuildingLabel}</span>
-            <ChevronDownIcon
-              className={`h-3.5 w-3.5 transition-transform ${isBuildingSwitcherOpen ? 'rotate-180' : ''}`}
-            />
-          </button>
-          {isBuildingSwitcherOpen && (
-            <div
-              className="absolute left-0 z-20 mt-2 min-w-44 overflow-hidden rounded-xl border border-[#a12124]/15 bg-white py-1 shadow-lg"
-              role="menu"
+      <div className="mb-6 flex w-full flex-col gap-3 rounded-xl border border-white/70 bg-white px-6 py-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-3 min-w-0">
+            <h3 className="text-xl font-bold text-gray-900">Pending Reservations</h3>
+            <span
+              className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
+              style={{
+                background: '#fef9c3',
+                color: '#92400e',
+                border: '1px solid #fde68a'
+              }}
             >
-              {managedBuildings.map((building) => {
-                const isActive = building.id === buildingId;
-                return (
-                  <button
-                    key={building.id}
-                    type="button"
-                    onClick={() => handleBuildingSwitcherSelect(building.id)}
-                    className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs font-bold transition-colors ${isActive
-                        ? 'bg-[#a12124]/10 text-[#7f1d1d]'
-                        : 'text-gray-700 hover:bg-[#a12124]/5 hover:text-[#a12124]'
-                      }`}
-                    role="menuitemradio"
-                    aria-checked={isActive}
-                  >
-                    <span>{getManagedBuildingOptionLabel(building)}</span>
-                    {isActive && <CheckIcon className="h-3.5 w-3.5 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+              {requests.length} pending
+            </span>
+          </div>
         </div>
+        {managedBuildings.length > 1 ? (
+          <div className="w-full lg:ml-auto lg:w-72">
+            <AdminBuildingSelect
+              label="Active Building:"
+              options={managedBuildings.map((building) => ({
+                value: building.id,
+                label: getManagedBuildingOptionLabel(building),
+              }))}
+              value={buildingId}
+              onChange={onBuildingChange}
+              fullWidth
+            />
+          </div>
+        ) : (
+          <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#a12124]/30 bg-[#a12124]/10 px-3 py-1 text-xs font-bold text-[#7f1d1d] shadow-sm lg:ml-auto">
+            <span>Active Building: {activeBuildingLabel}</span>
+          </div>
+        )}
       </div>
 
       {/* ── Search bar ───────────────────────────────────────────────────── */}
