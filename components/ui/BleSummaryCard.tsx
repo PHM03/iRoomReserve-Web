@@ -4,25 +4,30 @@ import Link from 'next/link';
 import { formatClockTime } from '@/lib/utils/dateTime';
 import { useCallback, useEffect, useState } from 'react';
 
-import BleStatusBadge from '@/components/ui/BleStatusBadge';
 import {
   BLE_MONITOR_REFRESH_INTERVAL_MS,
-  formatBleLabel,
   formatBleTimestamp,
-  isBeaconHardwareOnline,
+  getBeaconConfiguredRooms,
 } from '@/lib/occupancy/bleMonitor';
 import {
   DEFAULT_OCCUPANCY_PAYLOAD,
   type OccupancyPayload,
 } from '@/lib/occupancy/occupancy';
 import { fetchOccupancySnapshot } from '@/lib/occupancy/occupancyClient';
+import type { Room } from '@/lib/rooms/rooms';
 
 interface BleSummaryCardProps {
+  activeBeaconsOverride?: number;
   buildingName?: string;
   className?: string;
   pollIntervalMs?: number;
   detailsHref?: string;
   onViewDetails?: () => void;
+  rooms?: Pick<
+    Room,
+    'id' | 'name' | 'beaconConnected' | 'beaconId' | 'bleBeaconId'
+  >[];
+  totalBeaconsOverride?: number;
   variant?: 'default' | 'compact';
 }
 
@@ -42,11 +47,14 @@ function formatRefreshCountdown(milliseconds: number) {
 }
 
 export default function BleSummaryCard({
+  activeBeaconsOverride,
   buildingName,
   className = '',
   pollIntervalMs = BLE_MONITOR_REFRESH_INTERVAL_MS,
   detailsHref = '/dashboard/room-status',
   onViewDetails,
+  rooms = [],
+  totalBeaconsOverride,
   variant = 'default',
 }: Readonly<BleSummaryCardProps>) {
   const [occupancyData, setOccupancyData] = useState<OccupancyPayload>(
@@ -62,7 +70,17 @@ export default function BleSummaryCard({
   );
   const [refreshScheduleVersion, setRefreshScheduleVersion] = useState(0);
 
-  const hardwareOnline = isBeaconHardwareOnline(occupancyData.timestamp);
+  const totalBeacons =
+    typeof totalBeaconsOverride === 'number'
+      ? totalBeaconsOverride
+      : getBeaconConfiguredRooms(rooms).length;
+  const totalActiveBeacons =
+    typeof activeBeaconsOverride === 'number'
+      ? activeBeaconsOverride
+      : getBeaconConfiguredRooms(rooms).filter(
+          (room) => 'beaconConnected' in room && room.beaconConnected === true
+        ).length;
+  const totalInactiveBeacons = Math.max(0, totalBeacons - totalActiveBeacons);
 
   const refreshCard = useCallback(
     async (mode: 'initial' | 'manual' | 'background' = 'initial') => {
@@ -193,22 +211,16 @@ export default function BleSummaryCard({
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
-            <span className="text-[11px] font-bold uppercase text-black/55">Hardware</span>
-            <BleStatusBadge
-              status={hardwareOnline ? 'ONLINE' : 'OFFLINE'}
-              label={hardwareOnline ? 'Online' : 'Offline'}
-            />
+            <span className="text-[11px] font-bold uppercase text-black/55">Total Beacons</span>
+            <span className="text-sm font-bold text-black">{totalBeacons}</span>
           </div>
           <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
-            <span className="text-[11px] font-bold uppercase text-black/55">Connection</span>
-            <BleStatusBadge
-              status={occupancyData.connectionStatus}
-              label={formatBleLabel(occupancyData.connectionStatus)}
-            />
+            <span className="text-[11px] font-bold uppercase text-black/55">Total Active Beacons</span>
+            <span className="text-sm font-bold text-black">{totalActiveBeacons}</span>
           </div>
           <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
-            <span className="text-[11px] font-bold uppercase text-black/55">Occupancy</span>
-            <span className="text-sm font-bold text-black">{occupancyData.occupancy}</span>
+            <span className="text-[11px] font-bold uppercase text-black/55">Total Inactive Beacons</span>
+            <span className="text-sm font-bold text-black">{totalInactiveBeacons}</span>
           </div>
           <div className="rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
             <div className="flex items-center justify-between gap-2">
@@ -276,35 +288,23 @@ export default function BleSummaryCard({
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-dark/10 bg-dark/5 p-4">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-black/45">
-            Hardware
+            Total Beacons
           </p>
-          <div className="mt-3">
-            <BleStatusBadge
-              status={hardwareOnline ? 'ONLINE' : 'OFFLINE'}
-              label={hardwareOnline ? 'Online' : 'Offline'}
-            />
-          </div>
+          <p className="mt-3 text-2xl font-bold text-black">{totalBeacons}</p>
         </div>
 
         <div className="rounded-2xl border border-dark/10 bg-dark/5 p-4">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-black/45">
-            Connection
+            Total Active Beacons
           </p>
-          <div className="mt-3">
-            <BleStatusBadge
-              status={occupancyData.connectionStatus}
-              label={formatBleLabel(occupancyData.connectionStatus)}
-            />
-          </div>
+          <p className="mt-3 text-2xl font-bold text-black">{totalActiveBeacons}</p>
         </div>
 
         <div className="rounded-2xl border border-dark/10 bg-dark/5 p-4">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-black/45">
-            Occupancy
+            Total Inactive
           </p>
-          <p className="mt-3 text-2xl font-bold text-black">
-            {occupancyData.occupancy}
-          </p>
+          <p className="mt-3 text-2xl font-bold text-black">{totalInactiveBeacons}</p>
         </div>
 
         <div className="rounded-2xl border border-dark/10 bg-dark/5 p-4">

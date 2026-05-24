@@ -262,6 +262,7 @@ export default function UtilityStaffDashboard({
         <BleSummaryCard
           buildingName={buildingName}
           detailsHref="/dashboard/ble-beacon"
+          rooms={rooms}
         />
       </section>
 

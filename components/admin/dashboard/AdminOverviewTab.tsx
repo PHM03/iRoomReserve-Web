@@ -9,6 +9,7 @@ import {
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
 import {
   approveReservation,
+  deleteReservation,
   rejectReservation,
   type Reservation,
 } from '@/lib/reservations/reservations';
@@ -150,6 +151,29 @@ function getInitials(name: string) {
     .join('')
     .toUpperCase()
     .slice(0, 2);
+}
+
+function getReservationDates(request: Reservation) {
+  return request.dates?.length ? request.dates : request.date ? [request.date] : [];
+}
+
+function getTodayDateKey() {
+  const today = new Date();
+  return [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function isExpiredReservation(request: Reservation) {
+  const reservationDates = getReservationDates(request);
+  if (reservationDates.length === 0) {
+    return false;
+  }
+
+  const todayDateKey = getTodayDateKey();
+  return reservationDates.every((date) => date < todayDateKey);
 }
 
 export default function AdminOverviewTab({
@@ -350,6 +374,27 @@ export default function AdminOverviewTab({
     }
   };
 
+  const runDelete = async (reservationId: string) => {
+    if (!currentUserId) {
+      setReservationActionError('Your account is unavailable for deleting requests.');
+      return;
+    }
+
+    setReservationActionError('');
+    setActionLoading(reservationId);
+
+    try {
+      await deleteReservation(reservationId, currentUserId);
+      await onReload();
+    } catch (error) {
+      setReservationActionError(
+        error instanceof Error ? error.message : 'Failed to delete reservation.'
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -507,6 +552,7 @@ export default function AdminOverviewTab({
               {latestRequests.map((request) => {
                 const isWorking = actionLoading === request.id;
                 const isRejecting = rejectingRequestId === request.id;
+                const isExpired = request.status === 'pending' && isExpiredReservation(request);
 
                 return (
                   <article
@@ -523,6 +569,7 @@ export default function AdminOverviewTab({
                             {request.userName}
                           </p>
                           <RoleBadge role={request.userRole} />
+                          {isExpired ? <StatusBadge status="Expired" /> : null}
                         </div>
                         <p className="mt-1 line-clamp-2 text-[11px] font-bold text-black/55">
                           {request.roomName} |{' '}
@@ -553,42 +600,62 @@ export default function AdminOverviewTab({
                     ) : null}
 
                     <div className="mt-3 flex flex-wrap justify-end gap-2">
-                      {isRejecting ? (
+                      {isExpired ? (
                         <button
                           type="button"
                           onClick={() => {
-                            setRejectingRequestId(null);
-                            setRejectReason('');
+                            if (!window.confirm('Delete this expired reservation request?')) {
+                              return;
+                            }
+
+                            void runDelete(request.id);
                           }}
-                          className="rounded-lg border border-dark/10 bg-white px-3 py-1.5 text-[11px] font-bold text-black/65 transition-all hover:bg-dark/5"
+                          disabled={isWorking}
+                          className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-[11px] font-bold text-red-700 transition-all hover:bg-red-500/15 disabled:opacity-50"
                         >
-                          Cancel
+                          {isWorking ? 'Deleting...' : 'Delete'}
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isRejecting) {
-                            void runReject(request.id);
-                            return;
-                          }
+                      {!isExpired ? (
+                        <>
+                          {isRejecting ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRejectingRequestId(null);
+                                setRejectReason('');
+                              }}
+                              className="rounded-lg border border-dark/10 bg-white px-3 py-1.5 text-[11px] font-bold text-black/65 transition-all hover:bg-dark/5"
+                            >
+                              Cancel
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isRejecting) {
+                                void runReject(request.id);
+                                return;
+                              }
 
-                          setRejectingRequestId(request.id);
-                          setRejectReason('');
-                        }}
-                        disabled={isWorking}
-                        className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-[11px] font-bold text-red-700 transition-all hover:bg-red-500/15 disabled:opacity-50"
-                      >
-                        {isRejecting ? 'Confirm Reject' : 'Reject'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void runApprove(request.id)}
-                        disabled={isWorking}
-                        className="rounded-lg border border-green-500/25 bg-green-500/10 px-3 py-1.5 text-[11px] font-bold text-green-700 transition-all hover:bg-green-500/15 disabled:opacity-50"
-                      >
-                        {isWorking ? 'Working...' : 'Approve'}
-                      </button>
+                              setRejectingRequestId(request.id);
+                              setRejectReason('');
+                            }}
+                            disabled={isWorking}
+                            className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-[11px] font-bold text-red-700 transition-all hover:bg-red-500/15 disabled:opacity-50"
+                          >
+                            {isRejecting ? 'Confirm Reject' : 'Reject'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void runApprove(request.id)}
+                            disabled={isWorking}
+                          className="rounded-lg border border-green-500/25 bg-green-500/10 px-3 py-1.5 text-[11px] font-bold text-green-700 transition-all hover:bg-green-500/15 disabled:opacity-50"
+                          >
+                            {isWorking ? 'Working...' : 'Approve'}
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   </article>
                 );
@@ -600,8 +667,11 @@ export default function AdminOverviewTab({
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
         <BleSummaryCard
+          activeBeaconsOverride={dashboardSummary?.activeBeacons}
           buildingName={buildingName}
           detailsHref="/admin/ble-status"
+          rooms={rooms}
+          totalBeaconsOverride={dashboardSummary?.totalBeacons}
           variant="compact"
         />
 

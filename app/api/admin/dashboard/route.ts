@@ -51,6 +51,7 @@ type DashboardSchedule = {
 } & Record<string, unknown>;
 
 type DashboardSummary = {
+  activeBeacons: number;
   availableRooms: number;
   occupiedRooms: number;
   pendingRequests: number;
@@ -58,6 +59,7 @@ type DashboardSummary = {
   reservedRooms: number;
   roomPreviewLimit: number | null;
   roomsHasMore: boolean;
+  totalBeacons: number;
   totalRooms: number;
   unavailableRooms: number;
 };
@@ -216,6 +218,21 @@ function matchesRoomSearch(room: DashboardRoom, searchValue: string) {
   return searchableText.includes(searchValue);
 }
 
+function normalizeBeaconId(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+  return trimmedValue.length > 0 ? trimmedValue : null;
+}
+
+function hasConfiguredBeacon(room: DashboardRoom) {
+  return Boolean(
+    normalizeBeaconId(room.bleBeaconId) ?? normalizeBeaconId(room.beaconId)
+  );
+}
+
 async function getAggregateCount(query: FirebaseFirestore.Query) {
   const snapshot = await query.count().get();
   return snapshot.data().count ?? 0;
@@ -329,13 +346,15 @@ export async function GET(request: NextRequest) {
         : schedulesBaseQuery.where("dayOfWeek", "==", scheduleDayOfWeek);
 
     const [
+      roomSummarySnapshot,
       roomsSnapshot,
       approvedReservationsSnapshot,
       pendingReservationsSnapshot,
       schedulesSnapshot,
       roomHistorySnapshot,
-      summaryCounts,
+      pendingRequestCount,
     ] = await Promise.all([
+      includeSummary ? roomsBaseQuery.get() : Promise.resolve(null),
       includeRooms
         ? (roomFetchLimit ? roomPreviewQuery.limit(roomFetchLimit) : roomPreviewQuery)
             .get()
@@ -353,29 +372,63 @@ export async function GET(request: NextRequest) {
         ? adminDb.collection("roomHistory").where("buildingId", "==", buildingId).get()
         : Promise.resolve(null),
       includeSummary
-        ? Promise.all([
-            getAggregateCount(roomsBaseQuery),
-            getAggregateCount(roomsBaseQuery.where("status", "==", "Available")),
-            getAggregateCount(roomsBaseQuery.where("status", "==", "Reserved")),
-            getAggregateCount(roomsBaseQuery.where("status", "==", "Occupied")),
-            getAggregateCount(roomsBaseQuery.where("status", "==", "Unavailable")),
-            getAggregateCount(pendingReservationsQuery),
-          ])
+        ? getAggregateCount(pendingReservationsQuery)
         : Promise.resolve(null),
     ]);
 
-    const roomPreviewTotal =
-      roomStatusFilter && summaryCounts
-        ? summaryCounts[
-            roomStatusFilter === "Available"
-              ? 1
-              : roomStatusFilter === "Reserved"
-                ? 2
-                : roomStatusFilter === "Occupied"
-                  ? 3
-                  : 4
-          ]
-        : (summaryCounts?.[0] ?? 0);
+    const allSummaryRooms = (roomSummarySnapshot?.docs ?? [])
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }) as DashboardRoom)
+      .sort(sortRooms);
+    const summaryStatusCounts = allSummaryRooms.reduce(
+      (counts, room) => {
+        switch (room.status) {
+          case "Available":
+            counts.availableRooms += 1;
+            break;
+          case "Reserved":
+            counts.reservedRooms += 1;
+            break;
+          case "Occupied":
+            counts.occupiedRooms += 1;
+            break;
+          case "Unavailable":
+            counts.unavailableRooms += 1;
+            break;
+          default:
+            break;
+        }
+
+        if (hasConfiguredBeacon(room)) {
+          counts.totalBeacons += 1;
+
+          if (room.beaconConnected === true) {
+            counts.activeBeacons += 1;
+          }
+        }
+
+        return counts;
+      },
+      {
+        activeBeacons: 0,
+        availableRooms: 0,
+        occupiedRooms: 0,
+        reservedRooms: 0,
+        totalBeacons: 0,
+        unavailableRooms: 0,
+      }
+    );
+    const roomPreviewTotal = roomSummarySnapshot
+      ? allSummaryRooms.filter((room) => {
+          if (roomStatusFilter && room.status !== roomStatusFilter) {
+            return false;
+          }
+
+          return matchesRoomSearch(room, roomSearch);
+        }).length
+      : 0;
     const rooms = roomsSnapshot
       ? roomsSnapshot.docs
         .map((doc) => ({
@@ -421,20 +474,22 @@ export async function GET(request: NextRequest) {
         ...doc.data()
       }) as DashboardRoomHistoryEntry)
       .sort(sortByCreatedAtDesc);
-    const summary: DashboardSummary | null = summaryCounts
+    const summary: DashboardSummary | null = roomSummarySnapshot
       ? {
-          availableRooms: summaryCounts[1],
-          occupiedRooms: summaryCounts[3],
-          pendingRequests: includePendingRequests ? allRequests.length : summaryCounts[5],
+          activeBeacons: summaryStatusCounts.activeBeacons,
+          availableRooms: summaryStatusCounts.availableRooms,
+          occupiedRooms: summaryStatusCounts.occupiedRooms,
+          pendingRequests: includePendingRequests ? allRequests.length : (pendingRequestCount ?? 0),
           pendingPreviewLimit: pendingLimit,
-          reservedRooms: summaryCounts[2],
+          reservedRooms: summaryStatusCounts.reservedRooms,
           roomPreviewLimit: roomLimit,
           roomsHasMore:
             !roomSearch && roomLimit !== null
               ? roomPreviewTotal > rooms.length
               : roomsSnapshot !== null && roomsSnapshot.size > rooms.length,
-          totalRooms: summaryCounts[0],
-          unavailableRooms: summaryCounts[4],
+          totalBeacons: summaryStatusCounts.totalBeacons,
+          totalRooms: allSummaryRooms.length,
+          unavailableRooms: summaryStatusCounts.unavailableRooms,
         }
       : null;
 

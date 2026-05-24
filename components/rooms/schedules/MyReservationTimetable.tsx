@@ -75,6 +75,14 @@ function getWeekdayValue(dateValue: string) {
   return weekday >= 1 && weekday <= 6 ? weekday : null;
 }
 
+function formatCurrentDateLabel(date: Date = new Date()) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
 function buildEntriesByDay(
   reservations: Reservation[],
   currentUserId?: string | null
@@ -144,7 +152,6 @@ export default function MyReservationTimetable({
     if (compactVariant === 'today') {
       const today = new Date();
       const todayValue = today.getDay();
-      const todayConfig = TIMETABLE_DAYS.find((day) => day.value === todayValue);
       const todayEntries = [...(entriesByDay.get(todayValue)?.values() ?? [])].sort(
         (left, right) =>
           left.startTime.localeCompare(right.startTime) ||
@@ -159,7 +166,7 @@ export default function MyReservationTimetable({
                 Reservation Timetable
               </h3>
               <p className="mt-0.5 truncate text-[11px] font-bold text-black/50">
-                {todayConfig?.label ?? 'Today'}
+                {formatCurrentDateLabel(today)}
               </p>
             </div>
             <span className="rounded-lg border border-primary/15 bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">
