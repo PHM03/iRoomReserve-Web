@@ -24,6 +24,9 @@ interface ScheduleRecord {
   roomName: string;
   buildingId: string;
   subjectName: string;
+  courseName: string;
+  courseCode: string;
+  section: string;
   instructorName: string;
   dayOfWeek: number;
   startTime: string;
@@ -79,6 +82,9 @@ export async function GET(request: NextRequest) {
           roomName?: string;
           buildingId?: string;
           subjectName?: string;
+          courseName?: string;
+          courseCode?: string;
+          section?: string;
           instructorName?: string;
           dayOfWeek?: number;
           startTime?: string;
@@ -94,6 +100,9 @@ export async function GET(request: NextRequest) {
           roomName: data.roomName ?? "",
           buildingId: data.buildingId ?? "",
           subjectName: data.subjectName ?? "",
+          courseName: data.courseName ?? "",
+          courseCode: data.courseCode ?? "",
+          section: data.section ?? "",
           instructorName: data.instructorName ?? "",
           dayOfWeek: data.dayOfWeek ?? 0,
           startTime: data.startTime ?? "",

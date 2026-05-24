@@ -7,6 +7,9 @@ export interface ScheduleCreateInput {
   roomName: string;
   buildingId: string;
   subjectName: string;
+  courseName: string;
+  courseCode: string;
+  section: string;
   instructorName: string;
   dayOfWeek: number;
   startTime: string;

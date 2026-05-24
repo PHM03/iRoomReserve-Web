@@ -33,6 +33,19 @@ export interface RoomStatusReservationLike {
 export interface RoomStatusScheduleLike {
   roomId: string;
   subjectName?: string;
+  courseCode?: string;
+  section?: string;
+}
+
+function getScheduleStatusLabel(schedule: RoomStatusScheduleLike) {
+  const courseCode = schedule.courseCode?.trim() ?? "";
+  const section = schedule.section?.trim() ?? "";
+
+  if (courseCode && section) {
+    return `${courseCode} - ${section}`;
+  }
+
+  return schedule.subjectName ?? "";
 }
 
 export interface ResolvedRoomStatus {
@@ -295,11 +308,12 @@ export function resolveRoomStatus(
   }
 
   if (activeSchedule) {
+    const scheduleLabel = getScheduleStatusLabel(activeSchedule);
     return {
       status: "Reserved",
       reservation,
-      detail: activeSchedule.subjectName
-        ? `Class: ${activeSchedule.subjectName}`
+      detail: scheduleLabel
+        ? `Class: ${scheduleLabel}`
         : "Class in progress",
     };
   }

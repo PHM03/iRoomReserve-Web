@@ -16,6 +16,7 @@ import {
   ScheduleInput,
   addSchedule,
   deleteSchedule,
+  getScheduleDisplayTitle,
   isRoomInClass,
   onSchedulesByBuilding,
   onSchedulesByBuildingRoomIds,
@@ -129,7 +130,9 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [schedRoomId, setSchedRoomId] = useState('');
-  const [schedSubject, setSchedSubject] = useState('');
+  const [schedCourseName, setSchedCourseName] = useState('');
+  const [schedCourseCode, setSchedCourseCode] = useState('');
+  const [schedSection, setSchedSection] = useState('');
   const [schedInstructor, setSchedInstructor] = useState('');
   const [schedDay, setSchedDay] = useState<number>(1);
   const [schedStart, setSchedStart] = useState('');
@@ -328,7 +331,9 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     setShowScheduleForm(false);
     setEditingScheduleId(null);
     setSchedRoomId('');
-    setSchedSubject('');
+    setSchedCourseName('');
+    setSchedCourseCode('');
+    setSchedSection('');
     setSchedInstructor('');
     setSchedDay(1);
     setSchedStart('');
@@ -357,7 +362,9 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     if (
       !buildingId ||
       !schedRoomId ||
-      !schedSubject.trim() ||
+      !schedCourseName.trim() ||
+      !schedCourseCode.trim() ||
+      !schedSection.trim() ||
       !schedInstructor.trim() ||
       !schedStart ||
       !schedEnd
@@ -381,7 +388,14 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
         await updateSchedule(editingScheduleId, {
           roomId: schedRoomId,
           roomName: room?.name || '',
-          subjectName: schedSubject.trim(),
+          subjectName: getScheduleDisplayTitle({
+            courseCode: schedCourseCode.trim(),
+            section: schedSection.trim(),
+            subjectName: schedCourseName.trim(),
+          }),
+          courseName: schedCourseName.trim(),
+          courseCode: schedCourseCode.trim(),
+          section: schedSection.trim(),
           instructorName: schedInstructor.trim(),
           dayOfWeek: schedDay,
           startTime: schedStart,
@@ -392,7 +406,14 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
           roomId: schedRoomId,
           roomName: room?.name || '',
           buildingId,
-          subjectName: schedSubject.trim(),
+          subjectName: getScheduleDisplayTitle({
+            courseCode: schedCourseCode.trim(),
+            section: schedSection.trim(),
+            subjectName: schedCourseName.trim(),
+          }),
+          courseName: schedCourseName.trim(),
+          courseCode: schedCourseCode.trim(),
+          section: schedSection.trim(),
           instructorName: schedInstructor.trim(),
           dayOfWeek: schedDay,
           startTime: schedStart,
@@ -417,7 +438,9 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
   const handleEditSchedule = (schedule: Schedule) => {
     setEditingScheduleId(schedule.id);
     setSchedRoomId(schedule.roomId);
-    setSchedSubject(schedule.subjectName);
+    setSchedCourseName(schedule.courseName ?? schedule.subjectName);
+    setSchedCourseCode(schedule.courseCode ?? '');
+    setSchedSection(schedule.section ?? '');
     setSchedInstructor(schedule.instructorName);
     setSchedDay(schedule.dayOfWeek);
     setSchedStart(schedule.startTime);
@@ -494,7 +517,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     if (activeClass) {
       return {
         status: 'Reserved',
-        detail: `Class: ${activeClass.subjectName}`
+        detail: `Class: ${getScheduleDisplayTitle(activeClass)}`
       };
     }
 
@@ -609,8 +632,12 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     showScheduleForm,
     schedRoomId,
     setSchedRoomId,
-    schedSubject,
-    setSchedSubject,
+    schedCourseName,
+    setSchedCourseName,
+    schedCourseCode,
+    setSchedCourseCode,
+    schedSection,
+    setSchedSection,
     schedInstructor,
     setSchedInstructor,
     schedDay,

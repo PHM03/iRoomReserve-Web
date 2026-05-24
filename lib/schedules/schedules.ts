@@ -24,6 +24,9 @@ export interface Schedule {
   roomName: string;
   buildingId: string;
   subjectName: string;
+  courseName?: string;
+  courseCode?: string;
+  section?: string;
   instructorName: string;
   dayOfWeek: number;
   startTime: string;
@@ -65,6 +68,17 @@ function chunkValues<T>(values: T[], size: number) {
 
 export function formatTime12h(time24: string): string {
   return formatTime(time24);
+}
+
+export function getScheduleDisplayTitle(schedule: Pick<Schedule, "courseCode" | "section" | "subjectName">): string {
+  const courseCode = schedule.courseCode?.trim() ?? "";
+  const section = schedule.section?.trim() ?? "";
+
+  if (courseCode && section) {
+    return `${courseCode} - ${section}`;
+  }
+
+  return courseCode || section || schedule.subjectName;
 }
 
 export async function addSchedule(data: ScheduleInput): Promise<string> {

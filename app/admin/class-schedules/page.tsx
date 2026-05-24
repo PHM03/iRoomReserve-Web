@@ -20,7 +20,7 @@ import {
   type ScheduleAcademicYear,
   type ScheduleSemester,
 } from '@/lib/schedules/scheduleContext';
-import type { Schedule } from '@/lib/schedules/schedules';
+import { getScheduleDisplayTitle, type Schedule } from '@/lib/schedules/schedules';
 
 type ScheduleFilterFields = Schedule & {
   floor?: unknown;
@@ -114,8 +114,12 @@ export default function AdminClassSchedulesPage() {
     showScheduleForm,
     schedRoomId,
     setSchedRoomId,
-    schedSubject,
-    setSchedSubject,
+    schedCourseName,
+    setSchedCourseName,
+    schedCourseCode,
+    setSchedCourseCode,
+    schedSection,
+    setSchedSection,
     schedInstructor,
     setSchedInstructor,
     schedDay,
@@ -232,9 +236,27 @@ export default function AdminClassSchedulesPage() {
       ),
     [selectedFloorRooms, selectedRoom]
   );
+  const selectedTopRoomId = useMemo(() => {
+    const matchingRoom = selectedFloorRooms.find(
+      (room) => room.id === selectedRoom || getRoomFilterValue(room) === selectedRoom
+    );
+
+    return matchingRoom?.id ?? '';
+  }, [selectedFloorRooms, selectedRoom]);
   const handleScheduleFloorChange = (nextFloor: string) => {
     setSelectedFloor(nextFloor);
     setSelectedRoom('');
+  };
+  const handleScheduleFormRoomChange = (roomId: string) => {
+    setSchedRoomId(roomId);
+
+    const room = rooms.find((nextRoom) => nextRoom.id === roomId);
+    if (!room) {
+      return;
+    }
+
+    setSelectedFloor(room.floor);
+    setSelectedRoom(getRoomFilterValue(room));
   };
   useEffect(() => {
     if (!selectedFloor || availableRooms.length === 0) {
@@ -249,6 +271,16 @@ export default function AdminClassSchedulesPage() {
     }
   }, [availableRooms, selectedFloor, selectedRoom]);
 
+  useEffect(() => {
+    if (!showScheduleForm || Boolean(editingScheduleId)) {
+      return;
+    }
+
+    if (schedRoomId !== selectedTopRoomId) {
+      setSchedRoomId(selectedTopRoomId);
+    }
+  }, [editingScheduleId, schedRoomId, selectedTopRoomId, setSchedRoomId, showScheduleForm]);
+
   const filteredSchedules = useMemo(() => {
     if (!selectedFloor) {
       return [];
@@ -261,8 +293,13 @@ export default function AdminClassSchedulesPage() {
 
       if (
         query &&
-        ![schedule.subjectName, roomValue, schedule.instructorName]
-          .filter(Boolean)
+        [
+          getScheduleDisplayTitle(schedule),
+          schedule.courseName,
+          roomValue,
+          schedule.instructorName,
+        ]
+          .filter((value): value is string => typeof value === 'string' && value.length > 0)
           .some((value) => value.toLowerCase().includes(query))
       ) {
         return false;
@@ -413,7 +450,9 @@ export default function AdminClassSchedulesPage() {
             rooms={rooms}
             showScheduleForm={showScheduleForm}
             schedRoomId={schedRoomId}
-            schedSubject={schedSubject}
+            schedCourseName={schedCourseName}
+            schedCourseCode={schedCourseCode}
+            schedSection={schedSection}
             schedInstructor={schedInstructor}
             schedDay={schedDay}
             schedStart={schedStart}
@@ -421,8 +460,10 @@ export default function AdminClassSchedulesPage() {
             addingSchedule={addingSchedule}
             editingScheduleId={editingScheduleId}
             onToggleForm={toggleScheduleForm}
-            onSchedRoomIdChange={setSchedRoomId}
-            onSchedSubjectChange={setSchedSubject}
+            onSchedRoomIdChange={handleScheduleFormRoomChange}
+            onSchedCourseNameChange={setSchedCourseName}
+            onSchedCourseCodeChange={setSchedCourseCode}
+            onSchedSectionChange={setSchedSection}
             onSchedInstructorChange={setSchedInstructor}
             onSchedDayChange={setSchedDay}
             onSchedStartChange={setSchedStart}

@@ -38,6 +38,7 @@ import {
   addSchedule,
   updateSchedule,
   deleteSchedule,
+  getScheduleDisplayTitle,
   onSchedulesByBuilding,
   isRoomInClass,
 } from '@/lib/schedules/schedules';
@@ -101,7 +102,9 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
 
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [schedRoomId, setSchedRoomId] = useState('');
-  const [schedSubject, setSchedSubject] = useState('');
+  const [schedCourseName, setSchedCourseName] = useState('');
+  const [schedCourseCode, setSchedCourseCode] = useState('');
+  const [schedSection, setSchedSection] = useState('');
   const [schedInstructor, setSchedInstructor] = useState('');
   const [schedDay, setSchedDay] = useState<number>(1);
   const [schedStart, setSchedStart] = useState('');
@@ -286,7 +289,7 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
   };
 
   const handleAddSchedule = async () => {
-    if (!buildingId || !schedRoomId || !schedSubject.trim() || !schedInstructor.trim() || !schedStart || !schedEnd) return;
+    if (!buildingId || !schedRoomId || !schedCourseName.trim() || !schedCourseCode.trim() || !schedSection.trim() || !schedInstructor.trim() || !schedStart || !schedEnd) return;
     setAddingSchedule(true);
     try {
       const room = rooms.find((nextRoom) => nextRoom.id === schedRoomId);
@@ -294,7 +297,14 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
         await updateSchedule(editingScheduleId, {
           roomId: schedRoomId,
           roomName: room?.name || '',
-          subjectName: schedSubject.trim(),
+          subjectName: getScheduleDisplayTitle({
+            courseCode: schedCourseCode.trim(),
+            section: schedSection.trim(),
+            subjectName: schedCourseName.trim(),
+          }),
+          courseName: schedCourseName.trim(),
+          courseCode: schedCourseCode.trim(),
+          section: schedSection.trim(),
           instructorName: schedInstructor.trim(),
           dayOfWeek: schedDay,
           startTime: schedStart,
@@ -306,7 +316,14 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
           roomId: schedRoomId,
           roomName: room?.name || '',
           buildingId,
-          subjectName: schedSubject.trim(),
+          subjectName: getScheduleDisplayTitle({
+            courseCode: schedCourseCode.trim(),
+            section: schedSection.trim(),
+            subjectName: schedCourseName.trim(),
+          }),
+          courseName: schedCourseName.trim(),
+          courseCode: schedCourseCode.trim(),
+          section: schedSection.trim(),
           instructorName: schedInstructor.trim(),
           dayOfWeek: schedDay,
           startTime: schedStart,
@@ -319,7 +336,9 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
       }
       setShowScheduleForm(false);
       setSchedRoomId('');
-      setSchedSubject('');
+      setSchedCourseName('');
+      setSchedCourseCode('');
+      setSchedSection('');
       setSchedInstructor('');
       setSchedDay(1);
       setSchedStart('');
@@ -334,7 +353,9 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
   const handleEditSchedule = (schedule: Schedule) => {
     setEditingScheduleId(schedule.id);
     setSchedRoomId(schedule.roomId);
-    setSchedSubject(schedule.subjectName);
+    setSchedCourseName(schedule.courseName ?? schedule.subjectName);
+    setSchedCourseCode(schedule.courseCode ?? '');
+    setSchedSection(schedule.section ?? '');
     setSchedInstructor(schedule.instructorName);
     setSchedDay(schedule.dayOfWeek);
     setSchedStart(schedule.startTime);
@@ -368,7 +389,7 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
     const activeClass = isRoomInClass(schedules, room.id);
     if (activeClass) return {
       status: 'Reserved',
-      detail: `Class: ${activeClass.subjectName}`
+      detail: `Class: ${getScheduleDisplayTitle(activeClass)}`
     };
 
     const now = new Date();
@@ -493,8 +514,12 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
     setShowScheduleForm,
     schedRoomId,
     setSchedRoomId,
-    schedSubject,
-    setSchedSubject,
+    schedCourseName,
+    setSchedCourseName,
+    schedCourseCode,
+    setSchedCourseCode,
+    schedSection,
+    setSchedSection,
     schedInstructor,
     setSchedInstructor,
     schedDay,

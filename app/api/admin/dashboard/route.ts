@@ -48,9 +48,11 @@ type DashboardRoomHistoryEntry = {
 } & Record<string, unknown>;
 
 type DashboardSchedule = {
+  academicYear?: string;
   dayOfWeek?: number;
   id: string;
   roomName?: string;
+  semester?: string;
   startTime?: string;
 } & Record<string, unknown>;
 

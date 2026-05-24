@@ -5,7 +5,11 @@ import { useState, useEffect } from 'react';
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
 import type { Room } from '@/lib/rooms/rooms';
 import type { Schedule } from '@/lib/schedules/schedules';
-import { DAY_NAMES, formatTime12h } from '@/lib/schedules/schedules';
+import {
+  DAY_NAMES,
+  formatTime12h,
+  getScheduleDisplayTitle,
+} from '@/lib/schedules/schedules';
 import { getCampusTimeRule, validateScheduleTimes } from '@/lib/schedules/scheduleTimeRules';
 
 // ---------------------------------------------------------------------------
@@ -77,7 +81,9 @@ interface AdminClassSchedulesSectionProps {
   rooms: Room[];
   showScheduleForm: boolean;
   schedRoomId: string;
-  schedSubject: string;
+  schedCourseName: string;
+  schedCourseCode: string;
+  schedSection: string;
   schedInstructor: string;
   schedDay: number;
   schedStart: string;
@@ -86,7 +92,9 @@ interface AdminClassSchedulesSectionProps {
   editingScheduleId: string | null;
   onToggleForm: () => void;
   onSchedRoomIdChange: (value: string) => void;
-  onSchedSubjectChange: (value: string) => void;
+  onSchedCourseNameChange: (value: string) => void;
+  onSchedCourseCodeChange: (value: string) => void;
+  onSchedSectionChange: (value: string) => void;
   onSchedInstructorChange: (value: string) => void;
   onSchedDayChange: (value: number) => void;
   onSchedStartChange: (value: string) => void;
@@ -131,7 +139,9 @@ export default function AdminClassSchedulesSection({
   rooms,
   showScheduleForm,
   schedRoomId,
-  schedSubject,
+  schedCourseName,
+  schedCourseCode,
+  schedSection,
   schedInstructor,
   schedDay,
   schedStart,
@@ -140,7 +150,9 @@ export default function AdminClassSchedulesSection({
   editingScheduleId,
   onToggleForm,
   onSchedRoomIdChange,
-  onSchedSubjectChange,
+  onSchedCourseNameChange,
+  onSchedCourseCodeChange,
+  onSchedSectionChange,
   onSchedInstructorChange,
   onSchedDayChange,
   onSchedStartChange,
@@ -268,11 +280,29 @@ export default function AdminClassSchedulesSection({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-black">Subject</label>
+              <label className="mb-1 block text-xs font-bold text-black">Course Name</label>
               <input
-                value={schedSubject}
-                onChange={(event) => onSchedSubjectChange(event.target.value)}
+                value={schedCourseName}
+                onChange={(event) => onSchedCourseNameChange(event.target.value)}
+                placeholder="e.g. Introduction to Programming"
+                className="glass-input w-full px-4 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-black">Course Code</label>
+              <input
+                value={schedCourseCode}
+                onChange={(event) => onSchedCourseCodeChange(event.target.value)}
                 placeholder="e.g. IT 101"
+                className="glass-input w-full px-4 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-black">Section</label>
+              <input
+                value={schedSection}
+                onChange={(event) => onSchedSectionChange(event.target.value)}
+                placeholder="e.g. BSIT 2A"
                 className="glass-input w-full px-4 py-2.5 text-sm"
               />
             </div>
@@ -321,19 +351,7 @@ export default function AdminClassSchedulesSection({
             </p>
           ) : null}
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSaveClick}
-              disabled={addingSchedule || !schedRoomId || !schedSubject.trim()}
-              className="btn-primary px-6 py-2.5 text-sm disabled:opacity-50"
-            >
-              {addingSchedule
-                ? 'Saving...'
-                : editingScheduleId
-                  ? 'Update Schedule'
-                  : 'Add Schedule'}
-            </button>
-
+          <div className="flex items-center justify-end gap-3">
             {editingScheduleId ? (
               <button
                 type="button"
@@ -344,6 +362,24 @@ export default function AdminClassSchedulesSection({
                 Delete
               </button>
             ) : null}
+
+            <button
+              onClick={handleSaveClick}
+              disabled={
+                addingSchedule ||
+                !schedRoomId ||
+                !schedCourseName.trim() ||
+                !schedCourseCode.trim() ||
+                !schedSection.trim()
+              }
+              className="btn-primary px-6 py-2.5 text-sm disabled:opacity-50"
+            >
+              {addingSchedule
+                ? 'Saving...'
+                : editingScheduleId
+                  ? 'Update Schedule'
+                  : 'Add Schedule'}
+            </button>
           </div>
 
           {/* ── Delete confirmation dialog ── */}
@@ -432,7 +468,7 @@ export default function AdminClassSchedulesSection({
                     key={schedule.id}
                     type="button"
                     onClick={() => onEditSchedule(schedule)}
-                    title={`${schedule.subjectName} | ${schedule.roomName} · ${schedule.instructorName} | ${formatTime12h(schedule.startTime)} - ${formatTime12h(schedule.endTime)}`}
+                    title={`${schedule.courseName ?? schedule.subjectName} | ${schedule.section ?? ''} | ${schedule.instructorName} | ${schedule.courseCode ?? ''} | ${formatTime12h(schedule.startTime)} - ${formatTime12h(schedule.endTime)}`}
                     className="absolute left-2 right-2 overflow-hidden rounded-md border-l-[3px] border-[#8B0000] bg-[#fde8e8] px-2 py-1 text-left text-xs transition-all hover:bg-[#f9c8c8] hover:shadow-[0_2px_6px_rgba(0,0,0,0.1)]"
                     style={{
                       top: getTimeOffset(schedule.startTime),
@@ -442,11 +478,17 @@ export default function AdminClassSchedulesSection({
                       ),
                     }}
                   >
-                    <p className="truncate font-semibold text-[#8B0000]">
-                      {schedule.subjectName}
+                    <p className="whitespace-normal break-words text-[11px] font-semibold leading-tight text-[#8B0000]">
+                      {schedule.courseName ?? schedule.subjectName}
                     </p>
-                    <p className="truncate text-[11px] text-[#666666]">
-                      {schedule.roomName} · {schedule.instructorName}
+                    <p className="whitespace-normal break-words text-[10px] leading-tight text-[#666666]">
+                      {schedule.section ?? ''}
+                    </p>
+                    <p className="whitespace-normal break-words text-[10px] leading-tight text-[#666666]">
+                      {schedule.instructorName}
+                    </p>
+                    <p className="whitespace-normal break-words text-[10px] leading-tight text-[#666666]">
+                      {schedule.courseCode ?? getScheduleDisplayTitle(schedule)}
                     </p>
                   </button>
                 ))}
