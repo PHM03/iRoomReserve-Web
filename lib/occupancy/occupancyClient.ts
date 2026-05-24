@@ -51,6 +51,28 @@ async function requestOccupancySnapshot() {
   return nextPayload;
 }
 
+export async function clearOccupancyHistory() {
+  const response = await fetch('/api/occupancy', {
+    method: 'DELETE',
+    cache: 'no-store',
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(getResponseMessage(payload));
+  }
+
+  cachedPayload = cachedPayload
+    ? {
+        ...cachedPayload,
+        history: [],
+      }
+    : null;
+  cachedAt = Date.now();
+
+  return payload;
+}
+
 export async function fetchOccupancySnapshot(options?: { force?: boolean }) {
   const force = options?.force ?? false;
   const now = Date.now();

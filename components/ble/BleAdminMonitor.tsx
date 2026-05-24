@@ -22,7 +22,10 @@ import {
   DEFAULT_OCCUPANCY_PAYLOAD,
   type OccupancyPayload,
 } from '@/lib/occupancy/occupancy';
-import { fetchOccupancySnapshot } from '@/lib/occupancy/occupancyClient';
+import {
+  clearOccupancyHistory,
+  fetchOccupancySnapshot,
+} from '@/lib/occupancy/occupancyClient';
 import { type Room } from '@/lib/rooms/rooms';
 import { type Reservation } from '@/lib/reservations/reservations';
 import { isReservationActiveTimeSlot } from '@/lib/rooms/roomStatus';
@@ -104,6 +107,7 @@ export default function BleAdminMonitor({
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isClearingHistory, setIsClearingHistory] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [nextRefreshAt, setNextRefreshAt] = useState<number | null>(null);
@@ -111,7 +115,6 @@ export default function BleAdminMonitor({
     pollIntervalMs
   );
   const [refreshScheduleVersion, setRefreshScheduleVersion] = useState(0);
-  const [isHistoryCleared, setIsHistoryCleared] = useState(false);
   const [floorFilter, setFloorFilter] = useState('');
 
   const beaconRooms = getBeaconConfiguredRooms(rooms);
@@ -178,7 +181,6 @@ export default function BleAdminMonitor({
 
         setErrorMessage(null);
         setLastRefreshedAt(new Date());
-        setIsHistoryCleared(false);
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -243,14 +245,27 @@ export default function BleAdminMonitor({
     setRefreshScheduleVersion((currentValue) => currentValue + 1);
   }, [refreshMonitor]);
 
-  const handleClearHistory = useCallback(() => {
-    setIsHistoryCleared(true);
+  const handleClearHistory = useCallback(async () => {
+    setErrorMessage(null);
+    setIsClearingHistory(true);
+
+    try {
+      await clearOccupancyHistory();
+      const nextOccupancyData = await fetchOccupancySnapshot({ force: true });
+      setOccupancyData(nextOccupancyData);
+      setLastRefreshedAt(new Date());
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to clear BLE history right now.'
+      );
+    } finally {
+      setIsClearingHistory(false);
+    }
   }, []);
 
-  const historyEntries = (isHistoryCleared ? [] : occupancyData.history).slice(
-    0,
-    50
-  );
+  const historyEntries = occupancyData.history.slice(0, 50);
 
   return (
     <section className={`glass-card p-5 ${className}`.trim()}>
@@ -273,11 +288,11 @@ export default function BleAdminMonitor({
             </button>
             <button
               type="button"
-              onClick={handleClearHistory}
-              disabled={historyEntries.length === 0}
+              onClick={() => void handleClearHistory()}
+              disabled={historyEntries.length === 0 || isClearingHistory}
               className="rounded-xl border border-dark/10 bg-white/70 px-4 py-2 text-xs font-bold text-black transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Clear History
+              {isClearingHistory ? 'Clearing...' : 'Clear History'}
             </button>
           </div>
         </div>
@@ -396,9 +411,7 @@ export default function BleAdminMonitor({
           </div>
         ) : historyEntries.length === 0 ? (
           <div className="mt-3 rounded-xl border border-dark/10 bg-dark/5 p-6 text-center text-sm text-black/75">
-            {isHistoryCleared
-              ? 'History was cleared from this view. Refresh to load the latest events again.'
-              : 'No BLE events have been recorded yet.'}
+            No BLE events have been recorded yet.
           </div>
         ) : (
           <div className="mt-3 overflow-x-auto rounded-2xl border border-dark/10">

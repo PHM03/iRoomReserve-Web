@@ -69,3 +69,15 @@ export async function POST(request: Request) {
 export async function GET() {
   return toNoStoreResponse(trimOccupancyHistory(occupancyData), { headers: { "x-occupancy-source": occupancyData.timestamp ? "memory" : "empty" } });
 }
+
+export async function DELETE() {
+  occupancyData = {
+    ...occupancyData,
+    history: [],
+  };
+
+  return toNoStoreResponse({
+    success: true,
+    message: "Occupancy history cleared.",
+  });
+}
