@@ -10,6 +10,10 @@ import {
   assertAuthenticated,
   assertCanManageBuilding,
 } from "@/lib/server/route-guards";
+import {
+  doesScheduleMatchContext,
+  normalizeScheduleContext,
+} from "@/lib/schedules/scheduleContext";
 
 type DashboardAdminRequest = {
   createdAt?: unknown;
@@ -314,6 +318,11 @@ export async function GET(request: NextRequest) {
         "Firebase Admin Firestore is not configured. Set FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY."
       );
     }
+    const buildingSnapshot = await adminDb.collection("buildings").doc(buildingId).get();
+    const activeScheduleContext = normalizeScheduleContext({
+      academicYear: buildingSnapshot.data()?.activeScheduleAcademicYear,
+      semester: buildingSnapshot.data()?.activeScheduleSemester,
+    });
 
     const roomsBaseQuery = adminDb
       .collection("rooms")
@@ -467,6 +476,7 @@ export async function GET(request: NextRequest) {
         id: doc.id,
         ...doc.data()
       }) as DashboardSchedule)
+      .filter((schedule) => doesScheduleMatchContext(schedule, activeScheduleContext))
       .sort(sortSchedules);
     const roomHistory = (roomHistorySnapshot?.docs ?? [])
       .map((doc) => ({

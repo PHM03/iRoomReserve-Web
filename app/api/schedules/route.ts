@@ -13,6 +13,10 @@ import { scheduleInputSchema } from "@/lib/server/schemas";
 import { createScheduleRecord } from "@/lib/server/services/schedules";
 import { inferCampusFromBuilding } from "@/lib/buildings/campuses";
 import { validateScheduleTimes } from "@/lib/schedules/scheduleTimeRules";
+import {
+  doesScheduleMatchContext,
+  normalizeScheduleContext,
+} from "@/lib/schedules/scheduleContext";
 
 interface ScheduleRecord {
   id: string;
@@ -24,6 +28,8 @@ interface ScheduleRecord {
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  semester: string;
+  academicYear: string;
   createdBy: string;
 }
 
@@ -46,6 +52,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([]);
     }
 
+    const roomSnapshot = await adminDb.collection("rooms").doc(roomId).get();
+    if (!roomSnapshot.exists) {
+      return NextResponse.json([]);
+    }
+
+    const roomData = roomSnapshot.data() as { buildingId?: string };
+    const buildingId = roomData.buildingId ?? "";
+    const buildingSnapshot = buildingId
+      ? await adminDb.collection("buildings").doc(buildingId).get()
+      : null;
+    const activeScheduleContext = normalizeScheduleContext({
+      academicYear: buildingSnapshot?.data()?.activeScheduleAcademicYear,
+      semester: buildingSnapshot?.data()?.activeScheduleSemester,
+    });
+
     const snapshot = await adminDb
       .collection("schedules")
       .where("roomId", "==", roomId)
@@ -62,6 +83,8 @@ export async function GET(request: NextRequest) {
           dayOfWeek?: number;
           startTime?: string;
           endTime?: string;
+          semester?: string;
+          academicYear?: string;
           createdBy?: string;
         };
 
@@ -75,9 +98,12 @@ export async function GET(request: NextRequest) {
           dayOfWeek: data.dayOfWeek ?? 0,
           startTime: data.startTime ?? "",
           endTime: data.endTime ?? "",
+          semester: data.semester ?? "",
+          academicYear: data.academicYear ?? "",
           createdBy: data.createdBy ?? "",
         };
       })
+      .filter((schedule) => doesScheduleMatchContext(schedule, activeScheduleContext))
       .sort(
         (left, right) =>
           left.dayOfWeek - right.dayOfWeek ||

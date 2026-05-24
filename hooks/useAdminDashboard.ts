@@ -41,6 +41,7 @@ import {
   onSchedulesByBuilding,
   isRoomInClass,
 } from '@/lib/schedules/schedules';
+import { DEFAULT_SCHEDULE_CONTEXT } from '@/lib/schedules/scheduleContext';
 import {
   RoomHistoryEntry,
   onRoomHistoryByBuilding,
@@ -310,6 +311,8 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
           dayOfWeek: schedDay,
           startTime: schedStart,
           endTime: schedEnd,
+          semester: DEFAULT_SCHEDULE_CONTEXT.semester,
+          academicYear: DEFAULT_SCHEDULE_CONTEXT.academicYear,
           createdBy: firebaseUser?.uid || '',
         };
         await addSchedule(data);

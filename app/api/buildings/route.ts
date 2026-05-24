@@ -5,6 +5,7 @@ import { handleApiError } from "@/lib/server/api-error";
 import { getOptionalAdminDb } from "@/lib/server/firebase-admin";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
 import { assertAuthenticated } from "@/lib/server/route-guards";
+import { normalizeScheduleContext } from "@/lib/schedules/scheduleContext";
 
 interface BuildingRecord {
   id: string;
@@ -14,6 +15,8 @@ interface BuildingRecord {
   floors: number;
   campus: "digi" | "main";
   assignedAdminUid: string | null;
+  activeScheduleSemester: string;
+  activeScheduleAcademicYear: string;
 }
 
 export async function GET(request: NextRequest) {
@@ -40,7 +43,13 @@ export async function GET(request: NextRequest) {
         floors?: number;
         campus?: string | null;
         assignedAdminUid?: string | null;
+        activeScheduleSemester?: string | null;
+        activeScheduleAcademicYear?: string | null;
       };
+      const scheduleContext = normalizeScheduleContext({
+        academicYear: data.activeScheduleAcademicYear,
+        semester: data.activeScheduleSemester,
+      });
 
       return {
         id: buildingDoc.id,
@@ -56,6 +65,8 @@ export async function GET(request: NextRequest) {
             campus: data.campus,
           }) ?? "main",
         assignedAdminUid: data.assignedAdminUid ?? null,
+        activeScheduleSemester: scheduleContext.semester,
+        activeScheduleAcademicYear: scheduleContext.academicYear,
       };
     });
 

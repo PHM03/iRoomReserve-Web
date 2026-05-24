@@ -3,6 +3,10 @@ import { z } from "zod";
 import { normalizeCampus, RESERVATION_CAMPUSES } from "../buildings/campuses";
 import { ALL_USER_ROLES, normalizeRole } from "../auth/roles";
 import { RESERVATION_APPROVAL_ROLES } from "../reservations/reservation-approval";
+import {
+  SCHEDULE_ACADEMIC_YEARS,
+  SCHEDULE_SEMESTERS,
+} from "../schedules/scheduleContext";
 
 const nonEmptyString = z.string().trim().min(1);
 const timeString = z.string().regex(/^\d{2}:\d{2}$/, "Expected HH:mm time.");
@@ -316,6 +320,8 @@ export const scheduleInputSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
   startTime: timeString,
   endTime: timeString,
+  semester: z.enum(SCHEDULE_SEMESTERS),
+  academicYear: z.enum(SCHEDULE_ACADEMIC_YEARS),
   createdBy: nonEmptyString,
 });
 

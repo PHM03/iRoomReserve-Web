@@ -11,6 +11,12 @@ import { apiRequest } from "@/lib/api/client";
 import { auth, db } from "@/lib/firebase/firebase";
 import { formatTime } from "@/lib/utils/dateTime";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
+import {
+  doesScheduleMatchContext,
+  type ScheduleAcademicYear,
+  type ScheduleContext,
+  type ScheduleSemester,
+} from "@/lib/schedules/scheduleContext";
 
 export interface Schedule {
   id: string;
@@ -22,6 +28,8 @@ export interface Schedule {
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  semester: ScheduleSemester;
+  academicYear: ScheduleAcademicYear;
   createdBy: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -82,10 +90,31 @@ export async function deleteSchedule(scheduleId: string): Promise<void> {
   await apiRequest(`/api/schedules/${scheduleId}`, { method: "DELETE" });
 }
 
+function filterSchedulesByContext(
+  schedules: Schedule[],
+  context: ScheduleContext
+) {
+  return schedules.filter((schedule) => doesScheduleMatchContext(schedule, context));
+}
+
 export function onSchedulesByBuilding(
   buildingId: string,
-  callback: (schedules: Schedule[]) => void
+  activeContextOrCallback: ScheduleContext | ((schedules: Schedule[]) => void),
+  maybeCallback?: (schedules: Schedule[]) => void
 ): Unsubscribe {
+  const activeContext =
+    typeof activeContextOrCallback === "function"
+      ? null
+      : activeContextOrCallback;
+  const callback =
+    typeof activeContextOrCallback === "function"
+      ? activeContextOrCallback
+      : maybeCallback;
+
+  if (!callback) {
+    return () => {};
+  }
+
   const q = query(
     collection(db, "schedules"),
     where("buildingId", "==", buildingId)
@@ -94,12 +123,15 @@ export function onSchedulesByBuilding(
   const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      const schedules: Schedule[] = snapshot.docs
-        .map((d) => ({
+      const mappedSchedules = snapshot.docs.map((d) => ({
           id: d.id,
           ...d.data()
-        }) as Schedule)
-        .sort(sortSchedules);
+        }) as Schedule);
+      const schedules = (
+        activeContext
+          ? filterSchedulesByContext(mappedSchedules, activeContext)
+          : mappedSchedules
+      ).sort(sortSchedules);
       console.log("[schedules] onSchedulesByBuilding snapshot", {
         buildingId,
         count: schedules.length,
@@ -208,6 +240,7 @@ export function onSchedulesByBuildingIds(
 export function onSchedulesByBuildingRoomIds(
   buildingId: string,
   roomIds: string[],
+  activeContext: ScheduleContext,
   callback: (schedules: Schedule[]) => void
 ): Unsubscribe {
   const uniqueRoomIds = [...new Set(roomIds.filter(Boolean))];
@@ -227,7 +260,11 @@ export function onSchedulesByBuildingRoomIds(
   const roomIdChunks = chunkValues(uniqueRoomIds, 10);
 
   const emit = () => {
-    listener.emit([...schedulesByChunk.values()].flat().sort(sortSchedules));
+    listener.emit(
+      filterSchedulesByContext([...schedulesByChunk.values()].flat(), activeContext).sort(
+        sortSchedules
+      )
+    );
   };
 
   const unsubscribers = roomIdChunks.map((roomIdChunk, chunkIndex) =>

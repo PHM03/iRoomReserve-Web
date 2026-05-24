@@ -25,6 +25,10 @@ import {
   onSchedulesByBuildingIds,
   Schedule,
 } from '@/lib/schedules/schedules';
+import {
+  doesScheduleMatchContext,
+  normalizeScheduleContext,
+} from '@/lib/schedules/scheduleContext';
 import { resolveRoomStatus } from '@/lib/rooms/roomStatus';
 
 export default function RoomStatusPage() {
@@ -94,6 +98,8 @@ export default function RoomStatusPage() {
               name: fallbackName,
             }) ?? 'main',
           assignedAdminUid: null,
+          activeScheduleSemester: '1st Semester',
+          activeScheduleAcademicYear: 'A.Y. 2025-2026',
         } satisfies Building;
       }),
     [fallbackNames, liveById, managedBuildingIds]
@@ -159,10 +165,26 @@ export default function RoomStatusPage() {
     };
   }, [activeCampusBuildingIds, uid]);
 
-  const roomStatuses: RoomStatusViewItem[] = rooms.map((room) => ({
-    room,
-    resolved: resolveRoomStatus(room, reservations, { activeSchedule: isRoomInClass(schedules, room.id) }),
-  }));
+  const roomStatuses: RoomStatusViewItem[] = rooms.map((room) => {
+    const building = liveById.get(room.buildingId);
+    const activeScheduleContext = normalizeScheduleContext({
+      academicYear: building?.activeScheduleAcademicYear,
+      semester: building?.activeScheduleSemester,
+    });
+    const activeSchedule = isRoomInClass(
+      schedules.filter(
+        (schedule) =>
+          schedule.roomId === room.id &&
+          doesScheduleMatchContext(schedule, activeScheduleContext)
+      ),
+      room.id
+    );
+
+    return {
+      room,
+      resolved: resolveRoomStatus(room, reservations, { activeSchedule }),
+    };
+  });
   const buildingSections = buildingOptions.map((building) => ({
     building,
     floors: groupRoomStatusesByFloor(

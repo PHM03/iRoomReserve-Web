@@ -13,8 +13,14 @@ import {
   Unsubscribe,
 } from "firebase/firestore";
 import { inferCampusFromBuilding, type ReservationCampus } from "@/lib/buildings/campuses";
+import { apiRequest } from "@/lib/api/client";
 import { db } from "@/lib/firebase/firebase";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
+import {
+  normalizeScheduleContext,
+  type ScheduleAcademicYear,
+  type ScheduleSemester,
+} from "@/lib/schedules/scheduleContext";
 
 // ─── Types ──────────────────────────────────────────────────────
 export interface Building {
@@ -25,14 +31,25 @@ export interface Building {
   floors: number;
   campus: ReservationCampus;
   assignedAdminUid: string | null;
+  activeScheduleSemester: ScheduleSemester;
+  activeScheduleAcademicYear: ScheduleAcademicYear;
   createdAt?: { seconds: number; nanoseconds: number };
   updatedAt?: { seconds: number; nanoseconds: number };
 }
 
 function mapBuilding(
   buildingId: string,
-  data: Omit<Building, "id" | "campus"> & { campus?: string | null }
+  data: Omit<Building, "id" | "campus" | "activeScheduleSemester" | "activeScheduleAcademicYear"> & {
+    campus?: string | null;
+    activeScheduleSemester?: string | null;
+    activeScheduleAcademicYear?: string | null;
+  }
 ): Building {
+  const activeScheduleContext = normalizeScheduleContext({
+    academicYear: data.activeScheduleAcademicYear,
+    semester: data.activeScheduleSemester,
+  });
+
   return {
     id: buildingId,
     ...data,
@@ -43,6 +60,8 @@ function mapBuilding(
         name: data.name,
         campus: data.campus,
       }) ?? "main",
+    activeScheduleSemester: activeScheduleContext.semester,
+    activeScheduleAcademicYear: activeScheduleContext.academicYear,
   };
 }
 
@@ -83,6 +102,19 @@ export async function getBuildingById(buildingId: string): Promise<Building | nu
     );
   }
   return null;
+}
+
+export async function updateBuildingScheduleContext(
+  buildingId: string,
+  input: {
+    academicYear: ScheduleAcademicYear;
+    semester: ScheduleSemester;
+  }
+): Promise<void> {
+  await apiRequest(`/api/buildings/${buildingId}/schedule-context`, {
+    method: "PATCH",
+    body: input,
+  });
 }
 
 // ─── Get Building Assigned to a Specific Admin ──────────────────
@@ -144,6 +176,47 @@ export function onBuildings(
       }
 
       console.warn("Firestore listener error (buildings):", error);
+    }
+  );
+
+  return listener.wrap(unsubscribe);
+}
+
+export function onBuildingById(
+  buildingId: string,
+  callback: (building: Building | null) => void
+): Unsubscribe {
+  if (!buildingId) {
+    callback(null);
+    return () => {};
+  }
+
+  const listener = createGuardedSnapshotCallback(callback);
+  const unsubscribe = onSnapshot(
+    doc(db, "buildings", buildingId),
+    (snapshot) => {
+      if (listener.isCancelled()) {
+        return;
+      }
+
+      if (!snapshot.exists()) {
+        listener.emit(null);
+        return;
+      }
+
+      listener.emit(
+        mapBuilding(
+          snapshot.id,
+          snapshot.data() as Omit<Building, "id" | "campus"> & { campus?: string | null }
+        )
+      );
+    },
+    (error) => {
+      if (listener.isCancelled()) {
+        return;
+      }
+
+      console.warn("Firestore listener error (building by id):", error);
     }
   );
 

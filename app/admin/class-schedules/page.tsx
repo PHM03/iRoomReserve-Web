@@ -13,6 +13,13 @@ import AdminNoBuildingAssigned from '@/components/admin/AdminNoBuildingAssigned'
 import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import { useAdminStatusPages } from '@/hooks/useAdminStatusPages';
 import type { Room } from '@/lib/rooms/rooms';
+import {
+  formatScheduleContextLabel,
+  SCHEDULE_ACADEMIC_YEARS,
+  SCHEDULE_SEMESTERS,
+  type ScheduleAcademicYear,
+  type ScheduleSemester,
+} from '@/lib/schedules/scheduleContext';
 import type { Schedule } from '@/lib/schedules/schedules';
 
 type ScheduleFilterFields = Schedule & {
@@ -91,6 +98,11 @@ export default function AdminClassSchedulesPage() {
   const [selectedRoom, setSelectedRoom] = useState('');
   const [clearButtonPressed, setClearButtonPressed] = useState(false);
   const [lastActiveBuildingId, setLastActiveBuildingId] = useState('');
+  const [selectedSemester, setSelectedSemester] =
+    useState<ScheduleSemester>('1st Semester');
+  const [selectedAcademicYear, setSelectedAcademicYear] =
+    useState<ScheduleAcademicYear>('A.Y. 2025-2026');
+  const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
   const {
     managedBuildings,
     buildingId,
@@ -119,6 +131,10 @@ export default function AdminClassSchedulesPage() {
     handleEditSchedule,
     handleDeleteSchedule,
     campus,
+    activeScheduleSemester,
+    activeScheduleAcademicYear,
+    switchingScheduleContext,
+    handleSwitchScheduleContext,
   } = useAdminStatusPages({
     campusOverride,
     scheduleSelectionRequired: true,
@@ -137,6 +153,14 @@ export default function AdminClassSchedulesPage() {
     setSelectedFloor(getPreferredDefaultFloorValue(availableFloors));
     setSelectedRoom('');
   }
+
+  useEffect(() => {
+    setSelectedSemester(activeScheduleSemester);
+  }, [activeScheduleSemester]);
+
+  useEffect(() => {
+    setSelectedAcademicYear(activeScheduleAcademicYear);
+  }, [activeScheduleAcademicYear]);
 
   useEffect(() => {
     if (availableFloors.length === 0) {
@@ -256,6 +280,13 @@ export default function AdminClassSchedulesPage() {
     selectedFloor,
     selectedRoomIds,
   ]);
+  const hasPendingScheduleContextChanges =
+    selectedSemester !== activeScheduleSemester ||
+    selectedAcademicYear !== activeScheduleAcademicYear;
+  const pendingScheduleContextLabel = formatScheduleContextLabel({
+    academicYear: selectedAcademicYear,
+    semester: selectedSemester,
+  });
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10">
@@ -304,46 +335,77 @@ export default function AdminClassSchedulesPage() {
             </div>
           </div>
 
-          <div className="flex w-full flex-row flex-wrap items-center gap-3 rounded-xl bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+          <div className="flex w-full flex-row flex-wrap items-end gap-3 rounded-xl bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
             <AdminFloorFilter
-              label="Floor:"
-              options={availableFloors}
-              value={selectedFloor}
-              onChange={handleScheduleFloorChange}
-              placeholder="Select Floor"
+              label="Select Semester:"
+              options={SCHEDULE_SEMESTERS.map((semester) => ({
+                value: semester,
+                label: semester,
+              }))}
+              value={selectedSemester}
+              onChange={(value) => setSelectedSemester(value as ScheduleSemester)}
             />
 
             <AdminFloorFilter
-              label="Room:"
-              options={roomOptions}
-              value={selectedRoom}
-              onChange={setSelectedRoom}
-              placeholder="Select a floor first"
-              disabled={!selectedFloor}
+              label="Select Academic Year:"
+              options={SCHEDULE_ACADEMIC_YEARS.map((academicYear) => ({
+                value: academicYear,
+                label: academicYear,
+              }))}
+              value={selectedAcademicYear}
+              onChange={(value) => setSelectedAcademicYear(value as ScheduleAcademicYear)}
             />
 
             <button
-              onClick={() => {
-                if (!hasActiveScheduleFilters) {
-                  return;
-                }
-
-                setClearButtonPressed(true);
-                setSelectedRoom('');
-                setSelectedFloor('');
-                window.setTimeout(() => setClearButtonPressed(false), 150);
-              }}
-              aria-disabled={!hasActiveScheduleFilters}
-              className={`rounded-lg border px-[14px] py-2 text-sm font-bold transition-all duration-200 ease-in-out ${
-                clearButtonPressed
-                  ? 'border-[#8B0000] bg-[#8B0000] text-white'
-                  : hasActiveScheduleFilters
-                    ? 'cursor-pointer border-[#8B0000] bg-transparent text-[#8B0000] pointer-events-auto hover:bg-[#fff0f0]'
-                    : 'pointer-events-none cursor-default border-[#cccccc] bg-transparent text-[#999999]'
-              }`}
+              type="button"
+              onClick={() => setShowSwitchConfirm(true)}
+              disabled={!hasPendingScheduleContextChanges || switchingScheduleContext}
+              className="rounded-lg bg-[#8B0000] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#6e0000] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Clear
+              {switchingScheduleContext ? 'Switching...' : 'Switch Schedules'}
             </button>
+          </div>
+
+          <div className="flex w-full flex-row flex-wrap items-center gap-3 rounded-xl bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+              <AdminFloorFilter
+                label="Floor:"
+                options={availableFloors}
+                value={selectedFloor}
+                onChange={handleScheduleFloorChange}
+                placeholder="Select Floor"
+              />
+
+              <AdminFloorFilter
+                label="Room:"
+                options={roomOptions}
+                value={selectedRoom}
+                onChange={setSelectedRoom}
+                placeholder="Select a floor first"
+                disabled={!selectedFloor}
+              />
+
+              <button
+                onClick={() => {
+                  if (!hasActiveScheduleFilters) {
+                    return;
+                  }
+
+                  setClearButtonPressed(true);
+                  setSelectedRoom('');
+                  setSelectedFloor('');
+                  window.setTimeout(() => setClearButtonPressed(false), 150);
+                }}
+                aria-disabled={!hasActiveScheduleFilters}
+                className={`rounded-lg border px-[14px] py-2 text-sm font-bold transition-all duration-200 ease-in-out ${
+                  clearButtonPressed
+                    ? 'border-[#8B0000] bg-[#8B0000] text-white'
+                    : hasActiveScheduleFilters
+                      ? 'cursor-pointer border-[#8B0000] bg-transparent text-[#8B0000] pointer-events-auto hover:bg-[#fff0f0]'
+                      : 'pointer-events-none cursor-default border-[#cccccc] bg-transparent text-[#999999]'
+                }`}
+              >
+                Clear
+              </button>
           </div>
 
           <AdminClassSchedulesSection
@@ -370,6 +432,47 @@ export default function AdminClassSchedulesPage() {
             onDeleteSchedule={handleDeleteSchedule}
             campus={campus}
           />
+
+          {showSwitchConfirm ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                <h4 className="mb-2 text-base font-bold text-gray-900">
+                  Switch Class Schedules?
+                </h4>
+                <p className="mb-6 text-sm text-gray-500">
+                  Are you sure you want to switch the class schedules to{' '}
+                  <span className="font-semibold text-gray-800">
+                    {pendingScheduleContextLabel}
+                  </span>
+                  ?
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowSwitchConfirm(false)}
+                    disabled={switchingScheduleContext}
+                    className="rounded-lg border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleSwitchScheduleContext({
+                        academicYear: selectedAcademicYear,
+                        semester: selectedSemester,
+                      });
+                      setShowSwitchConfirm(false);
+                    }}
+                    disabled={switchingScheduleContext}
+                    className="rounded-lg bg-[#8B0000] px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-[#6e0000] disabled:opacity-50"
+                  >
+                    {switchingScheduleContext ? 'Switching...' : 'Confirm'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </main>

@@ -17,6 +17,8 @@ function makeBuilding(overrides: Partial<Building>): Building {
     floors: 5,
     campus: 'main',
     assignedAdminUid: null,
+    activeScheduleSemester: '1st Semester',
+    activeScheduleAcademicYear: 'A.Y. 2025-2026',
     ...overrides,
   };
 }

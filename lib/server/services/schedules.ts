@@ -11,6 +11,8 @@ export interface ScheduleCreateInput {
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  semester: string;
+  academicYear: string;
   createdBy: string;
 }
 

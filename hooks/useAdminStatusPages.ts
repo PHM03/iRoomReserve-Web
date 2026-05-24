@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
 import { useAdminTab } from '@/context/AdminTabContext';
+import {
+  onBuildingById,
+  updateBuildingScheduleContext,
+} from '@/lib/buildings/buildings';
 import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
 import { normalizeRoomCheckInMethod } from '@/lib/rooms/roomStatus';
@@ -18,6 +22,12 @@ import {
   updateSchedule,
   DAY_NAMES,
 } from '@/lib/schedules/schedules';
+import {
+  DEFAULT_SCHEDULE_CONTEXT,
+  normalizeScheduleContext,
+  type ScheduleAcademicYear,
+  type ScheduleSemester,
+} from '@/lib/schedules/scheduleContext';
 import { validateScheduleTimes } from '@/lib/schedules/scheduleTimeRules';
 import { onReservationsByBuilding, Reservation } from '@/lib/reservations/reservations';
 import { onRoomsByBuilding, Room, updateRoomStatus } from '@/lib/rooms/rooms';
@@ -104,6 +114,15 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     id: buildingId,
     name: buildingName,
   });
+  const [activeScheduleSemester, setActiveScheduleSemester] =
+    useState<ScheduleSemester>(DEFAULT_SCHEDULE_CONTEXT.semester);
+  const [activeScheduleAcademicYear, setActiveScheduleAcademicYear] =
+    useState<ScheduleAcademicYear>(DEFAULT_SCHEDULE_CONTEXT.academicYear);
+  const [switchingScheduleContext, setSwitchingScheduleContext] = useState(false);
+  const activeScheduleContext = {
+    academicYear: activeScheduleAcademicYear,
+    semester: activeScheduleSemester,
+  };
 
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -192,6 +211,34 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
 
   useEffect(() => {
     if (!buildingId || !firebaseUser?.uid) {
+      const fallbackContext = normalizeScheduleContext();
+      setActiveScheduleSemester(fallbackContext.semester);
+      setActiveScheduleAcademicYear(fallbackContext.academicYear);
+      return;
+    }
+
+    let cancelled = false;
+    const unsubscribe = onBuildingById(buildingId, (building) => {
+      if (cancelled) {
+        return;
+      }
+
+      const nextContext = normalizeScheduleContext({
+        academicYear: building?.activeScheduleAcademicYear,
+        semester: building?.activeScheduleSemester,
+      });
+      setActiveScheduleSemester(nextContext.semester);
+      setActiveScheduleAcademicYear(nextContext.academicYear);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [buildingId, firebaseUser?.uid]);
+
+  useEffect(() => {
+    if (!buildingId || !firebaseUser?.uid) {
       setSchedules([]);
       return;
     }
@@ -238,6 +285,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       const unsubscribe = onSchedulesByBuildingRoomIds(
         buildingId,
         selectedScheduleRoomIds,
+        activeScheduleContext,
         (nextSchedules) => {
           console.log('[schedules] onSchedulesByBuildingRoomIds callback', {
             buildingId,
@@ -256,7 +304,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     }
 
     let cancelled = false;
-    const unsubscribe = onSchedulesByBuilding(buildingId, (nextSchedules) => {
+    const unsubscribe = onSchedulesByBuilding(buildingId, activeScheduleContext, (nextSchedules) => {
       if (cancelled) return;
       setSchedules(nextSchedules);
     });
@@ -272,6 +320,8 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     normalizedSelectedScheduleRoom,
     scheduleSelectionRequired,
     selectedScheduleRoomKey,
+    activeScheduleAcademicYear,
+    activeScheduleSemester,
   ]);
 
   const resetScheduleForm = () => {
@@ -347,6 +397,8 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
           dayOfWeek: schedDay,
           startTime: schedStart,
           endTime: schedEnd,
+          semester: activeScheduleSemester,
+          academicYear: activeScheduleAcademicYear,
           createdBy: firebaseUser?.uid || '',
         };
 
@@ -374,18 +426,31 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
   };
 
   const handleDeleteSchedule = async (scheduleId: string) => {
-    const response = await fetch(`/api/schedules/${scheduleId}`, {
-      method: 'DELETE',
-    });
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      console.warn('Failed to delete schedule:', body);
+    try {
+      await deleteSchedule(scheduleId);
+    } catch (error) {
+      console.warn('Failed to delete schedule:', error);
       alert('Failed to delete schedule. Please try again.');
       return;
     }
 
     resetScheduleForm();
+  };
+
+  const handleSwitchScheduleContext = async (input: {
+    academicYear: ScheduleAcademicYear;
+    semester: ScheduleSemester;
+  }) => {
+    if (!buildingId) {
+      return;
+    }
+
+    setSwitchingScheduleContext(true);
+    try {
+      await updateBuildingScheduleContext(buildingId, input);
+    } finally {
+      setSwitchingScheduleContext(false);
+    }
   };
 
   const computeEffectiveStatus = (
@@ -533,6 +598,9 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     buildingName,
     activeBuildingLabel,
     campus: managedCampus ?? null,
+    activeScheduleSemester,
+    activeScheduleAcademicYear,
+    switchingScheduleContext,
     selectedBuildingId: effectiveManagedBuildingId,
     setSelectedBuildingId,
     allReservations,
@@ -561,6 +629,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     handleSaveSchedule,
     handleEditSchedule,
     handleDeleteSchedule,
+    handleSwitchScheduleContext,
     computeEffectiveStatus,
   };
 }

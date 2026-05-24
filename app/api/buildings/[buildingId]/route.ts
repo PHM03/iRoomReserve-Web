@@ -5,6 +5,7 @@ import { ApiError, handleApiError } from "@/lib/server/api-error";
 import { getOptionalAdminDb } from "@/lib/server/firebase-admin";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
 import { assertAuthenticated } from "@/lib/server/route-guards";
+import { normalizeScheduleContext } from "@/lib/schedules/scheduleContext";
 
 export async function GET(
   request: NextRequest,
@@ -36,7 +37,13 @@ export async function GET(
       floors?: number;
       campus?: string | null;
       assignedAdminUid?: string | null;
+      activeScheduleSemester?: string | null;
+      activeScheduleAcademicYear?: string | null;
     };
+    const scheduleContext = normalizeScheduleContext({
+      academicYear: data.activeScheduleAcademicYear,
+      semester: data.activeScheduleSemester,
+    });
 
     const building = {
       id: buildingSnapshot.id,
@@ -50,8 +57,10 @@ export async function GET(
           code: data.code,
           name: data.name,
           campus: data.campus,
-        }) ?? "main",
+      }) ?? "main",
       assignedAdminUid: data.assignedAdminUid ?? null,
+      activeScheduleSemester: scheduleContext.semester,
+      activeScheduleAcademicYear: scheduleContext.academicYear,
     };
 
     return NextResponse.json(building);
