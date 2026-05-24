@@ -114,14 +114,18 @@ function SummaryMetricCard({
       <button
         type="button"
         onClick={action}
-        className="glass-card min-h-[88px] p-3 text-left transition-all hover:!border-primary/30 hover:shadow-md"
+        className="glass-card flex min-h-[88px] w-full flex-col items-start justify-start appearance-none p-3 text-left align-top transition-all hover:!border-primary/30 hover:shadow-md"
       >
         {content}
       </button>
     );
   }
 
-  return <div className="glass-card min-h-[88px] p-3">{content}</div>;
+  return (
+    <div className="glass-card flex min-h-[88px] flex-col items-start justify-start p-3">
+      {content}
+    </div>
+  );
 }
 
 function getRoomStatusAccent(status: string) {

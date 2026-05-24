@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { useAuth } from '@/context/AuthContext';
+import { useAdminTab } from '@/context/AdminTabContext';
 import {
   markAllNotificationsRead,
   markNotificationRead,
@@ -121,6 +122,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [isMobileStatusMenuOpen, setIsMobileStatusMenuOpen] = useState(false);
   const { firebaseUser } = useAuth();
+  const { setSelectedBuildingId } = useAdminTab();
   const uid = firebaseUser?.uid;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -289,6 +291,10 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
       await markNotificationRead(notification.id);
     }
     setShowNotifications(false);
+
+    if (notification.buildingId) {
+      setSelectedBuildingId(notification.buildingId);
+    }
 
     if ((isAdmin || isBuildingAdmin) && onTabChange) {
       onTabChange(isPending ? 'pending' : 'inbox');
