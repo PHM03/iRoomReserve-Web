@@ -41,6 +41,8 @@ export function StatusBadge({ status }: Readonly<StatusBadgeProps>) {
         return 'ui-badge-yellow';
       case 'completed':
         return 'ui-badge-blue';
+      case 'expired':
+        return 'ui-badge-gray';
       default:
         return 'ui-badge-gray';
     }

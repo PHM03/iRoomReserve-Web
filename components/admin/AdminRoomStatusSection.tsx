@@ -314,7 +314,7 @@ export default function AdminRoomStatusSection({
   );
 
   const floorOptionsWithAll = useMemo(
-    () => [...floorOptions, { value: 'All', label: 'All' }],
+    () => [...floorOptions, { value: 'All', label: 'All Floors' }],
     [floorOptions]
   );
 
@@ -323,8 +323,12 @@ export default function AdminRoomStatusSection({
       return;
     }
 
-    if (floorFilter === 'All' || !floorFilter) {
+    if (!floorFilter) {
       setFloorFilter(getPreferredDefaultFloorValue(floorOptions));
+      return;
+    }
+
+    if (floorFilter === 'All') {
       return;
     }
 
@@ -368,6 +372,16 @@ export default function AdminRoomStatusSection({
       return true;
     });
   }, [rooms, search, floorFilter]);
+
+  const desktopGridTemplateColumns = useMemo(() => {
+    const longestRoomNameLength = rooms.reduce(
+      (maxLength, room) => Math.max(maxLength, room.name.trim().length),
+      'Room'.length
+    );
+    const roomColumnWidth = `${Math.max(longestRoomNameLength + 2, 10)}ch`;
+
+    return `18px ${roomColumnWidth} minmax(0, 1fr) 110px 112px 120px 160px 40px`;
+  }, [rooms]);
 
   if (rooms.length === 0) {
     return (
@@ -441,13 +455,17 @@ export default function AdminRoomStatusSection({
       ) : (
         <div className="glass-card overflow-hidden">
           {/* Header row */}
-          <div className="hidden md:grid grid-cols-[18px_minmax(0,1fr)_110px_90px_80px_160px_40px] items-center gap-3 px-4 py-2.5 border-b border-dark/10 bg-dark/5">
+          <div
+            className="hidden md:grid items-center gap-3 px-4 py-2.5 border-b border-dark/10 bg-dark/5"
+            style={{ gridTemplateColumns: desktopGridTemplateColumns }}
+          >
             <span />
             <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Room</span>
+            <span />
             <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Floor</span>
-            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Cap</span>
-            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Status</span>
-            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Toggle</span>
+            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Max. Capacity</span>
+            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Room Status</span>
+            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Manual Override</span>
             <span />
           </div>
 
@@ -466,7 +484,10 @@ export default function AdminRoomStatusSection({
               return (
                 <li key={room.id}>
                   {/* ── Main row ── */}
-                  <div className="grid md:grid-cols-[18px_minmax(0,1fr)_110px_90px_80px_160px_40px] items-center gap-3 px-4 py-3 hover:bg-primary/5 transition-colors">
+                  <div
+                    className="grid items-center gap-3 px-4 py-3 hover:bg-primary/5 transition-colors md:grid"
+                    style={{ gridTemplateColumns: desktopGridTemplateColumns }}
+                  >
                     {/* Sentiment dot */}
                     <div className="flex items-center justify-center">
                       <SentimentDot label={feedbackStats.sentimentLabel} />
@@ -484,6 +505,8 @@ export default function AdminRoomStatusSection({
                       </p>
                     </div>
 
+                    <div className="hidden md:block" />
+
                     {/* Floor */}
                     <p className="hidden md:block text-xs font-bold text-black/70 truncate">{floorLabel}</p>
 
@@ -496,7 +519,7 @@ export default function AdminRoomStatusSection({
                     </div>
 
                     {/* Toggle buttons */}
-                    <div className="flex gap-1.5 md:col-start-6">
+                    <div className="flex gap-1.5">
                       <button
                         type="button"
                         onClick={() => onStatusChange(room.id, 'Available')}

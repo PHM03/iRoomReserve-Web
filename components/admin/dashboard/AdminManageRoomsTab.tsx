@@ -425,7 +425,7 @@ export default function AdminManageRoomsTab({
                             label="Filter by Floor:"
                             options={[
                                 ...floorOptions,
-                                { value: 'all', label: 'All' },
+                                { value: 'all', label: 'All Floors' },
                             ]}
                             value={roomFloorFilter}
                             onChange={setRoomFloorFilter}

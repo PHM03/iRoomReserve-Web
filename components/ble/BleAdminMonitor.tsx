@@ -144,8 +144,12 @@ export default function BleAdminMonitor({
       return;
     }
 
-    if (floorFilter === 'All' || !floorFilter) {
+    if (!floorFilter) {
       setFloorFilter(getPreferredDefaultFloorValue(floorOptions));
+      return;
+    }
+
+    if (floorFilter === 'All') {
       return;
     }
 

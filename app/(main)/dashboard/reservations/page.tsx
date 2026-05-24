@@ -193,7 +193,7 @@ export default function MyReservationsPage() {
     },
     {
       key: 'rejected',
-      label: 'Rejected/Cancelled',
+      label: 'Rejected',
       badge: rejectedBadge || undefined
     },
     {
