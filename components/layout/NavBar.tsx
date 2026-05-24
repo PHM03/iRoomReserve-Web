@@ -322,7 +322,10 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   };
 
   return (
-    <nav ref={navRef} className="glass-nav fixed top-0 left-0 right-0 z-50">
+    <nav
+      ref={navRef}
+      className="glass-nav fixed top-0 left-0 right-0 z-50 border-white/20 bg-white/70 shadow-xl backdrop-blur-md"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between py-5">
           <div className="flex items-center">

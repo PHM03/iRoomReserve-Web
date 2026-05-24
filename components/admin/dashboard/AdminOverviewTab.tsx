@@ -73,8 +73,8 @@ function DashboardSection({
   title,
 }: Readonly<DashboardSectionProps>) {
   return (
-    <section className={`glass-card p-3 sm:p-4 ${className}`.trim()}>
-      <div className="mb-3 flex items-start justify-between gap-3">
+    <section className={`glass-card p-4 sm:p-5 ${className}`.trim()}>
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-extrabold text-black">{title}</h3>
           {eyebrow ? (
@@ -115,7 +115,7 @@ function SummaryMetricCard({
       <button
         type="button"
         onClick={action}
-        className="glass-card flex min-h-[88px] w-full flex-col items-start justify-start appearance-none p-3 text-left align-top transition-all hover:!border-primary/30 hover:shadow-md"
+        className="glass-card flex min-h-[96px] w-full flex-col items-start justify-start appearance-none p-4 text-left align-top transition-all hover:!border-primary/30 hover:shadow-xl"
       >
         {content}
       </button>
@@ -123,7 +123,7 @@ function SummaryMetricCard({
   }
 
   return (
-    <div className="glass-card flex min-h-[88px] flex-col items-start justify-start p-3">
+    <div className="glass-card flex min-h-[96px] flex-col items-start justify-start p-4">
       {content}
     </div>
   );
@@ -396,8 +396,8 @@ export default function AdminOverviewTab({
   };
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {dashboardStats.map((stat) => (
           <SummaryMetricCard
             key={stat.label}
@@ -410,7 +410,7 @@ export default function AdminOverviewTab({
         ))}
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.95fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.95fr)]">
         <DashboardSection
           title="Live Room Status"
           eyebrow={`${visibleRooms.length} shown${
@@ -665,7 +665,7 @@ export default function AdminOverviewTab({
         </DashboardSection>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
         <BleSummaryCard
           activeBeaconsOverride={dashboardSummary?.activeBeacons}
           buildingName={buildingName}

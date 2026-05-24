@@ -201,7 +201,7 @@ export default function FeedbackPage() {
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       {/* ── Unified page header ─────────────────────────────── */}
       <div className="mb-8">
-        <div className="bg-white rounded-xl px-6 py-4 border border-white/30">
+        <div className="rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md">
           <h1 className="text-2xl font-bold text-gray-800">Feedback</h1>
           <p className="text-gray-600 mt-1">Rate your experience and help us improve</p>
         </div>

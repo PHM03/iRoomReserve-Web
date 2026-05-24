@@ -1093,7 +1093,7 @@ export default function ReserveRoomPage() {
   return (
     <main className="relative z-10 mx-auto max-w-5xl px-4 pt-[100px] py-8 pb-24 sm:px-6 lg:px-8 md:pb-8">
       <div className="mb-8">
-        <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block">
+        <div className="inline-block rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md">
           <h2 className="text-2xl font-bold text-gray-800">Reserve a Room</h2>
           <p className="mt-1 text-gray-600">
             Browse rooms, filter quickly, and continue straight into reservation details.

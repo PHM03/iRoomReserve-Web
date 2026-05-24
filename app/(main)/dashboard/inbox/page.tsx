@@ -406,7 +406,7 @@ function UserInbox({
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
-        <div className="bg-white rounded-xl px-6 py-4 border border-white/30 inline-block">
+        <div className="inline-block rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-gray-800">

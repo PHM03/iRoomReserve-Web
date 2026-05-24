@@ -455,7 +455,7 @@ export default function AdminPendingTab({
   return (
     <div>
       {/* Ã¢â€â‚¬Ã¢â€â‚¬ Header with building switcher Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
-      <div className="mb-6 flex w-full flex-col gap-3 rounded-xl border border-white/70 bg-white px-6 py-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-6 flex w-full flex-col gap-3 rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3 min-w-0">
             <h3 className="text-xl font-bold text-gray-900">Pending Reservations</h3>
@@ -816,16 +816,19 @@ export default function AdminPendingTab({
 
           {/* Ã¢â€â‚¬Ã¢â€â‚¬ Cards list Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
               <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                background: 'rgba(255,255,255,0.7)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '16px',
+                boxShadow: '0 22px 50px rgba(15,23,42,0.14)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)'
               }}>
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '16px 24px',
-                  borderBottom: '1px solid #f0f0f0'
+                  borderBottom: '1px solid rgba(255,255,255,0.3)'
                 }}>
                   <span style={{
                     fontSize: '14px',
@@ -871,9 +874,9 @@ export default function AdminPendingTab({
                         toggleReservationExpanded(request.id);
                       }
                     }}
-                    style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #f0f0f0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: isExpanded ? '20px 24px' : '14px 18px', transition: 'box-shadow 0.2s', animation: 'fadeInCard 0.25s ease both', cursor: 'pointer' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)'; }}
+                    style={{ background: 'rgba(255,255,255,0.62)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.24)', boxShadow: '0 12px 28px rgba(15,23,42,0.1)', padding: isExpanded ? '20px 24px' : '14px 18px', transition: 'box-shadow 0.2s, background 0.2s, transform 0.2s', animation: 'fadeInCard 0.25s ease both', cursor: 'pointer', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 18px 40px rgba(15,23,42,0.16)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.78)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 28px rgba(15,23,42,0.1)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.62)'; }}
                   >
                     {/* Top row */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isExpanded ? '16px' : 0, gap: '12px', flexWrap: 'wrap' }}>

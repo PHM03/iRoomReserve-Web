@@ -22,6 +22,13 @@ interface MemberDashboardProps {
   welcomeEmoji: string;
 }
 
+const dashboardPanelClasses =
+  'rounded-2xl border border-white/20 bg-white/70 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl';
+const dashboardCardClasses =
+  'relative overflow-hidden rounded-2xl border border-white/20 bg-white/70 p-5 shadow-xl backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-2xl';
+const iconTileClasses =
+  'flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/55 shadow-sm backdrop-blur-md';
+
 export default function MemberDashboard({
   firstName,
   welcomeEmoji,
@@ -99,9 +106,9 @@ export default function MemberDashboard({
   const recentActivity = reservationHistory.slice(0, 3);
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[100px] relative z-10 pb-24 md:pb-8">
-      <div className="mb-8 flex items-start justify-between">
-        <div className="bg-white rounded-xl px-6 py-4 border border-white/30">
+    <main className="relative z-10 mx-auto max-w-7xl px-4 pb-24 pt-[100px] sm:px-6 lg:px-8 md:pb-8">
+      <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className={`${dashboardPanelClasses} px-6 py-4`}>
           <h2 className="text-2xl font-bold text-gray-800">
             Welcome, {firstName} {welcomeEmoji}
           </h2>
@@ -112,7 +119,7 @@ export default function MemberDashboard({
 
         <Link
           href="/dashboard/reserve"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#a12124] text-white text-sm font-bold shadow-md hover:bg-[#8e1d20] transition-all hover:-translate-y-0.5"
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#a12124] px-5 py-3 text-sm font-bold text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8e1d20] hover:shadow-2xl hover:shadow-primary/30"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -121,10 +128,10 @@ export default function MemberDashboard({
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5">
+      <div className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div className={`${dashboardCardClasses} shadow-blue-500/10 hover:shadow-blue-500/20`}>
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+            <div className={`${iconTileClasses} bg-blue-500/10 text-blue-700`}>
               <svg
                 className="w-4 h-4 ui-text-blue"
                 fill="none"
@@ -174,9 +181,9 @@ export default function MemberDashboard({
           )}
         </div>
 
-        <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5">
+        <div className={`${dashboardCardClasses} shadow-purple-500/10 hover:shadow-purple-500/20`}>
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+            <div className={`${iconTileClasses} bg-purple-500/10 text-purple-700`}>
               <svg
                 className="w-4 h-4 ui-text-purple"
                 fill="none"
@@ -199,9 +206,9 @@ export default function MemberDashboard({
           <p className="text-xs text-black mt-0.5">Awaiting approval</p>
         </div>
 
-        <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5">
+        <div className={`${dashboardCardClasses} shadow-green-500/10 hover:shadow-green-500/20`}>
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+            <div className={`${iconTileClasses} bg-green-500/10 text-green-700`}>
               <svg
                 className="w-4 h-4 ui-text-green"
                 fill="none"
@@ -223,9 +230,9 @@ export default function MemberDashboard({
         </div>
       </div>
 
-      <div className="flex w-full flex-col gap-4 bg-transparent">
+      <div className="flex w-full flex-col gap-6 bg-transparent">
       {upcomingReservations.length > 0 && (
-        <section className="w-full rounded-xl bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+        <section className={`w-full px-6 py-5 ${dashboardPanelClasses}`}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold text-black">Upcoming Reservations</h3>
             <Link
@@ -242,7 +249,7 @@ export default function MemberDashboard({
             {upcomingReservations.map((reservation) => (
               <div
                 key={reservation.id}
-                className="bg-white border border-gray-200 shadow-sm rounded-xl p-5"
+                className="rounded-2xl border border-white/20 bg-white/55 p-5 shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-white/70 hover:shadow-xl"
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <h4 className="text-sm font-bold text-black">
@@ -299,7 +306,7 @@ export default function MemberDashboard({
         </section>
       )}
 
-        <section className="w-full rounded-xl bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+        <section className={`w-full px-6 py-5 ${dashboardPanelClasses}`}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold text-gray-800">Recent Activity</h3>
             <Link
@@ -312,11 +319,11 @@ export default function MemberDashboard({
               </svg>
             </Link>
           </div>
-          <div className="overflow-hidden rounded-xl border border-gray-200">
+          <div className="overflow-hidden rounded-2xl border border-white/20 bg-white/40 backdrop-blur-md">
             {recentActivity.length === 0 ? (
               <div className="p-12 text-center">
                 <svg
-                  className="w-14 h-14 text-black mx-auto mb-3"
+                  className="w-14 h-14 text-black/60 mx-auto mb-3"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -334,11 +341,11 @@ export default function MemberDashboard({
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-dark/5">
+              <div className="divide-y divide-white/30">
                 {recentActivity.map((reservation) => (
                   <div
                     key={reservation.id}
-                    className="flex items-center gap-4 p-4 hover:bg-primary/10 transition-colors"
+                    className="flex items-center gap-4 p-4 transition-colors duration-300 hover:bg-white/35"
                   >
                     <span
                       className={`w-2.5 h-full min-h-[40px] rounded-full shrink-0 ${

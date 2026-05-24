@@ -350,7 +350,7 @@ export default function AdminRoomHistoryTab({
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 rounded-xl border border-white/30 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-xl font-bold text-gray-800">Reservation History</h3>
         {managedBuildings.length > 1 ? (
           <div className="w-full sm:ml-auto sm:w-72">

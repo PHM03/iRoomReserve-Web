@@ -45,6 +45,9 @@ const TIMETABLE_DAYS = [
   },
 ] as const;
 
+const timetablePanelClasses =
+  'rounded-2xl border border-white/20 bg-white/70 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl';
+
 function getOrderedTimetableDays(referenceDate = new Date()) {
   const todayValue = referenceDate.getDay();
   const startIndex = TIMETABLE_DAYS.findIndex((day) => day.value === todayValue);
@@ -211,7 +214,7 @@ export default function MyReservationTimetable({
 
     return (
       <section className={className}>
-        <div className="mb-2 flex items-center justify-between rounded-xl border border-white/30 bg-white px-3 py-2">
+        <div className="mb-2 flex items-center justify-between rounded-2xl border border-white/20 bg-white/70 px-3 py-2 shadow-lg backdrop-blur-md">
           <h3 className="text-sm font-bold text-gray-800">My Reservation Timetable</h3>
           <span className="text-[11px] font-bold text-gray-500">Weekly strip</span>
         </div>
@@ -228,7 +231,7 @@ export default function MyReservationTimetable({
               return (
                 <div
                   key={day.value}
-                  className="min-h-[112px] rounded-lg border border-dark/10 bg-white/70 p-2"
+                  className="min-h-[112px] rounded-2xl border border-white/20 bg-white/55 p-2 shadow-sm backdrop-blur-md"
                 >
                   <h4 className="mb-1.5 truncate text-xs font-extrabold text-black">
                     {day.label.slice(0, 3)}
@@ -270,7 +273,7 @@ export default function MyReservationTimetable({
   }
 
   return (
-    <section className={`rounded-xl bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.08)] ${className ?? ''}`}>
+    <section className={`px-6 py-5 ${timetablePanelClasses} ${className ?? ''}`}>
       <div className="mb-4">
         <h3 className="text-xl font-bold text-gray-800">
           My Reservation Timetable
@@ -280,7 +283,7 @@ export default function MyReservationTimetable({
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200 p-4">
+      <div className="overflow-x-auto rounded-2xl border border-white/20 bg-white/40 p-4 backdrop-blur-md">
         <div className="grid min-w-full grid-cols-[repeat(6,minmax(120px,1fr))] gap-3">
           {orderedTimetableDays.map((day) => {
             const entries = [...(entriesByDay.get(day.value)?.values() ?? [])].sort(
@@ -292,14 +295,14 @@ export default function MyReservationTimetable({
             return (
               <div
                 key={day.value}
-                className="rounded-xl border border-dark/10 bg-white/70 p-3 min-h-[190px]"
+                className="min-h-[190px] rounded-2xl border border-white/20 bg-white/55 p-3 shadow-sm backdrop-blur-md"
               >
                 <h4 className="text-sm font-extrabold text-black mb-3">
                   {day.label}
                 </h4>
 
                 {entries.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-dark/10 bg-dark/3 px-3 py-6 text-center">
+                  <div className="rounded-2xl border border-dashed border-white/30 bg-white/30 px-3 py-6 text-center">
                     <p className="text-xs font-bold text-black/50">
                       No reservations
                     </p>
@@ -309,7 +312,7 @@ export default function MyReservationTimetable({
                     {entries.map((entry) => (
                       <div
                         key={`${entry.buildingName}:${entry.roomName}:${entry.startTime}:${entry.endTime}`}
-                        className="rounded-xl border border-green-500/20 bg-green-500/10 p-3"
+                        className="rounded-2xl border border-green-500/20 bg-green-500/10 p-3 shadow-sm shadow-green-500/10 backdrop-blur-md"
                       >
                         <p className="text-sm font-bold text-black">
                           {entry.roomName}

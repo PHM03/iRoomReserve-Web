@@ -22,7 +22,7 @@ export default function AdminInboxTab({
 }: Readonly<AdminInboxTabProps>) {
   return (
     <div>
-      <div className="mb-5 flex w-full flex-col gap-3 rounded-xl border border-white/70 bg-white px-6 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex w-full flex-col gap-3 rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-bold text-black">Staff Messages</h2>
         {managedBuildings.length > 1 ? (
           <div className="w-full sm:ml-auto sm:w-72">

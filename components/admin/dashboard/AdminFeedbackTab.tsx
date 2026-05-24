@@ -177,7 +177,7 @@ export default function AdminFeedbackTab({
   return (
     <div>
       {/* Header — unchanged */}
-      <div className="mb-6 flex flex-col gap-3 bg-white rounded-xl px-6 py-4 border border-white/30 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-xl font-bold text-gray-800">Room Feedback</h3>
           <span className="text-sm text-gray-600">{feedbackList.length} total</span>
