@@ -34,6 +34,12 @@ export interface RoomStatusUpdateInput {
   beaconLastDisconnectedAt?: Date | string | null;
 }
 
+export interface RoomBeaconTelemetrySyncInput {
+  beaconId?: string | null;
+  connectionStatus: string;
+  roomId?: string | null;
+}
+
 function normalizeBuildingName(buildingId: string, buildingName: string) {
   const normalizedBuildingId = buildingId.trim().toLowerCase();
   const trimmedBuildingName = buildingName.trim();
@@ -67,6 +73,10 @@ function resolveBeaconId(input: {
   bleBeaconId?: string | null;
 }) {
   return normalizeBeaconId(input.bleBeaconId) ?? normalizeBeaconId(input.beaconId);
+}
+
+function isConnectedTelemetryStatus(connectionStatus: string) {
+  return connectionStatus.trim().toUpperCase() === "CONNECTED";
 }
 
 export async function createRoomRecord(data: RoomCreateInput) {
@@ -180,6 +190,62 @@ export async function updateRoomStatusRecord(
           beaconDeviceName: null,
         }
       : {}),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function syncRoomBeaconTelemetry(
+  input: RoomBeaconTelemetrySyncInput
+) {
+  const normalizedRoomId =
+    typeof input.roomId === "string" && input.roomId.trim().length > 0
+      ? input.roomId.trim()
+      : null;
+  const normalizedBeaconId = normalizeBeaconId(input.beaconId);
+  const isConnected = isConnectedTelemetryStatus(input.connectionStatus);
+
+  let roomRef = normalizedRoomId
+    ? db.collection("rooms").doc(normalizedRoomId)
+    : null;
+
+  if (roomRef) {
+    const directSnapshot = await roomRef.get();
+    if (!directSnapshot.exists) {
+      roomRef = null;
+    }
+  }
+
+  if (!roomRef && normalizedBeaconId) {
+    const beaconSnapshot = await db
+      .collection("rooms")
+      .where("bleBeaconId", "==", normalizedBeaconId)
+      .limit(1)
+      .get();
+
+    if (!beaconSnapshot.empty) {
+      roomRef = beaconSnapshot.docs[0].ref;
+    } else {
+      const legacyBeaconSnapshot = await db
+        .collection("rooms")
+        .where("beaconId", "==", normalizedBeaconId)
+        .limit(1)
+        .get();
+
+      if (!legacyBeaconSnapshot.empty) {
+        roomRef = legacyBeaconSnapshot.docs[0].ref;
+      }
+    }
+  }
+
+  if (!roomRef) {
+    return;
+  }
+
+  await roomRef.update({
+    beaconConnected: isConnected,
+    beaconDeviceName: isConnected ? normalizedBeaconId : null,
+    beaconLastConnectedAt: isConnected ? serverTimestamp() : null,
+    beaconLastDisconnectedAt: isConnected ? null : serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 }

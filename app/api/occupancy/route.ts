@@ -5,6 +5,7 @@ import {
   parseOccupancyRecord,
   type OccupancyPayload,
 } from "@/lib/occupancy/occupancy";
+import { syncRoomBeaconTelemetry } from "@/lib/server/services/rooms";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +35,19 @@ function trimOccupancyHistory(payload: OccupancyPayload): OccupancyPayload {
 
 export async function POST(request: Request) {
   try {
-    const nextRecord = parseOccupancyRecord(await request.json());
+    const payload = await request.json();
+    const nextRecord = parseOccupancyRecord(payload);
 
     occupancyData = trimOccupancyHistory({
       ...nextRecord,
       history: [nextRecord, ...occupancyData.history],
+    });
+
+    await syncRoomBeaconTelemetry({
+      beaconId:
+        typeof payload.beaconId === "string" ? payload.beaconId : undefined,
+      connectionStatus: nextRecord.connectionStatus,
+      roomId: typeof payload.roomId === "string" ? payload.roomId : undefined,
     });
 
     return toNoStoreResponse({
