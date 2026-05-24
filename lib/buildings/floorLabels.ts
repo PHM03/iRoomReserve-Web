@@ -142,8 +142,6 @@ export function getPreferredDefaultFloorValue(
   fallback = ""
 ) {
   return (
-    options.find((option) => option.value === "Ground Floor")?.value ??
-    options[0]?.value ??
-    fallback
+    options[0]?.value ?? fallback
   );
 }

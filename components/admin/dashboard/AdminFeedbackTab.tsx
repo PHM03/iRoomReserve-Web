@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import {
   resolveFeedbackSentimentLabel,
@@ -60,7 +60,7 @@ export default function AdminFeedbackTab({
   const [responseText, setResponseText] = useState('');
 
   // Filter state
-  const [floorFilter, setFloorFilter] = useState('All');
+  const [floorFilter, setFloorFilter] = useState('');
   const [roomFilter, setRoomFilter] = useState('All');
   const [starFilter, setStarFilter] = useState<number | null>(null);
   const [dateFrom, setDateFrom] = useState('');
@@ -134,8 +134,24 @@ export default function AdminFeedbackTab({
   const hasActiveFilters =
     floorFilter !== 'All' || roomFilter !== 'All' || starFilter !== null || !!dateFrom || !!dateTo;
 
+  useEffect(() => {
+    const defaultFloor = floorsInFeedback[0] ?? 'All';
+    const hasMatchingFloor =
+      floorFilter === 'All' || floorsInFeedback.includes(floorFilter);
+
+    if (!hasMatchingFloor) {
+      setFloorFilter(defaultFloor);
+      setRoomFilter('All');
+      return;
+    }
+
+    if (!floorFilter && defaultFloor) {
+      setFloorFilter(defaultFloor);
+    }
+  }, [floorFilter, floorsInFeedback]);
+
   const clearFilters = () => {
-    setFloorFilter('All');
+    setFloorFilter(floorsInFeedback[0] ?? 'All');
     setRoomFilter('All');
     setStarFilter(null);
     setDateFrom('');

@@ -300,7 +300,7 @@ export default function AdminRoomStatusSection({
   className = '',
 }: Readonly<AdminRoomStatusSectionProps>) {
   const [search, setSearch] = useState('');
-  const [floorFilter, setFloorFilter] = useState<string>('Ground Floor');
+  const [floorFilter, setFloorFilter] = useState<string>('');
   const [availFilter, setAvailFilter] = useState<AvailabilityFilter>('Available');
   const [expandedRoomId, setExpandedRoomId] = useState<string | null>(null);
 
@@ -322,12 +322,21 @@ export default function AdminRoomStatusSection({
   );
 
   useEffect(() => {
+    if (floorOptions.length === 0) {
+      return;
+    }
+
+    if (floorFilter === 'All' || !floorFilter) {
+      setFloorFilter(getPreferredDefaultFloorValue(floorOptions));
+      return;
+    }
+
     const hasMatchingFloor = floorOptionsWithAll.some(
       (option) => option.value === floorFilter
     );
 
     if (!hasMatchingFloor) {
-      setFloorFilter(getPreferredDefaultFloorValue(floorOptions, 'All'));
+      setFloorFilter(getPreferredDefaultFloorValue(floorOptions));
     }
   }, [floorFilter, floorOptions, floorOptionsWithAll]);
 

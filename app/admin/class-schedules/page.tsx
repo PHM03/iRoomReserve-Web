@@ -87,7 +87,7 @@ export default function AdminClassSchedulesPage() {
   const searchParams = useSearchParams();
   const campusOverride = getCampusOverride(searchParams.get('campus'));
   const [scheduleSearchQuery, setScheduleSearchQuery] = useState('');
-  const [selectedFloor, setSelectedFloor] = useState('Ground Floor');
+  const [selectedFloor, setSelectedFloor] = useState('');
   const [selectedRoom, setSelectedRoom] = useState('');
   const [clearButtonPressed, setClearButtonPressed] = useState(false);
   const [lastActiveBuildingId, setLastActiveBuildingId] = useState('');
@@ -137,6 +137,20 @@ export default function AdminClassSchedulesPage() {
     setSelectedFloor(getPreferredDefaultFloorValue(availableFloors));
     setSelectedRoom('');
   }
+
+  useEffect(() => {
+    if (availableFloors.length === 0) {
+      return;
+    }
+
+    const hasMatchingFloor = availableFloors.some(
+      (option) => option.value === selectedFloor
+    );
+
+    if (!selectedFloor || !hasMatchingFloor) {
+      setSelectedFloor(getPreferredDefaultFloorValue(availableFloors));
+    }
+  }, [availableFloors, selectedFloor]);
 
   logFirstScheduleObject(schedules[0]);
 

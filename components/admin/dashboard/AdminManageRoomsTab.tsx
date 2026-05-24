@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
-import { getBuildingFloorOptions, getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
+import {
+    getBuildingFloorOptions,
+    getFloorDisplayLabel,
+    getPreferredDefaultFloorValue,
+} from '@/lib/buildings/floorLabels';
 import {
     addRoom,
     deleteRoom,
@@ -29,7 +33,6 @@ interface BuildingOption {
     name: string;
 }
 
-const DEFAULT_ROOM_FLOOR_FILTER = 'Ground Floor';
 const EMPTY_ROOM_COUNTS: RoomCountSummary = {
   floors: [],
   total: 0
@@ -143,7 +146,7 @@ export default function AdminManageRoomsTab({
     const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
 
     const [roomSearch, setRoomSearch] = useState('');
-    const [roomFloorFilter, setRoomFloorFilter] = useState(DEFAULT_ROOM_FLOOR_FILTER);
+    const [roomFloorFilter, setRoomFloorFilter] = useState('');
     const [rooms, setRooms] = useState<Room[]>([]);
     const [roomCounts, setRoomCounts] = useState<RoomCountSummary>(EMPTY_ROOM_COUNTS);
     const [roomsLoading, setRoomsLoading] = useState(true);
@@ -181,11 +184,11 @@ export default function AdminManageRoomsTab({
     );
 
     useEffect(() => {
-        setRoomFloorFilter(DEFAULT_ROOM_FLOOR_FILTER);
+        setRoomFloorFilter(getPreferredDefaultFloorValue(floorOptions));
         setRoomSearch('');
         setRooms([]);
         setRoomCounts(EMPTY_ROOM_COUNTS);
-    }, [buildingId]);
+    }, [buildingId, floorOptions]);
 
     useEffect(() => {
         let cancelled = false;

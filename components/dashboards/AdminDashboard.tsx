@@ -384,7 +384,12 @@ export default function AdminDashboard({
       )}
 
       {activeTab === 'inbox' && (
-        <AdminInboxTab />
+        <AdminInboxTab
+          activeBuildingLabel={activeBuildingLabel}
+          buildingId={buildingId}
+          managedBuildings={managedBuildings}
+          onBuildingChange={setSelectedBuildingId}
+        />
       )}
     </main>
   );

@@ -112,7 +112,7 @@ export default function BleAdminMonitor({
   );
   const [refreshScheduleVersion, setRefreshScheduleVersion] = useState(0);
   const [isHistoryCleared, setIsHistoryCleared] = useState(false);
-  const [floorFilter, setFloorFilter] = useState('Ground Floor');
+  const [floorFilter, setFloorFilter] = useState('');
 
   const beaconRooms = getBeaconConfiguredRooms(rooms);
   const floorOptions = useMemo(
@@ -140,12 +140,21 @@ export default function BleAdminMonitor({
   const hardwareOnline = isBeaconHardwareOnline(occupancyData.timestamp);
 
   useEffect(() => {
+    if (floorOptions.length === 0) {
+      return;
+    }
+
+    if (floorFilter === 'All' || !floorFilter) {
+      setFloorFilter(getPreferredDefaultFloorValue(floorOptions));
+      return;
+    }
+
     const hasMatchingFloor = floorOptions.some(
       (option) => option.value === floorFilter
     );
 
     if (!hasMatchingFloor) {
-      setFloorFilter(getPreferredDefaultFloorValue(floorOptions, 'All'));
+      setFloorFilter(getPreferredDefaultFloorValue(floorOptions));
     }
   }, [floorFilter, floorOptions]);
 
