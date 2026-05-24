@@ -256,63 +256,6 @@ export default function BleAdminMonitor({
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-dark/10 bg-dark/5 p-4">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/45">
-            Beacon Hardware Status
-          </p>
-          <div className="mt-3">
-            <BleStatusBadge
-              status={hardwareOnline ? 'ONLINE' : 'OFFLINE'}
-              label={hardwareOnline ? 'Beacon Online' : 'Beacon Offline'}
-            />
-          </div>
-          <dl className="mt-4 space-y-2 text-sm text-black/75">
-            <div className="flex items-start justify-between gap-4">
-              <dt className="font-bold text-black">Last seen</dt>
-              <dd className="text-right">
-                {formatBleTimestamp(occupancyData.timestamp)}
-              </dd>
-            </div>
-            <div className="flex items-start justify-between gap-4">
-              <dt className="font-bold text-black">Current event</dt>
-              <dd className="text-right">
-                {formatBleLabel(occupancyData.eventType)}
-              </dd>
-            </div>
-          </dl>
-          {!hardwareOnline ? (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-              No beacon data has been received in the last 12 minutes.
-            </div>
-          ) : null}
-        </div>
-
-        <div className="rounded-2xl border border-dark/10 bg-dark/5 p-4">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/45">
-            Live Connection Snapshot
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <BleStatusBadge
-              status={occupancyData.connectionStatus}
-              label={formatBleLabel(occupancyData.connectionStatus)}
-            />
-          </div>
-          <dl className="mt-4 space-y-2 text-sm text-black/75">
-            <div className="flex items-start justify-between gap-4">
-              <dt className="font-bold text-black">Telemetry room</dt>
-              <dd className="text-right">{telemetryRoomLabel}</dd>
-            </div>
-            <div className="flex items-start justify-between gap-4">
-              <dt className="font-bold text-black">Updated</dt>
-              <dd className="text-right">
-                {formatBleTimestamp(occupancyData.timestamp)}
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-
       <div className="mt-6">
         <div className="flex items-center justify-between gap-3">
           <h4 className="text-base font-bold text-black">
