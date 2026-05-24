@@ -376,6 +376,7 @@ export default function AdminDashboard({
           approverEmail={approverEmail}
           activeBuildingLabel={activeBuildingLabel}
           buildingId={buildingId}
+          currentUserId={firebaseUser?.uid}
           requests={requests}
           onReload={reloadDashboard}
           managedBuildings={managedBuildings}

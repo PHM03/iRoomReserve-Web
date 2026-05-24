@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import {
   approveReservation,
+  deleteReservation,
   rejectReservation,
   type Reservation,
 } from '@/lib/reservations/reservations';
@@ -20,6 +21,7 @@ interface AdminPendingTabProps {
   activeBuildingLabel: string;
   approverEmail?: string | null;
   buildingId: string;
+  currentUserId?: string | null;
   requests: Reservation[];
   managedBuildings: BuildingOption[];
   onBuildingChange: (buildingId: string) => void;
@@ -71,6 +73,25 @@ function getDayOfWeekFromDate(dateString: string) {
 
   const parsedDate = new Date(dateString);
   return Number.isNaN(parsedDate.getTime()) ? null : parsedDate.getDay();
+}
+
+function getTodayDateKey() {
+  const today = new Date();
+  return [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function isExpiredReservation(request: Reservation) {
+  const reservationDates = getReservationDates(request);
+  if (reservationDates.length === 0) {
+    return false;
+  }
+
+  const todayDateKey = getTodayDateKey();
+  return reservationDates.every((date) => date < todayDateKey);
 }
 
 function getMinutesFromTime(value: string) {
@@ -136,6 +157,7 @@ export default function AdminPendingTab({
   activeBuildingLabel,
   approverEmail,
   buildingId,
+  currentUserId,
   requests,
   managedBuildings,
   onBuildingChange,
@@ -272,6 +294,23 @@ export default function AdminPendingTab({
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!currentUserId) return;
+    setReservationActionError('');
+    setActionLoading(id);
+    try {
+      await deleteReservation(id, currentUserId);
+      await onReload();
+    } catch (error) {
+      console.warn('Failed to delete reservation:', error);
+      setReservationActionError(
+        error instanceof Error ? error.message : 'Failed to delete reservation.'
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   // ─── Filtered list ────────────────────────────────────────────────────────
   const q = searchQuery.trim().toLowerCase();
   const filteredRequests = requests.filter((r) => {
@@ -304,6 +343,12 @@ export default function AdminPendingTab({
   };
 
   const statusBadge = (status: string) => {
+    if (status === 'expired') return {
+      bg: '#f3f4f6',
+      color: '#4b5563',
+      border: '#d1d5db',
+      label: 'Expired'
+    };
     if (status === 'approved') return {
       bg: '#d1fae5',
       color: '#065f46',
@@ -758,7 +803,8 @@ export default function AdminPendingTab({
                     }}>{reservationActionError}</p>
               )}
               {filteredRequests.map((request) => {
-                const badge = statusBadge(request.status);
+                const isExpired = request.status === 'pending' && isExpiredReservation(request);
+                const badge = statusBadge(isExpired ? 'expired' : request.status);
                 const initials = request.userName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
                 const avatarBg = avatarColor(request.userName);
                 const isExpanded = expandedReservationIds.includes(request.id);
@@ -929,46 +975,81 @@ export default function AdminPendingTab({
                       paddingTop: '14px',
                       borderTop: '1px solid #f0f0f0'
                     }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openApproveConfirm(request);
-                        }}
-                        disabled={actionLoading === request.id || approveCheckLoading === request.id}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', border: 'none', background: '#8B0000', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: actionLoading === request.id || approveCheckLoading === request.id ? 0.6 : 1, transition: 'background 0.15s' }}
-                        onMouseEnter={(e) => { if (!actionLoading && !approveCheckLoading) (e.currentTarget as HTMLButtonElement).style.background = '#6e0000'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#8B0000'; }}
-                      >
-                        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
-                        {approveCheckLoading === request.id ? 'Checking...' : 'Approve'}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openConfirm('reject', request.id);
-                        }}
-                        disabled={actionLoading === request.id}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '8px 20px',
-                          borderRadius: '8px',
-                          border: '1px solid #e53935',
-                          background: 'transparent',
-                          color: '#e53935',
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          opacity: actionLoading === request.id ? 0.6 : 1,
-                          transition: 'background 0.15s'
-                        }}
-                        onMouseEnter={(e) => { if (!actionLoading) (e.currentTarget as HTMLButtonElement).style.background = '#fff0f0'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-                      >
-                        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
-                        Reject
-                      </button>
+                      {isExpired ? (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!window.confirm('Delete this expired reservation request?')) {
+                              return;
+                            }
+                            await handleDelete(request.id);
+                          }}
+                          disabled={actionLoading === request.id}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '8px 20px',
+                            borderRadius: '8px',
+                            border: '1px solid #e53935',
+                            background: 'transparent',
+                            color: '#e53935',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            opacity: actionLoading === request.id ? 0.6 : 1,
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => { if (!actionLoading) (e.currentTarget as HTMLButtonElement).style.background = '#fff0f0'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                        >
+                          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
+                          {actionLoading === request.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openApproveConfirm(request);
+                            }}
+                            disabled={actionLoading === request.id || approveCheckLoading === request.id}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', border: 'none', background: '#8B0000', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: actionLoading === request.id || approveCheckLoading === request.id ? 0.6 : 1, transition: 'background 0.15s' }}
+                            onMouseEnter={(e) => { if (!actionLoading && !approveCheckLoading) (e.currentTarget as HTMLButtonElement).style.background = '#6e0000'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#8B0000'; }}
+                          >
+                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
+                            {approveCheckLoading === request.id ? 'Checking...' : 'Approve'}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openConfirm('reject', request.id);
+                            }}
+                            disabled={actionLoading === request.id}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '8px 20px',
+                              borderRadius: '8px',
+                              border: '1px solid #e53935',
+                              background: 'transparent',
+                              color: '#e53935',
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              opacity: actionLoading === request.id ? 0.6 : 1,
+                              transition: 'background 0.15s'
+                            }}
+                            onMouseEnter={(e) => { if (!actionLoading) (e.currentTarget as HTMLButtonElement).style.background = '#fff0f0'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                          >
+                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
+                            Reject
+                          </button>
+                        </>
+                      )}
                     </div>
                       </>
                     )}
