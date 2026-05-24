@@ -42,8 +42,6 @@ function StatusBadge({ status }: Readonly<StatusBadgeProps>) {
   })();
 }
 
-type AvailabilityFilter = 'Available' | 'Unavailable';
-
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -301,7 +299,6 @@ export default function AdminRoomStatusSection({
 }: Readonly<AdminRoomStatusSectionProps>) {
   const [search, setSearch] = useState('');
   const [floorFilter, setFloorFilter] = useState<string>('');
-  const [availFilter, setAvailFilter] = useState<AvailabilityFilter>('Available');
   const [expandedRoomId, setExpandedRoomId] = useState<string | null>(null);
 
   // Unique floors for filter
@@ -368,13 +365,9 @@ export default function AdminRoomStatusSection({
     return rooms.filter((room) => {
       if (q && !room.name.toLowerCase().includes(q)) return false;
       if (floorFilter !== 'All' && room.floor !== floorFilter) return false;
-      const effective = computeEffectiveStatus(room);
-      const isAvail = effective.status === 'Available';
-      if (availFilter === 'Available' && !isAvail) return false;
-      if (availFilter === 'Unavailable' && isAvail) return false;
       return true;
     });
-  }, [rooms, search, floorFilter, availFilter, computeEffectiveStatus]);
+  }, [rooms, search, floorFilter]);
 
   if (rooms.length === 0) {
     return (
@@ -417,26 +410,6 @@ export default function AdminRoomStatusSection({
             value={floorFilter}
             onChange={setFloorFilter}
           />
-
-          {/* Availability filter */}
-          <div className="flex items-center gap-1">
-            {(['Available', 'Unavailable'] as AvailabilityFilter[]).map((a) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => setAvailFilter(a)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
-                  availFilter === a
-                    ? a === 'Available'
-                      ? 'bg-emerald-600 text-white border-emerald-600'
-                      : 'bg-red-600 text-white border-red-600'
-                    : 'bg-white/70 text-black/60 border-dark/10 hover:bg-white hover:text-black'
-                }`}
-              >
-                {a}
-              </button>
-            ))}
-          </div>
 
           <span className="text-[11px] font-bold text-black/40 ml-auto whitespace-nowrap">
             {filteredRooms.length} of {rooms.length} rooms
