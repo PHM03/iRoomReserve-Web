@@ -94,6 +94,16 @@ export default function AdminLayout({ children }: Readonly<AdminLayoutProps>) {
     router,
   ]);
 
+  useEffect(() => {
+    const pathTitles: Record<string, string> = {
+      '/admin/room-status': 'iRoomReserve | Room Status Monitor',
+      '/admin/ble-status': 'iRoomReserve | BLE Beacon Status',
+      '/admin/class-schedules': 'iRoomReserve | Class Schedules',
+    };
+
+    document.title = pathTitles[pathname] ?? 'iRoomReserve | Admin';
+  }, [pathname]);
+
   if (loading || !firebaseUser || !canRenderAdminLayout) {
     return <LoadingState />;
   }
