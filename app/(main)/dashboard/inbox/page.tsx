@@ -376,6 +376,15 @@ function UserInbox({
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const searchParams = useSearchParams();
   const targetReservationId = searchParams.get('reservationId');
+  const requestedTab = searchParams.get('tab');
+  const initialTab =
+    requestedTab === 'reservationUpdates' ||
+    requestedTab === 'unread' ||
+    requestedTab === 'read' ||
+    requestedTab === 'sent' ||
+    requestedTab === 'closed'
+      ? requestedTab
+      : undefined;
 
   useEffect(() => {
     if (!uid) return;
@@ -432,6 +441,7 @@ function UserInbox({
       )}
 
       <MessagesSection
+        initialTab={initialTab}
         notifications={notifications}
         showComposeButton={false}
       />

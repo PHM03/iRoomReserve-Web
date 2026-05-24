@@ -283,19 +283,36 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   };
 
   const handleNotificationClick = async (notification: Notification) => {
-    const isPending = notification.type === 'new_reservation'
+    const isPending = notification.type === 'new_reservation';
 
     if (!isPending) {
       await markNotificationRead(notification.id);
     }
     setShowNotifications(false);
 
-    if (notification.reservationId) {
-      router.push(`/dashboard/inbox?reservationId=${encodeURIComponent(notification.reservationId)}`);
+    if ((isAdmin || isBuildingAdmin) && onTabChange) {
+      onTabChange(isPending ? 'pending' : 'inbox');
+      router.push(`/dashboard?tab=${isPending ? 'pending' : 'inbox'}`);
       return;
     }
 
-    router.push('/dashboard/inbox');
+    if (notification.reservationId) {
+      if (isPending) {
+        router.push(
+          `/dashboard/inbox?reservationId=${encodeURIComponent(notification.reservationId)}`
+        );
+        return;
+      }
+
+      router.push(
+        `/dashboard/inbox?tab=reservationUpdates&reservationId=${encodeURIComponent(
+          notification.reservationId
+        )}`
+      );
+      return;
+    }
+
+    router.push(isPending ? '/dashboard/inbox' : '/dashboard/inbox?tab=reservationUpdates');
   };
 
   return (

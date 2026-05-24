@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import NavBar from '@/components/layout/NavBar';
 import { useAdminTab } from '@/context/AdminTabContext';
@@ -16,7 +16,9 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
   const { firebaseUser, profile, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { activeTab, setActiveTab } = useAdminTab();
+  const requestedTab = searchParams.get('tab');
 
   // Redirect to login if not authenticated, or to superadmin dashboard if Super Admin
   useEffect(() => {
@@ -27,6 +29,24 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
       router.push('/superadmin/dashboard');
     }
   }, [loading, firebaseUser, profile, router]);
+
+  useEffect(() => {
+    if (pathname !== '/dashboard') {
+      return;
+    }
+
+    if (
+      requestedTab === 'dashboard' ||
+      requestedTab === 'pending' ||
+      requestedTab === 'manage-rooms' ||
+      requestedTab === 'feedback' ||
+      requestedTab === 'reservation-history' ||
+      requestedTab === 'inbox' ||
+      requestedTab === 'status-scheduling'
+    ) {
+      setActiveTab(requestedTab);
+    }
+  }, [pathname, requestedTab, setActiveTab]);
 
   useEffect(() => {
     const tabTitles: Record<string, string> = {
@@ -52,11 +72,21 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
       "/dashboard/room-status": "room-status",
       "/dashboard/ble-beacon": "ble-beacon-status",
     };
+    const dashboardTab =
+      requestedTab === 'dashboard' ||
+      requestedTab === 'pending' ||
+      requestedTab === 'manage-rooms' ||
+      requestedTab === 'feedback' ||
+      requestedTab === 'reservation-history' ||
+      requestedTab === 'inbox' ||
+      requestedTab === 'status-scheduling'
+        ? requestedTab
+        : activeTab;
     const currentTab =
-      pathname === "/dashboard" ? activeTab : pathToTab[pathname];
+      pathname === "/dashboard" ? dashboardTab : pathToTab[pathname];
     document.title =
       tabTitles[currentTab ?? ""] ?? "iRoomReserve | Dashboard";
-  }, [activeTab, pathname]);
+  }, [activeTab, pathname, requestedTab]);
 
   // Show loading while auth resolves
   if (loading || !firebaseUser) {

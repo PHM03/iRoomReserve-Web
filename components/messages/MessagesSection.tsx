@@ -127,6 +127,7 @@ interface MessagesSectionProps {
   registerComposeOpener?: (openCompose: () => void) => void;
   showComposeButton?: boolean;
   showReservationUpdates?: boolean;
+  initialTab?: InboxTab;
   subtitle?: string;
   title?: string;
 }
@@ -375,7 +376,15 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
     props.showReservationUpdates ?? props.notifications !== undefined;
   const isStaff = profile ? isStaffRole(profile.role) : false;
 
-  const [activeTab, setActiveTab] = useState<InboxTab>('unread');
+  const [activeTab, setActiveTab] = useState<InboxTab>(props.initialTab ?? 'unread');
+
+  useEffect(() => {
+    if (!props.initialTab) {
+      return;
+    }
+
+    setActiveTab(props.initialTab);
+  }, [props.initialTab]);
 
   // localStorage keys for "last seen" counts on Sent / Closed tabs.
   const lsKeySent = firebaseUser ? `msg_lastSeenSent_${firebaseUser.uid}` : '';
