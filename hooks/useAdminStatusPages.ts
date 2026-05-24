@@ -528,6 +528,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     campus: managedCampus ?? null,
     selectedBuildingId: effectiveManagedBuildingId,
     setSelectedBuildingId,
+    allReservations,
     rooms,
     schedules,
     showScheduleForm,

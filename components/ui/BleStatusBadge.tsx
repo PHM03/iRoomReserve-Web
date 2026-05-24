@@ -36,6 +36,12 @@ function getBleBadgeTheme(status: string) {
         containerClassName: 'border-blue-500/25 bg-blue-500/10 text-blue-700',
         dotClassName: 'bg-blue-500',
       };
+    case 'VACANT':
+      return {
+        containerClassName:
+          'border-dark/15 bg-dark/5 text-black/70',
+        dotClassName: 'bg-dark/45',
+      };
     default:
       return {
         containerClassName:

@@ -20,10 +20,16 @@ import {
 } from '@/lib/occupancy/occupancy';
 import { fetchOccupancySnapshot } from '@/lib/occupancy/occupancyClient';
 import { type Room } from '@/lib/rooms/rooms';
+import { type Reservation } from '@/lib/reservations/reservations';
+import { isReservationActiveTimeSlot } from '@/lib/rooms/roomStatus';
 
 interface BleAdminMonitorProps {
   buildingName?: string;
-  rooms: Pick<Room, 'id' | 'name' | 'beaconId' | 'bleBeaconId'>[];
+  reservations: Reservation[];
+  rooms: Pick<
+    Room,
+    'id' | 'name' | 'floor' | 'beaconId' | 'bleBeaconId'
+  >[];
   className?: string;
   pollIntervalMs?: number;
 }
@@ -58,8 +64,34 @@ function formatRefreshCountdown(milliseconds: number) {
   return `${minutes}:${seconds}`;
 }
 
+function getReservationStatus(
+  roomId: string,
+  reservations: Reservation[],
+  connectionStatus: string
+) {
+  const hasOngoingReservation = reservations.some(
+    (reservation) =>
+      reservation.roomId === roomId && isReservationActiveTimeSlot(reservation)
+  );
+
+  if (!hasOngoingReservation) {
+    return {
+      label: 'Vacant',
+      status: 'VACANT',
+    } as const;
+  }
+
+  const normalizedConnectionStatus = connectionStatus.trim().toUpperCase();
+  return {
+    label: normalizedConnectionStatus === 'CONNECTED' ? 'Connected' : 'Disconnected',
+    status:
+      normalizedConnectionStatus === 'CONNECTED' ? 'CONNECTED' : 'DISCONNECTED',
+  } as const;
+}
+
 export default function BleAdminMonitor({
   buildingName,
+  reservations,
   rooms,
   className = '',
   pollIntervalMs = BLE_MONITOR_REFRESH_INTERVAL_MS,
@@ -175,16 +207,6 @@ export default function BleAdminMonitor({
   return (
     <section className={`glass-card p-5 ${className}`.trim()}>
       <div className="flex flex-col gap-4 border-b border-dark/10 pb-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="bg-white rounded-xl px-6 py-4 border border-white/30">
-          <h3 className="text-lg font-bold text-gray-800">BLE Beacon Status</h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Live ESP32 beacon telemetry for{' '}
-            <span className="font-bold ui-text-teal">
-              {buildingName ?? 'the active building'}
-            </span>
-            . Auto-refreshes every 10 minutes.
-          </p>
-        </div>
 
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
           <div className="text-xs text-black/70 space-y-1">
@@ -275,9 +297,6 @@ export default function BleAdminMonitor({
               status={occupancyData.connectionStatus}
               label={formatBleLabel(occupancyData.connectionStatus)}
             />
-            <span className="rounded-full border border-dark/10 bg-white/70 px-3 py-1 text-xs font-bold text-black">
-              Occupancy: {occupancyData.occupancy}
-            </span>
           </div>
           <dl className="mt-4 space-y-2 text-sm text-black/75">
             <div className="flex items-start justify-between gap-4">
@@ -315,31 +334,46 @@ export default function BleAdminMonitor({
               <thead className="bg-dark/5 text-xs uppercase tracking-[0.16em] text-black/55">
                 <tr>
                   <th className="px-4 py-3">Room</th>
+                  <th className="px-4 py-3">Floor</th>
                   <th className="px-4 py-3">Beacon ID</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Occupancy</th>
+                  <th className="px-4 py-3">Reservation Status</th>
                   <th className="px-4 py-3">Last Update</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-dark/10 bg-white/60 text-sm text-black">
-                {beaconRooms.map((room) => (
-                  <tr key={room.id}>
-                    <td className="px-4 py-3 font-bold">{room.name}</td>
-                    <td className="px-4 py-3">
-                      {getRoomBleBeaconId(room) ?? 'Not configured'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <BleStatusBadge
-                        status={occupancyData.connectionStatus}
-                        label={formatBleLabel(occupancyData.connectionStatus)}
-                      />
-                    </td>
-                    <td className="px-4 py-3">{occupancyData.occupancy}</td>
-                    <td className="px-4 py-3">
-                      {formatBleTimestamp(occupancyData.timestamp)}
-                    </td>
-                  </tr>
-                ))}
+                {beaconRooms.map((room) => {
+                  const reservationStatus = getReservationStatus(
+                    room.id,
+                    reservations,
+                    occupancyData.connectionStatus
+                  );
+
+                  return (
+                    <tr key={room.id}>
+                      <td className="px-4 py-3 font-bold">{room.name}</td>
+                      <td className="px-4 py-3">{room.floor}</td>
+                      <td className="px-4 py-3">
+                        {getRoomBleBeaconId(room) ?? 'Not configured'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <BleStatusBadge
+                          status={hardwareOnline ? 'ONLINE' : 'OFFLINE'}
+                          label={hardwareOnline ? 'Online' : 'Offline'}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <BleStatusBadge
+                          status={reservationStatus.status}
+                          label={reservationStatus.label}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        {formatBleTimestamp(occupancyData.timestamp)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -373,7 +407,6 @@ export default function BleAdminMonitor({
                   <th className="px-4 py-3">Time</th>
                   <th className="px-4 py-3">Event Type</th>
                   <th className="px-4 py-3">Connection Status</th>
-                  <th className="px-4 py-3">Occupancy</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-dark/10 bg-white/60 text-sm text-black">
@@ -400,7 +433,6 @@ export default function BleAdminMonitor({
                           label={formatBleLabel(entry.connectionStatus)}
                         />
                       </td>
-                      <td className="px-4 py-3">{entry.occupancy}</td>
                     </tr>
                   );
                 })}

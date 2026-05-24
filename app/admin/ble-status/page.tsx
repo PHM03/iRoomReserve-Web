@@ -12,6 +12,7 @@ export default function AdminBleStatusPage() {
     buildingName,
     activeBuildingLabel,
     setSelectedBuildingId,
+    allReservations,
     rooms,
   } = useAdminStatusPages();
 
@@ -37,7 +38,11 @@ export default function AdminBleStatusPage() {
             integratedBuildingField
           />
 
-          <BleAdminMonitor buildingName={buildingName} rooms={rooms} />
+          <BleAdminMonitor
+            buildingName={buildingName}
+            reservations={allReservations}
+            rooms={rooms}
+          />
         </div>
       )}
     </main>

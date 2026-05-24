@@ -5,6 +5,7 @@ import BleAdminMonitor from '@/components/ble/BleAdminMonitor';
 import { useAuth } from '@/context/AuthContext';
 import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
 import { onRoomsByBuilding, Room } from '@/lib/rooms/rooms';
+import { onReservationsByBuilding, Reservation } from '@/lib/reservations/reservations';
 
 export default function BleBeaconPage() {
   const { firebaseUser, profile } = useAuth();
@@ -27,9 +28,12 @@ export default function BleBeaconPage() {
   const buildingName = selectedManagedBuilding?.name;
 
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
 
   useEffect(() => {
     if (!buildingId || !uid) {
+      setRooms([]);
+      setReservations([]);
       return;
     }
 
@@ -39,10 +43,18 @@ export default function BleBeaconPage() {
       if (cancelled) return;
       setRooms(nextRooms);
     });
+    const unsubscribeReservations = onReservationsByBuilding(
+      buildingId,
+      (nextReservations) => {
+        if (cancelled) return;
+        setReservations(nextReservations);
+      }
+    );
 
     return () => {
       cancelled = true;
       unsubscribeRooms();
+      unsubscribeReservations();
     };
   }, [buildingId, uid]);
 
@@ -92,7 +104,11 @@ export default function BleBeaconPage() {
         )}
       </div>
 
-      <BleAdminMonitor buildingName={buildingName} rooms={rooms} />
+      <BleAdminMonitor
+        buildingName={buildingName}
+        reservations={reservations}
+        rooms={rooms}
+      />
     </main>
   );
 }
