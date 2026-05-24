@@ -12,16 +12,15 @@ import { getCampusTimeRule, validateScheduleTimes } from '@/lib/schedules/schedu
 // TimeSelect - a minimal hour picker locked to whole-hour intervals
 // ---------------------------------------------------------------------------
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
-const MINUTES = [0];
 
 function pad2(n: number) {
   return String(n).padStart(2, '0');
 }
 
-function formatHour12(h: number) {
+function formatHourOption(h: number) {
   const period = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
-  return `${pad2(h12)} ${period}`;
+  return `${h12}:00 ${period}`;
 }
 
 function TimeSelect({
@@ -29,49 +28,43 @@ function TimeSelect({
   onChange,
   minHour = 0,
   maxHour = 23,
+  disabled = false,
+  placeholder = 'Select time',
   className = '',
 }: {
   value: string;
   onChange: (value: string) => void;
   minHour?: number;
   maxHour?: number;
+  disabled?: boolean;
+  placeholder?: string;
   className?: string;
 }) {
-  const [rawHour, rawMin] = value ? value.split(':') : ['07', '00'];
-  const hour = Number(rawHour ?? 7);
-  // Snap stored minute to nearest allowed value
-  const minute = MINUTES.includes(Number(rawMin)) ? Number(rawMin) : 0;
+  const [rawHour] = value ? value.split(':') : [''];
+  const hour = rawHour === '' ? '' : String(Number(rawHour));
   const allowedHours = HOURS.filter((h) => h >= minHour && h <= maxHour);
 
   function handleHour(e: React.ChangeEvent<HTMLSelectElement>) {
-    onChange(`${pad2(Number(e.target.value))}:${pad2(minute)}`);
-  }
+    if (!e.target.value) {
+      onChange('');
+      return;
+    }
 
-  function handleMinute(e: React.ChangeEvent<HTMLSelectElement>) {
-    onChange(`${pad2(hour)}:${pad2(Number(e.target.value))}`);
+    onChange(`${pad2(Number(e.target.value))}:00`);
   }
 
   return (
-    <div className={`flex gap-1 ${className}`}>
+    <div className={className}>
       <select
         value={hour}
         onChange={handleHour}
-        className="glass-input flex-1 px-2 py-2.5 text-sm"
+        disabled={disabled}
+        className="glass-input w-full px-2 py-2.5 text-sm"
       >
+        <option value="">{placeholder}</option>
         {allowedHours.map((h) => (
           <option key={h} value={h}>
-            {formatHour12(h)}
-          </option>
-        ))}
-      </select>
-      <select
-        value={minute}
-        onChange={handleMinute}
-        className="glass-input w-[4.5rem] px-2 py-2.5 text-sm"
-      >
-        {MINUTES.map((m) => (
-          <option key={m} value={m}>
-            {pad2(m)}
+            {formatHourOption(h)}
           </option>
         ))}
       </select>
@@ -170,10 +163,27 @@ export default function AdminClassSchedulesSection({
   const campusTimeRule = getCampusTimeRule(campus);
   const minHour = campusTimeRule?.startHour ?? 0;
   const maxHour = campusTimeRule?.endHour ?? 23;
+  const startMaxHour = Math.max(minHour, maxHour - 1);
+  const selectedStartHour = schedStart ? Number(schedStart.split(':')[0]) : null;
+  const endMinHour =
+    selectedStartHour === null ? minHour : Math.min(selectedStartHour + 1, maxHour);
+  const isEndTimeDisabled = !schedStart || endMinHour > maxHour;
 
   function handleStartChange(value: string) {
     setTimeError(null);
     onSchedStartChange(value);
+
+    if (!value) {
+      onSchedEndChange('');
+      return;
+    }
+
+    if (
+      schedEnd &&
+      validateScheduleTimes(value, schedEnd, campus)
+    ) {
+      onSchedEndChange('');
+    }
   }
 
   function handleEndChange(value: string) {
@@ -285,7 +295,8 @@ export default function AdminClassSchedulesSection({
                 value={schedStart}
                 onChange={handleStartChange}
                 minHour={minHour}
-                maxHour={maxHour}
+                maxHour={startMaxHour}
+                placeholder="Select start time"
                 className="w-full"
               />
             </div>
@@ -296,8 +307,10 @@ export default function AdminClassSchedulesSection({
               <TimeSelect
                 value={schedEnd}
                 onChange={handleEndChange}
-                minHour={minHour}
+                minHour={endMinHour}
                 maxHour={maxHour}
+                disabled={isEndTimeDisabled}
+                placeholder={schedStart ? 'Select end time' : 'Choose start time first'}
                 className="w-full"
               />
             </div>

@@ -7,6 +7,7 @@ import {
   roomInputSchema,
   scheduleInputSchema,
 } from '../lib/server/schemas';
+import { validateScheduleTimes } from '../lib/schedules/scheduleTimeRules';
 
 const approvalDocument = {
   approvalDocumentMimeType: 'application/pdf',
@@ -241,5 +242,14 @@ describe('server schemas', () => {
         createdBy: 'admin-1',
       }).success
     ).toBe(true);
+  });
+
+  it('rejects schedules whose end time is not later than the start time', () => {
+    expect(validateScheduleTimes('10:00', '09:00', 'main')).toBe(
+      'End time must be later than start time.'
+    );
+    expect(validateScheduleTimes('10:00', '10:00', 'main')).toBe(
+      'End time must be later than start time.'
+    );
   });
 });

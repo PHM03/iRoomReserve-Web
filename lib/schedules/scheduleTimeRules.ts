@@ -65,6 +65,10 @@ export function validateScheduleTimes(
   endTime: string,
   campus: string | null | undefined
 ): string | null {
+  if (timeToMinutes(endTime) <= timeToMinutes(startTime)) {
+    return "End time must be later than start time.";
+  }
+
   const rule = getCampusTimeRule(campus);
   if (!rule) return null; // no rule = no restriction
 
