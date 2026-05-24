@@ -1,8 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import BleStatusBadge from '@/components/ui/BleStatusBadge';
+import {
+  getPreferredDefaultFloorValue,
+  sortFloorOptions,
+} from '@/lib/buildings/floorLabels';
 import { formatClockTime } from '@/lib/utils/dateTime';
 import {
   BLE_MONITOR_REFRESH_INTERVAL_MS,
@@ -11,7 +16,6 @@ import {
   getBeaconConfiguredRooms,
   getBleHistoryTone,
   getRoomBleBeaconId,
-  getTelemetryRoomLabel,
   isBeaconHardwareOnline,
 } from '@/lib/occupancy/bleMonitor';
 import {
@@ -90,7 +94,6 @@ function getReservationStatus(
 }
 
 export default function BleAdminMonitor({
-  buildingName,
   reservations,
   rooms,
   className = '',
@@ -109,10 +112,42 @@ export default function BleAdminMonitor({
   );
   const [refreshScheduleVersion, setRefreshScheduleVersion] = useState(0);
   const [isHistoryCleared, setIsHistoryCleared] = useState(false);
+  const [floorFilter, setFloorFilter] = useState('Ground Floor');
 
   const beaconRooms = getBeaconConfiguredRooms(rooms);
-  const telemetryRoomLabel = getTelemetryRoomLabel(beaconRooms);
+  const floorOptions = useMemo(
+    () =>
+      [
+        ...sortFloorOptions(
+          Array.from(new Set(beaconRooms.map((room) => room.floor)))
+            .filter(Boolean)
+            .map((floor) => ({
+              value: floor,
+              label: floor,
+            }))
+        ),
+        { value: 'All', label: 'All' },
+      ],
+    [beaconRooms]
+  );
+  const filteredBeaconRooms = useMemo(
+    () =>
+      floorFilter === 'All'
+        ? beaconRooms
+        : beaconRooms.filter((room) => room.floor === floorFilter),
+    [beaconRooms, floorFilter]
+  );
   const hardwareOnline = isBeaconHardwareOnline(occupancyData.timestamp);
+
+  useEffect(() => {
+    const hasMatchingFloor = floorOptions.some(
+      (option) => option.value === floorFilter
+    );
+
+    if (!hasMatchingFloor) {
+      setFloorFilter(getPreferredDefaultFloorValue(floorOptions, 'All'));
+    }
+  }, [floorFilter, floorOptions]);
 
   const refreshMonitor = useCallback(
     async (mode: 'initial' | 'manual' | 'background' = 'initial') => {
@@ -207,7 +242,6 @@ export default function BleAdminMonitor({
   return (
     <section className={`glass-card p-5 ${className}`.trim()}>
       <div className="flex flex-col gap-4 border-b border-dark/10 pb-5 lg:flex-row lg:items-start lg:justify-between">
-
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
           <div className="text-xs text-black/70 space-y-1">
             <p>Last refreshed: {formatRefreshTime(lastRefreshedAt)}</p>
@@ -234,6 +268,15 @@ export default function BleAdminMonitor({
             </button>
           </div>
         </div>
+
+        <AdminFloorFilter
+          label="Filter by Floor:"
+          options={floorOptions}
+          value={floorFilter}
+          onChange={setFloorFilter}
+          disabled={beaconRooms.length === 0}
+          className="lg:justify-end"
+        />
       </div>
 
       {isLoading ? (
@@ -257,12 +300,10 @@ export default function BleAdminMonitor({
       ) : null}
 
       <div className="mt-6">
-        <div className="flex items-center justify-between gap-3">
-          <h4 className="text-base font-bold text-black">
-            Live Connection Status
-          </h4>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h4 className="text-base font-bold text-black">Live Connection Status</h4>
           <span className="text-xs text-black/60">
-            {beaconRooms.length} beacon room
+            {filteredBeaconRooms.length} of {beaconRooms.length} beacon room
             {beaconRooms.length === 1 ? '' : 's'}
           </span>
         </div>
@@ -270,6 +311,10 @@ export default function BleAdminMonitor({
         {beaconRooms.length === 0 ? (
           <div className="mt-3 rounded-xl border border-dark/10 bg-dark/5 p-6 text-center text-sm text-black/75">
             No rooms have a BLE beacon ID configured yet.
+          </div>
+        ) : filteredBeaconRooms.length === 0 ? (
+          <div className="mt-3 rounded-xl border border-dark/10 bg-dark/5 p-6 text-center text-sm text-black/75">
+            No beacon rooms match the selected floor.
           </div>
         ) : (
           <div className="mt-3 overflow-x-auto rounded-2xl border border-dark/10">
@@ -285,7 +330,7 @@ export default function BleAdminMonitor({
                 </tr>
               </thead>
               <tbody className="divide-y divide-dark/10 bg-white/60 text-sm text-black">
-                {beaconRooms.map((room) => {
+                {filteredBeaconRooms.map((room) => {
                   const reservationStatus = getReservationStatus(
                     room.id,
                     reservations,

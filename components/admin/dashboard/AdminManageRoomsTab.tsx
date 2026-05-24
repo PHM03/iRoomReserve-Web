@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import { getBuildingFloorOptions, getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
 import {
     addRoom,
@@ -164,9 +165,7 @@ export default function AdminManageRoomsTab({
     const [roomLoadError, setRoomLoadError] = useState('');
     const [roomReloadKey, setRoomReloadKey] = useState(0);
     const [isBuildingSwitcherOpen, setIsBuildingSwitcherOpen] = useState(false);
-    const [isFloorFilterOpen, setIsFloorFilterOpen] = useState(false);
     const buildingSwitcherRef = useRef<HTMLDivElement | null>(null);
-    const floorFilterRef = useRef<HTMLDivElement | null>(null);
 
     const floorOptions = useMemo(
         () =>
@@ -181,13 +180,6 @@ export default function AdminManageRoomsTab({
         () => sortFloors(floorOptions.map((floorOption) => floorOption.value)),
         [floorOptions]
     );
-    const activeRoomFloorFilterLabel =
-        roomFloorFilter === 'all'
-            ? 'All'
-        : getFloorDisplayLabel(roomFloorFilter, {
-          id: buildingId,
-          name: buildingName
-        });
     const hasAnyRooms = roomCounts.total > 0;
     const filteredRooms = useMemo(
         () =>
@@ -210,16 +202,11 @@ export default function AdminManageRoomsTab({
             if (!buildingSwitcherRef.current?.contains(event.target as Node)) {
                 setIsBuildingSwitcherOpen(false);
             }
-
-            if (!floorFilterRef.current?.contains(event.target as Node)) {
-                setIsFloorFilterOpen(false);
-            }
         };
 
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 setIsBuildingSwitcherOpen(false);
-                setIsFloorFilterOpen(false);
             }
         };
 
@@ -497,75 +484,16 @@ export default function AdminManageRoomsTab({
                     </div>
 
                     <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
-                        <label htmlFor="admin-room-floor-filter" className="shrink-0 text-sm font-bold text-gray-700">
-                            Filter by Floor:
-                        </label>
-                        <div ref={floorFilterRef} className="relative">
-                            <button
-                                type="button"
-                                id="admin-room-floor-filter"
-                                onClick={() => setIsFloorFilterOpen((current) => !current)}
-                                className="flex min-w-44 items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/30"
-                                aria-haspopup="listbox"
-                                aria-expanded={isFloorFilterOpen}
-                            >
-                                <span>{activeRoomFloorFilterLabel}</span>
-                                <ChevronDownIcon
-                                    className={`h-4 w-4 text-[#a12124] transition-transform ${isFloorFilterOpen ? 'rotate-180' : ''}`}
-                                />
-                            </button>
-
-                            {isFloorFilterOpen && (
-                                <div
-                                    className="absolute right-0 z-50 mt-2 min-w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-lg"
-                                    role="listbox"
-                                    aria-labelledby="admin-room-floor-filter"
-                                >
-                                    {[...roomFloorOptions, 'all'].map((floor, index, options) => {
-                                        const isAllOption = floor === 'all';
-                                        const isSelected = roomFloorFilter === floor;
-                                        const optionLabel = isAllOption
-                                            ? 'All'
-                                          : getFloorDisplayLabel(floor, {
-                                            id: buildingId,
-                                            name: buildingName
-                                          });
-                                        const roundedClass =
-                                            index === 0
-                                                ? 'rounded-t-2xl'
-                                                : index === options.length - 1
-                                                    ? 'rounded-b-2xl'
-                                                    : '';
-
-                                        return (
-                                            <div
-                                                key={floor}
-                                                role="option"
-                                                tabIndex={0}
-                                                aria-selected={isSelected}
-                                                onClick={() => {
-                                                    setRoomFloorFilter(floor);
-                                                    setIsFloorFilterOpen(false);
-                                                }}
-                                                onKeyDown={(event) => {
-                                                    if (event.key === 'Enter' || event.key === ' ') {
-                                                        event.preventDefault();
-                                                        setRoomFloorFilter(floor);
-                                                        setIsFloorFilterOpen(false);
-                                                    }
-                                                }}
-                                                className={`cursor-pointer px-4 py-2.5 text-sm transition-colors hover:bg-[#a12124]/5 hover:text-[#a12124] ${isSelected
-                                                        ? 'bg-[#a12124]/10 font-bold text-[#a12124]'
-                                                        : 'font-medium text-gray-700'
-                                                    } ${roundedClass}`}
-                                            >
-                                                {optionLabel}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
+                        <AdminFloorFilter
+                            label="Filter by Floor:"
+                            options={[
+                                ...floorOptions,
+                                { value: 'all', label: 'All' },
+                            ]}
+                            value={roomFloorFilter}
+                            onChange={setRoomFloorFilter}
+                            menuAlign="right"
+                        />
                     </div>
                 </div>
             )}

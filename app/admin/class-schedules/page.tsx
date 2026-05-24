@@ -1,10 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import AdminClassSchedulesSection from '@/components/admin/AdminClassSchedulesSection';
-import { getBuildingFloorOptions } from '@/lib/buildings/floorLabels';
+import {
+  getBuildingFloorOptions,
+  getPreferredDefaultFloorValue,
+} from '@/lib/buildings/floorLabels';
 import AdminNoBuildingAssigned from '@/components/admin/AdminNoBuildingAssigned';
 import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import { useAdminStatusPages } from '@/hooks/useAdminStatusPages';
@@ -83,7 +87,7 @@ export default function AdminClassSchedulesPage() {
   const searchParams = useSearchParams();
   const campusOverride = getCampusOverride(searchParams.get('campus'));
   const [scheduleSearchQuery, setScheduleSearchQuery] = useState('');
-  const [selectedFloor, setSelectedFloor] = useState('');
+  const [selectedFloor, setSelectedFloor] = useState('Ground Floor');
   const [selectedRoom, setSelectedRoom] = useState('');
   const [clearButtonPressed, setClearButtonPressed] = useState(false);
   const [lastActiveBuildingId, setLastActiveBuildingId] = useState('');
@@ -122,10 +126,15 @@ export default function AdminClassSchedulesPage() {
     selectedScheduleRoom: selectedRoom,
   });
 
+  const availableFloors = getBuildingFloorOptions({
+    id: buildingId,
+    name: buildingName
+  });
+
   // Reset floor/room selections when the active building changes.
   if (buildingId && buildingId !== lastActiveBuildingId) {
     setLastActiveBuildingId(buildingId);
-    setSelectedFloor('');
+    setSelectedFloor(getPreferredDefaultFloorValue(availableFloors));
     setSelectedRoom('');
   }
 
@@ -141,10 +150,6 @@ export default function AdminClassSchedulesPage() {
     });
   }
   const hasActiveScheduleFilters = Boolean(selectedRoom || selectedFloor);
-  const availableFloors = getBuildingFloorOptions({
-    id: buildingId,
-    name: buildingName
-  });
   const selectedFloorRooms = useMemo(
     () =>
       selectedFloor
@@ -167,6 +172,14 @@ export default function AdminClassSchedulesPage() {
       ),
     ].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
   }, [selectedFloor, selectedFloorRooms]);
+  const roomOptions = useMemo(
+    () =>
+      availableRooms.map((room) => ({
+        value: room,
+        label: room,
+      })),
+    [availableRooms]
+  );
   const selectedRoomIds = useMemo(
     () =>
       new Set(
@@ -185,6 +198,19 @@ export default function AdminClassSchedulesPage() {
     setSelectedFloor(nextFloor);
     setSelectedRoom('');
   };
+  useEffect(() => {
+    if (!selectedFloor || availableRooms.length === 0) {
+      if (selectedRoom) {
+        setSelectedRoom('');
+      }
+      return;
+    }
+
+    if (!availableRooms.includes(selectedRoom)) {
+      setSelectedRoom(availableRooms[0]);
+    }
+  }, [availableRooms, selectedFloor, selectedRoom]);
+
   const filteredSchedules = useMemo(() => {
     if (!selectedFloor) {
       return [];
@@ -264,37 +290,23 @@ export default function AdminClassSchedulesPage() {
             </div>
           </div>
 
-          <div className="flex w-full flex-row items-center gap-3 rounded-xl bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
-            <label className="flex items-center gap-2 text-sm font-bold text-gray-800">
-              <span>Floor</span>
-              <select
-                value={selectedFloor}
-                onChange={(event) => handleScheduleFloorChange(event.target.value)}
-                className="min-w-[150px] rounded-lg border border-[#e0e0e0] bg-white px-[14px] py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                <option value="">Select Floor</option>
-                {availableFloors.map((floor) => (
-                  <option key={floor.value} value={floor.value}>
-                    {floor.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="flex w-full flex-row flex-wrap items-center gap-3 rounded-xl bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+            <AdminFloorFilter
+              label="Floor:"
+              options={availableFloors}
+              value={selectedFloor}
+              onChange={handleScheduleFloorChange}
+              placeholder="Select Floor"
+            />
 
-            <label className="flex items-center gap-2 text-sm font-bold text-gray-800">
-              <span>Room</span>
-              <select
-                value={selectedRoom}
-                onChange={(event) => setSelectedRoom(event.target.value)}
-                className="min-w-[150px] rounded-lg border border-[#e0e0e0] bg-white px-[14px] py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                {availableRooms.map((room) => (
-                  <option key={room} value={room}>
-                    {room}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <AdminFloorFilter
+              label="Room:"
+              options={roomOptions}
+              value={selectedRoom}
+              onChange={setSelectedRoom}
+              placeholder="Select a floor first"
+              disabled={!selectedFloor}
+            />
 
             <button
               onClick={() => {

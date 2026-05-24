@@ -71,6 +71,16 @@ function createStandardFloorOptions(totalFloors: number) {
   });
 }
 
+function getFloorSortOrder(value: string) {
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "basement") return -1;
+  if (normalized === "ground" || normalized === "ground floor") return 0;
+
+  const match = normalized.match(/-?\d+/);
+  return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
+}
+
 export function isDigitalCampusBuilding(building?: BuildingLike | null) {
   if (!building) {
     return false;
@@ -117,4 +127,23 @@ export function getBuildingFloorOptions(building?: BuildingLike | null): FloorOp
     default:
       return createStandardFloorOptions(building?.floors ?? 0);
   }
+}
+
+export function sortFloorOptions(options: FloorOption[]) {
+  return [...options].sort(
+    (left, right) =>
+      getFloorSortOrder(left.value) - getFloorSortOrder(right.value) ||
+      left.label.localeCompare(right.label, undefined, { numeric: true })
+  );
+}
+
+export function getPreferredDefaultFloorValue(
+  options: FloorOption[],
+  fallback = ""
+) {
+  return (
+    options.find((option) => option.value === "Ground Floor")?.value ??
+    options[0]?.value ??
+    fallback
+  );
 }

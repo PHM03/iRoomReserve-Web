@@ -1,8 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import type { Feedback } from '@/lib/feedback/feedback';
 import { resolveFeedbackSentimentLabel } from '@/lib/feedback/feedback-sentiment';
+import {
+  getPreferredDefaultFloorValue,
+  sortFloorOptions,
+} from '@/lib/buildings/floorLabels';
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
 import type { Room } from '@/lib/rooms/rooms';
 import { StarRating } from '@/components/admin/dashboard/shared';
@@ -300,16 +305,31 @@ export default function AdminRoomStatusSection({
   const [expandedRoomId, setExpandedRoomId] = useState<string | null>(null);
 
   // Unique floors for filter
-  const floors = useMemo(() => {
-    const set = Array.from(new Set(statusMonitorFloorGroups.map((g) => g.floor)));
-    return set;
-  }, [statusMonitorFloorGroups]);
+  const floorOptions = useMemo(
+    () =>
+      sortFloorOptions(
+        statusMonitorFloorGroups.map((group) => ({
+          value: group.floor,
+          label: group.label,
+        }))
+      ),
+    [statusMonitorFloorGroups]
+  );
 
-  const floorLabelMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    statusMonitorFloorGroups.forEach((g) => { m[g.floor] = g.label; });
-    return m;
-  }, [statusMonitorFloorGroups]);
+  const floorOptionsWithAll = useMemo(
+    () => [...floorOptions, { value: 'All', label: 'All' }],
+    [floorOptions]
+  );
+
+  useEffect(() => {
+    const hasMatchingFloor = floorOptionsWithAll.some(
+      (option) => option.value === floorFilter
+    );
+
+    if (!hasMatchingFloor) {
+      setFloorFilter(getPreferredDefaultFloorValue(floorOptions, 'All'));
+    }
+  }, [floorFilter, floorOptions, floorOptionsWithAll]);
 
   // Per-room feedback map
   const feedbackByRoom = useMemo(() => {
@@ -382,23 +402,12 @@ export default function AdminRoomStatusSection({
             />
           </label>
 
-          {/* Floor filter */}
-          <div className="flex items-center gap-1 flex-wrap">
-            {[...floors, 'All'].map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFloorFilter(f)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
-                  floorFilter === f
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white/70 text-black/60 border-dark/10 hover:bg-white hover:text-black'
-                }`}
-              >
-                {f === 'All' ? 'All Floors' : (floorLabelMap[f] ?? f)}
-              </button>
-            ))}
-          </div>
+          <AdminFloorFilter
+            label="Filter by Floor:"
+            options={floorOptionsWithAll}
+            value={floorFilter}
+            onChange={setFloorFilter}
+          />
 
           {/* Availability filter */}
           <div className="flex items-center gap-1">
@@ -468,7 +477,9 @@ export default function AdminRoomStatusSection({
               const feedbackStats = computeRoomFeedbackStats(roomFeedback);
               const usageStats = computeRoomUsageStats(roomHistEntries);
               const isExpanded = expandedRoomId === room.id;
-              const floorLabel = floorLabelMap[room.floor] ?? room.floor;
+              const floorLabel =
+                floorOptions.find((option) => option.value === room.floor)?.label ??
+                room.floor;
 
               return (
                 <li key={room.id}>
