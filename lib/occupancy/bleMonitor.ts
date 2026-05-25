@@ -12,6 +12,14 @@ export interface BleBeaconRoomLike {
   name: string;
   beaconId?: string | null;
   bleBeaconId?: string | null;
+  beaconLastConnectedAt?:
+    | Date
+    | { toDate?: () => Date }
+    | null;
+  beaconLastDisconnectedAt?:
+    | Date
+    | { toDate?: () => Date }
+    | null;
 }
 
 function normalizeBeaconId(value?: string | null) {
@@ -86,6 +94,51 @@ export function isBeaconHardwareOnline(
   if (!lastSeenAt) return false;
 
   return now.getTime() - lastSeenAt.getTime() <= offlineWindowMs;
+}
+
+function normalizeRoomBeaconTimestamp(
+  value?: Date | { toDate?: () => Date } | null
+) {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value.toDate === "function") {
+    const parsedDate = value.toDate();
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+  }
+
+  return null;
+}
+
+export function isRoomBeaconHardwareOnline(
+  room: Pick<
+    BleBeaconRoomLike,
+    "beaconLastConnectedAt" | "beaconLastDisconnectedAt"
+  >,
+  now: Date = new Date(),
+  offlineWindowMs: number = BLE_HARDWARE_OFFLINE_WINDOW_MS
+) {
+  const lastConnectedAt = normalizeRoomBeaconTimestamp(room.beaconLastConnectedAt);
+  const lastDisconnectedAt = normalizeRoomBeaconTimestamp(
+    room.beaconLastDisconnectedAt
+  );
+  const latestSeenAt =
+    lastConnectedAt && lastDisconnectedAt
+      ? new Date(
+          Math.max(lastConnectedAt.getTime(), lastDisconnectedAt.getTime())
+        )
+      : lastConnectedAt ?? lastDisconnectedAt;
+
+  if (!latestSeenAt) {
+    return false;
+  }
+
+  return now.getTime() - latestSeenAt.getTime() <= offlineWindowMs;
 }
 
 export function getBleHistoryTone(

@@ -1,6 +1,7 @@
 'use client';
 
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
+import { isRoomBeaconHardwareOnline } from '@/lib/occupancy/bleMonitor';
 import type { Room } from '@/lib/rooms/rooms';
 
 interface BeaconStatusSectionProps {
@@ -21,8 +22,8 @@ export default function BeaconStatusSection({
   title = 'Beacon Status',
 }: Readonly<BeaconStatusSectionProps>) {
   const sortedRooms = [...rooms].sort(compareRooms);
-  const occupiedCount = rooms.filter((room) => room.beaconConnected).length;
-  const availableCount = rooms.length - occupiedCount;
+  const onlineCount = rooms.filter((room) => isRoomBeaconHardwareOnline(room)).length;
+  const offlineCount = rooms.length - onlineCount;
 
   return (
     <div className="glass-card p-5 mb-8">
@@ -41,11 +42,11 @@ export default function BeaconStatusSection({
         <div className="flex flex-wrap gap-2 text-xs font-bold">
           <span className="inline-flex items-center gap-2 rounded-full border border-green-500/25 bg-green-500/10 px-3 py-1 ui-text-green">
             <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-            {occupiedCount} Occupied
+            {onlineCount} Online
           </span>
           <span className="inline-flex items-center gap-2 rounded-full border border-red-500/25 bg-red-500/10 px-3 py-1 ui-text-red">
             <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-            {availableCount} Available
+            {offlineCount} Offline
           </span>
         </div>
       </div>
@@ -59,7 +60,8 @@ export default function BeaconStatusSection({
       ) : (
         <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
           {sortedRooms.map((room) => {
-            const isOccupied = room.beaconConnected === true;
+            const isHardwareOnline = isRoomBeaconHardwareOnline(room);
+            const isReservationConnected = room.beaconConnected === true;
 
             return (
               <div
@@ -80,25 +82,27 @@ export default function BeaconStatusSection({
 
                   <div
                     className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold ${
-                      isOccupied
+                      isHardwareOnline
                         ? 'border-green-500/30 bg-green-500/10 ui-text-green'
                         : 'border-red-500/30 bg-red-500/10 ui-text-red'
                     }`}
                   >
                     <span
                       className={`h-2.5 w-2.5 rounded-full ${
-                        isOccupied ? 'bg-green-500' : 'bg-red-500'
+                        isHardwareOnline ? 'bg-green-500' : 'bg-red-500'
                       }`}
                     />
-                    {isOccupied ? 'Occupied' : 'Available'}
+                    {isHardwareOnline ? 'Online' : 'Offline'}
                   </div>
                 </div>
 
                 <p className="text-xs text-black mt-3">
                   {room.beaconId
-                    ? isOccupied
-                      ? `BLE connected${room.beaconDeviceName ? ` to ${room.beaconDeviceName}` : ''}.`
-                      : `Waiting for ${room.beaconId} to connect.`
+                    ? isHardwareOnline
+                      ? isReservationConnected
+                        ? `Beacon online and connected${room.beaconDeviceName ? ` to ${room.beaconDeviceName}` : ''}.`
+                        : `Beacon online. Waiting for a reservation device to connect to ${room.beaconId}.`
+                      : `No recent telemetry from ${room.beaconId}.`
                     : 'Assign a beacon ID to enable Bluetooth room tracking.'}
                 </p>
               </div>

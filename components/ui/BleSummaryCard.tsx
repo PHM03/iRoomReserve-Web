@@ -8,6 +8,7 @@ import {
   BLE_MONITOR_REFRESH_INTERVAL_MS,
   formatBleTimestamp,
   getBeaconConfiguredRooms,
+  isRoomBeaconHardwareOnline,
 } from '@/lib/occupancy/bleMonitor';
 import {
   DEFAULT_OCCUPANCY_PAYLOAD,
@@ -25,7 +26,13 @@ interface BleSummaryCardProps {
   onViewDetails?: () => void;
   rooms?: Pick<
     Room,
-    'id' | 'name' | 'beaconConnected' | 'beaconId' | 'bleBeaconId'
+    | 'id'
+    | 'name'
+    | 'beaconConnected'
+    | 'beaconId'
+    | 'bleBeaconId'
+    | 'beaconLastConnectedAt'
+    | 'beaconLastDisconnectedAt'
   >[];
   totalBeaconsOverride?: number;
   variant?: 'default' | 'compact';
@@ -78,7 +85,7 @@ export default function BleSummaryCard({
     typeof activeBeaconsOverride === 'number'
       ? activeBeaconsOverride
       : getBeaconConfiguredRooms(rooms).filter(
-          (room) => 'beaconConnected' in room && room.beaconConnected === true
+          (room) => isRoomBeaconHardwareOnline(room)
         ).length;
   const totalInactiveBeacons = Math.max(0, totalBeacons - totalActiveBeacons);
 
