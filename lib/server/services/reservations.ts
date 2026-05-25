@@ -1199,9 +1199,7 @@ export async function approveReservationRecord(
             approvalResult.groupedReservations[0].roomName
           } on ${formatGroupedScheduleSummary(
             approvalResult.groupedReservations
-          )}. Your ${
-            approvalResult.nextApprovalStep?.role ?? "next"
-          } approval is required.`,
+          )}. Your approval is required.`,
           buildingId: approvalResult.groupedReservations[0].buildingId,
           reservationId,
         });
