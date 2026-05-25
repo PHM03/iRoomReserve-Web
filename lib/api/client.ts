@@ -1,5 +1,7 @@
 'use client';
 
+import { onAuthStateChanged } from "firebase/auth";
+
 import { auth } from "@/lib/firebase/firebase";
 import type { UserRole } from "@/lib/auth/roles";
 import { buildUrl, type QueryParams } from "@/lib/utils/buildUrl";
@@ -24,10 +26,41 @@ type ApiRequestError = Error & {
   status?: number;
 };
 
+let authReadyPromise: Promise<void> | null = null;
+
+async function waitForAuthReady() {
+  if (auth.currentUser) {
+    return;
+  }
+
+  const authWithReady = auth as typeof auth & {
+    authStateReady?: () => Promise<void>;
+  };
+
+  if (typeof authWithReady.authStateReady === "function") {
+    await authWithReady.authStateReady();
+    return;
+  }
+
+  if (!authReadyPromise) {
+    authReadyPromise = new Promise<void>((resolve) => {
+      const unsubscribe = onAuthStateChanged(auth, () => {
+        unsubscribe();
+        resolve();
+      });
+    }).finally(() => {
+      authReadyPromise = null;
+    });
+  }
+
+  await authReadyPromise;
+}
+
 export async function apiRequest<T>(
   input: string,
   { body, method = "POST", params, role, userId }: ApiRequestOptions = {}
 ): Promise<T> {
+  await waitForAuthReady();
   const currentUser = auth.currentUser;
   const token = currentUser ? await currentUser.getIdToken(true) : null;
 
@@ -36,6 +69,7 @@ export async function apiRequest<T>(
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(currentUser?.uid ? { "x-user-id": currentUser.uid } : {}),
       ...(userId ? { "x-user-id": userId } : {}),
       ...(role ? { "x-user-role": role } : {}),
     },
