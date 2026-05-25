@@ -5,7 +5,7 @@ import { type SubmitEvent, useDeferredValue, useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Feedback, createFeedback, getAverageSentiment, getFeedbackByUser } from '@/lib/feedback/feedback';
 import { Reservation, getReservationsByUser } from '@/lib/reservations/reservations';
-import { analyzeSentiment, getSentimentLabel } from '@/lib/ai/sentiment';
+import { analyzeFeedbackSentiment, getSentimentLabel } from '@/lib/ai/sentiment';
 import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
 
 function formatSentimentLabel(label: string) {
@@ -13,6 +13,10 @@ function formatSentimentLabel(label: string) {
 }
 
 function getSentimentBadgeClasses(label: string) {
+  if (label === 'conflicted') {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-700';
+  }
+
   if (label === 'positive') {
     return 'border-green-500/25 bg-green-500/10 text-green-700';
   }
@@ -41,8 +45,9 @@ export default function FeedbackPage() {
 
   const deferredComment = useDeferredValue(comment);
   const trimmedComment = comment.trim();
-  const sentimentPreview = analyzeSentiment(deferredComment);
-  const sentimentPreviewLabel = getSentimentLabel(sentimentPreview.compound);
+  const sentimentPreview = analyzeFeedbackSentiment(deferredComment, rating);
+  const sentimentPreviewLabel = sentimentPreview.sentimentLabel;
+  const hasSentimentPreview = rating > 0 || Boolean(trimmedComment);
 
   useEffect(() => {
     if (!firebaseUser) {
@@ -201,7 +206,7 @@ export default function FeedbackPage() {
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       {/* ── Unified page header ─────────────────────────────── */}
       <div className="mb-8">
-        <div className="rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md">
+        <div className="rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
           <h1 className="text-2xl font-bold text-gray-800">Feedback</h1>
           <p className="text-gray-600 mt-1">Rate your experience and help us improve</p>
         </div>
@@ -298,12 +303,12 @@ export default function FeedbackPage() {
                         Sentiment Preview
                       </p>
                       <p className="text-sm text-black mt-1">
-                        {trimmedComment
+                        {hasSentimentPreview
                           ? `${formatSentimentLabel(sentimentPreviewLabel)} (${sentimentPreview.compound.toFixed(2)})`
-                          : 'Start typing to preview the tone of your feedback.'}
+                          : 'Select a rating and start typing to preview the tone of your feedback.'}
                       </p>
                     </div>
-                    {trimmedComment && (
+                    {hasSentimentPreview && (
                       <span
                         className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] ${getSentimentBadgeClasses(
                           sentimentPreviewLabel
@@ -314,18 +319,22 @@ export default function FeedbackPage() {
                     )}
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-black sm:grid-cols-4">
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-black sm:grid-cols-5">
                     <div>
-                      <p className="font-bold">Compound</p>
+                      <p className="font-bold">Hybrid</p>
                       <p>{sentimentPreview.compound.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="font-bold">Stars</p>
+                      <p>{sentimentPreview.starScore.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="font-bold">VADER</p>
+                      <p>{sentimentPreview.vaderCompound.toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="font-bold">Positive</p>
                       <p>{Math.round(sentimentPreview.positive * 100)}%</p>
-                    </div>
-                    <div>
-                      <p className="font-bold">Neutral</p>
-                      <p>{Math.round(sentimentPreview.neutral * 100)}%</p>
                     </div>
                     <div>
                       <p className="font-bold">Negative</p>
@@ -384,7 +393,7 @@ export default function FeedbackPage() {
           </div>
 
           {pendingFeedback.length === 0 ? (
-            <div className="rounded-xl border border-dark/5 bg-dark/3 p-8 text-center">
+            <div className="dashboard-empty-state rounded-2xl p-8 text-center">
               <svg className="w-10 h-10 text-black/25 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -428,7 +437,7 @@ export default function FeedbackPage() {
           </div>
 
           {feedbackList.length === 0 ? (
-            <div className="rounded-xl border border-dark/5 bg-dark/3 p-8 text-center">
+            <div className="dashboard-empty-state rounded-2xl p-8 text-center">
               <svg className="w-10 h-10 text-black/25 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
               </svg>

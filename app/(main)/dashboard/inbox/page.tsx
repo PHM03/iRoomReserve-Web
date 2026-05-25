@@ -230,7 +230,7 @@ function ReservationApprovals({
         )}
 
         {loadingRequests ? (
-          <div className="mt-4 rounded-3xl border border-dark/5 bg-white/70 p-8 text-center">
+          <div className="dashboard-empty-state mt-4 rounded-2xl p-8 text-center">
             <p className="text-sm font-bold text-black">
               Loading reservation approvals...
             </p>
@@ -406,7 +406,7 @@ function UserInbox({
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
-        <div className="inline-block rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md">
+        <div className="inline-block rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-gray-800">

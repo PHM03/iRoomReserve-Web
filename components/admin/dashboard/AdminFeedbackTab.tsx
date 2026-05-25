@@ -169,7 +169,7 @@ export default function AdminFeedbackTab({
     `px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
       active
         ? 'bg-primary text-white border-primary'
-        : 'bg-white/70 text-black/60 border-dark/10 hover:bg-white hover:text-black'
+        : 'border-white/45 bg-white/85 text-black/65 shadow-sm hover:bg-white hover:text-black'
     }`;
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ export default function AdminFeedbackTab({
   return (
     <div>
       {/* Header — unchanged */}
-      <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-xl font-bold text-gray-800">Room Feedback</h3>
           <span className="text-sm text-gray-600">{feedbackList.length} total</span>
@@ -203,10 +203,12 @@ export default function AdminFeedbackTab({
       </div>
 
       {feedbackList.length === 0 ? (
-        <div className="glass-card p-12 text-center">
+        <div className="glass-card p-4">
+          <div className="dashboard-empty-state rounded-2xl p-12 text-center">
           <div className="text-4xl mb-3">Feedback</div>
           <h4 className="text-lg font-bold text-black mb-1">No Feedback Yet</h4>
           <p className="text-sm text-black">Feedback from room users will appear here.</p>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -320,7 +322,7 @@ export default function AdminFeedbackTab({
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
                     starFilter === star
                       ? 'bg-yellow-400 text-yellow-900 border-yellow-500'
-                      : 'bg-white/70 text-black/60 border-dark/10 hover:bg-white hover:text-black'
+                      : 'border-white/45 bg-white/85 text-black/65 shadow-sm hover:bg-white hover:text-black'
                   }`}
                 >
                   {'★'.repeat(star)}

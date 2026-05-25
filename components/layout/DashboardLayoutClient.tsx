@@ -133,10 +133,10 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
       ? '/images/admin-superadmin-dashboard-bg.png'
       : '/images/student-faculty-dashboard-bg.png';
   const roleBackgroundOverlayClassName = isUtility
-    ? 'absolute inset-0 bg-[linear-gradient(135deg,rgba(4,8,18,0.48)_0%,rgba(16,24,39,0.28)_46%,rgba(161,33,36,0.18)_100%),linear-gradient(180deg,rgba(0,0,0,0.38)_0%,rgba(0,0,0,0.22)_46%,rgba(0,0,0,0.12)_100%)]'
+    ? 'absolute inset-0 bg-[linear-gradient(135deg,rgba(4,8,18,0.58)_0%,rgba(16,24,39,0.38)_46%,rgba(161,33,36,0.22)_100%),linear-gradient(180deg,rgba(0,0,0,0.46)_0%,rgba(0,0,0,0.3)_46%,rgba(0,0,0,0.18)_100%)]'
     : isAdmin
-      ? 'absolute inset-0 bg-[linear-gradient(135deg,rgba(4,8,18,0.5)_0%,rgba(15,23,42,0.3)_52%,rgba(161,33,36,0.16)_100%),linear-gradient(180deg,rgba(0,0,0,0.4)_0%,rgba(0,0,0,0.24)_44%,rgba(0,0,0,0.12)_100%)]'
-      : 'absolute inset-0 bg-[linear-gradient(135deg,rgba(4,8,18,0.42)_0%,rgba(15,23,42,0.24)_50%,rgba(161,33,36,0.14)_100%),linear-gradient(180deg,rgba(0,0,0,0.34)_0%,rgba(0,0,0,0.2)_44%,rgba(0,0,0,0.1)_100%)]';
+      ? 'absolute inset-0 bg-[linear-gradient(135deg,rgba(4,8,18,0.6)_0%,rgba(15,23,42,0.4)_52%,rgba(161,33,36,0.2)_100%),linear-gradient(180deg,rgba(0,0,0,0.48)_0%,rgba(0,0,0,0.32)_44%,rgba(0,0,0,0.18)_100%)]'
+      : 'absolute inset-0 bg-[linear-gradient(135deg,rgba(4,8,18,0.52)_0%,rgba(15,23,42,0.34)_50%,rgba(161,33,36,0.18)_100%),linear-gradient(180deg,rgba(0,0,0,0.42)_0%,rgba(0,0,0,0.28)_44%,rgba(0,0,0,0.16)_100%)]';
 
   // Shared mobile bottom nav icons
   const navIcons = {
@@ -229,14 +229,15 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
       {shouldUseRoleBackground ? (
         <div className="fixed inset-0 pointer-events-none overflow-hidden">
           <div
-            className={`absolute inset-0 bg-center bg-no-repeat ${isUtility ? 'opacity-75' : 'opacity-80'}`}
+            className="dashboard-bg-image absolute inset-0 bg-center bg-no-repeat"
             style={{
               backgroundImage: `url('${roleBackgroundImage}')`,
               backgroundSize: 'cover',
               backgroundPosition: 'center center',
             }}
           />
-          <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.08)_0%,rgba(161,33,36,0.1)_48%,rgba(15,23,42,0.12)_100%)]" />
+          <div className="dashboard-scrim absolute inset-0" />
+          <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.06)_0%,rgba(161,33,36,0.08)_48%,rgba(15,23,42,0.16)_100%)]" />
           <div className={roleBackgroundOverlayClassName} />
         </div>
       ) : (

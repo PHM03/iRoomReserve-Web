@@ -256,7 +256,7 @@ export default function MyReservationsPage() {
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
-        <div className="inline-block rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md">
+        <div className="inline-block rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
           <h2 className="text-2xl font-bold text-gray-800">My Reservations</h2>
           <p className="text-gray-600 mt-1">
             View and manage all your room reservations

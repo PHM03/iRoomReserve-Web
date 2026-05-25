@@ -324,7 +324,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   return (
     <nav
       ref={navRef}
-      className="glass-nav fixed top-0 left-0 right-0 z-50 border-white/20 bg-white/70 shadow-xl backdrop-blur-md"
+      className="glass-nav fixed top-0 left-0 right-0 z-50 border-white/40 bg-white/90 shadow-xl backdrop-blur-xl"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between py-5">
@@ -372,13 +372,13 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   </button>
 
                   {isStatusMenuOpen ? (
-                    <div className="absolute left-0 top-full mt-2 w-64 glass-card !rounded-2xl p-2 shadow-xl">
+                    <div className="dashboard-dropdown absolute left-0 top-full mt-2 w-64 rounded-2xl p-2">
                       {visibleStatusSchedulingLinks.map((link) => (
                         <Link
                           key={link.href}
                           href={getStatusSchedulingHref(link.href)}
                           onClick={closeMenus}
-                          className={`flex w-full items-center rounded-xl px-3 py-2.5 text-sm ${getNavItemClasses(
+                          className={`dashboard-dropdown-item flex w-full items-center rounded-xl px-3 py-2.5 text-sm ${getNavItemClasses(
                             pathname === link.href
                           )}`}
                           style={navbarBoldStyle}
@@ -420,7 +420,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   {user.initials}
                 </div>
                 {showUserTooltip && (
-                  <div className="absolute right-0 top-full mt-2 w-52 glass-card !rounded-xl p-3 shadow-xl z-50">
+                  <div className="dashboard-dropdown absolute right-0 top-full z-50 mt-2 w-52 rounded-2xl p-3">
                     <p className="text-xs font-bold text-black capitalize">{user.role}</p>
                     {user.email && (
                       <p className="text-[11px] text-black/70 mt-0.5 truncate">{user.email}</p>
@@ -451,11 +451,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
               </button>
               {showNotifications && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-80 sm:w-96 !rounded-xl overflow-hidden z-50 border border-dark/12 shadow-2xl shadow-black/20"
-                  style={{
-                    background: 'rgba(248, 246, 242, 0.98)',
-                    backdropFilter: 'blur(20px)',
-                  }}
+                  className="dashboard-dropdown absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-2xl sm:w-96"
                 >
                   <div className="flex items-center justify-between p-4 border-b border-dark/10">
                     <h4 className="font-bold text-black text-sm">Notifications</h4>
@@ -470,7 +466,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   </div>
                   <div className="max-h-64 overflow-y-auto">
                     {notifications.length === 0 ? (
-                      <div className="p-6 text-center">
+                      <div className="dashboard-empty-state m-3 rounded-2xl p-6 text-center">
                         <p className="text-sm text-black/80">No new notifications</p>
                       </div>
                     ) : (
@@ -599,7 +595,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
       </div>
 
       {isMenuOpen ? (
-        <div className="md:hidden border-t border-[#343434]/8 bg-[#f5f5f5]/80 backdrop-blur-xl">
+        <div className="md:hidden border-t border-[#343434]/8 bg-white/90 shadow-xl backdrop-blur-xl">
           <div className="px-3 py-2 space-y-1">
             {isAdmin ? (
               <>
@@ -616,7 +612,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   </button>
                 ))}
 
-                <div className="rounded-xl border border-dark/5 bg-white/50">
+                <div className="rounded-2xl border border-white/50 bg-white/75 shadow-sm">
                   <button
                     type="button"
                     onClick={() =>
@@ -638,7 +634,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                           key={link.href}
                           href={getStatusSchedulingHref(link.href)}
                           onClick={closeMenus}
-                          className={`block rounded-xl px-3 py-2.5 text-sm ${getNavItemClasses(
+                          className={`dashboard-dropdown-item block rounded-xl px-3 py-2.5 text-sm ${getNavItemClasses(
                             pathname === link.href
                           )}`}
                           style={navbarBoldStyle}

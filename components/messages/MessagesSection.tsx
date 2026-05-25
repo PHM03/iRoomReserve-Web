@@ -258,7 +258,7 @@ function EmptyState({
   title,
 }: Readonly<EmptyStateProps>) {
   return (
-    <div className="rounded-3xl border border-dark/5 bg-white/70 p-10 text-center">
+    <div className="dashboard-empty-state rounded-2xl p-10 text-center">
       <p className="text-sm font-bold text-black">{title}</p>
       <p className="mt-1 text-xs text-black/70">{description}</p>
     </div>
@@ -1195,7 +1195,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
   return (
     <section className="mb-8">
       {(props.title || props.subtitle) && (
-        <div className="mb-5 rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md">
+        <div className="mb-5 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
           {props.title && (
             <h2 className="text-xl font-bold text-black">{props.title}</h2>
           )}
@@ -1301,7 +1301,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search by name, subject, or message..."
-                className="w-full rounded-2xl border border-dark/10 bg-white/70 py-3 pl-11 pr-10 text-sm text-black placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
+                className="w-full rounded-2xl border border-white/45 bg-white/85 py-3 pl-11 pr-10 text-sm text-black shadow-sm backdrop-blur-xl placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
               {searchQuery && (
                 <button
@@ -1353,7 +1353,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                 value={reservationSearch}
                 onChange={(event) => setReservationSearch(event.target.value)}
                 placeholder="Search by room, building, requester, or status..."
-                className="w-full rounded-2xl border border-dark/10 bg-white/70 py-3 pl-11 pr-10 text-sm text-black placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
+                className="w-full rounded-2xl border border-white/45 bg-white/85 py-3 pl-11 pr-10 text-sm text-black shadow-sm backdrop-blur-xl placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
               {reservationSearch && (
                 <button

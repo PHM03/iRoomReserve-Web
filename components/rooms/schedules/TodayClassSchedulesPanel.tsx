@@ -343,7 +343,7 @@ export default function TodayClassSchedulesPanel(
 
   return (
     <div className={props.className}>
-      <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md">
+      <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
         <h3 className="text-xl font-bold text-gray-800">Today&apos;s Class Schedules</h3>
         <div className="flex items-center gap-2">
           <button

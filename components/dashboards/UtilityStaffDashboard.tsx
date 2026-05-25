@@ -349,7 +349,7 @@ function StatCard({
 }>) {
   return (
     <div
-      className={`rounded-2xl border border-white/20 border-l-4 bg-white/70 p-5 shadow-xl backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-2xl ${accentClassName} ${glowClassName}`.trim()}
+      className={`rounded-2xl border border-white/35 border-l-4 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/85 hover:shadow-2xl ${accentClassName} ${glowClassName}`.trim()}
     >
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -361,7 +361,7 @@ function StatCard({
           </p>
         </div>
         <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/20 shadow-sm backdrop-blur-md ${iconClassName}`.trim()}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/40 shadow-sm backdrop-blur-xl ${iconClassName}`.trim()}
         >
           {icon}
         </div>
@@ -506,7 +506,7 @@ function UtilityBleBeaconSummary({
 
   return (
     <section
-      className={`rounded-2xl border border-white/20 border-t-2 border-t-primary bg-white/70 p-6 shadow-xl shadow-primary/10 backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl ${className}`.trim()}
+      className={`rounded-2xl border border-white/35 border-t-2 border-t-primary bg-white/75 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10 backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl ${className}`.trim()}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -518,7 +518,7 @@ function UtilityBleBeaconSummary({
         <div className="flex shrink-0 items-center gap-2 sm:justify-end">
           <Link
             href={detailsHref}
-            className="rounded-2xl border border-white/30 bg-white/50 px-3 py-2 text-xs font-bold text-gray-700 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-primary/30 hover:bg-white/70 hover:text-primary"
+            className="rounded-2xl border border-white/45 bg-white/75 px-3 py-2 text-xs font-bold text-gray-700 shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-primary/30 hover:bg-white hover:text-primary"
           >
             View Details
           </Link>
@@ -526,7 +526,7 @@ function UtilityBleBeaconSummary({
             type="button"
             onClick={handleManualRefresh}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-bold text-primary shadow-sm backdrop-blur-md transition-all duration-300 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-bold text-primary shadow-sm backdrop-blur-xl transition-all duration-300 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RefreshIcon />
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
@@ -540,18 +540,18 @@ function UtilityBleBeaconSummary({
       </div>
 
       {isLoading ? (
-        <div className="mt-4 rounded-2xl border border-white/20 bg-white/60 px-4 py-3 text-sm text-gray-500 shadow-sm backdrop-blur-md">
+        <div className="dashboard-empty-state mt-4 rounded-2xl px-4 py-3 text-sm text-gray-500">
           Loading BLE beacon summary...
         </div>
       ) : null}
 
       {errorMessage ? (
-        <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary shadow-sm backdrop-blur-md">
+        <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary shadow-sm backdrop-blur-xl">
           {errorMessage}
         </div>
       ) : null}
 
-      <div className="mt-5 grid grid-cols-1 divide-y divide-white/30 rounded-2xl border border-white/20 bg-white/40 backdrop-blur-md sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+      <div className="dashboard-table-shell mt-5 grid grid-cols-1 divide-y divide-white/35 rounded-2xl backdrop-blur-xl sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
         {summaryStats.map((stat) => (
           <div key={stat.label} className="min-h-[96px] p-4">
             <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
@@ -580,7 +580,7 @@ function UtilityReservationTimetable({
 
   return (
     <section
-      className={`rounded-2xl border border-white/20 bg-white/70 p-6 shadow-xl shadow-primary/10 backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl ${className}`.trim()}
+      className={`rounded-2xl border border-white/35 bg-white/75 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10 backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl ${className}`.trim()}
     >
       <div className="mb-5">
         <h3 className="text-lg font-bold text-gray-900">
@@ -604,7 +604,7 @@ function UtilityReservationTimetable({
             return (
               <div
                 key={day.value}
-                className="flex min-h-[190px] flex-col rounded-2xl border border-white/20 bg-white/55 p-3 shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-white/70 hover:shadow-xl"
+                className="flex min-h-[190px] flex-col rounded-2xl border border-white/35 bg-white/70 p-3 shadow-lg backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-xl"
               >
                 <div className="border-b border-white/30 pb-2">
                   <p className="text-sm font-bold text-gray-900">
@@ -614,7 +614,7 @@ function UtilityReservationTimetable({
                 </div>
 
                 {entries.length === 0 ? (
-                  <div className="flex flex-1 items-center justify-center px-2 py-6">
+                  <div className="dashboard-empty-state mt-3 flex flex-1 items-center justify-center rounded-2xl px-2 py-6">
                     <p className="text-center text-xs font-bold text-gray-400">
                       No reservations
                     </p>
@@ -624,7 +624,7 @@ function UtilityReservationTimetable({
                     {entries.map((entry) => (
                       <div
                         key={`${entry.buildingName}:${entry.roomName}:${entry.startTime}:${entry.endTime}`}
-                        className="rounded-2xl border border-primary/15 bg-primary/10 p-3 shadow-sm shadow-primary/10 backdrop-blur-md"
+                        className="rounded-2xl border border-primary/15 bg-primary/10 p-3 shadow-sm shadow-primary/10 backdrop-blur-xl"
                       >
                         <p className="truncate text-sm font-bold text-gray-900">
                           {entry.roomName}
@@ -750,7 +750,7 @@ export default function UtilityStaffDashboard({
     return (
       <main className="relative z-10 min-h-screen pb-24 pt-[100px] md:pb-8">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-8 rounded-2xl border border-white/20 bg-white/70 p-5 shadow-xl backdrop-blur-md">
+          <div className="mb-8 rounded-2xl border border-white/35 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
             <p className="text-sm font-bold uppercase tracking-wide text-primary">
               Utility Staff Dashboard
             </p>
@@ -759,7 +759,7 @@ export default function UtilityStaffDashboard({
             </h2>
           </div>
 
-          <div className="rounded-2xl border border-white/20 bg-white/70 p-10 text-center shadow-xl shadow-primary/10 backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl">
+          <div className="dashboard-empty-state rounded-2xl p-10 text-center backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <WarningIcon />
             </div>
@@ -822,7 +822,7 @@ export default function UtilityStaffDashboard({
   return (
     <main className="relative z-10 min-h-screen pb-24 pt-[100px] md:pb-8">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-10 flex flex-col gap-5 rounded-2xl border border-white/20 bg-white/70 p-5 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-10 flex flex-col gap-5 rounded-2xl border border-white/35 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-wide text-primary">
               Utility Staff Dashboard
@@ -846,7 +846,7 @@ export default function UtilityStaffDashboard({
                 onChange={(event) =>
                   setSelectedManagedBuildingId(event.target.value)
                 }
-                className="w-full appearance-none rounded-2xl border border-white/20 bg-white/70 px-4 py-3 text-sm text-gray-900 shadow-xl backdrop-blur-md outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                className="w-full appearance-none rounded-2xl border border-white/55 bg-white/85 px-4 py-3 text-sm text-gray-900 shadow-xl backdrop-blur-xl outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/15"
                 style={{ backgroundImage: 'none' }}
               >
                 {managedBuildings.map((building) => (
@@ -873,26 +873,26 @@ export default function UtilityStaffDashboard({
           ))}
         </div>
 
-        <section className="mb-10">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">
+        <section className="mb-10 rounded-2xl border border-white/35 bg-white p-4 shadow-md shadow-primary/10 sm:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-base font-bold leading-tight text-gray-900 sm:text-lg">
                 Room Status Overview
               </h3>
             </div>
             <Link
               href="/dashboard/room-status"
-              className="inline-flex items-center justify-center rounded-2xl border border-primary/20 bg-white/60 px-4 py-2 text-sm font-bold text-primary shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-primary/10 hover:shadow-2xl"
+              className="inline-flex shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-white/75 px-3 py-2 text-xs font-bold text-primary shadow-xl backdrop-blur-xl transition-all duration-300 hover:bg-primary/10 hover:shadow-2xl sm:px-4 sm:text-sm"
             >
               Open Room Status
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 divide-y divide-white/30 rounded-2xl border border-white/20 bg-white/70 shadow-xl backdrop-blur-md sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="dashboard-table-shell grid grid-cols-1 divide-y divide-white/35 rounded-2xl backdrop-blur-xl sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             {ROOM_STATUS_SUMMARIES.map((status) => (
               <div
                 key={status.label}
-                className={`p-5 shadow-xl transition-all duration-300 hover:bg-white/30 ${status.glowClassName}`.trim()}
+                className={`p-5 shadow-xl transition-all duration-300 hover:bg-white/65 ${status.glowClassName}`.trim()}
               >
                 <div className="flex items-center gap-2">
                   <span
@@ -922,7 +922,7 @@ export default function UtilityStaffDashboard({
           reservations={reservations}
         />
 
-        <section className="rounded-2xl border border-white/20 bg-white/70 p-6 shadow-xl shadow-primary/10 backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl">
+        <section className="rounded-2xl border border-white/35 bg-white/75 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10 backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl">
           <div className="flex items-center justify-between gap-4 border-b border-white/30 pb-4">
             <h3 className="text-lg font-bold text-gray-900">
               Today&apos;s Room Reservations
@@ -934,8 +934,8 @@ export default function UtilityStaffDashboard({
           </div>
 
           {todayReservations.length === 0 ? (
-            <div className="flex min-h-[180px] flex-col items-center justify-center text-center">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/60 text-gray-400 shadow-sm backdrop-blur-md">
+            <div className="dashboard-empty-state mt-5 flex min-h-[180px] flex-col items-center justify-center rounded-2xl text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/75 text-gray-400 shadow-sm backdrop-blur-xl">
                 <CalendarIcon className="h-6 w-6" />
               </div>
               <p className="text-sm font-bold text-gray-500">
@@ -960,11 +960,11 @@ export default function UtilityStaffDashboard({
                 return (
                   <div
                     key={reservation.id}
-                    className="rounded-2xl border border-white/20 border-l-4 border-l-primary/40 bg-white/60 p-4 shadow-lg shadow-primary/10 backdrop-blur-md transition-all duration-300 hover:bg-white/75 hover:shadow-xl"
+                    className="dashboard-row rounded-2xl border-l-4 border-l-primary/40 p-4 backdrop-blur-xl"
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/70 text-sm font-bold text-gray-700 shadow-sm backdrop-blur-md">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/40 bg-white/80 text-sm font-bold text-gray-700 shadow-sm backdrop-blur-xl">
                           {reservation.userName
                             .split(' ')
                             .map((name) => name[0])

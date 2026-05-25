@@ -82,8 +82,8 @@ export default function AdminFloorFilter({
               setIsOpen((current) => !current);
             }
           }}
-          className={`flex ${fullWidth ? 'w-full' : 'min-w-44'} items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/30 disabled:cursor-not-allowed disabled:opacity-60 ${
-            elevated && isOpen ? 'shadow-[0_8px_24px_rgba(161,33,36,0.12)]' : ''
+          className={`flex ${fullWidth ? 'w-full' : 'min-w-44'} items-center justify-between gap-3 rounded-xl border border-white/55 bg-white/85 px-4 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all hover:bg-white focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25 disabled:cursor-not-allowed disabled:opacity-60 ${
+            elevated && isOpen ? 'shadow-[0_18px_44px_rgba(15,23,42,0.18)]' : ''
           }`}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
@@ -109,7 +109,7 @@ export default function AdminFloorFilter({
 
         {isOpen && !disabled ? (
           <div
-            className={`absolute z-50 mt-2 min-w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-lg ${
+            className={`dashboard-dropdown absolute z-50 mt-2 min-w-full overflow-hidden rounded-2xl ${
               menuAlign === 'right' ? 'right-0' : 'left-0'
             }`}
             role="listbox"
@@ -135,10 +135,10 @@ export default function AdminFloorFilter({
                       setIsOpen(false);
                     }
                   }}
-                  className={`cursor-pointer px-4 py-2.5 text-sm transition-colors hover:bg-[#a12124]/5 hover:text-[#a12124] ${
+                  className={`dashboard-dropdown-item cursor-pointer px-4 py-2.5 text-sm ${
                     isSelected
-                      ? 'bg-[#a12124]/10 font-bold text-[#a12124]'
-                      : 'font-medium text-gray-700'
+                      ? 'bg-[#a12124]/10 font-bold text-[#7f1d1d]'
+                      : 'font-medium text-gray-800'
                   } ${index === 0 ? 'rounded-t-2xl' : ''} ${
                     index === options.length - 1 ? 'rounded-b-2xl' : ''
                   }`}

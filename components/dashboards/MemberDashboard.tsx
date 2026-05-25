@@ -23,11 +23,11 @@ interface MemberDashboardProps {
 }
 
 const dashboardPanelClasses =
-  'rounded-2xl border border-white/20 bg-white/70 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl';
+  'rounded-2xl border border-white/35 bg-white/75 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl';
 const dashboardCardClasses =
-  'relative overflow-hidden rounded-2xl border border-white/20 bg-white/70 p-5 shadow-xl backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-2xl';
+  'relative overflow-hidden rounded-2xl border border-white/35 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/85 hover:shadow-2xl';
 const iconTileClasses =
-  'flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 bg-white/55 shadow-sm backdrop-blur-md';
+  'flex h-10 w-10 items-center justify-center rounded-2xl border border-white/40 bg-white/70 shadow-sm backdrop-blur-xl';
 
 export default function MemberDashboard({
   firstName,
@@ -249,7 +249,7 @@ export default function MemberDashboard({
             {upcomingReservations.map((reservation) => (
               <div
                 key={reservation.id}
-                className="rounded-2xl border border-white/20 bg-white/55 p-5 shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-white/70 hover:shadow-xl"
+                className="dashboard-row rounded-2xl p-5 backdrop-blur-xl"
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <h4 className="text-sm font-bold text-black">
@@ -319,9 +319,9 @@ export default function MemberDashboard({
               </svg>
             </Link>
           </div>
-          <div className="overflow-hidden rounded-2xl border border-white/20 bg-white/40 backdrop-blur-md">
+          <div className="dashboard-table-shell overflow-hidden rounded-2xl backdrop-blur-xl">
             {recentActivity.length === 0 ? (
-              <div className="p-12 text-center">
+              <div className="dashboard-empty-state m-4 rounded-2xl p-12 text-center">
                 <svg
                   className="w-14 h-14 text-black/60 mx-auto mb-3"
                   fill="none"
@@ -341,11 +341,11 @@ export default function MemberDashboard({
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-white/30">
+              <div className="divide-y divide-white/35">
                 {recentActivity.map((reservation) => (
                   <div
                     key={reservation.id}
-                    className="flex items-center gap-4 p-4 transition-colors duration-300 hover:bg-white/35"
+                    className="flex items-center gap-4 p-4 transition-all duration-300 hover:bg-white/80"
                   >
                     <span
                       className={`w-2.5 h-full min-h-[40px] rounded-full shrink-0 ${

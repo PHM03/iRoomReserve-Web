@@ -1093,7 +1093,7 @@ export default function ReserveRoomPage() {
   return (
     <main className="relative z-10 mx-auto max-w-5xl px-4 pt-[100px] py-8 pb-24 sm:px-6 lg:px-8 md:pb-8">
       <div className="mb-8">
-        <div className="inline-block rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md">
+        <div className="inline-block rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
           <h2 className="text-2xl font-bold text-gray-800">Reserve a Room</h2>
           <p className="mt-1 text-gray-600">
             Browse rooms, filter quickly, and continue straight into reservation details.
@@ -1397,7 +1397,7 @@ export default function ReserveRoomPage() {
                         </button>
                       </div>
                     ) : filteredRooms.length === 0 ? (
-                      <div className="rounded-2xl border border-dark/10 bg-dark/5 p-8 text-center">
+                      <div className="dashboard-empty-state rounded-2xl p-8 text-center">
                         <p className="text-sm font-bold text-black">
                           No rooms match the current filters.
                         </p>
@@ -1460,7 +1460,7 @@ export default function ReserveRoomPage() {
             )}
 
             {currentStep > 1 && !roomsLoading && !selectedRoom && (
-              <div className="rounded-2xl border border-dark/10 bg-dark/5 p-8 text-center">
+              <div className="dashboard-empty-state rounded-2xl p-8 text-center">
                 <p className="text-sm font-bold text-black">That room is no longer available.</p>
                 <p className="mt-1 text-xs text-black">
                   Return to the room list and choose another available room.
@@ -1513,25 +1513,25 @@ export default function ReserveRoomPage() {
                     </span>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <div className="rounded-xl border border-dark/10 bg-white/70 p-3">
+                    <div className="rounded-xl border border-white/45 bg-white/85 p-3 shadow-sm backdrop-blur-xl">
                       <p className="text-[10px] font-bold uppercase text-black/55">Capacity</p>
                       <p className="mt-1 text-sm font-bold text-black">
                         {selectedRoom.capacity} people
                       </p>
                     </div>
-                    <div className="rounded-xl border border-dark/10 bg-white/70 p-3">
+                    <div className="rounded-xl border border-white/45 bg-white/85 p-3 shadow-sm backdrop-blur-xl">
                       <p className="text-[10px] font-bold uppercase text-black/55">Air Conditioning</p>
                       <p className="mt-1 text-sm font-bold text-black">
                         {selectedRoom.acStatus || 'Not specified'}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-dark/10 bg-white/70 p-3">
+                    <div className="rounded-xl border border-white/45 bg-white/85 p-3 shadow-sm backdrop-blur-xl">
                       <p className="text-[10px] font-bold uppercase text-black/55">Category</p>
                       <p className="mt-1 text-sm font-bold text-black">
                         {selectedRoom.roomType || 'Room'}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-dark/10 bg-white/70 p-3">
+                    <div className="rounded-xl border border-white/45 bg-white/85 p-3 shadow-sm backdrop-blur-xl">
                       <p className="text-[10px] font-bold uppercase text-black/55">TV/Projector</p>
                       <p className="mt-1 text-sm font-bold text-black">
                         {selectedRoom.tvProjectorStatus || 'Not specified'}
@@ -1687,7 +1687,7 @@ export default function ReserveRoomPage() {
 
                         {/* Schedule Panel — appears when a date is selected */}
                         {reservationDate && selectedCampus && firebaseUser && (
-                          <div className="rounded-2xl border border-dark/10 bg-white/70 p-4">
+                          <div className="rounded-2xl border border-white/45 bg-white/80 p-4 shadow-sm backdrop-blur-xl">
                             <DaySchedulePanel
                               date={reservationDate}
                               roomEnrichedSlots={enrichedSlots}

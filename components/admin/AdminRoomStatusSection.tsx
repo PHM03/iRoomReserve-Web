@@ -192,9 +192,9 @@ function ExpandedAnalytics({
   const noData = feedbackStats.totalFeedback === 0 && usageStats.totalHours === 0;
 
   return (
-    <div className="px-4 pb-4 pt-2 border-t border-dark/10 bg-white/40 animate-[fadeIn_0.15s_ease]">
+    <div className="border-t border-dark/10 bg-white/60 px-4 pb-4 pt-2 backdrop-blur-xl animate-[fadeIn_0.15s_ease]">
       {noData ? (
-        <p className="text-xs text-black/50 py-2 text-center">No analytics data available yet.</p>
+        <p className="dashboard-empty-state rounded-xl py-3 text-center text-xs text-black/55">No analytics data available yet.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Feedback / VADER */}
@@ -202,7 +202,7 @@ function ExpandedAnalytics({
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-black/40">Feedback & Sentiment</p>
 
             {feedbackStats.totalFeedback === 0 ? (
-              <p className="text-xs text-black/50">No feedback yet.</p>
+              <p className="dashboard-empty-state rounded-xl px-3 py-3 text-xs text-black/55">No feedback yet.</p>
             ) : (
               <>
                 {/* Star rating */}
@@ -386,8 +386,10 @@ export default function AdminRoomStatusSection({
   if (rooms.length === 0) {
     return (
       <section className={className}>
-        <div className="glass-card p-12 text-center">
-          <p className="text-sm text-black">No rooms configured. Add rooms first.</p>
+        <div className="glass-card p-4">
+          <div className="dashboard-empty-state rounded-2xl p-12 text-center">
+            <p className="text-sm text-black">No rooms configured. Add rooms first.</p>
+          </div>
         </div>
       </section>
     );
@@ -432,8 +434,8 @@ export default function AdminRoomStatusSection({
       </div>
 
       {/* ── Legend ── */}
-      <div className="flex items-center gap-4 px-1 mb-3">
-        <p className="text-[10px] font-bold text-black/40 uppercase tracking-widest">Sentiment:</p>
+      <div className="bg-white rounded-xl px-4 py-2.5 mb-3 shadow-sm ring-1 ring-black/5 flex items-center gap-4">
+        <p className="text-[10px] font-bold text-black/50 uppercase tracking-widest">Sentiment:</p>
         {[
           { color: 'bg-emerald-500', label: 'Good (4★+ / Positive)' },
           { color: 'bg-yellow-400', label: 'Needs work (3–3.9★ / Neutral)' },
@@ -442,15 +444,17 @@ export default function AdminRoomStatusSection({
         ].map(({ color, label }) => (
           <div key={label} className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${color} border border-black/10`} />
-            <span className="text-[10px] text-black/50 font-bold hidden sm:inline">{label}</span>
+            <span className="text-[10px] text-black/70 font-semibold hidden sm:inline">{label}</span>
           </div>
         ))}
       </div>
 
       {/* ── Room list ── */}
       {filteredRooms.length === 0 ? (
-        <div className="glass-card p-10 text-center">
-          <p className="text-sm text-black/60 font-bold">No rooms match your filters.</p>
+        <div className="glass-card p-4">
+          <div className="dashboard-empty-state rounded-2xl p-10 text-center">
+            <p className="text-sm font-bold text-black/60">No rooms match your filters.</p>
+          </div>
         </div>
       ) : (
         <div className="glass-card overflow-hidden">

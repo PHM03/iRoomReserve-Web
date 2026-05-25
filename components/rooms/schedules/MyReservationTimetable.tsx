@@ -46,7 +46,7 @@ const TIMETABLE_DAYS = [
 ] as const;
 
 const timetablePanelClasses =
-  'rounded-2xl border border-white/20 bg-white/70 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl';
+  'rounded-2xl border border-white/35 bg-white/75 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl';
 
 function getOrderedTimetableDays(referenceDate = new Date()) {
   const todayValue = referenceDate.getDay();
@@ -178,7 +178,7 @@ export default function MyReservationTimetable({
           </div>
 
           {todayEntries.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-dark/15 bg-dark/5 px-3 py-5 text-center text-xs font-bold text-black/55">
+            <p className="dashboard-empty-state rounded-2xl px-3 py-5 text-center text-xs font-bold text-black/60">
               No approved reservations today.
             </p>
           ) : (
@@ -214,7 +214,7 @@ export default function MyReservationTimetable({
 
     return (
       <section className={className}>
-        <div className="mb-2 flex items-center justify-between rounded-2xl border border-white/20 bg-white/70 px-3 py-2 shadow-lg backdrop-blur-md">
+        <div className="mb-2 flex items-center justify-between rounded-2xl border border-white/35 bg-white/75 px-3 py-2 shadow-lg backdrop-blur-xl">
           <h3 className="text-sm font-bold text-gray-800">My Reservation Timetable</h3>
           <span className="text-[11px] font-bold text-gray-500">Weekly strip</span>
         </div>
@@ -231,14 +231,14 @@ export default function MyReservationTimetable({
               return (
                 <div
                   key={day.value}
-                  className="min-h-[112px] rounded-2xl border border-white/20 bg-white/55 p-2 shadow-sm backdrop-blur-md"
+                  className="min-h-[112px] rounded-2xl border border-white/35 bg-white/70 p-2 shadow-sm backdrop-blur-xl"
                 >
                   <h4 className="mb-1.5 truncate text-xs font-extrabold text-black">
                     {day.label.slice(0, 3)}
                   </h4>
 
                   {entries.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-dark/10 bg-dark/3 px-1.5 py-4 text-center text-[10px] font-bold text-black/45">
+                    <p className="dashboard-empty-state rounded-xl px-1.5 py-4 text-center text-[10px] font-bold text-black/50">
                       None
                     </p>
                   ) : (
@@ -283,7 +283,7 @@ export default function MyReservationTimetable({
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-white/20 bg-white/40 p-4 backdrop-blur-md">
+      <div className="dashboard-table-shell overflow-x-auto rounded-2xl p-4 backdrop-blur-xl">
         <div className="grid min-w-full grid-cols-[repeat(6,minmax(120px,1fr))] gap-3">
           {orderedTimetableDays.map((day) => {
             const entries = [...(entriesByDay.get(day.value)?.values() ?? [])].sort(
@@ -295,14 +295,14 @@ export default function MyReservationTimetable({
             return (
               <div
                 key={day.value}
-                className="min-h-[190px] rounded-2xl border border-white/20 bg-white/55 p-3 shadow-sm backdrop-blur-md"
+                className="min-h-[190px] rounded-2xl border border-white/35 bg-white/70 p-3 shadow-sm backdrop-blur-xl"
               >
                 <h4 className="text-sm font-extrabold text-black mb-3">
                   {day.label}
                 </h4>
 
                 {entries.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/30 bg-white/30 px-3 py-6 text-center">
+                  <div className="dashboard-empty-state rounded-2xl px-3 py-6 text-center">
                     <p className="text-xs font-bold text-black/50">
                       No reservations
                     </p>

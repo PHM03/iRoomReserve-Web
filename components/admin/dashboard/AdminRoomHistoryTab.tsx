@@ -350,7 +350,7 @@ export default function AdminRoomHistoryTab({
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-xl font-bold text-gray-800">Reservation History</h3>
         {managedBuildings.length > 1 ? (
           <div className="w-full sm:ml-auto sm:w-72">
@@ -388,7 +388,7 @@ export default function AdminRoomHistoryTab({
               <select
                 value={historyYearFilter}
                 onChange={(event) => setHistoryYearFilter(event.target.value)}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
+                className="rounded-xl border border-white/55 bg-white/85 px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
               >
                 <option value="all">All Years</option>
                 {availableHistoryYears.map((year) => (
@@ -401,7 +401,7 @@ export default function AdminRoomHistoryTab({
               <select
                 value={historyMonthFilter}
                 onChange={(event) => setHistoryMonthFilter(event.target.value)}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
+                className="rounded-xl border border-white/55 bg-white/85 px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
               >
                 <option value="all">All Months</option>
                 {MONTH_FILTER_OPTIONS.map((month, index) => (
@@ -431,7 +431,8 @@ export default function AdminRoomHistoryTab({
       </div>
 
       {groupedHistory.length === 0 ? (
-        <div className="glass-card p-12 text-center">
+        <div className="glass-card p-4">
+          <div className="dashboard-empty-state rounded-2xl p-12 text-center">
           <div className="mb-3 text-4xl">History</div>
           <h4 className="mb-1 text-lg font-bold text-black">No Reservations Found</h4>
           <p className="text-sm text-black">
@@ -439,10 +440,11 @@ export default function AdminRoomHistoryTab({
               ? 'Try adjusting your filters.'
               : 'Reservation history will appear here.'}
           </p>
+          </div>
         </div>
       ) : (
         <>
-          <div className="hidden overflow-hidden rounded-xl md:block glass-card">
+          <div className="dashboard-table-shell hidden overflow-hidden rounded-2xl backdrop-blur-xl md:block">
             <table className="w-full min-w-full">
               <thead>
                 <tr className="border-b border-dark/10">
@@ -470,7 +472,7 @@ export default function AdminRoomHistoryTab({
                   return (
                     <Fragment key={group.userName}>
                       <tr
-                        className="border-b border-dark/5 transition-colors hover:bg-primary/10"
+                        className="border-b border-dark/5 transition-colors hover:bg-white/85"
                       >
                         <td className="whitespace-nowrap px-6 py-4">
                           <div className="flex items-center gap-2">
@@ -505,7 +507,7 @@ export default function AdminRoomHistoryTab({
                       {isExpanded ? (
                         <tr className="border-b border-dark/5">
                           <td colSpan={5} className="bg-primary/5 px-6 py-5">
-                            <div className="overflow-hidden rounded-xl border border-dark/10 bg-white">
+                            <div className="dashboard-table-shell overflow-hidden rounded-xl bg-white/80">
                               <table className="min-w-full">
                                 <thead className="border-b border-dark/10 bg-dark/5">
                                   <tr>
@@ -546,7 +548,7 @@ export default function AdminRoomHistoryTab({
                                   {group.reservations.map((reservation) => (
                                     <tr
                                       key={reservation.id}
-                                      className="border-b border-dark/5 last:border-b-0"
+                                      className="border-b border-dark/5 transition-colors last:border-b-0 hover:bg-primary/5"
                                     >
                                       <td className="whitespace-nowrap px-4 py-3 text-sm text-black">
                                         {reservation.roomName}
@@ -591,7 +593,7 @@ export default function AdminRoomHistoryTab({
               const isExpanded = expandedUsers.includes(group.userName);
 
               return (
-                <div key={group.userName} className="glass-card p-4">
+                <div key={group.userName} className="glass-card p-4 backdrop-blur-xl">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
@@ -636,7 +638,7 @@ export default function AdminRoomHistoryTab({
                   {isExpanded ? (
                     <div className="mt-4 space-y-3 border-t border-dark/10 pt-4">
                       {group.reservations.map((reservation) => (
-                        <div key={reservation.id} className="rounded-xl border border-dark/10 bg-white p-3">
+                        <div key={reservation.id} className="dashboard-row rounded-xl p-3">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <span className="text-sm font-bold text-black">{reservation.roomName}</span>
                             <StatusBadge
@@ -677,10 +679,12 @@ export default function AdminRoomHistoryTab({
         </>
       )}
 
-      <div className="mt-4 text-center">
-        <p className="text-xs text-black">
+      <div className="mt-4 flex justify-center">
+        <div className="rounded-xl bg-white px-4 py-2.5 shadow-sm ring-1 ring-black/5">
+        <p className="text-xs font-medium text-gray-600">
           Showing {groupedHistory.length} of {new Set(roomHistory.map((entry) => entry.userName)).size} users
         </p>
+      </div>
       </div>
     </div>
   );

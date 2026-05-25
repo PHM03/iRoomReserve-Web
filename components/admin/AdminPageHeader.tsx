@@ -28,7 +28,7 @@ export default function AdminPageHeader({
 }: Readonly<AdminPageHeaderProps>) {
   if (integratedBuildingField) {
     return (
-      <section className="w-full rounded-2xl border border-white/20 bg-white/70 px-6 py-5 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl">
+      <section className="w-full rounded-2xl border border-white/35 bg-white/75 px-6 py-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
@@ -56,7 +56,7 @@ export default function AdminPageHeader({
               <input
                 value={activeBuildingLabel}
                 readOnly
-                className="w-full rounded-2xl border border-white/20 bg-white/70 px-3 py-2 text-sm text-black shadow-sm backdrop-blur-md focus:outline-none"
+                className="w-full rounded-2xl border border-white/45 bg-white/85 px-3 py-2 text-sm text-black shadow-sm backdrop-blur-xl focus:outline-none"
               />
             )}
           </div>
@@ -67,12 +67,12 @@ export default function AdminPageHeader({
 
   return (
     <section className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-      <div className="rounded-2xl border border-white/20 bg-white/70 px-6 py-4 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:shadow-2xl">
+      <div className="rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl">
         <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
         <div className="mt-2 text-sm text-gray-600">{description}</div>
       </div>
 
-      <div className="w-full max-w-sm rounded-2xl border border-white/20 bg-white/70 p-4 shadow-xl backdrop-blur-md">
+      <div className="w-full max-w-sm rounded-2xl border border-white/35 bg-white/75 p-4 shadow-xl backdrop-blur-xl">
         <p className="text-[11px] font-bold uppercase tracking-wide text-black">
           Active Building
         </p>

@@ -1,7 +1,7 @@
 import "server-only";
 
 import {
-  analyzeSentiment,
+  analyzeFeedbackSentiment,
   averageSentimentScores,
   getSentimentLabel,
 } from "@/lib/ai/sentiment";
@@ -130,7 +130,7 @@ function mapFeedbackDocument(
 export async function createFeedbackRecord(data: FeedbackCreateInput) {
   const adminIds = await getAssignedManagerIds(data.buildingId);
   const feedbackText = data.message.trim();
-  const sentiment = analyzeSentiment(feedbackText);
+  const sentiment = analyzeFeedbackSentiment(feedbackText, data.rating);
   const sentimentLabel = getSentimentLabel(sentiment.compound);
 
   const feedbackRef = db.collection("feedback").doc();
