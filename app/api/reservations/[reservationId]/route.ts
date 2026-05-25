@@ -13,6 +13,9 @@ import {
   deleteReservationRecord,
   disconnectReservationBeaconRecord,
   rejectReservationRecord,
+  sendReservationPresenceHeartbeatRecord,
+  startReservationPresenceMonitorRecord,
+  stopReservationPresenceMonitorRecord,
 } from "@/lib/server/services/reservations";
 
 export const runtime = "nodejs";
@@ -38,6 +41,25 @@ const reservationActionSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("disconnect-beacon"),
+    userId: z.string().trim().min(1),
+  }),
+  z.object({
+    action: z.literal("start-monitor"),
+    userId: z.string().trim().min(1),
+    beaconId: z.string().trim().min(1),
+  }),
+  z.object({
+    action: z.literal("presence-heartbeat"),
+    userId: z.string().trim().min(1),
+    appState: z.enum(["foreground", "background"]),
+    beaconId: z.string().trim().min(1).optional(),
+    bluetoothOn: z.boolean(),
+    checkedAt: z.string().trim().min(1).optional(),
+    inRange: z.boolean(),
+    rssi: z.number().nullable().optional(),
+  }),
+  z.object({
+    action: z.literal("stop-monitor"),
     userId: z.string().trim().min(1),
   }),
   z.object({
@@ -107,6 +129,37 @@ export async function PATCH(
           throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
         }
         await disconnectReservationBeaconRecord(reservationId, payload.userId);
+        break;
+      case "start-monitor":
+        if (authContext.uid !== payload.userId) {
+          throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
+        }
+        await startReservationPresenceMonitorRecord(
+          reservationId,
+          payload.userId,
+          payload.beaconId
+        );
+        break;
+      case "presence-heartbeat": {
+        if (authContext.uid !== payload.userId) {
+          throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
+        }
+        const result = await sendReservationPresenceHeartbeatRecord(reservationId, {
+          appState: payload.appState,
+          beaconId: payload.beaconId,
+          bluetoothOn: payload.bluetoothOn,
+          checkedAt: payload.checkedAt,
+          inRange: payload.inRange,
+          rssi: payload.rssi,
+          userId: payload.userId,
+        });
+        return NextResponse.json(result);
+      }
+      case "stop-monitor":
+        if (authContext.uid !== payload.userId) {
+          throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
+        }
+        await stopReservationPresenceMonitorRecord(reservationId, payload.userId);
         break;
       case "complete":
         if (authContext.uid !== payload.userId) {

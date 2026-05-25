@@ -38,6 +38,14 @@ type ReservationStatus =
   | "rejected"
   | "completed"
   | "cancelled";
+type ReservationPresenceAppState = "background" | "foreground";
+type ReservationPresenceStatus =
+  | "healthy"
+  | "stopped"
+  | "timed_out"
+  | "warning";
+
+const PRESENCE_HEARTBEAT_TIMEOUT_MS = 2 * 60 * 1000;
 
 interface ReservationRecord {
   id: string;
@@ -71,6 +79,15 @@ interface ReservationRecord {
   checkedInAt?: FirestoreTimestampLike | null;
   completedAt?: FirestoreTimestampLike | null;
   checkInMethod?: RoomCheckInMethod | null;
+  presenceMonitorBeaconId?: string | null;
+  presenceMonitoringStartedAt?: FirestoreTimestampLike | null;
+  presenceLastHeartbeatAt?: FirestoreTimestampLike | null;
+  presenceLastHeartbeatClientAt?: string | null;
+  presenceLastAppState?: ReservationPresenceAppState | null;
+  presenceLastBluetoothOn?: boolean | null;
+  presenceLastInRange?: boolean | null;
+  presenceLastRssi?: number | null;
+  presenceStatus?: ReservationPresenceStatus | null;
   createdAt?: FirestoreTimestampLike;
   updatedAt?: FirestoreTimestampLike;
 }
@@ -700,6 +717,78 @@ function addNotification(
   });
 }
 
+function normalizePresenceAppState(
+  appState?: string | null
+): ReservationPresenceAppState | null {
+  if (appState === "foreground" || appState === "background") {
+    return appState;
+  }
+
+  return null;
+}
+
+function normalizePresenceStatus(
+  input: {
+    bluetoothOn: boolean;
+    checkedAt: string | null;
+    inRange: boolean;
+  },
+  now: Date = new Date()
+): ReservationPresenceStatus {
+  if (input.checkedAt) {
+    const parsedCheckedAt = new Date(input.checkedAt);
+    if (
+      !Number.isNaN(parsedCheckedAt.getTime()) &&
+      now.getTime() - parsedCheckedAt.getTime() > PRESENCE_HEARTBEAT_TIMEOUT_MS
+    ) {
+      return "timed_out";
+    }
+  }
+
+  if (!input.bluetoothOn || !input.inRange) {
+    return "warning";
+  }
+
+  return "healthy";
+}
+
+async function updateReservationRoomPresence(
+  reservation: ReservationRecord,
+  options: {
+    beaconConnected: boolean;
+    beaconId?: string | null;
+  }
+) {
+  const roomRef = db.collection("rooms").doc(reservation.roomId);
+  const roomSnapshot = await roomRef.get();
+  if (!roomSnapshot.exists) {
+    return;
+  }
+
+  const roomData = roomSnapshot.data() as {
+    activeReservationId?: string | null;
+    beaconConnected?: boolean | null;
+    checkInMethod?: string | null;
+  };
+  const roomCheckInMethod = normalizeRoomCheckInMethod(roomData.checkInMethod);
+  const shouldUpdateRoom =
+    roomData.activeReservationId === reservation.id ||
+    roomCheckInMethod === "bluetooth" ||
+    roomData.beaconConnected === true;
+
+  if (!shouldUpdateRoom) {
+    return;
+  }
+
+  await roomRef.update({
+    beaconConnected: options.beaconConnected,
+    beaconDeviceName: options.beaconConnected ? options.beaconId ?? null : null,
+    beaconLastConnectedAt: options.beaconConnected ? serverTimestamp() : null,
+    beaconLastDisconnectedAt: options.beaconConnected ? null : serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 function addRoomHistory(
   batch: FirestoreBatch,
   reservation: ReservationRecord,
@@ -771,10 +860,10 @@ function formatGroupedReservationDates(dates: string[]) {
   }
 
   if (dates.length === 1) {
-    return formatDate(dates[0]);
+    return formatNotificationDate(dates[0]);
   }
 
-  return dates.map((date) => formatDate(date)).join(", ");
+  return dates.map((date) => formatNotificationDate(date)).join(", ");
 }
 
 function formatGroupedScheduleSummary(reservations: ReservationRecord[]) {
@@ -1548,6 +1637,202 @@ export async function disconnectReservationBeaconRecord(
   }
 }
 
+export async function startReservationPresenceMonitorRecord(
+  reservationId: string,
+  userId: string,
+  beaconId: string
+) {
+  try {
+    const normalizedBeaconId = beaconId.trim();
+    if (!normalizedBeaconId) {
+      throw new ApiError(400, "missing_beacon", "Beacon ID is required.");
+    }
+
+    const reservationRef = db.collection("reservations").doc(reservationId);
+    const reservationSnapshot = await reservationRef.get();
+    if (!reservationSnapshot.exists) {
+      throw new ApiError(404, "not_found", "Reservation not found.");
+    }
+
+    const reservation = {
+      id: reservationSnapshot.id,
+      ...reservationSnapshot.data(),
+    } as ReservationRecord;
+    if (reservation.userId !== userId) {
+      throw new ApiError(
+        403,
+        "forbidden",
+        "You cannot start monitoring for this reservation."
+      );
+    }
+    if (reservation.status !== "approved" || !reservation.checkedInAt) {
+      throw new ApiError(
+        400,
+        "invalid_status",
+        "Presence monitoring is only available for checked-in approved reservations."
+      );
+    }
+    if (normalizeRoomCheckInMethod(reservation.checkInMethod) !== "bluetooth") {
+      throw new ApiError(
+        400,
+        "invalid_check_in_method",
+        "Presence monitoring is only available for Bluetooth check-ins."
+      );
+    }
+
+    await reservationRef.update({
+      presenceMonitorBeaconId: normalizedBeaconId,
+      presenceMonitoringStartedAt: serverTimestamp(),
+      presenceStatus: "healthy",
+      updatedAt: serverTimestamp(),
+    });
+
+    await updateReservationRoomPresence(reservation, {
+      beaconConnected: true,
+      beaconId: normalizedBeaconId,
+    });
+  } catch (error) {
+    logReservationServiceError("startReservationPresenceMonitorRecord", error, {
+      reservationId,
+      userId,
+      beaconId,
+    });
+    throw error;
+  }
+}
+
+export async function sendReservationPresenceHeartbeatRecord(
+  reservationId: string,
+  input: {
+    appState: ReservationPresenceAppState;
+    beaconId?: string;
+    bluetoothOn: boolean;
+    checkedAt?: string;
+    inRange: boolean;
+    rssi?: number | null;
+    userId: string;
+  }
+) {
+  try {
+    const reservationRef = db.collection("reservations").doc(reservationId);
+    const reservationSnapshot = await reservationRef.get();
+    if (!reservationSnapshot.exists) {
+      throw new ApiError(404, "not_found", "Reservation not found.");
+    }
+
+    const reservation = {
+      id: reservationSnapshot.id,
+      ...reservationSnapshot.data(),
+    } as ReservationRecord;
+    if (reservation.userId !== input.userId) {
+      throw new ApiError(
+        403,
+        "forbidden",
+        "You cannot send heartbeats for this reservation."
+      );
+    }
+    if (reservation.status !== "approved" || !reservation.checkedInAt) {
+      return {
+        healthy: false,
+        status: "stopped" as const,
+        timedOut: false,
+      };
+    }
+
+    const normalizedAppState = normalizePresenceAppState(input.appState);
+    if (!normalizedAppState) {
+      throw new ApiError(400, "invalid_app_state", "App state is invalid.");
+    }
+
+    const checkedAt =
+      typeof input.checkedAt === "string" && input.checkedAt.trim().length > 0
+        ? input.checkedAt.trim()
+        : new Date().toISOString();
+    const normalizedBeaconId =
+      typeof input.beaconId === "string" && input.beaconId.trim().length > 0
+        ? input.beaconId.trim()
+        : (reservation.presenceMonitorBeaconId ?? null);
+    const status = normalizePresenceStatus({
+      bluetoothOn: input.bluetoothOn,
+      checkedAt,
+      inRange: input.inRange,
+    });
+
+    await reservationRef.update({
+      presenceMonitorBeaconId: normalizedBeaconId,
+      presenceLastHeartbeatAt: serverTimestamp(),
+      presenceLastHeartbeatClientAt: checkedAt,
+      presenceLastAppState: normalizedAppState,
+      presenceLastBluetoothOn: input.bluetoothOn,
+      presenceLastInRange: input.inRange,
+      presenceLastRssi:
+        typeof input.rssi === "number" && Number.isFinite(input.rssi)
+          ? input.rssi
+          : null,
+      presenceStatus: status,
+      updatedAt: serverTimestamp(),
+    });
+
+    await updateReservationRoomPresence(reservation, {
+      beaconConnected: status === "healthy",
+      beaconId: normalizedBeaconId,
+    });
+
+    return {
+      healthy: status === "healthy",
+      status,
+      timedOut: status === "timed_out",
+    };
+  } catch (error) {
+    logReservationServiceError("sendReservationPresenceHeartbeatRecord", error, {
+      reservationId,
+      ...input,
+    });
+    throw error;
+  }
+}
+
+export async function stopReservationPresenceMonitorRecord(
+  reservationId: string,
+  userId: string
+) {
+  try {
+    const reservationRef = db.collection("reservations").doc(reservationId);
+    const reservationSnapshot = await reservationRef.get();
+    if (!reservationSnapshot.exists) {
+      throw new ApiError(404, "not_found", "Reservation not found.");
+    }
+
+    const reservation = {
+      id: reservationSnapshot.id,
+      ...reservationSnapshot.data(),
+    } as ReservationRecord;
+    if (reservation.userId !== userId) {
+      throw new ApiError(
+        403,
+        "forbidden",
+        "You cannot stop monitoring for this reservation."
+      );
+    }
+
+    await reservationRef.update({
+      presenceStatus: "stopped",
+      updatedAt: serverTimestamp(),
+    });
+
+    await updateReservationRoomPresence(reservation, {
+      beaconConnected: false,
+      beaconId: reservation.presenceMonitorBeaconId ?? null,
+    });
+  } catch (error) {
+    logReservationServiceError("stopReservationPresenceMonitorRecord", error, {
+      reservationId,
+      userId,
+    });
+    throw error;
+  }
+}
+
 export async function completeReservationRecord(
   reservationId: string,
   userId: string
@@ -1595,7 +1880,7 @@ export async function completeReservationRecord(
         recipientUid: managerUid,
         type: "system",
         title: "Reservation Completed",
-        message: `${reservation.userName} marked their reservation for ${reservation.roomName} on ${formatDate(
+        message: `${reservation.userName} marked their reservation for ${reservation.roomName} on ${formatNotificationDate(
           reservation.date
         )} as completed.`,
         buildingId: reservation.buildingId,
