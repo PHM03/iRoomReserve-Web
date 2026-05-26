@@ -193,6 +193,8 @@ textarea {
     0 24px 70px rgba(15, 23, 42, 0.24),
     0 8px 24px rgba(15, 23, 42, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  /* Ensure the dropdown always layers above backdrop-filter stacking contexts */
+  z-index: 9999;
 }
 
 .dashboard-dropdown-item {

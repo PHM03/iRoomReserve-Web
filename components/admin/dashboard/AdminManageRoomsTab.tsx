@@ -374,7 +374,7 @@ export default function AdminManageRoomsTab({
 
     return (
         <div className="space-y-5">
-            <div className="flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative z-[60] flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
                     <h3 className="text-xl font-bold text-gray-800">Manage Rooms</h3>
                     <button
@@ -689,7 +689,7 @@ export default function AdminManageRoomsTab({
                                                 type="text"
                                                 value={editName}
                                                 onChange={(event) => setEditName(event.target.value)}
-                                                className="glass-input w-full px-4 py-2.5 text-sm"
+                                                className="glass-input w-full px-4 py-2.5 text-sm !border-gray-400 focus:!border-primary"
                                                 placeholder="e.g. Room 312"
                                             />
                                         </div>
@@ -698,7 +698,7 @@ export default function AdminManageRoomsTab({
                                             <select
                                                 value={editFloor}
                                                 onChange={(event) => setEditFloor(event.target.value)}
-                                                className="glass-input w-full cursor-pointer appearance-none px-4 py-2.5 text-sm"
+                                                className="glass-input w-full cursor-pointer appearance-none px-4 py-2.5 text-sm !border-gray-400 focus:!border-primary"
                                             >
                                                 <option value="" disabled>Select floor</option>
                                                 {floorOptions.map((floorOption) => (
@@ -713,7 +713,7 @@ export default function AdminManageRoomsTab({
                                             <select
                                                 value={editRoomType}
                                                 onChange={(event) => setEditRoomType(event.target.value)}
-                                                className="glass-input w-full cursor-pointer appearance-none px-4 py-2.5 text-sm"
+                                                className="glass-input w-full cursor-pointer appearance-none px-4 py-2.5 text-sm !border-gray-400 focus:!border-primary"
                                             >
                                                 <option value="" disabled>Select room type</option>
                                                 {ROOM_TYPE_OPTIONS.map((option) => (
@@ -729,7 +729,7 @@ export default function AdminManageRoomsTab({
                                                 type="text"
                                                 value={editBeaconId}
                                                 onChange={(event) => setEditBeaconId(event.target.value)}
-                                                className="glass-input w-full px-4 py-2.5 text-sm"
+                                                className="glass-input w-full px-4 py-2.5 text-sm !border-gray-400 focus:!border-primary"
                                                 placeholder="e.g. gd3-506-beacon"
                                             />
                                         </div>
@@ -779,7 +779,7 @@ export default function AdminManageRoomsTab({
                                                 type="number"
                                                 value={editCapacity}
                                                 onChange={(event) => setEditCapacity(event.target.value)}
-                                                className="glass-input w-full px-4 py-2.5 text-sm sm:w-40"
+                                                className="glass-input w-full px-4 py-2.5 text-sm sm:w-40 !border-gray-400 focus:!border-primary"
                                                 placeholder="30"
                                                 min={1}
                                             />

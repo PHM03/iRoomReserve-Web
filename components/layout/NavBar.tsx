@@ -366,13 +366,13 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                     aria-expanded={isStatusMenuOpen}
                   >
                     <span className="whitespace-nowrap" style={navbarBoldStyle}>
-                      Status & Scheduling
+                      Status &amp; Scheduling
                     </span>
                     <ChevronDownIcon open={isStatusMenuOpen} />
                   </button>
 
                   {isStatusMenuOpen ? (
-                    <div className="dashboard-dropdown absolute left-0 top-full mt-2 w-64 rounded-2xl p-2">
+                    <div className="dashboard-dropdown absolute left-0 top-full z-50 mt-2 w-64 rounded-2xl p-2">
                       {visibleStatusSchedulingLinks.map((link) => (
                         <Link
                           key={link.href}
@@ -623,7 +623,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                     )}`}
                     style={navbarBoldStyle}
                   >
-                    <span>Status & Scheduling</span>
+                    <span>Status &amp; Scheduling</span>
                     <ChevronDownIcon open={isMobileStatusMenuOpen} />
                   </button>
 

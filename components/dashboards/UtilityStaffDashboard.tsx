@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
+import { getManagedBuildingOptionLabel } from '@/components/admin/dashboard/shared';
 import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { useAuth } from '@/context/AuthContext';
@@ -822,7 +824,7 @@ export default function UtilityStaffDashboard({
   return (
     <main className="relative z-10 min-h-screen pb-24 pt-[100px] md:pb-8">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-10 flex flex-col gap-5 rounded-2xl border border-white/35 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-end sm:justify-between">
+        <div className="relative z-[60] mb-10 flex flex-col gap-5 rounded-2xl border border-white/35 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-wide text-primary">
               Utility Staff Dashboard
@@ -841,20 +843,17 @@ export default function UtilityStaffDashboard({
               <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-gray-500">
                 Active Building
               </label>
-              <select
+              <AdminBuildingSelect
+                label=""
+                options={managedBuildings.map((building) => ({
+                  value: building.id,
+                  label: getManagedBuildingOptionLabel(building),
+                }))}
                 value={buildingId ?? ''}
-                onChange={(event) =>
-                  setSelectedManagedBuildingId(event.target.value)
-                }
-                className="w-full appearance-none rounded-2xl border border-white/55 bg-white/85 px-4 py-3 text-sm text-gray-900 shadow-xl backdrop-blur-xl outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/15"
-                style={{ backgroundImage: 'none' }}
-              >
-                {managedBuildings.map((building) => (
-                  <option key={building.id} value={building.id}>
-                    {building.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedManagedBuildingId}
+                className="w-full"
+                fullWidth
+              />
             </div>
           )}
         </div>

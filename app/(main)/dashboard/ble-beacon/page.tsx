@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
+import { getManagedBuildingOptionLabel } from '@/components/admin/dashboard/shared';
 import BleAdminMonitor from '@/components/ble/BleAdminMonitor';
 import { useAuth } from '@/context/AuthContext';
 import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
@@ -32,8 +34,6 @@ export default function BleBeaconPage() {
 
   useEffect(() => {
     if (!buildingId || !uid) {
-      setRooms([]);
-      setReservations([]);
       return;
     }
 
@@ -75,7 +75,7 @@ export default function BleBeaconPage() {
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
-      <div className="mb-8">
+      <div className="relative z-[60] mb-8">
         <div className="inline-block rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
           <h2 className="text-2xl font-bold text-gray-800">BLE Beacon Status</h2>
           <p className="text-gray-600 mt-1">
@@ -88,18 +88,17 @@ export default function BleBeaconPage() {
             <label className="block text-xs font-bold uppercase tracking-wide text-black mb-2">
               Active Building
             </label>
-            <select
+            <AdminBuildingSelect
+              label=""
+              options={managedBuildings.map((building) => ({
+                value: building.id,
+                label: getManagedBuildingOptionLabel(building),
+              }))}
               value={buildingId ?? ''}
-              onChange={(event) => setSelectedManagedBuildingId(event.target.value)}
-              className="glass-input w-full px-4 py-3 bg-dark/6 appearance-none cursor-pointer"
-              style={{ backgroundImage: 'none' }}
-            >
-              {managedBuildings.map((building) => (
-                <option key={building.id} value={building.id} className="bg-white text-black">
-                  {building.name}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedManagedBuildingId}
+              className="w-full"
+              fullWidth
+            />
           </div>
         )}
       </div>

@@ -1697,23 +1697,9 @@ export default function ReserveRoomPage() {
                               campusTimeRange={CAMPUS_TIME_RANGES[selectedCampus]}
                               selectedStartTime={startTime}
                               selectedEndTime={endTime}
-                              onSelectSlot={(slotStart, slotEnd) => {
-                                const slotStartMins = timeStringToMinutes(slotStart);
-                                const slotEndMins = timeStringToMinutes(slotEnd);
-
-                                if (!startTime || !endTime) {
-                                  setStartTime(slotStart);
-                                  setEndTime(slotEnd);
-                                  return;
-                                }
-
-                                const currentStartMins = timeStringToMinutes(startTime);
-                                const currentEndMins = timeStringToMinutes(endTime);
-                                const nextStartMins = Math.min(currentStartMins, slotStartMins);
-                                const nextEndMins = Math.max(currentEndMins, slotEndMins);
-
-                                setStartTime(minutesToTimeString(nextStartMins));
-                                setEndTime(minutesToTimeString(nextEndMins));
+                              onSelectionChange={(selection) => {
+                                setStartTime(selection?.startTime ?? '');
+                                setEndTime(selection?.endTime ?? '');
                               }}
                               onRequestAlternatives={() => {
                                 setAssistantRequested(true);

@@ -2,49 +2,40 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 
+import {
+  getNextScheduleSelection,
+  isMultiSlotSelection,
+  isSlotSelected as isSlotInsideSelection,
+  type ScheduleSelection,
+  type ScheduleSlotStatus,
+} from '@/lib/reservations/dayScheduleSelection';
+import type {
+  EnrichedBookingSlot,
+  UserActiveSlot,
+} from '@/lib/reservations/roomAvailability';
 import { formatTime } from '@/lib/utils/dateTime';
-import type { EnrichedBookingSlot, UserActiveSlot } from '@/lib/reservations/roomAvailability';
 
-/* ──────────────────────────── Types ──────────────────────────── */
-
-type SlotStatus =
-  | 'available'
-  | 'past'
-  | 'reserved-others'
-  | 'pending-others'
-  | 'user-conflict';
+type SlotStatus = ScheduleSlotStatus;
 
 interface TimeSlot {
   startTime: string;
   endTime: string;
   status: SlotStatus;
-  /** The reservation that causes this status, if any. */
   conflictRoomName?: string;
 }
 
 interface DaySchedulePanelProps {
-  /** ISO date string (yyyy-MM-dd) for the day being displayed. */
   date: string;
-  /** All approved + pending reservations for THIS room on any date. */
   roomEnrichedSlots: readonly EnrichedBookingSlot[];
-  /** All of the current user's active reservations across ALL rooms. */
   userActiveSlots: readonly UserActiveSlot[];
-  /** Firebase UID of the logged-in user. */
   currentUserId: string;
-  /** Current room ID, used to exclude user's own reservations for THIS room from cross-room check. */
   currentRoomId: string;
-  /** Campus operating hours. */
   campusTimeRange: { startMinutes: number; endMinutes: number };
-  /** Current selected reservation range, used to highlight multiple slots. */
   selectedStartTime?: string;
   selectedEndTime?: string;
-  /** Called when user clicks an available slot to pre-fill start/end time. */
-  onSelectSlot: (startTime: string, endTime: string) => void;
-  /** Called when user wants to see alternative rooms (from a reserved slot). */
+  onSelectionChange: (selection: ScheduleSelection | null) => void;
   onRequestAlternatives: () => void;
 }
-
-/* ──────────────────────────── Helpers ─────────────────────────── */
 
 function minutesToTimeString(value: number): string {
   const hours = Math.floor(value / 60);
@@ -68,7 +59,16 @@ function slotsOverlap(
   return slotStart < rangeEnd && slotEnd > rangeStart;
 }
 
-/* ──────────────────────────── Component ──────────────────────── */
+function selectionsMatch(
+  left: ScheduleSelection | null,
+  right: ScheduleSelection | null
+): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return left.startTime === right.startTime && left.endTime === right.endTime;
+}
 
 export default function DaySchedulePanel({
   date,
@@ -79,21 +79,30 @@ export default function DaySchedulePanel({
   campusTimeRange,
   selectedStartTime = '',
   selectedEndTime = '',
-  onSelectSlot,
+  onSelectionChange,
   onRequestAlternatives,
 }: Readonly<DaySchedulePanelProps>) {
   const [now, setNow] = useState(() => new Date());
   const [toast, setToast] = useState<{
+    allowAlternatives?: boolean;
     message: string;
     type: 'info' | 'warning' | 'error';
   } | null>(null);
+  const currentSelection =
+    selectedStartTime && selectedEndTime
+      ? {
+          startTime: selectedStartTime,
+          endTime: selectedEndTime,
+        }
+      : null;
+  const multiSlotSelection = isMultiSlotSelection(currentSelection);
+  const singleSlotSelection = Boolean(currentSelection) && !multiSlotSelection;
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(intervalId);
   }, []);
 
-  // Build 1-hour slot grid for the selected date.
   const timeSlots = useMemo<TimeSlot[]>(() => {
     const slots: TimeSlot[] = [];
     const { startMinutes, endMinutes } = campusTimeRange;
@@ -101,20 +110,14 @@ export default function DaySchedulePanel({
     const isBeforeToday = date < today;
     const isToday = date === today;
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const roomSlotsForDate = roomEnrichedSlots.filter((slot) => slot.date === date);
+    const userSlotsForDate = userActiveSlots.filter((slot) => slot.date === date);
 
-    // Filter to only this date's data
-    const roomSlotsForDate = roomEnrichedSlots.filter(
-      (s) => s.date === date
-    );
-    const userSlotsForDate = userActiveSlots.filter(
-      (s) => s.date === date
-    );
+    for (let minutes = startMinutes; minutes < endMinutes; minutes += 60) {
+      const slotStart = minutesToTimeString(minutes);
+      const slotEnd = minutesToTimeString(minutes + 60);
 
-    for (let mins = startMinutes; mins < endMinutes; mins += 60) {
-      const slotStart = minutesToTimeString(mins);
-      const slotEnd = minutesToTimeString(mins + 60);
-
-      if (isBeforeToday || (isToday && mins <= nowMinutes)) {
+      if (isBeforeToday || (isToday && minutes <= nowMinutes)) {
         slots.push({
           startTime: slotStart,
           endTime: slotEnd,
@@ -123,12 +126,11 @@ export default function DaySchedulePanel({
         continue;
       }
 
-      // 1. Check if this slot overlaps an approved reservation by ANOTHER user on THIS room
       const roomApprovedConflict = roomSlotsForDate.find(
-        (s) =>
-          s.status === 'approved' &&
-          s.userId !== currentUserId &&
-          slotsOverlap(slotStart, slotEnd, s.startTime, s.endTime)
+        (slot) =>
+          slot.status === 'approved' &&
+          slot.userId !== currentUserId &&
+          slotsOverlap(slotStart, slotEnd, slot.startTime, slot.endTime)
       );
 
       if (roomApprovedConflict) {
@@ -140,11 +142,10 @@ export default function DaySchedulePanel({
         continue;
       }
 
-      // 2. Check if the CURRENT USER has an active reservation at this time in ANY OTHER room
       const userCrossRoomConflict = userSlotsForDate.find(
-        (s) =>
-          s.roomId !== currentRoomId &&
-          slotsOverlap(slotStart, slotEnd, s.startTime, s.endTime)
+        (slot) =>
+          slot.roomId !== currentRoomId &&
+          slotsOverlap(slotStart, slotEnd, slot.startTime, slot.endTime)
       );
 
       if (userCrossRoomConflict) {
@@ -157,12 +158,11 @@ export default function DaySchedulePanel({
         continue;
       }
 
-      // 3. Check if this slot overlaps a pending reservation by ANOTHER user on THIS room
       const roomPendingConflict = roomSlotsForDate.find(
-        (s) =>
-          s.status === 'pending' &&
-          s.userId !== currentUserId &&
-          slotsOverlap(slotStart, slotEnd, s.startTime, s.endTime)
+        (slot) =>
+          slot.status === 'pending' &&
+          slot.userId !== currentUserId &&
+          slotsOverlap(slotStart, slotEnd, slot.startTime, slot.endTime)
       );
 
       if (roomPendingConflict) {
@@ -174,7 +174,6 @@ export default function DaySchedulePanel({
         continue;
       }
 
-      // 4. Available
       slots.push({
         startTime: slotStart,
         endTime: slotEnd,
@@ -193,50 +192,65 @@ export default function DaySchedulePanel({
     userActiveSlots,
   ]);
 
+  function dismissToast() {
+    setToast(null);
+  }
+
   function handleSlotClick(slot: TimeSlot) {
+    const nextSelectionResult = getNextScheduleSelection(
+      timeSlots,
+      currentSelection,
+      slot
+    );
+
+    if (!selectionsMatch(nextSelectionResult.selection, currentSelection)) {
+      onSelectionChange(nextSelectionResult.selection);
+    }
+
+    if (nextSelectionResult.reason === 'blocked-range') {
+      setToast({
+        allowAlternatives: false,
+        message:
+          'That range crosses a reserved or unavailable slot. Pick another end slot.',
+        type: 'warning',
+      });
+      return;
+    }
+
     switch (slot.status) {
       case 'available':
-        onSelectSlot(slot.startTime, slot.endTime);
-        break;
-
+        dismissToast();
+        return;
       case 'past':
-        break;
-
+        return;
       case 'reserved-others':
         setToast({
+          allowAlternatives: true,
           message:
             'This slot is already reserved. Would you like to see alternative rooms?',
           type: 'warning',
         });
-        break;
-
+        return;
       case 'user-conflict':
         setToast({
           message: `Only one reservation at a time. You already have a booking at ${slot.conflictRoomName || 'another room'} during this time.`,
           type: 'error',
         });
-        break;
-
+        return;
       case 'pending-others':
         setToast({
           message:
             'This slot has a pending reservation from another user. You can still attempt to book, but it may conflict.',
           type: 'info',
         });
-        break;
+        return;
+      default:
+        return;
     }
   }
 
-  function dismissToast() {
-    setToast(null);
-  }
-
-  function isSlotSelected(slot: TimeSlot): boolean {
-    return Boolean(
-      selectedStartTime &&
-        selectedEndTime &&
-        slotsOverlap(slot.startTime, slot.endTime, selectedStartTime, selectedEndTime)
-    );
+  function slotIsSelected(slot: TimeSlot): boolean {
+    return isSlotInsideSelection(slot, currentSelection);
   }
 
   function getSlotClasses(status: SlotStatus, selected: boolean): string {
@@ -257,6 +271,38 @@ export default function DaySchedulePanel({
         return `${base} cursor-pointer schedule-slot-pending${selectedClass}`;
       default:
         return base;
+    }
+  }
+
+  function getSlotTimeClasses(status: SlotStatus): string {
+    switch (status) {
+      case 'reserved-others':
+        return 'line-through opacity-80';
+      case 'past':
+        return 'line-through opacity-70';
+      default:
+        return '';
+    }
+  }
+
+  function getStatusPillClasses(status: SlotStatus, selected: boolean): string {
+    if (selected && status === 'available') {
+      return 'border border-primary/20 bg-primary/10 text-primary';
+    }
+
+    switch (status) {
+      case 'available':
+        return 'border border-green-200/80 bg-green-50/90 text-green-700';
+      case 'past':
+        return 'border border-gray-200/90 bg-gray-100/95 text-gray-600';
+      case 'reserved-others':
+        return 'border border-red-200/90 bg-red-50/95 text-red-700';
+      case 'user-conflict':
+        return 'border border-red-300/80 bg-red-100/90 text-red-800';
+      case 'pending-others':
+        return 'border border-amber-200/90 bg-amber-50/95 text-amber-700';
+      default:
+        return 'border border-dark/10 bg-white/80 text-black/70';
     }
   }
 
@@ -342,6 +388,8 @@ export default function DaySchedulePanel({
             />
           </svg>
         );
+      default:
+        return null;
     }
   }
 
@@ -352,9 +400,9 @@ export default function DaySchedulePanel({
       case 'past':
         return 'Unavailable';
       case 'reserved-others':
-        return 'Reserved/Unavailable';
+        return 'Reserved';
       case 'user-conflict':
-        return 'Your conflict';
+        return 'Blocked';
       case 'pending-others':
         return 'Pending';
       default:
@@ -370,17 +418,15 @@ export default function DaySchedulePanel({
         return 'border-amber-300/60 bg-amber-50/95 text-amber-800';
       case 'error':
         return 'border-red-300/60 bg-red-50/95 text-red-800';
+      default:
+        return '';
     }
   }
 
-  // Count available vs total
-  const availableCount = timeSlots.filter(
-    (s) => s.status === 'available'
-  ).length;
+  const availableCount = timeSlots.filter((slot) => slot.status === 'available').length;
 
   return (
     <div className="relative">
-      {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h5 className="text-sm font-bold text-black">Day Schedule</h5>
@@ -393,51 +439,62 @@ export default function DaySchedulePanel({
         </span>
       </div>
 
-      {/* Legend */}
       <div className="mb-3 flex flex-wrap gap-2 text-[10px] font-bold">
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-white border border-green-400/60" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm border border-green-400/60 bg-white" />
           Available
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-100 border border-red-300/60" />
-          Reserved/Unavailable
+          <span className="inline-block h-2.5 w-2.5 rounded-sm border border-red-300/60 bg-red-100" />
+          Reserved
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-gray-100 border border-gray-300/70" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm border border-gray-300/70 bg-gray-100" />
           Past
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-primary/15 border border-primary/45" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm border border-primary/45 bg-primary/15" />
           Selected
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-100 border border-amber-300/60" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm border border-amber-300/60 bg-amber-100" />
           Pending
         </span>
       </div>
 
-      {/* Slot Grid */}
+      {singleSlotSelection && (
+        <p className="mb-3 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-[11px] font-bold text-primary">
+          Start slot selected. Click another available slot to fill the full range, or click the selected slot again to clear it.
+        </p>
+      )}
+
       <div className="schedule-panel-scroll grid max-h-[22rem] grid-cols-1 gap-2 overflow-y-auto pr-1">
         {timeSlots.map((slot) => {
-          const selected = isSlotSelected(slot);
+          const selected = slotIsSelected(slot);
 
           return (
             <button
               key={slot.startTime}
               type="button"
               onClick={() => handleSlotClick(slot)}
-              disabled={slot.status === 'past'}
+              aria-disabled={slot.status === 'past'}
               aria-pressed={selected}
               className={getSlotClasses(slot.status, selected)}
             >
               {getStatusIcon(slot.status)}
-              <span className="min-w-[6.75rem] text-left">
-              {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
+              <span className={`min-w-[6.75rem] text-left ${getSlotTimeClasses(slot.status)}`}>
+                {formatTime(slot.startTime)} - {formatTime(slot.endTime)}
               </span>
-              <span className="ml-auto w-[6.8rem] shrink-0 text-right text-[10px] opacity-80">
+              <span
+                className={`ml-auto inline-flex min-w-[6.8rem] shrink-0 items-center justify-center rounded-full px-2 py-1 text-[10px] font-bold ${getStatusPillClasses(
+                  slot.status,
+                  selected
+                )}`}
+              >
                 {selected && slot.status === 'available'
-                  ? 'Selected'
+                  ? singleSlotSelection
+                    ? 'Start selected'
+                    : 'Selected'
                   : getStatusLabel(slot.status)}
               </span>
             </button>
@@ -445,16 +502,15 @@ export default function DaySchedulePanel({
         })}
       </div>
 
-      {/* Toast / Action Prompt */}
       {toast && (
         <div
-          className={`mt-3 rounded-xl border p-3 text-xs font-bold animate-in ${getToastClasses(
+          className={`mt-3 animate-in rounded-xl border p-3 text-xs font-bold ${getToastClasses(
             toast.type
           )}`}
         >
           <p>{toast.message}</p>
           <div className="mt-2.5 flex items-center gap-2">
-            {toast.type === 'warning' && (
+            {toast.allowAlternatives && (
               <button
                 type="button"
                 onClick={() => {
