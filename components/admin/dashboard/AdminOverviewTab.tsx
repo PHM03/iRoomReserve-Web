@@ -669,7 +669,12 @@ export default function AdminOverviewTab({
         <BleSummaryCard
           activeBeaconsOverride={dashboardSummary?.activeBeacons}
           buildingName={buildingName}
+          compactActiveLabel="Active Beacons"
+          compactOnlineLabel="Online Beacons"
+          connectedBeaconsOverride={dashboardSummary?.activeBeacons}
           detailsHref="/admin/ble-status"
+          onlineBeaconsOverride={dashboardSummary?.onlineBeacons}
+          onRefreshData={onReload}
           rooms={rooms}
           totalBeaconsOverride={dashboardSummary?.totalBeacons}
           variant="compact"

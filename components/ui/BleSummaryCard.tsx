@@ -21,8 +21,13 @@ interface BleSummaryCardProps {
   activeBeaconsOverride?: number;
   buildingName?: string;
   className?: string;
+  compactActiveLabel?: string;
+  compactOnlineLabel?: string;
+  connectedBeaconsOverride?: number;
   pollIntervalMs?: number;
   detailsHref?: string;
+  onlineBeaconsOverride?: number;
+  onRefreshData?: () => Promise<void> | void;
   onViewDetails?: () => void;
   rooms?: Pick<
     Room,
@@ -57,8 +62,13 @@ export default function BleSummaryCard({
   activeBeaconsOverride,
   buildingName,
   className = '',
+  compactActiveLabel = 'Total Active Beacons',
+  compactOnlineLabel = 'Total Online Beacons',
+  connectedBeaconsOverride,
   pollIntervalMs = BLE_MONITOR_REFRESH_INTERVAL_MS,
   detailsHref = '/dashboard/room-status',
+  onlineBeaconsOverride,
+  onRefreshData,
   onViewDetails,
   rooms = [],
   totalBeaconsOverride,
@@ -81,13 +91,20 @@ export default function BleSummaryCard({
     typeof totalBeaconsOverride === 'number'
       ? totalBeaconsOverride
       : getBeaconConfiguredRooms(rooms).length;
-  const totalActiveBeacons =
-    typeof activeBeaconsOverride === 'number'
-      ? activeBeaconsOverride
+  const totalOnlineBeacons =
+    typeof onlineBeaconsOverride === 'number'
+      ? onlineBeaconsOverride
       : getBeaconConfiguredRooms(rooms).filter(
           (room) => isRoomBeaconHardwareOnline(room)
         ).length;
-  const totalInactiveBeacons = Math.max(0, totalBeacons - totalActiveBeacons);
+  const totalActiveBeacons =
+    typeof connectedBeaconsOverride === 'number'
+      ? connectedBeaconsOverride
+      : typeof activeBeaconsOverride === 'number'
+        ? activeBeaconsOverride
+        : getBeaconConfiguredRooms(rooms).filter(
+            (room) => room.beaconConnected === true
+          ).length;
 
   const refreshCard = useCallback(
     async (mode: 'initial' | 'manual' | 'background' = 'initial') => {
@@ -100,8 +117,19 @@ export default function BleSummaryCard({
       }
 
       try {
-        const nextOccupancyData = await fetchOccupancySnapshot({ force: mode === 'manual' });
-        setOccupancyData(nextOccupancyData);
+        const refreshTasks: Promise<unknown>[] = [
+          fetchOccupancySnapshot({ force: mode === 'manual' }).then(
+            (nextOccupancyData) => {
+              setOccupancyData(nextOccupancyData);
+            }
+          ),
+        ];
+
+        if (onRefreshData) {
+          refreshTasks.push(Promise.resolve(onRefreshData()));
+        }
+
+        await Promise.all(refreshTasks);
 
         setErrorMessage(null);
         setLastRefreshedAt(new Date());
@@ -121,7 +149,7 @@ export default function BleSummaryCard({
         }
       }
     },
-    []
+    [onRefreshData]
   );
 
   useEffect(() => {
@@ -222,12 +250,12 @@ export default function BleSummaryCard({
             <span className="text-sm font-bold text-black">{totalBeacons}</span>
           </div>
           <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
-            <span className="text-[11px] font-bold uppercase text-black/55">Total Active Beacons</span>
-            <span className="text-sm font-bold text-black">{totalActiveBeacons}</span>
+            <span className="text-[11px] font-bold uppercase text-black/55">{compactOnlineLabel}</span>
+            <span className="text-sm font-bold text-black">{totalOnlineBeacons}</span>
           </div>
           <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
-            <span className="text-[11px] font-bold uppercase text-black/55">Total Inactive Beacons</span>
-            <span className="text-sm font-bold text-black">{totalInactiveBeacons}</span>
+            <span className="text-[11px] font-bold uppercase text-black/55">{compactActiveLabel}</span>
+            <span className="text-sm font-bold text-black">{totalActiveBeacons}</span>
           </div>
           <div className="rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
             <div className="flex items-center justify-between gap-2">
@@ -302,16 +330,16 @@ export default function BleSummaryCard({
 
         <div className="rounded-2xl border border-dark/10 bg-dark/5 p-4">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-black/45">
-            Total Active Beacons
+            Total Online Beacons
           </p>
-          <p className="mt-3 text-2xl font-bold text-black">{totalActiveBeacons}</p>
+          <p className="mt-3 text-2xl font-bold text-black">{totalOnlineBeacons}</p>
         </div>
 
         <div className="rounded-2xl border border-dark/10 bg-dark/5 p-4">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-black/45">
-            Total Inactive
+            Total Active Beacons
           </p>
-          <p className="mt-3 text-2xl font-bold text-black">{totalInactiveBeacons}</p>
+          <p className="mt-3 text-2xl font-bold text-black">{totalActiveBeacons}</p>
         </div>
 
         <div className="rounded-2xl border border-dark/10 bg-dark/5 p-4">

@@ -35,6 +35,7 @@ export interface AdminDashboardSnapshot {
 export interface AdminDashboardSummary {
   activeBeacons: number;
   availableRooms: number;
+  onlineBeacons: number;
   occupiedRooms: number;
   pendingRequests: number;
   pendingPreviewLimit: number | null;

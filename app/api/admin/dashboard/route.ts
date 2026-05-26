@@ -14,6 +14,7 @@ import {
   doesScheduleMatchContext,
   normalizeScheduleContext,
 } from "@/lib/schedules/scheduleContext";
+import { isRoomBeaconHardwareOnline } from "@/lib/occupancy/bleMonitor";
 
 type DashboardAdminRequest = {
   createdAt?: unknown;
@@ -59,6 +60,7 @@ type DashboardSchedule = {
 type DashboardSummary = {
   activeBeacons: number;
   availableRooms: number;
+  onlineBeacons: number;
   occupiedRooms: number;
   pendingRequests: number;
   pendingPreviewLimit: number | null;
@@ -415,6 +417,10 @@ export async function GET(request: NextRequest) {
         if (hasConfiguredBeacon(room)) {
           counts.totalBeacons += 1;
 
+          if (isRoomBeaconHardwareOnline(room)) {
+            counts.onlineBeacons += 1;
+          }
+
           if (room.beaconConnected === true) {
             counts.activeBeacons += 1;
           }
@@ -425,6 +431,7 @@ export async function GET(request: NextRequest) {
       {
         activeBeacons: 0,
         availableRooms: 0,
+        onlineBeacons: 0,
         occupiedRooms: 0,
         reservedRooms: 0,
         totalBeacons: 0,
@@ -490,6 +497,7 @@ export async function GET(request: NextRequest) {
       ? {
           activeBeacons: summaryStatusCounts.activeBeacons,
           availableRooms: summaryStatusCounts.availableRooms,
+          onlineBeacons: summaryStatusCounts.onlineBeacons,
           occupiedRooms: summaryStatusCounts.occupiedRooms,
           pendingRequests: includePendingRequests ? allRequests.length : (pendingRequestCount ?? 0),
           pendingPreviewLimit: pendingLimit,
