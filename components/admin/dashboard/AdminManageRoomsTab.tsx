@@ -724,13 +724,13 @@ export default function AdminManageRoomsTab({
                                             </select>
                                         </div>
                                         <div className="sm:col-span-2">
-                                            <label className="mb-1.5 block text-xs font-bold text-black">Beacon ID</label>
+                                            <label className="mb-1.5 block text-xs font-bold text-black">Beacon ID (bld-roomname-beacon)</label>
                                             <input
                                                 type="text"
                                                 value={editBeaconId}
                                                 onChange={(event) => setEditBeaconId(event.target.value)}
                                                 className="glass-input w-full px-4 py-2.5 text-sm"
-                                                placeholder="e.g. ESP32_ROOM_301"
+                                                placeholder="e.g. gd3-506-beacon"
                                             />
                                         </div>
                                     </div>
