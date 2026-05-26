@@ -2,8 +2,9 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError, ApiError } from "@/lib/server/api-error";
+import { db } from "@/lib/firebase/firebase-admin";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
-import { assertAuthenticated } from "@/lib/server/route-guards";
+import { assertAuthenticated, assertCanManageBuilding } from "@/lib/server/route-guards";
 import { roomCheckInMethodSchema } from "@/lib/server/schemas";
 import {
   approveReservationRecord,
@@ -71,6 +72,17 @@ const reservationActionSchema = z.discriminatedUnion("action", [
     userId: z.string().trim().min(1),
   }),
 ]);
+
+function getTodayDateKeyInReservationTimeZone(date: Date = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return formatter.format(date);
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -168,10 +180,43 @@ export async function PATCH(
         await completeReservationRecord(reservationId, payload.userId);
         break;
       case "delete":
-        if (authContext.uid !== payload.userId) {
-          throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
+        const reservationSnapshot = await db
+          .collection("reservations")
+          .doc(reservationId)
+          .get();
+
+        if (!reservationSnapshot.exists) {
+          throw new ApiError(404, "not_found", "Reservation not found.");
         }
-        await deleteReservationRecord(reservationId, payload.userId);
+
+        const reservation = reservationSnapshot.data() as {
+          buildingId?: string;
+          date?: string;
+          status?: string;
+          userId?: string;
+        };
+
+        if (!reservation.userId) {
+          throw new ApiError(400, "invalid_reservation", "Reservation owner is missing.");
+        }
+
+        if (authContext.uid === reservation.userId) {
+          await deleteReservationRecord(reservationId, reservation.userId);
+          break;
+        }
+
+        const todayDateKey = getTodayDateKeyInReservationTimeZone();
+        const isExpiredPendingReservation =
+          reservation.status === "pending" &&
+          typeof reservation.date === "string" &&
+          reservation.date < todayDateKey;
+
+        if (!reservation.buildingId || !isExpiredPendingReservation) {
+          throw new ApiError(403, "forbidden", "You cannot delete this reservation.");
+        }
+
+        assertCanManageBuilding(authContext, reservation.buildingId);
+        await deleteReservationRecord(reservationId, reservation.userId);
         break;
       default:
         throw new ApiError(400, "invalid_action", "Unsupported reservation action.");
