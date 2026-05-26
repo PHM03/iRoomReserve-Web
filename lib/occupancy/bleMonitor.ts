@@ -2,8 +2,8 @@ import { type OccupancyRecord } from "@/lib/occupancy/occupancy";
 import { formatDateTime } from "@/lib/utils/dateTime";
 import { type Room } from "@/lib/rooms/rooms";
 
-export const BLE_MONITOR_REFRESH_INTERVAL_MS = 600_000;
-export const BLE_HARDWARE_OFFLINE_WINDOW_MS = 12 * 60 * 1000;
+export const BLE_MONITOR_REFRESH_INTERVAL_MS = 30_000;
+export const BLE_HARDWARE_OFFLINE_WINDOW_MS = 75_000;
 
 export type BleHistoryTone = "gray" | "green" | "red" | "yellow" | "blue";
 

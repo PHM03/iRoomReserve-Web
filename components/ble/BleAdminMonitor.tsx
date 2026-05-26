@@ -16,7 +16,7 @@ import {
   getBeaconConfiguredRooms,
   getBleHistoryTone,
   getRoomBleBeaconId,
-  isBeaconHardwareOnline,
+  isRoomBeaconHardwareOnline,
 } from '@/lib/occupancy/bleMonitor';
 import {
   DEFAULT_OCCUPANCY_PAYLOAD,
@@ -35,7 +35,14 @@ interface BleAdminMonitorProps {
   reservations: Reservation[];
   rooms: Pick<
     Room,
-    'id' | 'name' | 'floor' | 'beaconId' | 'bleBeaconId'
+    | 'id'
+    | 'name'
+    | 'floor'
+    | 'beaconId'
+    | 'bleBeaconId'
+    | 'beaconConnected'
+    | 'beaconLastConnectedAt'
+    | 'beaconLastDisconnectedAt'
   >[];
   className?: string;
   pollIntervalMs?: number;
@@ -74,7 +81,7 @@ function formatRefreshCountdown(milliseconds: number) {
 function getReservationStatus(
   roomId: string,
   reservations: Reservation[],
-  connectionStatus: string
+  beaconConnected: boolean
 ) {
   const hasOngoingReservation = reservations.some(
     (reservation) =>
@@ -88,12 +95,28 @@ function getReservationStatus(
     } as const;
   }
 
-  const normalizedConnectionStatus = connectionStatus.trim().toUpperCase();
   return {
-    label: normalizedConnectionStatus === 'CONNECTED' ? 'Connected' : 'Disconnected',
-    status:
-      normalizedConnectionStatus === 'CONNECTED' ? 'CONNECTED' : 'DISCONNECTED',
+    label: beaconConnected ? 'Connected' : 'Disconnected',
+    status: beaconConnected ? 'CONNECTED' : 'DISCONNECTED',
   } as const;
+}
+
+function getRoomLastUpdateTimestamp(
+  room: Pick<
+    Room,
+    'beaconLastConnectedAt' | 'beaconLastDisconnectedAt'
+  >
+) {
+  const lastConnectedAt = room.beaconLastConnectedAt?.toDate?.() ?? null;
+  const lastDisconnectedAt = room.beaconLastDisconnectedAt?.toDate?.() ?? null;
+
+  if (lastConnectedAt && lastDisconnectedAt) {
+    return lastConnectedAt.getTime() >= lastDisconnectedAt.getTime()
+      ? lastConnectedAt.toISOString()
+      : lastDisconnectedAt.toISOString();
+  }
+
+  return lastConnectedAt?.toISOString() ?? lastDisconnectedAt?.toISOString() ?? null;
 }
 
 export default function BleAdminMonitor({
@@ -140,7 +163,6 @@ export default function BleAdminMonitor({
         : beaconRooms.filter((room) => room.floor === floorFilter),
     [beaconRooms, floorFilter]
   );
-  const hardwareOnline = isBeaconHardwareOnline(occupancyData.timestamp);
 
   useEffect(() => {
     if (floorOptions.length === 0) {
@@ -319,14 +341,6 @@ export default function BleAdminMonitor({
         </div>
       ) : null}
 
-      {beaconRooms.length > 1 ? (
-        <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          The current ESP32 endpoint is still a single test feed, so the live
-          status below is shared across all configured beacon rooms until the
-          API includes a room or beacon identifier.
-        </div>
-      ) : null}
-
       <div className="mt-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h4 className="text-base font-bold text-black">Live Connection Status</h4>
@@ -359,11 +373,13 @@ export default function BleAdminMonitor({
               </thead>
               <tbody className="divide-y divide-dark/10 bg-white/60 text-sm text-black">
                 {filteredBeaconRooms.map((room) => {
+                  const hardwareOnline = isRoomBeaconHardwareOnline(room);
                   const reservationStatus = getReservationStatus(
                     room.id,
                     reservations,
-                    occupancyData.connectionStatus
+                    room.beaconConnected === true
                   );
+                  const lastUpdateTimestamp = getRoomLastUpdateTimestamp(room);
 
                   return (
                     <tr key={room.id}>
@@ -385,7 +401,7 @@ export default function BleAdminMonitor({
                         />
                       </td>
                       <td className="px-4 py-3">
-                        {formatBleTimestamp(occupancyData.timestamp)}
+                        {formatBleTimestamp(lastUpdateTimestamp)}
                       </td>
                     </tr>
                   );

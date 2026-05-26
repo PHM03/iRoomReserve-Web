@@ -26,14 +26,14 @@ describe('bleMonitor helpers', () => {
     expect(
       isBeaconHardwareOnline(
         '2026-04-04T12:00:00+08:00',
-        new Date('2026-04-04T12:10:30+08:00'),
+        new Date('2026-04-04T12:01:10+08:00'),
         BLE_HARDWARE_OFFLINE_WINDOW_MS
       )
     ).toBe(true);
     expect(
       isBeaconHardwareOnline(
         '2026-04-04T12:00:00+08:00',
-        new Date('2026-04-04T12:12:30+08:00'),
+        new Date('2026-04-04T12:01:20+08:00'),
         BLE_HARDWARE_OFFLINE_WINDOW_MS
       )
     ).toBe(false);

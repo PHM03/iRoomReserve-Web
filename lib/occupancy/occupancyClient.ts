@@ -6,7 +6,7 @@ import {
   type OccupancyPayload,
 } from '@/lib/occupancy/occupancy';
 
-const OCCUPANCY_CLIENT_CACHE_WINDOW_MS = 5 * 60 * 1000;
+const OCCUPANCY_CLIENT_CACHE_WINDOW_MS = 5_000;
 
 let cachedPayload: OccupancyPayload | null = null;
 let cachedAt = 0;
