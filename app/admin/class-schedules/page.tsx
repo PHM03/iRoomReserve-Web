@@ -130,6 +130,8 @@ export default function AdminClassSchedulesPage() {
     setSchedEnd,
     addingSchedule,
     editingScheduleId,
+    scheduleSaveError,
+    clearScheduleSaveError,
     toggleScheduleForm,
     handleSaveSchedule,
     handleEditSchedule,
@@ -447,6 +449,7 @@ export default function AdminClassSchedulesPage() {
 
           <AdminClassSchedulesSection
             schedules={filteredSchedules}
+            allSchedules={schedules}
             rooms={rooms}
             showScheduleForm={showScheduleForm}
             schedRoomId={schedRoomId}
@@ -468,6 +471,8 @@ export default function AdminClassSchedulesPage() {
             onSchedDayChange={setSchedDay}
             onSchedStartChange={setSchedStart}
             onSchedEndChange={setSchedEnd}
+            scheduleSaveError={scheduleSaveError}
+            onClearScheduleSaveError={clearScheduleSaveError}
             onSaveSchedule={handleSaveSchedule}
             onEditSchedule={handleEditSchedule}
             onDeleteSchedule={handleDeleteSchedule}

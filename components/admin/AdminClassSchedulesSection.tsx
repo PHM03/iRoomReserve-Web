@@ -1,10 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
 import type { Room } from '@/lib/rooms/rooms';
 import type { Schedule } from '@/lib/schedules/schedules';
+import {
+  findScheduleConflicts,
+  SCHEDULE_CONFLICT_MESSAGE,
+  timeRangesOverlap,
+} from '@/lib/schedules/scheduleConflicts';
 import {
   DAY_NAMES,
   formatTime12h,
@@ -78,6 +83,7 @@ function TimeSelect({
 
 interface AdminClassSchedulesSectionProps {
   schedules: Schedule[];
+  allSchedules: Schedule[];
   rooms: Room[];
   showScheduleForm: boolean;
   schedRoomId: string;
@@ -99,6 +105,8 @@ interface AdminClassSchedulesSectionProps {
   onSchedDayChange: (value: number) => void;
   onSchedStartChange: (value: string) => void;
   onSchedEndChange: (value: string) => void;
+  scheduleSaveError: string | null;
+  onClearScheduleSaveError: () => void;
   onSaveSchedule: () => void;
   onEditSchedule: (schedule: Schedule) => void;
   onDeleteSchedule: (scheduleId: string) => Promise<void>;
@@ -134,8 +142,11 @@ function getScheduleBlockHeight(startTime: string, endTime: string) {
   return Math.max(getTimeOffset(endTime) - getTimeOffset(startTime), 30);
 }
 
+type DayScheduleSlotStatus = 'available' | 'scheduled' | 'selected' | 'conflict';
+
 export default function AdminClassSchedulesSection({
   schedules,
+  allSchedules,
   rooms,
   showScheduleForm,
   schedRoomId,
@@ -157,6 +168,8 @@ export default function AdminClassSchedulesSection({
   onSchedDayChange,
   onSchedStartChange,
   onSchedEndChange,
+  scheduleSaveError,
+  onClearScheduleSaveError,
   onSaveSchedule,
   onEditSchedule,
   onDeleteSchedule,
@@ -165,11 +178,13 @@ export default function AdminClassSchedulesSection({
 }: Readonly<AdminClassSchedulesSectionProps>) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingSchedule, setDeletingSchedule] = useState(false);
-  const [timeError, setTimeError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Clear the time error whenever the form is hidden (cancelled / saved)
   useEffect(() => {
-    if (!showScheduleForm) setTimeError(null);
+    if (!showScheduleForm) {
+      setFormError(null);
+    }
   }, [showScheduleForm]);
 
   const campusTimeRule = getCampusTimeRule(campus);
@@ -180,9 +195,113 @@ export default function AdminClassSchedulesSection({
   const endMinHour =
     selectedStartHour === null ? minHour : Math.min(selectedStartHour + 1, maxHour);
   const isEndTimeDisabled = !schedStart || endMinHour > maxHour;
+  const timetableDays = DAY_NAMES.map((label, value) => ({ label, value })).filter(
+    (day) => day.value >= 1 && day.value <= 6
+  );
+  const selectedDayLabel =
+    timetableDays.find((day) => day.value === schedDay)?.label ?? 'Selected day';
+  const roomSchedulesForDay = useMemo(
+    () =>
+      allSchedules.filter(
+        (schedule) =>
+          schedule.roomId === schedRoomId &&
+          schedule.dayOfWeek === schedDay &&
+          schedule.id !== editingScheduleId
+      ),
+    [allSchedules, editingScheduleId, schedDay, schedRoomId]
+  );
+  const conflictingSchedules = useMemo(() => {
+    if (!schedRoomId || !schedStart || !schedEnd) {
+      return [];
+    }
+
+    return findScheduleConflicts(roomSchedulesForDay, {
+      dayOfWeek: schedDay,
+      endTime: schedEnd,
+      roomId: schedRoomId,
+      startTime: schedStart,
+    });
+  }, [roomSchedulesForDay, schedDay, schedEnd, schedRoomId, schedStart]);
+  const conflictingScheduleIds = useMemo(
+    () => new Set(conflictingSchedules.map((schedule) => schedule.id)),
+    [conflictingSchedules]
+  );
+  const liveConflictMessage =
+    conflictingSchedules.length > 0 && schedStart && schedEnd
+      ? SCHEDULE_CONFLICT_MESSAGE
+      : null;
+  const visibleError = formError ?? scheduleSaveError ?? liveConflictMessage;
+  const dayScheduleSlots = useMemo(() => {
+    if (!schedRoomId || maxHour <= minHour) {
+      return [];
+    }
+
+    return Array.from({ length: maxHour - minHour }, (_, index) => {
+      const hour = minHour + index;
+      const slotStart = `${pad2(hour)}:00`;
+      const slotEnd = `${pad2(hour + 1)}:00`;
+      const overlappingSchedules = roomSchedulesForDay.filter((schedule) =>
+        timeRangesOverlap(
+          schedule.startTime,
+          schedule.endTime,
+          slotStart,
+          slotEnd
+        )
+      );
+      const overlapsSelectedRange =
+        Boolean(schedStart && schedEnd) &&
+        timeRangesOverlap(slotStart, slotEnd, schedStart, schedEnd);
+      const overlapsConflict =
+        overlapsSelectedRange &&
+        conflictingSchedules.some((schedule) =>
+          timeRangesOverlap(
+            schedule.startTime,
+            schedule.endTime,
+            slotStart,
+            slotEnd
+          )
+        );
+      let status: DayScheduleSlotStatus = 'available';
+
+      if (overlapsConflict) {
+        status = 'conflict';
+      } else if (overlappingSchedules.length > 0) {
+        status = 'scheduled';
+      } else if (overlapsSelectedRange) {
+        status = 'selected';
+      }
+
+      return {
+        endTime: slotEnd,
+        label:
+          status === 'conflict'
+            ? 'Conflict'
+            : overlappingSchedules[0]
+              ? getScheduleDisplayTitle(overlappingSchedules[0])
+              : status === 'selected'
+                ? 'Selected'
+                : 'Available',
+        startTime: slotStart,
+        status,
+      };
+    });
+  }, [
+    conflictingSchedules,
+    maxHour,
+    minHour,
+    roomSchedulesForDay,
+    schedEnd,
+    schedRoomId,
+    schedStart,
+  ]);
+
+  function clearErrors() {
+    setFormError(null);
+    onClearScheduleSaveError();
+  }
 
   function handleStartChange(value: string) {
-    setTimeError(null);
+    clearErrors();
     onSchedStartChange(value);
 
     if (!value) {
@@ -199,16 +318,25 @@ export default function AdminClassSchedulesSection({
   }
 
   function handleEndChange(value: string) {
-    setTimeError(null);
+    clearErrors();
     onSchedEndChange(value);
   }
 
   function handleSaveClick() {
     const error = validateScheduleTimes(schedStart, schedEnd, campus);
     if (error) {
-      setTimeError(error);
+      clearErrors();
+      setFormError(error);
       return;
     }
+
+    if (liveConflictMessage) {
+      clearErrors();
+      setFormError(liveConflictMessage);
+      return;
+    }
+
+    clearErrors();
     onSaveSchedule();
   }
 
@@ -222,9 +350,6 @@ export default function AdminClassSchedulesSection({
       setShowDeleteConfirm(false);
     }
   }
-  const timetableDays = DAY_NAMES.map((label, value) => ({ label, value })).filter(
-    (day) => day.value >= 1 && day.value <= 6
-  );
   const currentDay = new Date().getDay();
   const timetableHeight = (TIMETABLE_END_HOUR - TIMETABLE_START_HOUR) * PIXELS_PER_HOUR;
 
@@ -249,7 +374,10 @@ export default function AdminClassSchedulesSection({
               <label className="mb-1 block text-xs font-bold text-black">Room</label>
               <select
                 value={schedRoomId}
-                onChange={(event) => onSchedRoomIdChange(event.target.value)}
+                onChange={(event) => {
+                  clearErrors();
+                  onSchedRoomIdChange(event.target.value);
+                }}
                 className="glass-input w-full px-4 py-2.5 text-sm"
               >
                 <option value="">Select room...</option>
@@ -269,7 +397,10 @@ export default function AdminClassSchedulesSection({
               <label className="mb-1 block text-xs font-bold text-black">Day</label>
               <select
                 value={schedDay}
-                onChange={(event) => onSchedDayChange(Number(event.target.value))}
+                onChange={(event) => {
+                  clearErrors();
+                  onSchedDayChange(Number(event.target.value));
+                }}
                 className="glass-input w-full px-4 py-2.5 text-sm"
               >
                 {timetableDays.map((day) => (
@@ -283,7 +414,10 @@ export default function AdminClassSchedulesSection({
               <label className="mb-1 block text-xs font-bold text-black">Course Name</label>
               <input
                 value={schedCourseName}
-                onChange={(event) => onSchedCourseNameChange(event.target.value)}
+                onChange={(event) => {
+                  clearErrors();
+                  onSchedCourseNameChange(event.target.value);
+                }}
                 placeholder="e.g. Introduction to Programming"
                 className="glass-input w-full px-4 py-2.5 text-sm"
               />
@@ -292,7 +426,10 @@ export default function AdminClassSchedulesSection({
               <label className="mb-1 block text-xs font-bold text-black">Course Code</label>
               <input
                 value={schedCourseCode}
-                onChange={(event) => onSchedCourseCodeChange(event.target.value)}
+                onChange={(event) => {
+                  clearErrors();
+                  onSchedCourseCodeChange(event.target.value);
+                }}
                 placeholder="e.g. IT 101"
                 className="glass-input w-full px-4 py-2.5 text-sm"
               />
@@ -301,7 +438,10 @@ export default function AdminClassSchedulesSection({
               <label className="mb-1 block text-xs font-bold text-black">Section</label>
               <input
                 value={schedSection}
-                onChange={(event) => onSchedSectionChange(event.target.value)}
+                onChange={(event) => {
+                  clearErrors();
+                  onSchedSectionChange(event.target.value);
+                }}
                 placeholder="e.g. BSIT 2A"
                 className="glass-input w-full px-4 py-2.5 text-sm"
               />
@@ -312,7 +452,10 @@ export default function AdminClassSchedulesSection({
               </label>
               <input
                 value={schedInstructor}
-                onChange={(event) => onSchedInstructorChange(event.target.value)}
+                onChange={(event) => {
+                  clearErrors();
+                  onSchedInstructorChange(event.target.value);
+                }}
                 placeholder="e.g. Prof. Santos"
                 className="glass-input w-full px-4 py-2.5 text-sm"
               />
@@ -345,10 +488,87 @@ export default function AdminClassSchedulesSection({
               />
             </div>
           </div>
-          {timeError ? (
+          {visibleError ? (
             <p className="rounded-lg bg-red-50 px-4 py-2 text-sm font-medium text-red-700">
-              {timeError}
+              {visibleError}
             </p>
+          ) : null}
+          {schedRoomId ? (
+            <div className="rounded-xl border border-gray-200 bg-[#faf7f7] p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-black">Day Schedule</h4>
+                  <p className="text-xs text-black/65">
+                    {selectedDayLabel} for the selected room
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[10px] font-bold text-black/70">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm border border-gray-300/80 bg-white" />
+                    Available
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm border border-[#8B0000]/30 bg-[#fde8e8]" />
+                    Scheduled
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm border border-primary/40 bg-primary/10" />
+                    Selected
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm border border-red-400/70 bg-red-100" />
+                    Conflict
+                  </span>
+                </div>
+              </div>
+              <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto pr-1">
+                {dayScheduleSlots.map((slot) => {
+                  const isConflict = slot.status === 'conflict';
+                  const slotClasses =
+                    slot.status === 'conflict'
+                      ? 'border-red-400/70 bg-red-100 text-red-800'
+                      : slot.status === 'scheduled'
+                        ? 'border-[#8B0000]/20 bg-[#fde8e8] text-[#8B0000]'
+                        : slot.status === 'selected'
+                          ? 'border-primary/35 bg-primary/10 text-primary'
+                          : 'border-gray-200 bg-white text-black/80';
+
+                  return (
+                    <div
+                      key={slot.startTime}
+                      className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-xs font-semibold ${slotClasses}`}
+                    >
+                      <span className="min-w-[7rem]">
+                        {formatTime12h(slot.startTime)} - {formatTime12h(slot.endTime)}
+                      </span>
+                      <span
+                        className={`truncate ${slot.status === 'scheduled' || isConflict ? 'line-through' : ''}`}
+                      >
+                        {slot.label}
+                      </span>
+                      <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide opacity-80">
+                        {slot.status}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {conflictingSchedules.length > 0 ? (
+                <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                  <p className="text-xs font-bold text-red-800">
+                    Conflicts with:
+                  </p>
+                  <div className="mt-1 space-y-1 text-xs text-red-700">
+                    {conflictingSchedules.map((schedule) => (
+                      <p key={schedule.id}>
+                        {getScheduleDisplayTitle(schedule)} | {formatTime12h(schedule.startTime)} -{' '}
+                        {formatTime12h(schedule.endTime)}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           <div className="flex items-center justify-end gap-3">
@@ -370,7 +590,8 @@ export default function AdminClassSchedulesSection({
                 !schedRoomId ||
                 !schedCourseName.trim() ||
                 !schedCourseCode.trim() ||
-                !schedSection.trim()
+                !schedSection.trim() ||
+                Boolean(liveConflictMessage)
               }
               className="btn-primary px-6 py-2.5 text-sm disabled:opacity-50"
             >
@@ -469,7 +690,11 @@ export default function AdminClassSchedulesSection({
                     type="button"
                     onClick={() => onEditSchedule(schedule)}
                     title={`${schedule.courseName ?? schedule.subjectName} | ${schedule.section ?? ''} | ${schedule.instructorName} | ${schedule.courseCode ?? ''} | ${formatTime12h(schedule.startTime)} - ${formatTime12h(schedule.endTime)}`}
-                    className="absolute left-2 right-2 overflow-hidden rounded-md border-l-[3px] border-[#8B0000] bg-[#fde8e8] px-2 py-1 text-left text-xs transition-all hover:bg-[#f9c8c8] hover:shadow-[0_2px_6px_rgba(0,0,0,0.1)]"
+                    className={`absolute left-2 right-2 overflow-hidden rounded-md border-l-[3px] px-2 py-1 text-left text-xs transition-all hover:shadow-[0_2px_6px_rgba(0,0,0,0.1)] ${
+                      conflictingScheduleIds.has(schedule.id)
+                        ? 'border-red-700 bg-red-100 ring-2 ring-red-400/70 hover:bg-red-200'
+                        : 'border-[#8B0000] bg-[#fde8e8] hover:bg-[#f9c8c8]'
+                    }`}
                     style={{
                       top: getTimeOffset(schedule.startTime),
                       height: getScheduleBlockHeight(

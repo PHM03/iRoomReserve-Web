@@ -2,19 +2,33 @@
 
 import type { SubmitEvent } from 'react';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DaySchedulePanel from '@/components/rooms/schedules/DaySchedulePanel';
 import RoomAvailabilityPicker from '@/components/rooms/RoomAvailabilityPicker';
 import RoomCard from '@/components/rooms/RoomCard';
 import RoomAssistantWidget from '@/components/rooms/RoomAssistantWidget';
 import { useAuth } from '@/context/AuthContext';
-import { getCampusName, getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
+import {
+  getCampusName,
+  getManagedBuildingIdsForCampus,
+  getManagedBuildingsForCampus,
+} from '@/lib/buildings/campusAssignments';
 import { inferCampusFromBuilding, type ReservationCampus } from '@/lib/buildings/campuses';
 import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
 import {
+  logAssistantAuthState,
+  logAssistantCampusFilter,
+  logAssistantFirestoreQuery,
+  logAssistantFirestoreSnapshot,
+  toAssistantRoomRecord,
+  toAssistantReservationRecords,
+} from '@/lib/ai/roomAssistantRealtime';
+import {
   createReservation,
   createRecurringReservation,
+  onReservationsByBuildingIds,
+  type Reservation,
   uploadReservationDocument,
   validateReservationApprover,
 } from '@/lib/reservations/reservations';
@@ -27,7 +41,7 @@ import {
   type EnrichedBookingSlot,
   type UserActiveSlot,
 } from '@/lib/reservations/roomAvailability';
-import { getRoomsByBuilding, type Room } from '@/lib/rooms/rooms';
+import { getRoomsByBuilding, onRoomsByBuildingIds, type Room } from '@/lib/rooms/rooms';
 import { getSchedulesByRoomId, type Schedule } from '@/lib/schedules/schedules';
 import { formatDate, formatTime } from '@/lib/utils/dateTime';
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
@@ -41,7 +55,6 @@ type RoomFilterKey =
   | 'specialized-room'
   | 'gymnasium'
   | 'open-area';
-type AssistantRoomType = '' | 'glass' | 'lecture' | 'lab';
 
 const WEEKDAY_OPTIONS = [
   { label: 'Mon', value: 1 },
@@ -65,6 +78,7 @@ const CAMPUS_TIME_RANGES: Record<ReservationCampus, { endMinutes: number; startM
     endMinutes: 21 * 60
   },
 };
+const ASSISTANT_CAMPUS_ORDER: ReservationCampus[] = ['main', 'digi'];
 const FILTER_CHIPS: Array<{ key: RoomFilterKey; label: string }> = [
   {
     key: 'classroom',
@@ -119,6 +133,28 @@ const PAST_TIME_MESSAGE =
   'That timeslot has already started or passed. Please choose a future 1-hour slot.';
 const NO_RECURRING_DATES_MESSAGE =
   'No reservation dates match the selected recurring schedule. Choose another date range or weekday.';
+
+function getFirstAssistantScope(preferredCampus?: ReservationCampus | null) {
+  const campusCandidates = preferredCampus
+    ? [preferredCampus]
+    : ASSISTANT_CAMPUS_ORDER;
+
+  for (const campus of campusCandidates) {
+    const [building] = getManagedBuildingsForCampus(campus);
+
+    if (building) {
+      return {
+        campus,
+        building: {
+          id: building.id,
+          name: building.name,
+        },
+      };
+    }
+  }
+
+  return null;
+}
 
 function timeStringToMinutes(value: string): number {
   const [hours, minutes] = value.split(':').map(Number);
@@ -249,50 +285,8 @@ function matchesRoomType(room: Room, filter: Exclude<RoomFilterKey, 'available'>
   }
 }
 
-function mapRoomTypeToRecommendationType(room: Room): AssistantRoomType {
-  const roomType = room.roomType.trim().toLowerCase();
-
-  if (roomType.includes('glass')) {
-    return 'glass';
-  }
-
-  if (roomType.includes('lab')) {
-    return 'lab';
-  }
-
-  return 'lecture';
-}
-
-function buildRecommendationFeatures(room: Room): string[] {
-  const features: string[] = [];
-
-  if (!room.acStatus.trim().toLowerCase().includes('no')) {
-    features.push('AC');
-  }
-
-  if (!room.tvProjectorStatus.trim().toLowerCase().includes('no')) {
-    features.push('Projector');
-  }
-
-  return features;
-}
-
-function toRecommendationRoom(room: Room) {
-  return {
-    roomId: room.id,
-    type: mapRoomTypeToRecommendationType(room),
-    capacity: room.capacity,
-    building: room.buildingName,
-    features: buildRecommendationFeatures(room),
-    // The live reserve page does not expose sentiment yet, so it defaults to neutral.
-    sentimentScore: 0,
-    label: room.name,
-    originalRoom: room,
-  };
-}
-
 export default function ReserveRoomPage() {
-  const { firebaseUser, profile } = useAuth();
+  const { firebaseUser, loading: authLoading, profile } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedRoomParam = searchParams.get('roomId') ?? '';
@@ -341,8 +335,22 @@ export default function ReserveRoomPage() {
   const [enrichedSlots, setEnrichedSlots] = useState<EnrichedBookingSlot[]>([]);
   const [userActiveSlots, setUserActiveSlots] = useState<UserActiveSlot[]>([]);
   const [roomSchedules, setRoomSchedules] = useState<Schedule[]>([]);
-  const [assistantRequested, setAssistantRequested] = useState(false);
+  const [assistantRooms, setAssistantRooms] = useState<Room[]>([]);
+  const [assistantReservations, setAssistantReservations] = useState<Reservation[]>([]);
+  const [assistantDataLoading, setAssistantDataLoading] = useState(false);
   const [now, setNow] = useState(() => new Date());
+
+  const assistantBuildingIds = useMemo(() => {
+    if (activeBuilding) {
+      return [activeBuilding.id];
+    }
+
+    if (activeCampus) {
+      return getManagedBuildingIdsForCampus(activeCampus);
+    }
+
+    return [];
+  }, [activeBuilding, activeCampus]);
 
   useEffect(() => {
     if (!firebaseUser || !activeBuilding) {
@@ -389,6 +397,107 @@ export default function ReserveRoomPage() {
     const intervalId = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    logAssistantAuthState({
+      authLoading,
+      firebaseUid: firebaseUser?.uid ?? null,
+      isAuthenticated: Boolean(firebaseUser?.uid),
+    });
+  }, [authLoading, firebaseUser?.uid]);
+
+  useEffect(() => {
+    logAssistantCampusFilter({
+      activeBuilding,
+      activeCampus,
+      assistantBuildingIds,
+      assistantRoomsCount: assistantRooms.length,
+      visibleRoomsCount: rooms.length,
+    });
+  }, [activeBuilding, activeCampus, assistantBuildingIds, assistantRooms.length, rooms.length]);
+
+  useEffect(() => {
+    if (assistantBuildingIds.length === 0) {
+      setAssistantRooms([]);
+      setAssistantReservations([]);
+      setAssistantDataLoading(false);
+      return;
+    }
+
+    if (authLoading) {
+      setAssistantRooms([]);
+      setAssistantReservations([]);
+      setAssistantDataLoading(true);
+      return;
+    }
+
+    if (!firebaseUser?.uid) {
+      console.warn('[room-assistant] Skipping Firestore room reads until the user is authenticated.');
+      setAssistantRooms([]);
+      setAssistantReservations([]);
+      setAssistantDataLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    let roomsLoaded = false;
+    let reservationsLoaded = false;
+
+    const updateLoading = () => {
+      if (!cancelled) {
+        setAssistantDataLoading(!(roomsLoaded && reservationsLoaded));
+      }
+    };
+
+    setAssistantDataLoading(true);
+    logAssistantFirestoreQuery({
+      buildingIds: assistantBuildingIds,
+      collection: 'rooms',
+    });
+    logAssistantFirestoreQuery({
+      buildingIds: assistantBuildingIds,
+      collection: 'reservations',
+    });
+
+    const unsubscribeRooms = onRoomsByBuildingIds(assistantBuildingIds, (nextRooms) => {
+      if (cancelled) {
+        return;
+      }
+
+      logAssistantFirestoreSnapshot({
+        buildingIds: assistantBuildingIds,
+        collection: 'rooms',
+        rawDocuments: nextRooms,
+      });
+      roomsLoaded = true;
+      setAssistantRooms(nextRooms);
+      updateLoading();
+    });
+
+    const unsubscribeReservations = onReservationsByBuildingIds(
+      assistantBuildingIds,
+      (nextReservations) => {
+        if (cancelled) {
+          return;
+        }
+
+        logAssistantFirestoreSnapshot({
+          buildingIds: assistantBuildingIds,
+          collection: 'reservations',
+          rawDocuments: nextReservations,
+        });
+        reservationsLoaded = true;
+        setAssistantReservations(nextReservations);
+        updateLoading();
+      }
+    );
+
+    return () => {
+      cancelled = true;
+      unsubscribeRooms();
+      unsubscribeReservations();
+    };
+  }, [assistantBuildingIds, authLoading, firebaseUser?.uid]);
 
   useEffect(() => {
     if (!selectedRoomParam) {
@@ -477,10 +586,30 @@ export default function ReserveRoomPage() {
     };
   }, [firebaseUser?.uid]);
 
+  useEffect(() => {
+    if (assistantRooms.length === 0 && rooms.length > 0 && activeBuilding) {
+      console.warn('[room-assistant] Firestore room listener returned no rooms; using reserve-page room data as a fallback.', {
+        activeBuilding,
+        assistantBuildingIds,
+        visibleRoomCount: rooms.length,
+      });
+    }
+  }, [activeBuilding, assistantBuildingIds, assistantRooms.length, rooms.length]);
+
   const selectedRoom = selectedRoomParam
     ? rooms.find((room) => room.id === selectedRoomParam) ?? null
     : null;
-  const selectedCampus = selectedRoom ? getRoomCampus(selectedRoom) : null;
+  const assistantRoomSource = assistantRooms.length > 0 ? assistantRooms : rooms;
+  const recommendationRooms = assistantRoomSource.map((room) => toAssistantRoomRecord(room));
+  const assistantReservationRecords = toAssistantReservationRecords(assistantReservations);
+  const selectedRecommendationRoom = selectedRoomParam
+    ? recommendationRooms.find((room) => room.roomId === selectedRoomParam) ?? null
+    : null;
+  const selectedCampus = selectedRoom
+    ? getRoomCampus(selectedRoom)
+    : selectedRecommendationRoom
+      ? getRoomCampus(selectedRecommendationRoom.originalRoom)
+      : null;
   const selectedRoomId = selectedRoom?.id ?? '';
   const selectedRoomName = selectedRoom?.name ?? '';
   const selectedBuildingId = selectedRoom?.buildingId ?? '';
@@ -491,10 +620,6 @@ export default function ReserveRoomPage() {
   const selectedRoomCampusName = selectedCampus
     ? getCampusName(selectedCampus)
     : selectedBuildingName || 'Unknown campus';
-  const recommendationRooms = rooms.map(toRecommendationRoom);
-  const selectedRecommendationRoom = selectedRoom
-    ? toRecommendationRoom(selectedRoom)
-    : null;
   const selectedTimeslot = {
     date: reservationDate,
     startTime,
@@ -864,6 +989,34 @@ export default function ReserveRoomPage() {
     setActiveRoomFilters([]);
   }
 
+  function applyAssistantScope(nextCampus?: ReservationCampus | null) {
+    const scope = getFirstAssistantScope(nextCampus);
+
+    if (!scope) {
+      return;
+    }
+
+    setActiveCampus(scope.campus);
+    setActiveBuilding(scope.building);
+    setActiveFloor(null);
+    setRooms([]);
+    setRoomsError('');
+    setRoomsLoading(Boolean(firebaseUser));
+    setActiveRoomFilters([]);
+  }
+
+  function handleAssistantOpen() {
+    if (activeCampus) {
+      return;
+    }
+
+    applyAssistantScope();
+  }
+
+  function handleAssistantCampusSelect(nextCampus: ReservationCampus) {
+    applyAssistantScope(nextCampus);
+  }
+
   function handleFloorSelect(nextFloor: string) {
     setActiveFloor(nextFloor);
     setActiveRoomFilters(['classroom']);
@@ -881,12 +1034,30 @@ export default function ReserveRoomPage() {
   }
 
   function handleRoomSelect(roomId: string) {
+    const nextRoom =
+      rooms.find((room) => room.id === roomId) ??
+      assistantRooms.find((room) => room.id === roomId) ??
+      null;
+
     if (selectedRoomId !== roomId) {
       resetReservationDetails();
       setBookedSlots([]);
       setBookedSlotsLoading(true);
       setEnrichedSlots([]);
       setRoomSchedules([]);
+    }
+
+    if (nextRoom) {
+      const nextCampus = getRoomCampus(nextRoom);
+
+      if (nextCampus) {
+        setActiveCampus(nextCampus);
+      }
+
+      setActiveBuilding({
+        id: nextRoom.buildingId,
+        name: nextRoom.buildingName,
+      });
     }
 
     setDetailsStep(2);
@@ -1701,9 +1872,6 @@ export default function ReserveRoomPage() {
                                 setStartTime(selection?.startTime ?? '');
                                 setEndTime(selection?.endTime ?? '');
                               }}
-                              onRequestAlternatives={() => {
-                                setAssistantRequested(true);
-                              }}
                             />
                           </div>
                         )}
@@ -2041,17 +2209,23 @@ export default function ReserveRoomPage() {
       </div>
 
       <RoomAssistantWidget
-        isAvailable={(roomId) => {
-          const room = rooms.find((nextRoom) => nextRoom.id === roomId);
-          return room?.status === 'Available';
-        }}
+        activeCampus={activeCampus}
+        campusTimeRange={(selectedCampus ?? activeCampus) ? CAMPUS_TIME_RANGES[selectedCampus ?? activeCampus!] : null}
+        dataLoading={assistantDataLoading}
+        onOpenWithoutCampus={handleAssistantOpen}
+        onSelectCampus={handleAssistantCampusSelect}
         onSelectRoom={handleRoomSelect}
+        onSelectTimeslot={(nextTimeslot) => {
+          setReservationDate(nextTimeslot.date);
+          setStartTime(nextTimeslot.startTime);
+          setEndTime(nextTimeslot.endTime);
+          setTimeError('');
+          setSubmitError('');
+        }}
+        reservations={assistantReservationRecords}
         rooms={recommendationRooms}
         selectedRoom={selectedRecommendationRoom}
-        selectedRoomAvailable={selectedRoom ? selectedRoom.status === 'Available' : null}
         timeslot={selectedTimeslot}
-        requestOpen={assistantRequested}
-        onRequestOpenHandled={() => setAssistantRequested(false)}
       />
     </main>
   );

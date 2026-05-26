@@ -37,10 +37,16 @@ type DashboardReservation = {
 } & Record<string, unknown>;
 
 type DashboardRoom = {
+  beaconConnected?: boolean;
+  beaconId?: string | null;
+  beaconLastConnectedAt?: Date | { toDate?: () => Date } | null;
+  beaconLastDisconnectedAt?: Date | { toDate?: () => Date } | null;
+  bleBeaconId?: string | null;
   buildingName?: string;
   floor?: string;
   id: string;
   name?: string;
+  status?: string;
 } & Record<string, unknown>;
 
 type DashboardRoomHistoryEntry = {

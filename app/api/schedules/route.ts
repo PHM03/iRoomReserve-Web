@@ -10,7 +10,10 @@ import {
   assertRole,
 } from "@/lib/server/route-guards";
 import { scheduleInputSchema } from "@/lib/server/schemas";
-import { createScheduleRecord } from "@/lib/server/services/schedules";
+import {
+  assertNoScheduleConflict,
+  createScheduleRecord,
+} from "@/lib/server/services/schedules";
 import { inferCampusFromBuilding } from "@/lib/buildings/campuses";
 import { validateScheduleTimes } from "@/lib/schedules/scheduleTimeRules";
 import {
@@ -141,6 +144,8 @@ export async function POST(request: NextRequest) {
     if (timeError) {
       throw new ApiError(400, "invalid_time_range", timeError);
     }
+
+    await assertNoScheduleConflict(payload);
 
     const id = await createScheduleRecord(payload);
     return NextResponse.json({ id });

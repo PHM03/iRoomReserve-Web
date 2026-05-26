@@ -11,19 +11,37 @@ import {
 } from "@/lib/server/route-guards";
 import { scheduleUpdateSchema } from "@/lib/server/schemas";
 import {
+  assertNoScheduleConflict,
   deleteScheduleRecord,
   updateScheduleRecord,
 } from "@/lib/server/services/schedules";
 import { inferCampusFromBuilding } from "@/lib/buildings/campuses";
 import { validateScheduleTimes } from "@/lib/schedules/scheduleTimeRules";
 
-async function getScheduleBuildingId(scheduleId: string) {
+interface StoredScheduleRecord {
+  academicYear?: string;
+  buildingId?: string;
+  courseCode?: string;
+  courseName?: string;
+  createdBy?: string;
+  dayOfWeek?: number;
+  endTime?: string;
+  instructorName?: string;
+  roomId?: string;
+  roomName?: string;
+  section?: string;
+  semester?: string;
+  startTime?: string;
+  subjectName?: string;
+}
+
+async function getScheduleRecord(scheduleId: string) {
   const scheduleSnapshot = await db.collection("schedules").doc(scheduleId).get();
   if (!scheduleSnapshot.exists) {
     throw new ApiError(404, "not_found", "Schedule not found.");
   }
 
-  return (scheduleSnapshot.data() as { buildingId?: string }).buildingId;
+  return scheduleSnapshot.data() as StoredScheduleRecord;
 }
 
 export async function PATCH(
@@ -37,7 +55,12 @@ export async function PATCH(
 
     const { scheduleId } = await params;
     const payload = scheduleUpdateSchema.parse(await request.json());
-    const buildingId = await getScheduleBuildingId(scheduleId);
+    const existingSchedule = await getScheduleRecord(scheduleId);
+    const mergedSchedule = {
+      ...existingSchedule,
+      ...payload,
+    };
+    const buildingId = mergedSchedule.buildingId;
 
     if (!buildingId) {
       throw new ApiError(400, "missing_building", "Schedule is missing a building.");
@@ -46,16 +69,33 @@ export async function PATCH(
     assertCanManageBuilding(authContext, buildingId);
 
     // Server-side campus time range validation (only when times are being updated)
-    if (payload.startTime || payload.endTime) {
-      const campus = inferCampusFromBuilding({ id: buildingId });
-      const startTime = payload.startTime ?? '';
-      const endTime = payload.endTime ?? '';
-      if (startTime && endTime) {
-        const timeError = validateScheduleTimes(startTime, endTime, campus);
-        if (timeError) {
-          throw new ApiError(400, "invalid_time_range", timeError);
-        }
+    const campus = inferCampusFromBuilding({ id: buildingId });
+    const startTime = mergedSchedule.startTime ?? '';
+    const endTime = mergedSchedule.endTime ?? '';
+    if (startTime && endTime) {
+      const timeError = validateScheduleTimes(startTime, endTime, campus);
+      if (timeError) {
+        throw new ApiError(400, "invalid_time_range", timeError);
       }
+    }
+
+    if (
+      mergedSchedule.roomId &&
+      typeof mergedSchedule.dayOfWeek === "number" &&
+      mergedSchedule.startTime &&
+      mergedSchedule.endTime
+    ) {
+      await assertNoScheduleConflict(
+        {
+          academicYear: mergedSchedule.academicYear ?? null,
+          dayOfWeek: mergedSchedule.dayOfWeek,
+          endTime: mergedSchedule.endTime,
+          roomId: mergedSchedule.roomId,
+          semester: mergedSchedule.semester ?? null,
+          startTime: mergedSchedule.startTime,
+        },
+        { excludeScheduleId: scheduleId }
+      );
     }
 
     await updateScheduleRecord(scheduleId, payload);
@@ -76,7 +116,7 @@ export async function DELETE(
     assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
 
     const { scheduleId } = await params;
-    const buildingId = await getScheduleBuildingId(scheduleId);
+    const buildingId = (await getScheduleRecord(scheduleId)).buildingId;
 
     if (!buildingId) {
       throw new ApiError(400, "missing_building", "Schedule is missing a building.");

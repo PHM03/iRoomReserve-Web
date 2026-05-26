@@ -34,7 +34,6 @@ interface DaySchedulePanelProps {
   selectedStartTime?: string;
   selectedEndTime?: string;
   onSelectionChange: (selection: ScheduleSelection | null) => void;
-  onRequestAlternatives: () => void;
 }
 
 function minutesToTimeString(value: number): string {
@@ -80,11 +79,9 @@ export default function DaySchedulePanel({
   selectedStartTime = '',
   selectedEndTime = '',
   onSelectionChange,
-  onRequestAlternatives,
 }: Readonly<DaySchedulePanelProps>) {
   const [now, setNow] = useState(() => new Date());
   const [toast, setToast] = useState<{
-    allowAlternatives?: boolean;
     message: string;
     type: 'info' | 'warning' | 'error';
   } | null>(null);
@@ -209,7 +206,6 @@ export default function DaySchedulePanel({
 
     if (nextSelectionResult.reason === 'blocked-range') {
       setToast({
-        allowAlternatives: false,
         message:
           'That range crosses a reserved or unavailable slot. Pick another end slot.',
         type: 'warning',
@@ -225,9 +221,7 @@ export default function DaySchedulePanel({
         return;
       case 'reserved-others':
         setToast({
-          allowAlternatives: true,
-          message:
-            'This slot is already reserved. Would you like to see alternative rooms?',
+          message: 'This slot is already reserved. Pick another time if you want to continue.',
           type: 'warning',
         });
         return;
@@ -510,18 +504,6 @@ export default function DaySchedulePanel({
         >
           <p>{toast.message}</p>
           <div className="mt-2.5 flex items-center gap-2">
-            {toast.allowAlternatives && (
-              <button
-                type="button"
-                onClick={() => {
-                  dismissToast();
-                  onRequestAlternatives();
-                }}
-                className="rounded-lg bg-primary px-3 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-primary-hover"
-              >
-                See Alternatives
-              </button>
-            )}
             <button
               type="button"
               onClick={dismissToast}

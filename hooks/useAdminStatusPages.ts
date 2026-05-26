@@ -28,6 +28,10 @@ import {
   DAY_NAMES,
 } from '@/lib/schedules/schedules';
 import {
+  findScheduleConflicts,
+  SCHEDULE_CONFLICT_MESSAGE,
+} from '@/lib/schedules/scheduleConflicts';
+import {
   DEFAULT_SCHEDULE_CONTEXT,
   normalizeScheduleContext,
   type ScheduleAcademicYear,
@@ -143,6 +147,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
   const [schedEnd, setSchedEnd] = useState('');
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
+  const [scheduleSaveError, setScheduleSaveError] = useState<string | null>(null);
   const selectedScheduleFloorValue = selectedScheduleFloor;
   const normalizedSelectedScheduleRoom = selectedScheduleRoom.trim();
   const selectedScheduleRoomIds = useMemo(() => {
@@ -334,6 +339,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
   const resetScheduleForm = () => {
     setShowScheduleForm(false);
     setEditingScheduleId(null);
+    setScheduleSaveError(null);
     setSchedRoomId('');
     setSchedCourseName('');
     setSchedCourseCode('');
@@ -379,10 +385,27 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     // Client-side campus time validation (defence-in-depth before API call)
     const timeError = validateScheduleTimes(schedStart, schedEnd, managedCampus ?? null);
     if (timeError) {
-      alert(timeError);
+      setScheduleSaveError(timeError);
       return;
     }
 
+    const conflictingSchedules = findScheduleConflicts(
+      schedules,
+      {
+        dayOfWeek: schedDay,
+        endTime: schedEnd,
+        roomId: schedRoomId,
+        startTime: schedStart,
+      },
+      { excludeScheduleId: editingScheduleId }
+    );
+
+    if (conflictingSchedules.length > 0) {
+      setScheduleSaveError(SCHEDULE_CONFLICT_MESSAGE);
+      return;
+    }
+
+    setScheduleSaveError(null);
     setAddingSchedule(true);
 
     try {
@@ -433,13 +456,18 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       resetScheduleForm();
     } catch (error) {
       console.warn('Failed to save schedule:', error);
-      alert('Failed to save schedule. Check the console for details.');
+      setScheduleSaveError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to save schedule. Check the console for details.'
+      );
     } finally {
       setAddingSchedule(false);
     }
   };
 
   const handleEditSchedule = (schedule: Schedule) => {
+    setScheduleSaveError(null);
     setEditingScheduleId(schedule.id);
     setSchedRoomId(schedule.roomId);
     setSchedCourseName(schedule.courseName ?? schedule.subjectName);
@@ -658,10 +686,12 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     setSchedEnd,
     addingSchedule,
     editingScheduleId,
+    scheduleSaveError,
     statusMonitorFloorGroups,
     scheduleCountsByDay,
     toggleScheduleForm,
     resetScheduleForm,
+    clearScheduleSaveError: () => setScheduleSaveError(null),
     handleStatusChange,
     handleSaveSchedule,
     handleEditSchedule,

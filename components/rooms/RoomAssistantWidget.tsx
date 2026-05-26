@@ -2,90 +2,114 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-import { handleUnavailableRoom } from '@/lib/ai/roomAssistantChat';
-import { findBestRooms } from '@/lib/ai/roomRecommendations';
+import {
+  ASSISTANT_FEATURE_OPTIONS,
+  ASSISTANT_ROOM_TYPE_OPTIONS,
+  checkAssistantRoomAvailability,
+  findAlternativeAssistantRooms,
+  findAssistantRoomMatches,
+  formatAssistantTimeslot,
+  getAssistantRoomTypeLabel,
+  getFallbackPreferencesFromRoom,
+  isCompleteTimeslot,
+  suggestAssistantTimeslotsForRoom,
+  type AssistantAvailabilityResult,
+  type AssistantPreferences,
+  type AssistantRecommendation,
+  type AssistantRoomRecord,
+  type AssistantTimeslot,
+  type AssistantTimeslotSuggestion,
+  type AssistantRoomTypeValue,
+} from '@/lib/ai/roomAssistantRealtime';
+import { getCampusName } from '@/lib/buildings/campusAssignments';
+import type { ReservationCampus } from '@/lib/buildings/campuses';
+
+type AssistantOptionValue =
+  | number
+  | string
+  | AssistantTimeslotSuggestion;
 
 type AssistantOption = {
   label: string;
-  value: number | string;
-};
-
-type RecommendationRoom = {
-  building: string;
-  capacity: number;
-  features: string[];
-  label?: string;
-  roomId: string;
-  sentimentScore: number;
-  type: string;
-};
-
-type RecommendationResult = RecommendationRoom & {
-  explanation?: string;
-  reason?: string;
-  score: number;
+  value: AssistantOptionValue;
 };
 
 type AssistantMessage = {
   allowMultiple?: boolean;
   id: string;
   options?: AssistantOption[];
-  recommendations?: RecommendationResult[];
+  recommendations?: AssistantRecommendation[];
   role: 'system' | 'user';
   text: string;
   type: 'buttons' | 'feature-picker' | 'recommendations' | 'text';
 };
 
-type RoomAssistantPreferences = {
-  minCapacity?: number;
-  preferredType?: string;
-  requiredFeatures: string[];
-};
-
-type RoomAssistantStep = 'capacity' | 'entry' | 'features' | 'results' | 'type';
-
-type RoomAssistantTimeslot = {
-  date?: string;
-  endTime?: string;
-  startTime?: string;
-};
-
-type ExternalAssistantMessage = {
-  allowMultiple?: boolean;
-  options?: AssistantOption[];
-  recommendations?: RecommendationResult[];
-  role: 'system' | 'user';
-  text: string;
-  type?: string;
-};
+type AssistantStep =
+  | 'campus'
+  | 'capacity'
+  | 'entry'
+  | 'features'
+  | 'results'
+  | 'timeslot-suggestions'
+  | 'type'
+  | 'unavailable-actions';
 
 interface RoomAssistantWidgetProps {
-  isAvailable?: (roomId: string, timeslot: RoomAssistantTimeslot) => boolean;
+  activeCampus?: ReservationCampus | null;
+  campusTimeRange?: { endMinutes: number; startMinutes: number } | null;
+  dataLoading?: boolean;
+  onOpenWithoutCampus: () => void;
+  onSelectCampus: (campus: ReservationCampus) => void;
   onSelectRoom: (roomId: string) => void;
-  rooms: RecommendationRoom[];
-  selectedRoom?: RecommendationRoom | null;
-  selectedRoomAvailable?: boolean | null;
-  timeslot: RoomAssistantTimeslot;
-  /**
-   * When set to true, the widget opens itself automatically. The parent
-   * should reset this to false via onRequestOpenHandled once acknowledged.
-   */
-  requestOpen?: boolean;
-  onRequestOpenHandled?: () => void;
+  onSelectTimeslot: (timeslot: Required<AssistantTimeslot>) => void;
+  reservations: ReadonlyArray<{
+    date: string;
+    endTime: string;
+    id: string;
+    roomId: string;
+    roomName: string;
+    startTime: string;
+    status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+  }>;
+  rooms: AssistantRoomRecord[];
+  selectedRoom?: AssistantRoomRecord | null;
+  timeslot: AssistantTimeslot;
 }
 
 const BOT_REPLY_DELAY_MS = 620;
 const BOT_REPLY_GAP_MS = 760;
 const DEFAULT_CAPACITY_CHOICES = [8, 12, 20, 40, 60];
-const DEFAULT_FEATURE_OPTIONS = ['AC', 'Projector', 'Whiteboard'];
+
+const CAMPUS_OPTIONS: AssistantOption[] = [
+  {
+    label: 'SDCA Main Campus',
+    value: 'main'
+  },
+  {
+    label: 'SDCA Digi Campus',
+    value: 'digi'
+  },
+];
+
 const ENTRY_OPTIONS: AssistantOption[] = [
+  {
+    label: 'Check availability',
+    value: 'check-selected-room'
+  },
   {
     label: 'Help me choose',
     value: 'help-me-choose'
   },
+];
+
+const UNAVAILABLE_OPTIONS: AssistantOption[] = [
   {
-    label: 'Check this room',
-    value: 'check-selected-room'
+    label: 'Try another day/time',
+    value: 'try-another-day-time'
+  },
+  {
+    label: 'See alternative rooms',
+    value: 'see-alternative-rooms'
   },
 ];
 
@@ -111,128 +135,31 @@ function createMessage(
   };
 }
 
-function createWelcomeMessage() {
-  return createMessage(
-    'Hi! I can help you choose a room through chat or check whether the room you picked is still free.',
-    'system',
-    'buttons',
-    { options: ENTRY_OPTIONS }
-  );
-}
-
-function createTypePromptMessage() {
-  return createMessage(
-    'Sure \u{1F44D} What kind of room are you looking for?',
-    'system',
-    'buttons',
-    {
-      options: [
-        {
-          label: 'Glass',
-          value: 'glass'
-        },
-        {
-          label: 'Lecture',
-          value: 'lecture'
-        },
-        {
-          label: 'Lab',
-          value: 'lab'
-        },
-        {
-          label: 'No preference',
-          value: ''
-        },
-      ],
-    }
-  );
-}
-
-function createCapacityPromptMessage(selectedType: string, options: AssistantOption[]) {
-  if (!selectedType) {
-    return createMessage(
-      'Got it \u{1F44D} no specific room type. How many people?',
-      'system',
-      'buttons',
-      { options }
-    );
+function getRoomDisplayName(room?: Pick<AssistantRoomRecord, 'label' | 'roomId'> | null) {
+  if (!room) {
+    return 'this room';
   }
 
-  return createMessage(
-    `Got it \u{1F44D} a ${selectedType} room. How many people?`,
-    'system',
-    'buttons',
-    { options }
-  );
-}
-
-function createCapacityAcknowledgementMessage(minCapacity?: number) {
-  if (typeof minCapacity === 'number' && Number.isFinite(minCapacity)) {
-    return createMessage(`Nice, around ${minCapacity} people.`, 'system', 'text');
-  }
-
-  return createMessage('Nice, keeping the group size flexible.', 'system', 'text');
-}
-
-function createFeaturePromptMessage(options: AssistantOption[]) {
-  return createMessage('Any features I should prioritize?', 'system', 'feature-picker', {
-    allowMultiple: true,
-    options: [...options, {
-      label: 'Done',
-      value: '__done__'
-    }],
-  });
-}
-
-function createSearchMessage() {
-  return createMessage(
-    'Perfect \u{1F44D} Let me find the best rooms for you...',
-    'system',
-    'text'
-  );
-}
-
-function createRecommendationMessage(
-  recommendations: RecommendationResult[],
-  introText: string
-) {
-  if (recommendations.length === 0) {
-    return createMessage(
-      'I could not find an available room that matches that just yet. Try another time slot or remove one feature.',
-      'system',
-      'text'
-    );
-  }
-
-  return createMessage(introText, 'system', 'recommendations', { recommendations });
-}
-
-function normalizeMessageType(type?: string): AssistantMessage['type'] {
-  if (type === 'buttons' || type === 'feature-picker' || type === 'recommendations') {
-    return type;
-  }
-
-  return 'text';
-}
-
-function normalizeExternalMessage(message: ExternalAssistantMessage): AssistantMessage {
-  return createMessage(message.text, message.role, normalizeMessageType(message.type), {
-    allowMultiple: message.allowMultiple,
-    options: message.options,
-    recommendations: message.recommendations,
-  });
-}
-
-function toSentenceCaseType(type: string) {
-  if (!type) {
-    return 'Room';
-  }
-
-  return `${type.charAt(0).toUpperCase()}${type.slice(1)}`;
-}
-
-function getRoomDisplayName(room: { label?: string; roomId: string }) {
   return room.label || room.roomId;
+}
+
+function normalizeFeatures(features: string[]) {
+  return [
+    ...new Set(
+      features
+        .filter((feature) => typeof feature === 'string' && feature.trim().length > 0)
+        .map((feature) => feature.trim())
+    ),
+  ];
+}
+
+function hasStoredPreferences(preferences: AssistantPreferences) {
+  return Boolean(
+    preferences.preferredType ||
+      preferences.minCapacity ||
+      preferences.requiredFeatures.length > 0 ||
+      preferences.preferredBuilding
+  );
 }
 
 function formatFeatureSummary(features: string[]) {
@@ -251,31 +178,19 @@ function formatFeatureSummary(features: string[]) {
   return `${features.slice(0, -1).join(', ')}, and ${features[features.length - 1]}`;
 }
 
-function normalizeFeatures(features: string[]) {
-  return [
-    ...new Set(
-      features
-        .filter((feature) => typeof feature === 'string' && feature.trim().length > 0)
-        .map((feature) => feature.trim())
-    ),
-  ];
-}
-
-function buildCapacityOptions(rooms: RecommendationRoom[]): AssistantOption[] {
-  const uniqueCapacities = [
+function buildCapacityOptions(rooms: AssistantRoomRecord[]): AssistantOption[] {
+  const capacities = [
     ...new Set(
       rooms
         .map((room) => room.capacity)
         .filter((capacity) => typeof capacity === 'number' && Number.isFinite(capacity))
     ),
-  ].sort((left, right) => left - right);
-  const capacities =
-    uniqueCapacities.length > 0
-      ? uniqueCapacities.slice(0, 6)
-      : DEFAULT_CAPACITY_CHOICES;
+  ]
+    .sort((left, right) => left - right)
+    .slice(0, 6);
 
   return [
-    ...capacities.map((capacity) => ({
+    ...(capacities.length > 0 ? capacities : DEFAULT_CAPACITY_CHOICES).map((capacity) => ({
       label: `${capacity} people`,
       value: capacity,
     })),
@@ -286,12 +201,13 @@ function buildCapacityOptions(rooms: RecommendationRoom[]): AssistantOption[] {
   ];
 }
 
-function buildFeatureOptions(rooms: RecommendationRoom[]): AssistantOption[] {
-  const uniqueFeatures = [
-    ...new Set(rooms.flatMap((room) => normalizeFeatures(room.features))),
+function buildFeatureOptions(rooms: AssistantRoomRecord[]): AssistantOption[] {
+  const features = [
+    ...new Set([
+      ...ASSISTANT_FEATURE_OPTIONS,
+      ...rooms.flatMap((room) => normalizeFeatures(room.features)),
+    ]),
   ].sort((left, right) => left.localeCompare(right));
-  const features =
-    uniqueFeatures.length > 0 ? uniqueFeatures : DEFAULT_FEATURE_OPTIONS;
 
   return features.map((feature) => ({
     label: feature,
@@ -317,45 +233,234 @@ function getLastInteractiveMessageId(messages: AssistantMessage[]) {
   return null;
 }
 
+function isCampusOptionValue(value: AssistantOptionValue): value is ReservationCampus {
+  return value === 'main' || value === 'digi';
+}
+
+function createCampusPromptMessage() {
+  return createMessage(
+    'Which campus are you looking for? SDCA Main Campus or SDCA Digi Campus?',
+    'system',
+    'buttons',
+    { options: CAMPUS_OPTIONS }
+  );
+}
+
+function createEntryPromptMessage(
+  selectedRoom: AssistantRoomRecord | null,
+  timeslot: AssistantTimeslot
+) {
+  if (selectedRoom) {
+    return createMessage(
+      isCompleteTimeslot(timeslot)
+        ? `What date and time are you planning to use ${getRoomDisplayName(
+            selectedRoom
+          )}? I can check the date and time currently selected in the form.`
+        : `What date and time are you planning to use ${getRoomDisplayName(
+            selectedRoom
+          )}? Select the date, start time, and end time in the reservation form, then ask me to check it.`,
+      'system',
+      'buttons',
+      { options: ENTRY_OPTIONS }
+    );
+  }
+
+  return createMessage(
+    'Hi! I can help you choose a room, or check a room you already picked once you are ready.',
+    'system',
+    'buttons',
+    { options: ENTRY_OPTIONS }
+  );
+}
+
+function createTypePromptMessage() {
+  return createMessage(
+    'Sure. What kind of room are you looking for?',
+    'system',
+    'buttons',
+    {
+      options: [
+        ...ASSISTANT_ROOM_TYPE_OPTIONS.map((option) => ({
+          label: option.label,
+          value: option.value,
+        })),
+        {
+          label: 'No preference',
+          value: ''
+        },
+      ],
+    }
+  );
+}
+
+function createCapacityPromptMessage(selectedType?: AssistantRoomTypeValue) {
+  if (!selectedType) {
+    return createMessage(
+      'Got it, no specific room type. How many people should it fit?',
+      'system',
+      'buttons'
+    );
+  }
+
+  return createMessage(
+    `Got it, a ${getAssistantRoomTypeLabel(selectedType).toLowerCase()}. How many people should it fit?`,
+    'system',
+    'buttons'
+  );
+}
+
+function createCapacityAcknowledgementMessage(minCapacity?: number) {
+  if (typeof minCapacity === 'number' && Number.isFinite(minCapacity)) {
+    return createMessage(`Nice, around ${minCapacity} people.`, 'system', 'text');
+  }
+
+  return createMessage('Nice, keeping the group size flexible.', 'system', 'text');
+}
+
+function createFeaturePromptMessage(options: AssistantOption[]) {
+  return createMessage('Any features I should prioritize?', 'system', 'feature-picker', {
+    allowMultiple: true,
+    options: [
+      ...options,
+      {
+        label: 'Done',
+        value: '__done__'
+      },
+    ],
+  });
+}
+
+function createSearchMessage() {
+  return createMessage('Checking live Firebase room data for you...', 'system', 'text');
+}
+
+function createRecommendationMessage(
+  recommendations: AssistantRecommendation[],
+  introText: string,
+  emptyText: string
+) {
+  if (recommendations.length === 0) {
+    return createMessage(emptyText, 'system', 'text');
+  }
+
+  return createMessage(introText, 'system', 'recommendations', { recommendations });
+}
+
+function createUnavailableOptionsMessage() {
+  return createMessage(
+    'You can try another day and time for this room, or I can show other rooms available at the same time.',
+    'system',
+    'buttons',
+    { options: UNAVAILABLE_OPTIONS }
+  );
+}
+
+function createTimeslotSuggestionMessage(suggestions: AssistantTimeslotSuggestion[]) {
+  if (suggestions.length === 0) {
+    return createMessage(
+      'I could not find another open slot for that room in the next two weeks. Try a different room or time.',
+      'system',
+      'text'
+    );
+  }
+
+  return createMessage(
+    'Here are the next available date and time options I found for that same room:',
+    'system',
+    'buttons',
+    {
+      options: suggestions.map((suggestion) => ({
+        label: suggestion.label,
+        value: suggestion,
+      })),
+    }
+  );
+}
+
+function createEntryFollowUpMessage(selectedRoom: AssistantRoomRecord | null) {
+  return createMessage(
+    selectedRoom
+      ? `I updated the form. Want me to check ${getRoomDisplayName(selectedRoom)} now?`
+      : 'I updated the form. Want me to check that room now?',
+    'system',
+    'buttons',
+    { options: ENTRY_OPTIONS }
+  );
+}
+
+function buildAvailabilityMessage(
+  selectedRoom: AssistantRoomRecord,
+  availability: AssistantAvailabilityResult,
+  timeslot: Required<AssistantTimeslot>
+) {
+  if (availability.available) {
+    return `Room ${getRoomDisplayName(selectedRoom)} is free at ${formatAssistantTimeslot(
+      timeslot
+    )}! Would you like to reserve it?`;
+  }
+
+  const [firstConflict] = availability.conflictingReservations;
+
+  if (firstConflict) {
+    return `Room ${getRoomDisplayName(selectedRoom)} is already reserved on ${formatAssistantTimeslot(
+      {
+        date: firstConflict.date,
+        endTime: firstConflict.endTime,
+        startTime: firstConflict.startTime,
+      }
+    )}.`;
+  }
+
+  if (availability.roomStatus === 'Unavailable') {
+    return `Room ${getRoomDisplayName(
+      selectedRoom
+    )} is currently marked as unavailable, so it cannot be reserved for ${formatAssistantTimeslot(
+      timeslot
+    )}.`;
+  }
+
+  return `Room ${getRoomDisplayName(selectedRoom)} is currently ${availability.roomStatus.toLowerCase()} at ${formatAssistantTimeslot(
+    timeslot
+  )}.`;
+}
+
 export default function RoomAssistantWidget({
-  isAvailable,
+  activeCampus = null,
+  campusTimeRange = null,
+  dataLoading = false,
+  onOpenWithoutCampus,
+  onSelectCampus,
   onSelectRoom,
+  onSelectTimeslot,
+  reservations,
   rooms,
   selectedRoom = null,
-  selectedRoomAvailable = null,
   timeslot,
-  requestOpen = false,
-  onRequestOpenHandled,
 }: Readonly<RoomAssistantWidgetProps>) {
-  const welcomeMessage = useMemo(() => createWelcomeMessage(), []);
+  const [initialConversation] = useState(() => {
+    const initialMessage = createEntryPromptMessage(selectedRoom, timeslot);
+
+    return {
+      activePromptId: initialMessage.id,
+      initialMessage,
+    };
+  });
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<AssistantMessage[]>([welcomeMessage]);
-  const [preferences, setPreferences] = useState<RoomAssistantPreferences>({ requiredFeatures: [] });
+  const [messages, setMessages] = useState<AssistantMessage[]>([
+    initialConversation.initialMessage,
+  ]);
+  const [preferences, setPreferences] = useState<AssistantPreferences>({ requiredFeatures: [] });
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
-  const [step, setStep] = useState<RoomAssistantStep>('entry');
+  const [step, setStep] = useState<AssistantStep>('entry');
   const [isBotTyping, setIsBotTyping] = useState(false);
-  const [activePromptId, setActivePromptId] = useState<string | null>(welcomeMessage.id);
+  const [activePromptId, setActivePromptId] = useState<string | null>(
+    initialConversation.activePromptId
+  );
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const replyTimeoutsRef = useRef<number[]>([]);
-  const lastAutoOpenKeyRef = useRef('');
 
   const capacityOptions = useMemo(() => buildCapacityOptions(rooms), [rooms]);
   const featureOptions = useMemo(() => buildFeatureOptions(rooms), [rooms]);
-  const availabilityChecker = useMemo(
-    () => (typeof isAvailable === 'function' ? isAvailable : () => true),
-    [isAvailable]
-  );
-  const selectedRoomIsAvailable = useMemo(() => {
-    if (!selectedRoom) {
-      return false;
-    }
-
-    if (selectedRoomAvailable === false) {
-      return false;
-    }
-
-    return availabilityChecker(selectedRoom.roomId, timeslot);
-  }, [availabilityChecker, selectedRoom, selectedRoomAvailable, timeslot]);
 
   function clearReplyTimers() {
     replyTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
@@ -364,14 +469,14 @@ export default function RoomAssistantWidget({
   }
 
   function resetConversation() {
-    const nextWelcomeMessage = createWelcomeMessage();
+    const nextEntryMessage = createEntryPromptMessage(selectedRoom, timeslot);
 
     clearReplyTimers();
-    setMessages([nextWelcomeMessage]);
+    setMessages([nextEntryMessage]);
     setPreferences({ requiredFeatures: [] });
     setSelectedFeatures([]);
     setStep('entry');
-    setActivePromptId(nextWelcomeMessage.id);
+    setActivePromptId(nextEntryMessage.id);
   }
 
   function appendUserMessage(text: string) {
@@ -379,7 +484,6 @@ export default function RoomAssistantWidget({
     setMessages((currentMessages) => [...currentMessages, message]);
   }
 
-  // Queue bot replies with a small gap so the chat feels conversational.
   function queueBotMessages(
     nextMessages: AssistantMessage[],
     initialDelay = BOT_REPLY_DELAY_MS
@@ -409,23 +513,19 @@ export default function RoomAssistantWidget({
   }
 
   function startGuidedFlow() {
-    setPreferences({ requiredFeatures: [] });
-    setSelectedFeatures([]);
-    setStep('type');
     appendUserMessage('Help me choose');
-    queueBotMessages([createTypePromptMessage()]);
-  }
 
-  function handleSelectedRoomEntry() {
-    appendUserMessage(
-      selectedRoom ? `Check ${getRoomDisplayName(selectedRoom)}` : 'Check this room'
-    );
+    if (!activeCampus) {
+      setStep('campus');
+      queueBotMessages([createCampusPromptMessage()]);
+      return;
+    }
 
-    if (!selectedRoom) {
+    if (dataLoading) {
       setStep('entry');
       queueBotMessages([
         createMessage(
-          'Pick a room from the list first, then I can check whether it is still available.',
+          'I am still waiting for your authenticated Firebase session and live room data. Try again in a moment.',
           'system',
           'text'
         ),
@@ -433,33 +533,113 @@ export default function RoomAssistantWidget({
       return;
     }
 
-    if (!selectedRoomIsAvailable) {
-      setStep('results');
-      const unavailableState = handleUnavailableRoom(
-        selectedRoom,
-        timeslot,
-        rooms,
-        availabilityChecker
-      ) as {
-        messages: ExternalAssistantMessage[];
-      };
-
-      queueBotMessages(unavailableState.messages.map(normalizeExternalMessage));
+    if (rooms.length === 0) {
+      setStep('entry');
+      queueBotMessages([
+        createMessage(
+          'I could not load any rooms from the top-level rooms collection for the current selection yet. Pick a building first, then try again.',
+          'system',
+          'text'
+        ),
+      ]);
       return;
     }
 
-    setStep('results');
+    setPreferences({ requiredFeatures: [] });
+    setSelectedFeatures([]);
+    setStep('type');
+    queueBotMessages([createTypePromptMessage()]);
+  }
+
+  function handleCampusSelection(value: ReservationCampus) {
+    onSelectCampus(value);
+    setPreferences({ requiredFeatures: [] });
+    setSelectedFeatures([]);
+    setStep('type');
+    appendUserMessage(getCampusName(value));
     queueBotMessages([
       createMessage(
-        `Good news \u{1F44D} ${getRoomDisplayName(selectedRoom)} looks available for that time.`,
+        `Got it, I will look in ${getCampusName(value)}.`,
         'system',
         'text'
       ),
+      createTypePromptMessage(),
     ]);
   }
 
-  function handleTypeSelection(value: string) {
-    const nextPreferences = {
+  function handleSelectedRoomCheck() {
+    appendUserMessage('Check availability');
+
+    if (dataLoading) {
+      setStep('entry');
+      queueBotMessages([
+        createMessage(
+          'I am still loading live Firebase room data. Try checking again in a moment.',
+          'system',
+          'text'
+        ),
+      ]);
+      return;
+    }
+
+    if (!selectedRoom) {
+      setStep('entry');
+      queueBotMessages([
+        createMessage(
+          'Pick a room from the list first, then I can check it against live availability.',
+          'system',
+          'text'
+        ),
+      ]);
+      return;
+    }
+
+    if (!isCompleteTimeslot(timeslot)) {
+      setStep('entry');
+      queueBotMessages([
+        createMessage(
+          `What date and time are you planning to use ${getRoomDisplayName(
+            selectedRoom
+          )}? Select the date, start time, and end time in the reservation form, then tap Check availability again.`,
+          'system',
+          'text'
+        ),
+      ]);
+      return;
+    }
+
+    const resolvedTimeslot = timeslot as Required<AssistantTimeslot>;
+    const availability = checkAssistantRoomAvailability(
+      selectedRoom,
+      resolvedTimeslot,
+      reservations
+    );
+
+    if (availability.available) {
+      setStep('results');
+      queueBotMessages([
+        createMessage(
+          buildAvailabilityMessage(selectedRoom, availability, resolvedTimeslot),
+          'system',
+          'text'
+        ),
+      ]);
+      return;
+    }
+
+    setStep('unavailable-actions');
+    queueBotMessages([
+      createMessage(
+        buildAvailabilityMessage(selectedRoom, availability, resolvedTimeslot),
+        'system',
+        'text'
+      ),
+      createUnavailableOptionsMessage(),
+    ]);
+  }
+
+  function handleTypeSelection(value: AssistantRoomTypeValue | '') {
+    const nextPreferences: AssistantPreferences = {
       ...preferences,
       preferredType: value || undefined,
       requiredFeatures: [],
@@ -468,20 +648,28 @@ export default function RoomAssistantWidget({
     setPreferences(nextPreferences);
     setSelectedFeatures([]);
     setStep('capacity');
-    appendUserMessage(value ? `${toSentenceCaseType(value)} room` : 'No preference');
-    queueBotMessages([createCapacityPromptMessage(value, capacityOptions)]);
+    appendUserMessage(value ? getAssistantRoomTypeLabel(value) : 'No preference');
+    queueBotMessages([
+      createMessage(
+        createCapacityPromptMessage(value || undefined).text,
+        'system',
+        'buttons',
+        { options: capacityOptions }
+      ),
+    ]);
   }
 
   function handleCapacitySelection(value: number | string) {
-    const minCapacity =
+    const normalizedCapacity =
       typeof value === 'number'
         ? value
         : typeof value === 'string' && value !== ''
           ? Number(value)
           : undefined;
-    const nextPreferences = {
+    const nextPreferences: AssistantPreferences = {
       ...preferences,
-      minCapacity: Number.isFinite(minCapacity) ? minCapacity : undefined,
+      minCapacity: Number.isFinite(normalizedCapacity) ? normalizedCapacity : undefined,
+      requiredFeatures: preferences.requiredFeatures,
     };
 
     setPreferences(nextPreferences);
@@ -504,28 +692,140 @@ export default function RoomAssistantWidget({
   }
 
   function handleFeatureSubmit() {
-    const normalizedSelectedFeatures = normalizeFeatures(selectedFeatures);
-    const nextPreferences = {
+    if (!activeCampus) {
+      setStep('campus');
+      queueBotMessages([createCampusPromptMessage()]);
+      return;
+    }
+
+    if (dataLoading) {
+      setStep('entry');
+      queueBotMessages([
+        createMessage(
+          'I am still loading live Firebase room data. Try again in a moment.',
+          'system',
+          'text'
+        ),
+      ]);
+      return;
+    }
+
+    if (rooms.length === 0) {
+      setStep('entry');
+      queueBotMessages([
+        createMessage(
+          'I still do not have any room records to search. Check the building selection and the Firestore room-read logs, then try again.',
+          'system',
+          'text'
+        ),
+      ]);
+      return;
+    }
+
+    const nextPreferences: AssistantPreferences = {
       ...preferences,
-      requiredFeatures: normalizedSelectedFeatures,
+      requiredFeatures: normalizeFeatures(selectedFeatures),
     };
-    const recommendations = findBestRooms(
-      nextPreferences,
-      timeslot,
+    const recommendations = findAssistantRoomMatches(
       rooms,
-      availabilityChecker
-    ) as RecommendationResult[];
+      reservations,
+      timeslot,
+      nextPreferences
+    );
 
     setPreferences(nextPreferences);
     setStep('results');
-    appendUserMessage(formatFeatureSummary(normalizedSelectedFeatures));
+    appendUserMessage(formatFeatureSummary(nextPreferences.requiredFeatures));
     queueBotMessages([
       createSearchMessage(),
       createRecommendationMessage(
         recommendations,
-        'Here are the top 3 rooms I recommend right now:'
+        'Here are the matching rooms I found right now:',
+        'I could not find a matching room right now. Try removing one feature or changing the date and time.'
       ),
     ]);
+  }
+
+  function handleUnavailableAction(value: string) {
+    if (!selectedRoom) {
+      setStep('entry');
+      queueBotMessages([
+        createMessage('Pick a room first so I know which availability to check.', 'system', 'text'),
+      ]);
+      return;
+    }
+
+    if (!isCompleteTimeslot(timeslot)) {
+      setStep('entry');
+      queueBotMessages([
+        createMessage(
+          'I need the date, start time, and end time first before I can suggest alternatives.',
+          'system',
+          'text'
+        ),
+      ]);
+      return;
+    }
+
+    if (value === 'try-another-day-time') {
+      appendUserMessage('Try another day/time');
+      setStep('timeslot-suggestions');
+
+      if (!campusTimeRange) {
+        queueBotMessages([
+          createMessage(
+            'I could not read this campus time range yet, so I cannot suggest another slot for that room.',
+            'system',
+            'text'
+          ),
+        ]);
+        return;
+      }
+
+      const suggestions = suggestAssistantTimeslotsForRoom(
+        selectedRoom,
+        reservations,
+        timeslot,
+        campusTimeRange
+      );
+
+      queueBotMessages([createTimeslotSuggestionMessage(suggestions)]);
+      return;
+    }
+
+    appendUserMessage('See alternative rooms');
+    setStep('results');
+
+    const resolvedPreferences = hasStoredPreferences(preferences)
+      ? preferences
+      : getFallbackPreferencesFromRoom(selectedRoom);
+    const recommendations = findAlternativeAssistantRooms(
+      rooms,
+      reservations,
+      selectedRoom,
+      timeslot,
+      resolvedPreferences
+    );
+
+    queueBotMessages([
+      createSearchMessage(),
+      createRecommendationMessage(
+        recommendations,
+        'Here are the alternative rooms available at the same time:',
+        'I could not find another room available at that same time. Try another day or a shorter time range.'
+      ),
+    ]);
+  }
+
+  function handleSuggestedTimeslotSelection(suggestion: AssistantTimeslotSuggestion) {
+    appendUserMessage(suggestion.label);
+    onSelectTimeslot({
+      date: suggestion.date ?? '',
+      endTime: suggestion.endTime ?? '',
+      startTime: suggestion.startTime ?? '',
+    });
+    setStep('entry');
+    queueBotMessages([createEntryFollowUpMessage(selectedRoom)]);
   }
 
   function handleOptionClick(messageId: string, option: AssistantOption) {
@@ -539,17 +839,25 @@ export default function RoomAssistantWidget({
         return;
       }
 
-      handleSelectedRoomEntry();
+      handleSelectedRoomCheck();
+      return;
+    }
+
+    if (step === 'campus') {
+      if (isCampusOptionValue(option.value)) {
+        handleCampusSelection(option.value);
+      }
+
       return;
     }
 
     if (step === 'type') {
-      handleTypeSelection(String(option.value));
+      handleTypeSelection(String(option.value) as AssistantRoomTypeValue | '');
       return;
     }
 
     if (step === 'capacity') {
-      handleCapacitySelection(option.value);
+      handleCapacitySelection(option.value as number | string);
       return;
     }
 
@@ -560,10 +868,24 @@ export default function RoomAssistantWidget({
       }
 
       handleFeatureToggle(String(option.value));
+      return;
+    }
+
+    if (step === 'unavailable-actions') {
+      handleUnavailableAction(String(option.value));
+      return;
+    }
+
+    if (
+      step === 'timeslot-suggestions' &&
+      typeof option.value === 'object' &&
+      option.value !== null
+    ) {
+      handleSuggestedTimeslotSelection(option.value);
     }
   }
 
-  function handleRecommendationClick(messageId: string, recommendation: RecommendationResult) {
+  function handleRecommendationClick(messageId: string, recommendation: AssistantRecommendation) {
     if (messageId !== activePromptId || isBotTyping) {
       return;
     }
@@ -580,18 +902,6 @@ export default function RoomAssistantWidget({
     };
   }, []);
 
-  // Allow parent to programmatically open the widget (e.g. from DaySchedulePanel).
-  useEffect(() => {
-    if (requestOpen && !isOpen) {
-      if (messages.length === 0) {
-        resetConversation();
-      }
-
-      setIsOpen(true);
-      onRequestOpenHandled?.();
-    }
-  }, [requestOpen]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     if (!isOpen || !messageListRef.current) {
       return;
@@ -600,76 +910,6 @@ export default function RoomAssistantWidget({
     messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
   }, [isBotTyping, isOpen, messages]);
 
-  useEffect(() => {
-    if (!selectedRoom || selectedRoomIsAvailable) {
-      return;
-    }
-
-    const autoOpenKey = [
-      selectedRoom.roomId,
-      timeslot.date ?? '',
-      timeslot.startTime ?? '',
-      timeslot.endTime ?? '',
-    ].join('|');
-
-    if (lastAutoOpenKeyRef.current === autoOpenKey) {
-      return;
-    }
-
-    lastAutoOpenKeyRef.current = autoOpenKey;
-    const unavailableState = handleUnavailableRoom(
-      selectedRoom,
-      timeslot,
-      rooms,
-      availabilityChecker
-    ) as {
-      messages: ExternalAssistantMessage[];
-    };
-    const normalizedMessages = unavailableState.messages.map(normalizeExternalMessage);
-    const [firstMessage, ...remainingMessages] = normalizedMessages;
-
-    const frameId = window.requestAnimationFrame(() => {
-      clearReplyTimers();
-      setPreferences({ requiredFeatures: [] });
-      setSelectedFeatures([]);
-      setStep('results');
-      setIsOpen(true);
-
-      if (!firstMessage) {
-        setMessages([]);
-        setActivePromptId(null);
-        return;
-      }
-
-      setMessages([firstMessage]);
-      setActivePromptId(isInteractiveMessage(firstMessage) ? firstMessage.id : null);
-
-      if (remainingMessages.length > 0) {
-        setIsBotTyping(true);
-        setActivePromptId(null);
-
-        const nextInteractiveId = getLastInteractiveMessageId(remainingMessages);
-
-        remainingMessages.forEach((message, index) => {
-          const timeoutId = window.setTimeout(() => {
-            setMessages((currentMessages) => [...currentMessages, message]);
-
-            if (index === remainingMessages.length - 1) {
-              setIsBotTyping(false);
-              setActivePromptId(nextInteractiveId);
-            }
-          }, 780 + (index * BOT_REPLY_GAP_MS));
-
-          replyTimeoutsRef.current.push(timeoutId);
-        });
-      }
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [availabilityChecker, rooms, selectedRoom, selectedRoomIsAvailable, timeslot]);
-
   return (
     <>
       {isOpen && (
@@ -677,9 +917,9 @@ export default function RoomAssistantWidget({
           <div className="border-b border-black/8 bg-[linear-gradient(135deg,#a12124_0%,#7a191c_100%)] px-4 py-3 text-white">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold">Room Reservation Assistant</p>
+                <p className="text-sm font-bold">Room Recommendation Assistant</p>
                 <p className="mt-1 text-[10px] leading-relaxed text-white/78">
-                  Quick chat help for room selection and backup suggestions
+                  Manual room checks and live Firebase recommendations
                 </p>
               </div>
 
@@ -747,7 +987,7 @@ export default function RoomAssistantWidget({
                             type="button"
                             onClick={() => handleOptionClick(message.id, option)}
                             disabled={!isCurrentPrompt}
-                            className="rounded-full border border-[#a12124]/18 bg-[#a12124]/8 px-3 py-2 text-xs font-bold text-[#8f1d20] transition-all hover:-translate-y-0.5 hover:bg-[#a12124]/14 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                            className="rounded-full border border-[#a12124]/18 bg-[#a12124]/8 px-3 py-2 text-left text-xs font-bold text-[#8f1d20] transition-all hover:-translate-y-0.5 hover:bg-[#a12124]/14 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                           >
                             {option.label}
                           </button>
@@ -796,7 +1036,7 @@ export default function RoomAssistantWidget({
                                   {getRoomDisplayName(recommendation)}
                                 </p>
                                 <p className="mt-1 text-[11px] text-black/72">
-                                  {toSentenceCaseType(recommendation.type)} room
+                                  {recommendation.typeLabel}
                                 </p>
                               </div>
                               <button
@@ -818,10 +1058,20 @@ export default function RoomAssistantWidget({
                               <span className="rounded-full border border-black/8 bg-white/85 px-2.5 py-1">
                                 {recommendation.building}
                               </span>
+                              <span className="rounded-full border border-black/8 bg-white/85 px-2.5 py-1">
+                                Floor {recommendation.floor}
+                              </span>
                             </div>
 
+                            <p className="mt-2 text-[11px] text-black/70">
+                              Features:{' '}
+                              {recommendation.features.length > 0
+                                ? recommendation.features.join(', ')
+                                : 'None listed'}
+                            </p>
+
                             <p className="mt-3 text-[11px] leading-relaxed text-black/78">
-                              {recommendation.explanation || recommendation.reason}
+                              {recommendation.reason}
                             </p>
                           </div>
                         ))}
@@ -855,15 +1105,23 @@ export default function RoomAssistantWidget({
           </div>
 
           <div className="border-t border-black/8 bg-white/65 px-4 py-3 text-[10px] leading-relaxed text-black/62">
-            {isBotTyping
-              ? 'Checking room matches for you...'
-              : step === 'entry'
-                ? 'Start with Help me choose or Check this room.'
-                : step === 'features'
-                  ? 'Tap any features you care about, then press Done.'
-                  : step === 'results'
-                    ? 'Use Select to jump straight to a recommended room.'
-                    : 'Reply with the chat buttons to keep going.'}
+            {dataLoading
+              ? 'Loading live room and reservation data from Firebase...'
+              : isBotTyping
+                ? 'Reviewing room availability for you...'
+                : step === 'entry'
+                  ? selectedRoom
+                    ? 'Use Check availability after you set the date and time.'
+                    : 'Pick a room first, or start the guided preference flow.'
+                  : step === 'campus'
+                    ? 'Choose a campus so I can load the right rooms.'
+                  : step === 'features'
+                    ? 'Choose any features you want, then press Done.'
+                    : step === 'timeslot-suggestions'
+                      ? 'Pick a suggested slot to update the reservation form.'
+                      : step === 'unavailable-actions'
+                        ? 'Choose whether to try another slot or see other rooms.'
+                        : 'Use Select to jump straight to a suggested room.'}
           </div>
         </div>
       )}
@@ -872,10 +1130,11 @@ export default function RoomAssistantWidget({
         <button
           type="button"
           onClick={() => {
-            if (messages.length === 0) {
-              resetConversation();
+            if (!activeCampus) {
+              onOpenWithoutCampus();
             }
 
+            resetConversation();
             setIsOpen(true);
           }}
           className="assistant-bubble-button assistant-float fixed bottom-5 right-5 z-40 flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full border border-white/55 shadow-[0_18px_38px_rgba(122,25,28,0.34)] transition-all hover:-translate-y-1 md:bottom-6 md:right-6"

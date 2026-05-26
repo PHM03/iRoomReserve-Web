@@ -123,27 +123,6 @@ service cloud.firestore {
       return canReadManagedBuildingData(buildingId);
     }
 
-    // Checks if the requesting user is a building admin with access to buildingId.
-    // Uses a single get() on the user document (cached within each rule evaluation).
-    // Covers every profile shape written historically:
-    //   assignedBuildingId (string), assignedBuildingIds (list),
-    //   campus ("digi"/"main"), campusName (human-readable).
-    function isBuildingAdminFor(buildingId) {
-      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      return request.auth != null
-        && u.status == "approved"
-        && (isAdminRoleValue(u.role) || isSuperAdminRoleValue(u.role))
-        && (
-          isSuperAdminRoleValue(u.role)
-          || u.assignedBuildingId == buildingId
-          || (u.assignedBuildingIds is list && buildingId in u.assignedBuildingIds)
-          || (u.campus == "digi" && buildingId == "sdca-digital-campus")
-          || (u.campus == "main" && buildingId in ["gd1", "gd2", "gd3"])
-          || (u.campusName == "SDCA Digi Campus" && buildingId == "sdca-digital-campus")
-          || (u.campusName == "SDCA Main Campus" && buildingId in ["gd1", "gd2", "gd3"])
-        );
-    }
-
     match /users/{userId} {
       allow read: if isSignedIn() && (
         request.auth.uid == userId
@@ -181,39 +160,30 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Room assistant reads:
+    // - buildings
+    // - rooms (including rooms-by-id queries)
+    // - schedules
+    // - reservations (including booked/enriched slot queries)
+    // Writes stay locked down.
     match /buildings/{docId} {
-      allow read: if isSignedIn();
+      allow read: if request.auth != null;
+      allow write: if false;
     }
 
     match /rooms/{docId} {
-      allow read: if isSignedIn() &&
-        resource.data.buildingId is string &&
-        canReadManagedBuildingData(resource.data.buildingId);
+      allow read: if request.auth != null;
+      allow write: if false;
     }
 
-    // Schedules are queried with WHERE buildingId == X AND roomId IN [...].
-    // The buildingId equality clause in the query lets Firestore security rules
-    // prove per-document access using resource.data.buildingId without rejecting
-    // the whole query. Only building admins whose campus/assignedBuilding covers
-    // resource.data.buildingId are allowed to read.
     match /schedules/{docId} {
-      allow read: if resource.data.buildingId is string
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && isBuildingAdminFor(resource.data.buildingId);
+      allow read: if request.auth != null;
+      allow write: if false;
     }
 
-    // Reservations are private to the owner, except that any signed-in user can
-    // read APPROVED reservations so the room availability date picker can paint
-    // booked days red without leaking other users' pending requests.
     match /reservations/{docId} {
-      allow read: if isSignedIn() && (
-        request.auth.uid == resource.data.userId
-        || resource.data.status == "approved"
-        || (
-          resource.data.buildingId is string &&
-          canReadManagedBuildingData(resource.data.buildingId)
-        )
-      );
+      allow read: if request.auth != null;
+      allow write: if false;
     }
 
     // Staff-to-staff messaging (Administrator <-> Utility Staff <-> Faculty
