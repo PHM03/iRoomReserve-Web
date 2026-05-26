@@ -10,7 +10,11 @@ import {
 } from '@/lib/buildings/buildings';
 import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
-import { normalizeRoomCheckInMethod } from '@/lib/rooms/roomStatus';
+import {
+  ADMIN_RESERVATION_HEARTBEAT_TIMEOUT_MS,
+  isRoomReservationHeartbeatHealthy,
+  normalizeRoomCheckInMethod,
+} from '@/lib/rooms/roomStatus';
 import {
   Schedule,
   ScheduleInput,
@@ -479,6 +483,13 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
   const computeEffectiveStatus = (
     room: Room
   ): { status: string; detail: string } => {
+    const now = new Date();
+    const heartbeatHealthy = isRoomReservationHeartbeatHealthy(
+      room,
+      ADMIN_RESERVATION_HEARTBEAT_TIMEOUT_MS,
+      now
+    );
+
     if (room.status === 'Unavailable') {
       return {
         status: 'Unavailable',
@@ -489,7 +500,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     if (room.status === 'Occupied') {
       if (
         normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth' &&
-        room.beaconConnected === false
+        !heartbeatHealthy
       ) {
         return {
           status: 'Available',
@@ -521,7 +532,6 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       };
     }
 
-    const now = new Date();
     const today = now.toISOString().split('T')[0];
     const currentTime =
       now.getHours().toString().padStart(2, '0') +
@@ -544,7 +554,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       if (
         activeReservation.checkedInAt &&
         activeCheckInMethod === 'bluetooth' &&
-        room.beaconConnected === false
+        !heartbeatHealthy
       ) {
         return {
           status: 'Available',

@@ -24,7 +24,11 @@ import { getFeedbackByBuilding } from '@/lib/feedback/feedback';
 import type { Feedback } from '@/lib/feedback/feedback';
 import type { FeedbackSentimentSummary } from '@/lib/feedback/feedback-sentiment';
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
-import { normalizeRoomCheckInMethod } from '@/lib/rooms/roomStatus';
+import {
+  ADMIN_RESERVATION_HEARTBEAT_TIMEOUT_MS,
+  isRoomReservationHeartbeatHealthy,
+  normalizeRoomCheckInMethod,
+} from '@/lib/rooms/roomStatus';
 import type { Room } from '@/lib/rooms/rooms';
 import type { Reservation } from '@/lib/reservations/reservations';
 import { isRoomInClass, type Schedule } from '@/lib/schedules/schedules';
@@ -157,6 +161,13 @@ export default function AdminDashboard({
 
   const computeEffectiveStatus = useCallback(
     (room: Room): { status: string; detail: string } => {
+      const now = new Date();
+      const heartbeatHealthy = isRoomReservationHeartbeatHealthy(
+        room,
+        ADMIN_RESERVATION_HEARTBEAT_TIMEOUT_MS,
+        now
+      );
+
       if (room.status === 'Unavailable') {
         return {
           status: 'Unavailable',
@@ -167,7 +178,7 @@ export default function AdminDashboard({
       if (room.status === 'Occupied') {
         if (
           normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth' &&
-          room.beaconConnected === false
+          !heartbeatHealthy
         ) {
           return {
             status: 'Available',
@@ -199,7 +210,6 @@ export default function AdminDashboard({
         };
       }
 
-      const now = new Date();
       const today = now.toISOString().split('T')[0];
       const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now
         .getMinutes()
@@ -223,7 +233,7 @@ export default function AdminDashboard({
         if (
           activeReservation.checkedInAt &&
           activeCheckInMethod === 'bluetooth' &&
-          room.beaconConnected === false
+          !heartbeatHealthy
         ) {
           return {
             status: 'Available',

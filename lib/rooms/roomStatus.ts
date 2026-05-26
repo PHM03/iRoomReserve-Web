@@ -4,6 +4,8 @@ import { formatDate, formatTimeRange } from "@/lib/utils/dateTime";
 export const ROOM_STATUS_VALUES = ["Available", "Reserved", "Occupied"] as const;
 export const ROOM_CHECK_IN_METHODS = ["manual", "bluetooth"] as const;
 export const DEFAULT_RESERVATION_TIME_ZONE = "Asia/Manila";
+export const UTILITY_RESERVATION_HEARTBEAT_TIMEOUT_MS = 30 * 1000;
+export const ADMIN_RESERVATION_HEARTBEAT_TIMEOUT_MS = 10 * 60 * 1000;
 
 export type RoomStatus = (typeof ROOM_STATUS_VALUES)[number];
 export type RoomStatusValue = RoomStatus | "Unavailable";
@@ -14,6 +16,8 @@ export interface RoomStatusRoomLike {
   status?: string | null;
   activeReservationId?: string | null;
   beaconConnected?: boolean | null;
+  beaconLastConnectedAt?: FirestoreTimestampLike | Date | null;
+  beaconLastDisconnectedAt?: FirestoreTimestampLike | Date | null;
   checkInMethod?: RoomCheckInMethod | null;
 }
 
@@ -52,6 +56,47 @@ export interface ResolvedRoomStatus {
   status: RoomStatusValue;
   reservation: RoomStatusReservationLike | null;
   detail: string;
+}
+
+function normalizeRoomStatusTimestamp(
+  value?: FirestoreTimestampLike | Date | null
+): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value.toDate === "function") {
+    const parsedDate = value.toDate();
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+  }
+
+  return null;
+}
+
+export function isRoomReservationHeartbeatHealthy(
+  room: Pick<
+    RoomStatusRoomLike,
+    "beaconConnected" | "beaconLastConnectedAt" | "beaconLastDisconnectedAt"
+  >,
+  timeoutMs: number = UTILITY_RESERVATION_HEARTBEAT_TIMEOUT_MS,
+  now: Date = new Date()
+) {
+  if (room.beaconConnected !== true) {
+    return false;
+  }
+
+  const lastConnectedAt = normalizeRoomStatusTimestamp(
+    room.beaconLastConnectedAt
+  );
+  if (!lastConnectedAt) {
+    return false;
+  }
+
+  return now.getTime() - lastConnectedAt.getTime() <= timeoutMs;
 }
 
 export function normalizeRoomCheckInMethod(
@@ -233,8 +278,16 @@ export function getReservationRoomStatus(
     RoomStatusReservationLike,
     "id" | "status" | "date" | "checkedInAt" | "checkInMethod"
   >,
-  room?: RoomStatusRoomLike | null
+  room?: RoomStatusRoomLike | null,
+  options: {
+    now?: Date;
+    connectionTimeoutMs?: number;
+  } = {}
 ): RoomStatusValue {
+  const {
+    now = new Date(),
+    connectionTimeoutMs = UTILITY_RESERVATION_HEARTBEAT_TIMEOUT_MS,
+  } = options;
   const roomStatus = normalizeRoomStatus(room?.status);
   const checkInMethod = normalizeRoomCheckInMethod(
     reservation.checkInMethod ?? room?.checkInMethod
@@ -242,7 +295,7 @@ export function getReservationRoomStatus(
   const bluetoothDisconnected =
     Boolean(reservation.checkedInAt) &&
     checkInMethod === "bluetooth" &&
-    room?.beaconConnected === false;
+    !isRoomReservationHeartbeatHealthy(room ?? {}, connectionTimeoutMs, now);
 
   if (reservation.checkedInAt && !bluetoothDisconnected) {
     return "Occupied";
@@ -265,9 +318,14 @@ export function resolveRoomStatus(
   options: {
     activeSchedule?: RoomStatusScheduleLike | null;
     now?: Date;
+    connectionTimeoutMs?: number;
   } = {}
 ): ResolvedRoomStatus {
-  const { activeSchedule = null, now = new Date() } = options;
+  const {
+    activeSchedule = null,
+    now = new Date(),
+    connectionTimeoutMs = UTILITY_RESERVATION_HEARTBEAT_TIMEOUT_MS,
+  } = options;
   const roomStatus = normalizeRoomStatus(room.status);
   const reservation = getPrimaryRoomReservation(room, reservations, now);
   const checkInMethod = normalizeRoomCheckInMethod(
@@ -276,7 +334,7 @@ export function resolveRoomStatus(
   const bluetoothDisconnected =
     Boolean(reservation?.checkedInAt) &&
     checkInMethod === "bluetooth" &&
-    room.beaconConnected === false;
+    !isRoomReservationHeartbeatHealthy(room, connectionTimeoutMs, now);
 
   if (roomStatus === "Unavailable") {
     return {
