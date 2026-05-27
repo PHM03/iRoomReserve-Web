@@ -32,6 +32,7 @@ import type { Schedule } from "@/lib/schedules/schedules";
 import { ApiError } from "@/lib/server/api-error";
 import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
 import {
+  queuePushNotification,
   queueNotificationWrite,
   sendQueuedPushNotifications,
   type AppNotificationInput,
@@ -713,9 +714,17 @@ function addNotification(
     message: string;
     buildingId: string;
     reservationId: string;
+    route?: string;
   }
 ) {
   queueNotificationWrite(batch, queuedNotifications, input);
+}
+
+function addPushNotification(
+  queuedNotifications: AppNotificationInput[],
+  input: AppNotificationInput
+) {
+  queuePushNotification(queuedNotifications, input);
 }
 
 function normalizePresenceAppState(
@@ -1566,7 +1575,7 @@ export async function checkInReservationRecord(
     });
 
     managerIds.forEach((managerUid) => {
-      addNotification(batch, queuedNotifications, {
+      addPushNotification(queuedNotifications, {
         recipientUid: managerUid,
         type: "system",
         title: "Room Checked In",
@@ -1575,6 +1584,7 @@ export async function checkInReservationRecord(
         )}.`,
         buildingId: reservation.buildingId,
         reservationId,
+        route: "/(main)/dashboard/rooms-status",
       });
     });
 
@@ -1905,7 +1915,7 @@ export async function completeReservationRecord(
     });
 
     managerIds.forEach((managerUid) => {
-      addNotification(batch, queuedNotifications, {
+      addPushNotification(queuedNotifications, {
         recipientUid: managerUid,
         type: "system",
         title: "Reservation Completed",
@@ -1914,6 +1924,7 @@ export async function completeReservationRecord(
         )} as completed.`,
         buildingId: reservation.buildingId,
         reservationId,
+        route: "/(main)/dashboard/rooms-status",
       });
     });
 

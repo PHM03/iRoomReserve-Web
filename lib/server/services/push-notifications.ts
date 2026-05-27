@@ -17,6 +17,7 @@ export interface AppNotificationInput {
   message: string;
   buildingId: string;
   reservationId: string;
+  route?: string;
 }
 
 const EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send";
@@ -57,6 +58,13 @@ export function queueNotificationWrite(
   queuedNotifications.push(input);
 }
 
+export function queuePushNotification(
+  queuedNotifications: AppNotificationInput[],
+  input: AppNotificationInput
+) {
+  queuedNotifications.push(input);
+}
+
 export async function sendQueuedPushNotifications(
   queuedNotifications: AppNotificationInput[]
 ) {
@@ -89,7 +97,7 @@ export async function sendQueuedPushNotifications(
         channelId: RESERVATION_UPDATES_CHANNEL_ID,
         data: {
           reservationId: notification.reservationId,
-          route: "/(main)/dashboard/inbox",
+          route: notification.route ?? "/(main)/dashboard/inbox",
           type: notification.type,
         },
       }));
