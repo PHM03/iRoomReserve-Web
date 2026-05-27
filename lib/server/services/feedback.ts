@@ -13,6 +13,11 @@ import {
   type FeedbackSentimentSummary,
 } from "@/lib/feedback/feedback-sentiment";
 import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
+import {
+  queueNotificationWrite,
+  sendQueuedPushNotifications,
+  type AppNotificationInput,
+} from "@/lib/server/services/push-notifications";
 
 export interface FeedbackCreateInput {
   roomId: string;
@@ -135,6 +140,7 @@ export async function createFeedbackRecord(data: FeedbackCreateInput) {
 
   const feedbackRef = db.collection("feedback").doc();
   const batch = db.batch();
+  const queuedNotifications: AppNotificationInput[] = [];
 
   batch.set(feedbackRef, {
     ...data,
@@ -151,8 +157,7 @@ export async function createFeedbackRecord(data: FeedbackCreateInput) {
   });
 
   adminIds.forEach((adminUid) => {
-    const notificationRef = db.collection("notifications").doc();
-    batch.set(notificationRef, {
+    queueNotificationWrite(batch, queuedNotifications, {
       recipientUid: adminUid,
       type: "feedback",
       title: "New Room Feedback",
@@ -162,12 +167,11 @@ export async function createFeedbackRecord(data: FeedbackCreateInput) {
       )}${feedbackText.length > 60 ? "..." : ""}"`,
       buildingId: data.buildingId,
       reservationId: feedbackRef.id,
-      read: false,
-      createdAt: serverTimestamp(),
     });
   });
 
   await batch.commit();
+  await sendQueuedPushNotifications(queuedNotifications);
   return feedbackRef.id;
 }
 

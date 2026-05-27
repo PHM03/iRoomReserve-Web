@@ -2,6 +2,11 @@ import "server-only";
 
 import { db, serverTimestamp } from "@/lib/firebase/firebase-admin";
 import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
+import {
+  queueNotificationWrite,
+  sendQueuedPushNotifications,
+  type AppNotificationInput,
+} from "@/lib/server/services/push-notifications";
 
 export interface AdminRequestCreateInput {
   userId: string;
@@ -19,6 +24,7 @@ export async function createAdminRequestRecord(data: AdminRequestCreateInput) {
 
   const requestRef = db.collection("adminRequests").doc();
   const batch = db.batch();
+  const queuedNotifications: AppNotificationInput[] = [];
 
   batch.set(requestRef, {
     ...data,
@@ -28,8 +34,7 @@ export async function createAdminRequestRecord(data: AdminRequestCreateInput) {
   });
 
   adminIds.forEach((adminUid) => {
-    const notificationRef = db.collection("notifications").doc();
-    batch.set(notificationRef, {
+    queueNotificationWrite(batch, queuedNotifications, {
       recipientUid: adminUid,
       type: "system",
       title: "New Admin Request",
@@ -38,12 +43,11 @@ export async function createAdminRequestRecord(data: AdminRequestCreateInput) {
       }"`,
       buildingId: data.buildingId,
       reservationId: requestRef.id,
-      read: false,
-      createdAt: serverTimestamp(),
     });
   });
 
   await batch.commit();
+  await sendQueuedPushNotifications(queuedNotifications);
   return requestRef.id;
 }
 
@@ -64,13 +68,13 @@ export async function respondToAdminRequestRecord(
   };
 
   const batch = db.batch();
+  const queuedNotifications: AppNotificationInput[] = [];
   batch.update(requestRef, {
     adminResponse: responseText,
     status: "responded",
   });
 
-  const notificationRef = db.collection("notifications").doc();
-  batch.set(notificationRef, {
+  queueNotificationWrite(batch, queuedNotifications, {
     recipientUid: requestData.userId,
     type: "system",
     title: "Admin Replied",
@@ -80,9 +84,8 @@ export async function respondToAdminRequestRecord(
     )}${responseText.length > 80 ? "..." : ""}"`,
     buildingId: requestData.buildingId,
     reservationId: requestId,
-    read: false,
-    createdAt: serverTimestamp(),
   });
 
   await batch.commit();
+  await sendQueuedPushNotifications(queuedNotifications);
 }

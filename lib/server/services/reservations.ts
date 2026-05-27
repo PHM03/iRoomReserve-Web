@@ -31,6 +31,11 @@ import {
 import type { Schedule } from "@/lib/schedules/schedules";
 import { ApiError } from "@/lib/server/api-error";
 import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
+import {
+  queueNotificationWrite,
+  sendQueuedPushNotifications,
+  type AppNotificationInput,
+} from "@/lib/server/services/push-notifications";
 
 type ReservationStatus =
   | "pending"
@@ -694,6 +699,7 @@ function getRoomStatusPayload(
 
 function addNotification(
   batch: FirestoreBatch,
+  queuedNotifications: AppNotificationInput[],
   input: {
     recipientUid: string;
     type:
@@ -709,12 +715,7 @@ function addNotification(
     reservationId: string;
   }
 ) {
-  const notificationRef = db.collection("notifications").doc();
-  batch.set(notificationRef, {
-    ...input,
-    read: false,
-    createdAt: serverTimestamp(),
-  });
+  queueNotificationWrite(batch, queuedNotifications, input);
 }
 
 function normalizePresenceAppState(
@@ -902,6 +903,7 @@ export async function createReservationRecord(data: ReservationCreateInput) {
     );
     const reservationRef = db.collection("reservations").doc();
     const batch = db.batch();
+    const queuedNotifications: AppNotificationInput[] = [];
 
     batch.set(reservationRef, {
       userId: data.userId,
@@ -947,7 +949,7 @@ export async function createReservationRecord(data: ReservationCreateInput) {
     });
 
     firstApproverIds.forEach((recipientUid) => {
-      addNotification(batch, {
+      addNotification(batch, queuedNotifications, {
         recipientUid,
         type: "new_reservation",
         title: "New Reservation Request",
@@ -960,6 +962,7 @@ export async function createReservationRecord(data: ReservationCreateInput) {
     });
 
     await batch.commit();
+    await sendQueuedPushNotifications(queuedNotifications);
     return reservationRef.id;
   } catch (error) {
     logReservationServiceError("createReservationRecord", error, {
@@ -994,6 +997,7 @@ export async function createRecurringReservationRecord(
       .toString(36)
       .slice(2, 8)}`;
     const batch = db.batch();
+    const queuedNotifications: AppNotificationInput[] = [];
     const createdIds: string[] = [];
 
     dates.forEach((date) => {
@@ -1050,7 +1054,7 @@ export async function createRecurringReservationRecord(
       .join(", ");
 
     firstApproverIds.forEach((recipientUid) => {
-      addNotification(batch, {
+      addNotification(batch, queuedNotifications, {
         recipientUid,
         type: "new_reservation",
         title: "New Recurring Reservation",
@@ -1066,6 +1070,7 @@ export async function createRecurringReservationRecord(
     });
 
     await batch.commit();
+    await sendQueuedPushNotifications(queuedNotifications);
     return createdIds;
   } catch (error) {
     logReservationServiceError("createRecurringReservationRecord", error, {
@@ -1169,6 +1174,7 @@ export async function approveReservationRecord(
       });
 
       return {
+        currentApprovalStep,
         groupedReservations: pendingReservations,
         nextApprovalStep: getNextApprovalStep(
           reservation.approvalFlow,
@@ -1183,13 +1189,26 @@ export async function approveReservationRecord(
         ? await getUserIdsByEmail(approvalResult.nextApprovalStep.email)
         : [];
 
-      if (nextApproverIds.length === 0) {
-        return;
+      const batch = db.batch();
+      const queuedNotifications: AppNotificationInput[] = [];
+
+      if (approvalResult.currentApprovalStep.role === "advisor") {
+        addNotification(batch, queuedNotifications, {
+          recipientUid: approvalResult.groupedReservations[0].userId,
+          type: "system",
+          title: "Faculty Adviser Approved",
+          message: `Your faculty adviser approved your reservation for ${
+            approvalResult.groupedReservations[0].roomName
+          } on ${formatGroupedScheduleSummary(
+            approvalResult.groupedReservations
+          )}. It is now waiting for the next approval step.`,
+          buildingId: approvalResult.groupedReservations[0].buildingId,
+          reservationId,
+        });
       }
 
-      const batch = db.batch();
       nextApproverIds.forEach((recipientUid) => {
-        addNotification(batch, {
+        addNotification(batch, queuedNotifications, {
           recipientUid,
           type: "new_reservation",
           title: "Reservation Approval Required",
@@ -1205,12 +1224,16 @@ export async function approveReservationRecord(
         });
       });
 
-      await batch.commit();
+      if (queuedNotifications.length > 0) {
+        await batch.commit();
+        await sendQueuedPushNotifications(queuedNotifications);
+      }
       return;
     }
     const batch = db.batch();
+    const queuedNotifications: AppNotificationInput[] = [];
 
-    addNotification(batch, {
+    addNotification(batch, queuedNotifications, {
       recipientUid: approvalResult.groupedReservations[0].userId,
       type: "reservation_approved",
       title: "Reservation Approved",
@@ -1237,6 +1260,7 @@ export async function approveReservationRecord(
     });
 
     await batch.commit();
+    await sendQueuedPushNotifications(queuedNotifications);
   } catch (error) {
     logReservationServiceError("approveReservationRecord", error, {
       reservationId,
@@ -1329,8 +1353,9 @@ export async function rejectReservationRecord(
     });
 
     const batch = db.batch();
+    const queuedNotifications: AppNotificationInput[] = [];
 
-    addNotification(batch, {
+    addNotification(batch, queuedNotifications, {
       recipientUid: rejectionResult.groupedReservations[0].userId,
       type: "reservation_rejected",
       title: "Reservation Rejected",
@@ -1346,6 +1371,7 @@ export async function rejectReservationRecord(
     });
 
     await batch.commit();
+    await sendQueuedPushNotifications(queuedNotifications);
   } catch (error) {
     logReservationServiceError("rejectReservationRecord", error, {
       reservationId,
@@ -1395,6 +1421,7 @@ export async function cancelReservationRecord(
         ? await getApprovedReservationsForRoom(reservation.roomId)
         : [];
     const batch = db.batch();
+    const queuedNotifications: AppNotificationInput[] = [];
 
     reservationsToCancel.forEach((reservationToCancel) => {
       batch.update(db.collection("reservations").doc(reservationToCancel.id), {
@@ -1404,7 +1431,7 @@ export async function cancelReservationRecord(
     });
 
     managerIds.forEach((managerUid) => {
-      addNotification(batch, {
+      addNotification(batch, queuedNotifications, {
         recipientUid: managerUid,
         type: "reservation_cancelled",
         title: "Reservation Cancelled",
@@ -1432,6 +1459,7 @@ export async function cancelReservationRecord(
     }
 
     await batch.commit();
+    await sendQueuedPushNotifications(queuedNotifications);
   } catch (error) {
     logReservationServiceError("cancelReservationRecord", error, {
       reservationId,
@@ -1514,6 +1542,7 @@ export async function checkInReservationRecord(
 
     const managerIds = await getBuildingManagerIds(reservation.buildingId);
     const batch = db.batch();
+    const queuedNotifications: AppNotificationInput[] = [];
 
     batch.update(reservationRef, {
       checkedInAt: serverTimestamp(),
@@ -1537,7 +1566,7 @@ export async function checkInReservationRecord(
     });
 
     managerIds.forEach((managerUid) => {
-      addNotification(batch, {
+      addNotification(batch, queuedNotifications, {
         recipientUid: managerUid,
         type: "system",
         title: "Room Checked In",
@@ -1550,6 +1579,7 @@ export async function checkInReservationRecord(
     });
 
     await batch.commit();
+    await sendQueuedPushNotifications(queuedNotifications);
   } catch (error) {
     logReservationServiceError("checkInReservationRecord", error, {
       reservationId,
@@ -1865,6 +1895,7 @@ export async function completeReservationRecord(
       reservation.roomId
     );
     const batch = db.batch();
+    const queuedNotifications: AppNotificationInput[] = [];
 
     batch.update(reservationRef, {
       status: "completed",
@@ -1874,7 +1905,7 @@ export async function completeReservationRecord(
     });
 
     managerIds.forEach((managerUid) => {
-      addNotification(batch, {
+      addNotification(batch, queuedNotifications, {
         recipientUid: managerUid,
         type: "system",
         title: "Reservation Completed",
@@ -1898,6 +1929,7 @@ export async function completeReservationRecord(
     });
 
     await batch.commit();
+    await sendQueuedPushNotifications(queuedNotifications);
   } catch (error) {
     logReservationServiceError("completeReservationRecord", error, {
       reservationId,
