@@ -800,17 +800,27 @@ export default function AdminPendingTab({
                       }
                       if (!reservationActionError) closeConfirm();
                     }}
-                        style={{
-                          padding: '8px 20px',
-                          borderRadius: '8px',
-                          border: 'none',
-                          background: confirmModal.type === 'approve' ? '#8B0000' : '#e53935',
-                          color: '#fff',
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          opacity: actionLoading === confirmModal.id ? 0.6 : 1
-                        }}
+                    style={{
+                      padding: '8px 20px',
+                      borderRadius: '8px',
+                      border: confirmModal.type === 'approve' ? '1px solid rgba(34, 197, 94, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)',
+                      background: confirmModal.type === 'approve' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                      color: confirmModal.type === 'approve' ? '#15803d' : '#b91c1c',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      opacity: actionLoading === confirmModal.id ? 0.6 : 1,
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (actionLoading === confirmModal.id) return;
+                      (e.currentTarget as HTMLButtonElement).style.background =
+                        confirmModal.type === 'approve' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background =
+                        confirmModal.type === 'approve' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+                    }}
                   >
                     {actionLoading === confirmModal.id ? 'Processing...' : confirmModal.type === 'approve' ? confirmModal.step === 'conflict-reminder' ? 'Approve Anyway' : 'Yes, Approve' : 'Yes, Reject'}
                   </button>
@@ -1071,9 +1081,28 @@ export default function AdminPendingTab({
                               openApproveConfirm(request);
                             }}
                             disabled={actionLoading === request.id || approveCheckLoading === request.id}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', border: 'none', background: '#8B0000', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: actionLoading === request.id || approveCheckLoading === request.id ? 0.6 : 1, transition: 'background 0.15s' }}
-                            onMouseEnter={(e) => { if (!actionLoading && !approveCheckLoading) (e.currentTarget as HTMLButtonElement).style.background = '#6e0000'; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#8B0000'; }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '8px 20px',
+                              borderRadius: '8px',
+                              border: '1px solid rgba(34, 197, 94, 0.25)',
+                              background: 'rgba(34, 197, 94, 0.1)',
+                              color: '#15803d',
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              opacity: actionLoading === request.id || approveCheckLoading === request.id ? 0.6 : 1,
+                              transition: 'background 0.15s'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (actionLoading || approveCheckLoading) return;
+                              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(34, 197, 94, 0.15)';
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(34, 197, 94, 0.1)';
+                            }}
                           >
                             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
                             {approveCheckLoading === request.id ? 'Checking...' : 'Approve'}
@@ -1090,17 +1119,20 @@ export default function AdminPendingTab({
                               gap: '6px',
                               padding: '8px 20px',
                               borderRadius: '8px',
-                              border: '1px solid #e53935',
-                              background: 'transparent',
-                              color: '#e53935',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              background: 'rgba(239, 68, 68, 0.1)',
+                              color: '#b91c1c',
                               fontSize: '13px',
                               fontWeight: 700,
                               cursor: 'pointer',
                               opacity: actionLoading === request.id ? 0.6 : 1,
                               transition: 'background 0.15s'
                             }}
-                            onMouseEnter={(e) => { if (!actionLoading) (e.currentTarget as HTMLButtonElement).style.background = '#fff0f0'; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                            onMouseEnter={(e) => {
+                              if (actionLoading) return;
+                              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.15)';
+                            }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.1)'; }}
                           >
                             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
                             Reject
