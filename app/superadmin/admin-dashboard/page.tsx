@@ -9,9 +9,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useAdminTab } from '@/context/AdminTabContext';
 import { USER_ROLES } from '@/lib/auth/roles';
 import {
+  deleteNotification,
   markAllNotificationsRead,
   markNotificationRead,
   onUnreadNotifications,
+  shouldDeleteNotificationOnClick,
   type Notification,
 } from '@/lib/notifications/notifications';
 
@@ -186,8 +188,35 @@ function SuperAdminCampusNavBar({
   const handleNotificationClick = async (notification: Notification) => {
     const isPending = notification.type === 'new_reservation';
 
-    if (!isPending) {
-      await markNotificationRead(notification.id);
+    try {
+      if (isPending) {
+        const shouldDelete = await shouldDeleteNotificationOnClick(
+          notification,
+          email
+        );
+
+        if (shouldDelete) {
+          try {
+            await deleteNotification(notification.id);
+          } catch (deleteError) {
+            console.warn('Failed to delete stale notification, marking as read instead:', deleteError);
+            await markNotificationRead(notification.id);
+          }
+          setShowNotifications(false);
+          return;
+        }
+      } else {
+        await markNotificationRead(notification.id);
+      }
+    } catch (error) {
+      console.warn('Failed to process notification click:', error);
+      if (isPending) {
+        try {
+          await markNotificationRead(notification.id);
+        } catch (readError) {
+          console.warn('Failed to hide pending notification after click:', readError);
+        }
+      }
     }
 
     setShowNotifications(false);
