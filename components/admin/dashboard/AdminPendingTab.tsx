@@ -89,6 +89,14 @@ function getTodayDateKey() {
   ].join('-');
 }
 
+function getRequestedEquipmentEntries(equipment?: Record<string, number>) {
+  if (!equipment) {
+    return [];
+  }
+
+  return Object.entries(equipment).filter(([, quantity]) => quantity > 0);
+}
+
 function isExpiredReservation(request: Reservation) {
   const reservationDates = getReservationDates(request);
   if (reservationDates.length === 0) {
@@ -969,29 +977,29 @@ export default function AdminPendingTab({
                       ))}
                     </div>
 
-                    {/* Equipment */}
-                    {request.equipment && Object.keys(request.equipment).length > 0 && (
-                      <div style={{
-                        background: '#fafafa',
-                        borderRadius: '8px',
-                        border: '1px solid #f0f0f0',
-                        padding: '10px 14px',
-                        marginBottom: '12px'
-                      }}>
-                        <p style={{
-                          fontSize: '10px',
-                          fontWeight: 600,
-                          letterSpacing: '0.08em',
-                          color: '#999',
-                          textTransform: 'uppercase',
-                          marginBottom: '8px'
-                        }}>Equipment</p>
+                    {/* Requested Equipment */}
+                    <div style={{
+                      background: '#fafafa',
+                      borderRadius: '8px',
+                      border: '1px solid #f0f0f0',
+                      padding: '10px 14px',
+                      marginBottom: '12px'
+                    }}>
+                      <p style={{
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        letterSpacing: '0.08em',
+                        color: '#999',
+                        textTransform: 'uppercase',
+                        marginBottom: '8px'
+                      }}>Requested Equipment</p>
+                      {getRequestedEquipmentEntries(request.equipment).length > 0 ? (
                         <div style={{
                           display: 'flex',
                           flexWrap: 'wrap',
                           gap: '6px'
                         }}>
-                          {Object.entries(request.equipment).map(([key, val]) => (
+                          {getRequestedEquipmentEntries(request.equipment).map(([key, val]) => (
                             <span key={key} style={{
                               background: '#f0f0f0',
                               borderRadius: '20px',
@@ -1002,8 +1010,14 @@ export default function AdminPendingTab({
                             }}>{key} x{val}</span>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <p style={{
+                          fontSize: '14px',
+                          color: '#222',
+                          fontWeight: 500
+                        }}>N/A</p>
+                      )}
+                    </div>
 
                     {/* Concept paper */}
                     {request.approvalDocumentUrl && (
