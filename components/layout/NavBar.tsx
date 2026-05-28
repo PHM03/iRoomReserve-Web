@@ -240,8 +240,8 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     `${navItemBaseClasses} ${isActive ? navItemActiveClasses : navItemInactiveClasses}`;
   const navIconButtonClasses =
     'rounded-lg bg-transparent p-2 text-[#343434] transition-colors duration-200 ease-in-out hover:bg-transparent hover:text-[#a12124]';
-  const defaultLinkPaddingClasses = isStudentRole ? 'px-5' : 'px-3';
-  const navCenterPaddingClasses = isAdmin ? 'px-3' : 'px-10';
+  const defaultLinkPaddingClasses = isStudentRole ? 'px-4 2xl:px-5' : 'px-3';
+  const navCenterPaddingClasses = isAdmin ? 'px-2 2xl:px-3' : 'px-4 xl:px-6';
   const adminLinkPaddingClasses = 'px-2.5';
   const navbarBoldStyle = {
     fontFamily: 'var(--font-century-gothic-bold)',
@@ -357,15 +357,15 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
       className="glass-nav fixed top-0 left-0 right-0 z-50 border-white/40 bg-white/90 shadow-xl backdrop-blur-xl"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between py-5">
-          <div className="flex items-center">
-            <h1 className="text-xl text-[#343434]" style={navbarBoldStyle}>
+        <div className="flex items-center justify-between gap-3 py-4 xl:gap-5">
+          <div className="flex min-w-0 items-center">
+            <h1 className="truncate text-lg text-[#343434] sm:text-xl" style={navbarBoldStyle}>
               iRoomReserve
             </h1>
           </div>
 
           <div
-            className={`hidden md:flex flex-1 items-center justify-center gap-2 ${navCenterPaddingClasses}`}
+            className={`hidden xl:flex flex-1 items-center justify-center gap-1 2xl:gap-2 ${navCenterPaddingClasses}`}
           >
             {isAdmin ? (
               <>
@@ -436,8 +436,8 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
             )}
           </div>
 
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2">
+          <div className="flex shrink-0 items-center space-x-1 sm:space-x-2">
+            <div className="hidden sm:flex items-center space-x-2">
               <div
                 className="relative"
                 onMouseEnter={() => setShowUserTooltip(true)}
@@ -598,7 +598,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
 
             <button
               onClick={() => setIsMenuOpen((current) => !current)}
-              className={`md:hidden ${navIconButtonClasses}`}
+              className={`xl:hidden ${navIconButtonClasses}`}
             >
               {isMenuOpen ? (
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -625,7 +625,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
       </div>
 
       {isMenuOpen ? (
-        <div className="md:hidden border-t border-[#343434]/8 bg-white/90 shadow-xl backdrop-blur-xl">
+        <div className="xl:hidden border-t border-[#343434]/8 bg-white/90 shadow-xl backdrop-blur-xl">
           <div className="px-3 py-2 space-y-1">
             {isAdmin ? (
               <>
