@@ -565,6 +565,13 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       };
     }
 
+    if (pendingFinishReservation) {
+      return {
+        status: 'Occupied',
+        detail: `Completed by ${pendingFinishReservation.userName}; waiting for staff confirmation`,
+      };
+    }
+
     if (room.status === 'Occupied') {
       if (
         normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth' &&
@@ -579,11 +586,9 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       return {
         status: 'Occupied',
         detail:
-          pendingFinishReservation
-            ? `Completed by ${pendingFinishReservation.userName}; waiting for staff confirmation`
-            : normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth'
-              ? 'Bluetooth beacon connected'
-              : 'Checked in',
+          normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth'
+            ? 'Bluetooth beacon connected'
+            : 'Checked in',
       };
     }
 
