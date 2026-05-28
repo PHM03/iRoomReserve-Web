@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import type { Feedback } from '@/lib/feedback/feedback';
 import { resolveFeedbackSentimentLabel } from '@/lib/feedback/feedback-sentiment';
+import type { Reservation } from '@/lib/reservations/reservations';
 import {
   getPreferredDefaultFloorValue,
   sortFloorOptions,
@@ -20,6 +21,8 @@ interface AdminRoomStatusSectionProps {
   statusMonitorFloorGroups: Array<{ floor: string; label: string; rooms: Room[] }>;
   computeEffectiveStatus: (room: Room) => { status: string; detail: string };
   onStatusChange: (roomId: string, status: Room['status']) => void;
+  pendingFinishReservationsByRoomId?: Map<string, Reservation>;
+  onConfirmFinishedReservation?: (reservationId: string) => void;
   feedbackList?: Feedback[];
   roomHistory?: RoomHistoryEntry[];
   className?: string;
@@ -293,6 +296,8 @@ export default function AdminRoomStatusSection({
   statusMonitorFloorGroups,
   computeEffectiveStatus,
   onStatusChange,
+  pendingFinishReservationsByRoomId,
+  onConfirmFinishedReservation,
   feedbackList = [],
   roomHistory = [],
   className = '',
@@ -481,6 +486,8 @@ export default function AdminRoomStatusSection({
               const feedbackStats = computeRoomFeedbackStats(roomFeedback);
               const usageStats = computeRoomUsageStats(roomHistEntries);
               const isExpanded = expandedRoomId === room.id;
+              const pendingFinishReservation =
+                pendingFinishReservationsByRoomId?.get(room.id) ?? null;
               const floorLabel =
                 floorOptions.find((option) => option.value === room.floor)?.label ??
                 room.floor;
@@ -524,6 +531,17 @@ export default function AdminRoomStatusSection({
 
                     {/* Toggle buttons */}
                     <div className="flex gap-1.5">
+                      {pendingFinishReservation && onConfirmFinishedReservation ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onConfirmFinishedReservation(pendingFinishReservation.id)
+                          }
+                          className="flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ui-button-blue"
+                        >
+                          Finish Reservation
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => onStatusChange(room.id, 'Available')}

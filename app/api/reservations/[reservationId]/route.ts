@@ -10,6 +10,7 @@ import {
   approveReservationRecord,
   cancelReservationRecord,
   checkInReservationRecord,
+  confirmFinishedReservationRecord,
   completeReservationRecord,
   deleteReservationRecord,
   disconnectReservationBeaconRecord,
@@ -66,6 +67,10 @@ const reservationActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("complete"),
     userId: z.string().trim().min(1),
+  }),
+  z.object({
+    action: z.literal("confirm-finish"),
+    userId: z.string().trim().min(1).optional(),
   }),
   z.object({
     action: z.literal("delete"),
@@ -179,6 +184,28 @@ export async function PATCH(
         }
         await completeReservationRecord(reservationId, payload.userId);
         break;
+      case "confirm-finish": {
+        const reservationSnapshot = await db
+          .collection("reservations")
+          .doc(reservationId)
+          .get();
+
+        if (!reservationSnapshot.exists) {
+          throw new ApiError(404, "not_found", "Reservation not found.");
+        }
+
+        const reservation = reservationSnapshot.data() as {
+          buildingId?: string;
+        };
+
+        if (!reservation.buildingId) {
+          throw new ApiError(400, "invalid_reservation", "Reservation building is missing.");
+        }
+
+        assertCanManageBuilding(authContext, reservation.buildingId);
+        await confirmFinishedReservationRecord(reservationId, authContext.uid!);
+        break;
+      }
       case "delete":
         const reservationSnapshot = await db
           .collection("reservations")

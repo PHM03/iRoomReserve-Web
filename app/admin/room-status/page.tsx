@@ -28,6 +28,8 @@ export default function AdminRoomStatusPage() {
     statusMonitorFloorGroups,
     handleStatusChange,
     computeEffectiveStatus,
+    pendingFinishReservationsByRoomId,
+    handleConfirmFinishedReservation,
   } = useAdminStatusPages({ campusOverride });
 
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
@@ -85,6 +87,8 @@ export default function AdminRoomStatusPage() {
             statusMonitorFloorGroups={statusMonitorFloorGroups}
             computeEffectiveStatus={computeEffectiveStatus}
             onStatusChange={handleStatusChange}
+            pendingFinishReservationsByRoomId={pendingFinishReservationsByRoomId}
+            onConfirmFinishedReservation={handleConfirmFinishedReservation}
             feedbackList={feedbackList}
             roomHistory={roomHistory}
           />

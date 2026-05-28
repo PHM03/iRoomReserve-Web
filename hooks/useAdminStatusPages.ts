@@ -38,7 +38,11 @@ import {
   type ScheduleSemester,
 } from '@/lib/schedules/scheduleContext';
 import { validateScheduleTimes } from '@/lib/schedules/scheduleTimeRules';
-import { onReservationsByBuilding, Reservation } from '@/lib/reservations/reservations';
+import {
+  confirmFinishedReservation,
+  onReservationsByBuilding,
+  Reservation,
+} from '@/lib/reservations/reservations';
 import { onRoomsByBuilding, Room, updateRoomStatus } from '@/lib/rooms/rooms';
 
 function getManagedBuildingDisplayLabel(input: {
@@ -368,6 +372,40 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     }
   };
 
+  const pendingFinishReservationsByRoomId = useMemo(() => {
+    const nextMap = new Map<string, Reservation>();
+
+    allReservations.forEach((reservation) => {
+      if (
+        reservation.status !== 'completed' ||
+        !reservation.checkedInAt ||
+        reservation.occupancyReleasedAt
+      ) {
+        return;
+      }
+
+      const existingReservation = nextMap.get(reservation.roomId);
+      if (
+        !existingReservation ||
+        (reservation.updatedAt?.seconds ?? 0) >
+          (existingReservation.updatedAt?.seconds ?? 0)
+      ) {
+        nextMap.set(reservation.roomId, reservation);
+      }
+    });
+
+    return nextMap;
+  }, [allReservations]);
+
+  const handleConfirmFinishedReservation = async (reservationId: string) => {
+    try {
+      await confirmFinishedReservation(reservationId);
+    } catch (error) {
+      console.warn('Failed to confirm finished reservation:', error);
+      alert('Failed to confirm the finished reservation. Check the console for details.');
+    }
+  };
+
   const handleSaveSchedule = async () => {
     if (
       !buildingId ||
@@ -517,6 +555,8 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       ADMIN_RESERVATION_HEARTBEAT_TIMEOUT_MS,
       now
     );
+    const pendingFinishReservation =
+      pendingFinishReservationsByRoomId.get(room.id) ?? null;
 
     if (room.status === 'Unavailable') {
       return {
@@ -539,9 +579,11 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       return {
         status: 'Occupied',
         detail:
-          normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth'
-            ? 'Bluetooth beacon connected'
-            : 'Checked in',
+          pendingFinishReservation
+            ? `Completed by ${pendingFinishReservation.userName}; waiting for staff confirmation`
+            : normalizeRoomCheckInMethod(room.checkInMethod) === 'bluetooth'
+              ? 'Bluetooth beacon connected'
+              : 'Checked in',
       };
     }
 
@@ -698,5 +740,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     handleDeleteSchedule,
     handleSwitchScheduleContext,
     computeEffectiveStatus,
+    pendingFinishReservationsByRoomId,
+    handleConfirmFinishedReservation,
   };
 }

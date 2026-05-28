@@ -84,6 +84,8 @@ interface ReservationRecord {
   recurringGroupId?: string;
   checkedInAt?: FirestoreTimestampLike | null;
   completedAt?: FirestoreTimestampLike | null;
+  occupancyReleasedAt?: FirestoreTimestampLike | null;
+  occupancyReleasedByUid?: string | null;
   checkInMethod?: RoomCheckInMethod | null;
   presenceMonitorBeaconId?: string | null;
   presenceMonitoringStartedAt?: FirestoreTimestampLike | null;
@@ -1769,7 +1771,12 @@ export async function sendReservationPresenceHeartbeatRecord(
         "You cannot send heartbeats for this reservation."
       );
     }
-    if (reservation.status !== "approved" || !reservation.checkedInAt) {
+    const monitoringActive =
+      !reservation.occupancyReleasedAt &&
+      (reservation.status === "approved" || reservation.status === "completed") &&
+      Boolean(reservation.checkedInAt);
+
+    if (!monitoringActive) {
       return {
         healthy: false,
         status: "stopped" as const,
@@ -1901,16 +1908,14 @@ export async function completeReservationRecord(
     }
 
     const managerIds = await getBuildingManagerIds(reservation.buildingId);
-    const approvedReservations = await getApprovedReservationsForRoom(
-      reservation.roomId
-    );
     const batch = db.batch();
     const queuedNotifications: AppNotificationInput[] = [];
 
     batch.update(reservationRef, {
       status: "completed",
       completedAt: serverTimestamp(),
-      checkInMethod: null,
+      occupancyReleasedAt: null,
+      occupancyReleasedByUid: null,
       updatedAt: serverTimestamp(),
     });
 
@@ -1930,6 +1935,73 @@ export async function completeReservationRecord(
 
     addRoomHistory(batch, reservation, "completed");
 
+    await batch.commit();
+    await sendQueuedPushNotifications(queuedNotifications);
+  } catch (error) {
+    logReservationServiceError("completeReservationRecord", error, {
+      reservationId,
+      userId,
+    });
+    throw error;
+  }
+}
+
+export async function confirmFinishedReservationRecord(
+  reservationId: string,
+  actingUserId: string
+) {
+  try {
+    const reservationRef = db.collection("reservations").doc(reservationId);
+    const reservationSnapshot = await reservationRef.get();
+    if (!reservationSnapshot.exists) {
+      throw new ApiError(404, "not_found", "Reservation not found.");
+    }
+
+    const reservation = {
+      id: reservationSnapshot.id,
+      ...reservationSnapshot.data(),
+    } as ReservationRecord;
+
+    if (reservation.occupancyReleasedAt) {
+      return;
+    }
+
+    const canConfirmCompletedReservation = reservation.status === "completed";
+    const canForceFinishCheckedInApprovedReservation =
+      reservation.status === "approved" && Boolean(reservation.checkedInAt);
+
+    if (
+      !canConfirmCompletedReservation &&
+      !canForceFinishCheckedInApprovedReservation
+    ) {
+      throw new ApiError(
+        400,
+        "invalid_status",
+        "Only completed reservations or checked-in approved reservations can be confirmed as finished."
+      );
+    }
+
+    const approvedReservations = await getApprovedReservationsForRoom(
+      reservation.roomId
+    );
+    const batch = db.batch();
+
+    batch.update(reservationRef, {
+      checkedInAt: null,
+      checkInMethod: null,
+      completedAt:
+        reservation.status === "completed"
+          ? reservation.completedAt ?? serverTimestamp()
+          : serverTimestamp(),
+      occupancyReleasedAt: serverTimestamp(),
+      occupancyReleasedByUid: actingUserId,
+      presenceMonitorBeaconId: null,
+      presenceMonitoringStartedAt: null,
+      presenceStatus: "stopped",
+      status: "completed",
+      updatedAt: serverTimestamp(),
+    });
+
     batch.update(db.collection("rooms").doc(reservation.roomId), {
       ...getRoomStatusPayload(
         approvedReservations.filter(
@@ -1940,11 +2012,10 @@ export async function completeReservationRecord(
     });
 
     await batch.commit();
-    await sendQueuedPushNotifications(queuedNotifications);
   } catch (error) {
-    logReservationServiceError("completeReservationRecord", error, {
+    logReservationServiceError("confirmFinishedReservationRecord", error, {
       reservationId,
-      userId,
+      actingUserId,
     });
     throw error;
   }

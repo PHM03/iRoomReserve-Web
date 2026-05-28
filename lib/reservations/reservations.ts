@@ -58,6 +58,7 @@ export interface Reservation {
   isRecurringRequest?: boolean;
   occurrenceCount?: number;
   checkedInAt?: Timestamp | null;
+  occupancyReleasedAt?: Timestamp | null;
   checkInMethod?: RoomCheckInMethod | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -599,6 +600,18 @@ export async function completeReservation(
     },
     method: "PATCH",
     userId,
+  });
+}
+
+export async function confirmFinishedReservation(
+  reservationId: string
+): Promise<void> {
+  await apiRequest(`/api/reservations/${reservationId}`, {
+    body: {
+      action: "confirm-finish",
+    },
+    method: "PATCH",
+    userId: auth.currentUser?.uid,
   });
 }
 
