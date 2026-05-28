@@ -43,6 +43,11 @@ export const metadata: Metadata = {
   applicationName: "iRoomReserve",
   description: "Smart Room Reservation and Occupancy Monitoring System for St. Dominic College of Asia",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 interface RootLayoutProps {
