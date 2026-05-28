@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import NavBar from '@/components/layout/NavBar';
@@ -48,7 +48,7 @@ function LoadingState() {
   );
 }
 
-export default function AdminLayout({ children }: Readonly<AdminLayoutProps>) {
+function AdminLayoutInner({ children }: Readonly<AdminLayoutProps>) {
   const { firebaseUser, profile, loading, logout } = useAuth();
   const { activeTab, setActiveTab } = useAdminTab();
   const router = useRouter();
@@ -150,5 +150,13 @@ export default function AdminLayout({ children }: Readonly<AdminLayoutProps>) {
         {children}
       </div>
     </div>
+  );
+}
+
+export default function AdminLayout({ children }: Readonly<AdminLayoutProps>) {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <AdminLayoutInner>{children}</AdminLayoutInner>
+    </Suspense>
   );
 }
