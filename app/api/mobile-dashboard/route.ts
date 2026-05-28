@@ -296,6 +296,9 @@ export async function GET(request: NextRequest) {
           (reservation) =>
             (reservation.status === "approved" &&
               Boolean(reservation.checkedInAt) &&
+              typeof reservation.date === "string" &&
+              typeof reservation.startTime === "string" &&
+              typeof reservation.endTime === "string" &&
               reservation.date === todayDateKey &&
               reservation.startTime <= currentTimeKey &&
               reservation.endTime > currentTimeKey) ||
