@@ -765,40 +765,36 @@ function normalizePresenceStatus(
 }
 
 async function updateReservationRoomPresence(
-  reservation: ReservationRecord,
+  roomId: string,
   options: {
     beaconConnected: boolean;
     beaconId?: string | null;
   }
 ) {
-  const roomRef = db.collection("rooms").doc(reservation.roomId);
-  const roomSnapshot = await roomRef.get();
-  if (!roomSnapshot.exists) {
-    return;
-  }
-
-  const roomData = roomSnapshot.data() as {
-    activeReservationId?: string | null;
-    beaconConnected?: boolean | null;
-    checkInMethod?: string | null;
-  };
-  const roomCheckInMethod = normalizeRoomCheckInMethod(roomData.checkInMethod);
-  const shouldUpdateRoom =
-    roomData.activeReservationId === reservation.id ||
-    roomCheckInMethod === "bluetooth" ||
-    roomData.beaconConnected === true;
-
-  if (!shouldUpdateRoom) {
-    return;
-  }
-
-  await roomRef.update({
+  await db.collection("rooms").doc(roomId).update({
     beaconConnected: options.beaconConnected,
     beaconDeviceName: options.beaconConnected ? options.beaconId ?? null : null,
     beaconLastConnectedAt: options.beaconConnected ? serverTimestamp() : null,
     beaconLastDisconnectedAt: options.beaconConnected ? null : serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+}
+
+function shouldSyncRoomPresence(
+  reservation: ReservationRecord,
+  nextState: {
+    beaconConnected: boolean;
+    beaconId?: string | null;
+  }
+) {
+  const currentBeaconConnected = reservation.presenceStatus === "healthy";
+  const currentBeaconId = reservation.presenceMonitorBeaconId ?? null;
+  const nextBeaconId = nextState.beaconId ?? null;
+
+  return (
+    currentBeaconConnected !== nextState.beaconConnected ||
+    currentBeaconId !== nextBeaconId
+  );
 }
 
 function addRoomHistory(
@@ -1727,10 +1723,17 @@ export async function startReservationPresenceMonitorRecord(
       updatedAt: serverTimestamp(),
     });
 
-    await updateReservationRoomPresence(reservation, {
-      beaconConnected: true,
-      beaconId: normalizedBeaconId,
-    });
+    if (
+      shouldSyncRoomPresence(reservation, {
+        beaconConnected: true,
+        beaconId: normalizedBeaconId,
+      })
+    ) {
+      await updateReservationRoomPresence(reservation.roomId, {
+        beaconConnected: true,
+        beaconId: normalizedBeaconId,
+      });
+    }
   } catch (error) {
     logReservationServiceError("startReservationPresenceMonitorRecord", error, {
       reservationId,
@@ -1818,10 +1821,17 @@ export async function sendReservationPresenceHeartbeatRecord(
       updatedAt: serverTimestamp(),
     });
 
-    await updateReservationRoomPresence(reservation, {
-      beaconConnected: status === "healthy",
-      beaconId: normalizedBeaconId,
-    });
+    if (
+      shouldSyncRoomPresence(reservation, {
+        beaconConnected: status === "healthy",
+        beaconId: normalizedBeaconId,
+      })
+    ) {
+      await updateReservationRoomPresence(reservation.roomId, {
+        beaconConnected: status === "healthy",
+        beaconId: normalizedBeaconId,
+      });
+    }
 
     return {
       healthy: status === "healthy",
@@ -1865,10 +1875,17 @@ export async function stopReservationPresenceMonitorRecord(
       updatedAt: serverTimestamp(),
     });
 
-    await updateReservationRoomPresence(reservation, {
-      beaconConnected: false,
-      beaconId: reservation.presenceMonitorBeaconId ?? null,
-    });
+    if (
+      shouldSyncRoomPresence(reservation, {
+        beaconConnected: false,
+        beaconId: reservation.presenceMonitorBeaconId ?? null,
+      })
+    ) {
+      await updateReservationRoomPresence(reservation.roomId, {
+        beaconConnected: false,
+        beaconId: reservation.presenceMonitorBeaconId ?? null,
+      });
+    }
   } catch (error) {
     logReservationServiceError("stopReservationPresenceMonitorRecord", error, {
       reservationId,
