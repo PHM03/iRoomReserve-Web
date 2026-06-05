@@ -104,12 +104,23 @@ export const ROOM_DISPLAY_OPTIONS = [
 ] as const;
 
 export function formatSentimentLabel(label: string) {
-  return label.charAt(0).toUpperCase() + label.slice(1);
+  return label
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 export function getSentimentBadgeClasses(label: string) {
+  if (label === 'very_positive') {
+    return 'border-emerald-600/30 bg-emerald-600/15 text-emerald-800';
+  }
+
   if (label === 'positive') {
     return 'border-green-500/25 bg-green-500/10 text-green-700';
+  }
+
+  if (label === 'very_negative') {
+    return 'border-red-700/30 bg-red-700/15 text-red-800';
   }
 
   if (label === 'negative') {

@@ -2,29 +2,82 @@ import {
   averageSentimentScores,
   getSentimentLabel,
   type SentimentLabel,
-} from "@/lib/ai/sentiment";
+} from "../ai/sentiment";
+import {
+  FEEDBACK_ASPECT_KEYS,
+  FEEDBACK_ASPECT_LABELS,
+  SENTIMENT_DISTRIBUTION_ORDER,
+  normalizeDetectedAspects,
+  type DetectedFeedbackAspects,
+  type FeedbackAspectKey,
+} from "./feedback-analytics";
 
 export interface FeedbackSentimentFields {
   compoundScore?: number | null;
+  vaderCompoundScore?: number | null;
+  vader_compound_score?: number | null;
   positiveScore?: number | null;
   neutralScore?: number | null;
   negativeScore?: number | null;
-  sentimentLabel?: SentimentLabel | null;
+  sentimentLabel?: SentimentLabel | string | null;
+  sentimentClassification?: SentimentLabel | string | null;
+  sentiment_classification?: SentimentLabel | string | null;
+  detectedAspects?: DetectedFeedbackAspects | null;
+  detected_aspects?: DetectedFeedbackAspects | null;
+}
+
+export interface FeedbackSentimentDistributionItem {
+  count: number;
+  label: SentimentLabel;
+  percentage: number;
+}
+
+export interface FeedbackAspectMentionSummary {
+  aspect: FeedbackAspectKey;
+  label: string;
+  negativeCount: number;
+  neutralCount: number;
+  positiveCount: number;
+  total: number;
+}
+
+export interface FeedbackAspectRanking {
+  aspect: FeedbackAspectKey;
+  count: number;
+  label: string;
 }
 
 export interface FeedbackSentimentSummary {
+  aspectMentions: FeedbackAspectMentionSummary[];
   averageCompoundScore: number;
+  mostMentionedIssues: FeedbackAspectRanking[];
+  mostPraisedAspects: FeedbackAspectRanking[];
   negativeCount: number;
   negativePercentage: number;
   neutralCount: number;
   neutralPercentage: number;
   positiveCount: number;
   positivePercentage: number;
+  sentimentDistribution: FeedbackSentimentDistributionItem[];
   total: number;
+  veryNegativeCount: number;
+  veryNegativePercentage: number;
+  veryPositiveCount: number;
+  veryPositivePercentage: number;
 }
 
 function isSentimentLabel(value: unknown): value is SentimentLabel {
-  return value === "positive" || value === "neutral" || value === "negative";
+  return SENTIMENT_DISTRIBUTION_ORDER.includes(value as SentimentLabel);
+}
+
+function normalizeSentimentLabel(value: unknown): SentimentLabel | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+  return isSentimentLabel(normalized) ? normalized : null;
 }
 
 function toPercentage(count: number, total: number) {
@@ -35,71 +88,143 @@ function toPercentage(count: number, total: number) {
   return Number(((count / total) * 100).toFixed(1));
 }
 
+function getCompoundScore(feedback: FeedbackSentimentFields) {
+  if (typeof feedback.vaderCompoundScore === "number") {
+    return feedback.vaderCompoundScore;
+  }
+
+  if (typeof feedback.vader_compound_score === "number") {
+    return feedback.vader_compound_score;
+  }
+
+  return typeof feedback.compoundScore === "number"
+    ? feedback.compoundScore
+    : null;
+}
+
+function getStoredSentimentLabel(feedback: FeedbackSentimentFields) {
+  return (
+    normalizeSentimentLabel(feedback.sentimentClassification) ??
+    normalizeSentimentLabel(feedback.sentiment_classification) ??
+    normalizeSentimentLabel(feedback.sentimentLabel)
+  );
+}
+
+function createAspectMentionSummary(): FeedbackAspectMentionSummary[] {
+  return FEEDBACK_ASPECT_KEYS.map((aspect) => ({
+    aspect,
+    label: FEEDBACK_ASPECT_LABELS[aspect],
+    negativeCount: 0,
+    neutralCount: 0,
+    positiveCount: 0,
+    total: 0,
+  }));
+}
+
+function updateAspectMentionSummary(
+  aspectMentions: FeedbackAspectMentionSummary[],
+  detectedAspects: DetectedFeedbackAspects
+) {
+  Object.entries(detectedAspects).forEach(([aspect, sentiment]) => {
+    const mention = aspectMentions.find((item) => item.aspect === aspect);
+
+    if (!mention) {
+      return;
+    }
+
+    mention.total += 1;
+
+    if (sentiment === "positive") {
+      mention.positiveCount += 1;
+      return;
+    }
+
+    if (sentiment === "negative") {
+      mention.negativeCount += 1;
+      return;
+    }
+
+    mention.neutralCount += 1;
+  });
+}
+
+function rankAspects(
+  aspectMentions: FeedbackAspectMentionSummary[],
+  field: "negativeCount" | "positiveCount"
+): FeedbackAspectRanking[] {
+  return aspectMentions
+    .filter((mention) => mention[field] > 0)
+    .map((mention) => ({
+      aspect: mention.aspect,
+      count: mention[field],
+      label: mention.label,
+    }))
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.label.localeCompare(right.label)
+    );
+}
+
 export function resolveFeedbackSentimentLabel(
   feedback: FeedbackSentimentFields
 ): SentimentLabel {
-  if (isSentimentLabel(feedback.sentimentLabel)) {
-    return feedback.sentimentLabel;
+  const compoundScore = getCompoundScore(feedback);
+
+  if (typeof compoundScore === "number") {
+    return getSentimentLabel(compoundScore);
   }
 
-  if (typeof feedback.compoundScore === "number") {
-    return getSentimentLabel(feedback.compoundScore);
-  }
-
-  return "neutral";
+  return getStoredSentimentLabel(feedback) ?? "neutral";
 }
 
 export function summarizeFeedbackSentiment(
   feedbackItems: FeedbackSentimentFields[]
 ): FeedbackSentimentSummary {
-  const summary = {
-    averageCompoundScore: 0,
-    negativeCount: 0,
-    negativePercentage: 0,
-    neutralCount: 0,
-    neutralPercentage: 0,
-    positiveCount: 0,
-    positivePercentage: 0,
-    total: feedbackItems.length,
-  };
-
-  if (feedbackItems.length === 0) {
-    return summary;
-  }
+  const aspectMentions = createAspectMentionSummary();
+  const distributionCounts = SENTIMENT_DISTRIBUTION_ORDER.reduce(
+    (counts, label) => {
+      counts[label] = 0;
+      return counts;
+    },
+    {} as Record<SentimentLabel, number>
+  );
 
   feedbackItems.forEach((feedback) => {
     const sentimentLabel = resolveFeedbackSentimentLabel(feedback);
-
-    if (sentimentLabel === "positive") {
-      summary.positiveCount += 1;
-      return;
-    }
-
-    if (sentimentLabel === "negative") {
-      summary.negativeCount += 1;
-      return;
-    }
-
-    summary.neutralCount += 1;
+    distributionCounts[sentimentLabel] += 1;
+    updateAspectMentionSummary(
+      aspectMentions,
+      normalizeDetectedAspects(feedback.detectedAspects ?? feedback.detected_aspects)
+    );
   });
 
-  summary.averageCompoundScore = Number(
-    averageSentimentScores(
-      feedbackItems.map((feedback) => feedback.compoundScore ?? null)
-    ).toFixed(3)
-  );
-  summary.positivePercentage = toPercentage(
-    summary.positiveCount,
-    summary.total
-  );
-  summary.neutralPercentage = toPercentage(
-    summary.neutralCount,
-    summary.total
-  );
-  summary.negativePercentage = toPercentage(
-    summary.negativeCount,
-    summary.total
-  );
+  const total = feedbackItems.length;
+  const summary = {
+    aspectMentions,
+    averageCompoundScore: Number(
+      averageSentimentScores(
+        feedbackItems.map((feedback) => getCompoundScore(feedback))
+      ).toFixed(3)
+    ),
+    mostMentionedIssues: rankAspects(aspectMentions, "negativeCount"),
+    mostPraisedAspects: rankAspects(aspectMentions, "positiveCount"),
+    negativeCount: distributionCounts.negative,
+    negativePercentage: toPercentage(distributionCounts.negative, total),
+    neutralCount: distributionCounts.neutral,
+    neutralPercentage: toPercentage(distributionCounts.neutral, total),
+    positiveCount: distributionCounts.positive,
+    positivePercentage: toPercentage(distributionCounts.positive, total),
+    sentimentDistribution: SENTIMENT_DISTRIBUTION_ORDER.map((label) => ({
+      count: distributionCounts[label],
+      label,
+      percentage: toPercentage(distributionCounts[label], total),
+    })),
+    total,
+    veryNegativeCount: distributionCounts.very_negative,
+    veryNegativePercentage: toPercentage(distributionCounts.very_negative, total),
+    veryPositiveCount: distributionCounts.very_positive,
+    veryPositivePercentage: toPercentage(distributionCounts.very_positive, total),
+  };
 
   return summary;
 }

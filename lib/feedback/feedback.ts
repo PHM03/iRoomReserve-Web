@@ -21,11 +21,17 @@ import {
   type FeedbackSentimentSummary,
 } from "@/lib/feedback/feedback-sentiment";
 import {
-  analyzeSentiment,
-  getSentimentLabel,
   type SentimentAnalysis,
   type SentimentLabel,
 } from "@/lib/ai/sentiment";
+import {
+  analyzeFeedbackText,
+  normalizeCategoryRatings,
+  normalizeDetectedAspects,
+  normalizeFeedbackKeywords,
+  type DetectedFeedbackAspects,
+  type FeedbackCategoryRatings,
+} from "@/lib/feedback/feedback-analytics";
 
 export interface Feedback {
   id: string;
@@ -39,11 +45,18 @@ export interface Feedback {
   text: string;
   message: string;
   rating: number;
+  overallRating: number;
+  categoryRatings: Partial<FeedbackCategoryRatings>;
+  feedbackText: string;
   compoundScore?: number;
+  vaderCompoundScore?: number;
   positiveScore?: number;
   neutralScore?: number;
   negativeScore?: number;
   sentimentLabel?: SentimentLabel;
+  sentimentClassification?: SentimentLabel;
+  detectedAspects: DetectedFeedbackAspects;
+  extractedKeywords: string[];
   adminResponse: string | null;
   respondedAt?: Timestamp | null;
   createdAt?: Timestamp;
@@ -59,6 +72,7 @@ export interface FeedbackInput {
   userName: string;
   message: string;
   rating: number;
+  categoryRatings: FeedbackCategoryRatings;
 }
 
 export interface SubmitFeedbackResult {
@@ -85,9 +99,19 @@ type TimestampLike =
 
 type FeedbackSnapshot = Partial<Feedback> &
   FeedbackSentimentFields & {
+    category_ratings?: unknown;
+    created_at?: TimestampLike;
+    detected_aspects?: unknown;
+    extracted_keywords?: unknown;
+    feedback_text?: string | null;
     id?: string;
+    overall_rating?: number | null;
+    sentimentClassification?: string | null;
+    sentiment_classification?: string | null;
     sentimentLabel?: string | null;
     text?: string;
+    vaderCompoundScore?: number | null;
+    vader_compound_score?: number | null;
   };
 
 function reviveTimestamp(value: TimestampLike): Timestamp | null | undefined {
@@ -120,9 +144,54 @@ function reviveTimestamp(value: TimestampLike): Timestamp | null | undefined {
 }
 
 function mapFeedbackData(id: string, data: FeedbackSnapshot): Feedback {
-  const text = data.text ?? data.message ?? "";
+  const text =
+    data.feedback_text?.trim() ||
+    data.feedbackText?.trim() ||
+    data.text?.trim() ||
+    data.message?.trim() ||
+    "";
+  const fallbackAnalytics = text ? analyzeFeedbackText(text) : null;
+  const normalizedAspects = normalizeDetectedAspects(
+    data.detectedAspects ?? data.detected_aspects
+  );
+  const detectedAspects =
+    Object.keys(normalizedAspects).length > 0
+      ? normalizedAspects
+      : (fallbackAnalytics?.detectedAspects ?? {});
+  const normalizedKeywords = normalizeFeedbackKeywords(
+    data.extractedKeywords ?? data.extracted_keywords
+  );
+  const extractedKeywords =
+    normalizedKeywords.length > 0
+      ? normalizedKeywords
+      : (fallbackAnalytics?.extractedKeywords ?? []);
+  const categoryRatings = normalizeCategoryRatings(
+    data.categoryRatings ?? data.category_ratings
+  );
   const compoundScore =
-    typeof data.compoundScore === "number" ? data.compoundScore : undefined;
+    typeof data.vaderCompoundScore === "number"
+      ? data.vaderCompoundScore
+      : typeof data.vader_compound_score === "number"
+        ? data.vader_compound_score
+        : typeof data.compoundScore === "number"
+          ? data.compoundScore
+          : undefined;
+  const sentimentClassification = resolveFeedbackSentimentLabel({
+    compoundScore,
+    detectedAspects,
+    sentimentClassification:
+      data.sentimentClassification ?? data.sentiment_classification ?? undefined,
+    sentimentLabel: data.sentimentLabel ?? undefined,
+    vaderCompoundScore: compoundScore,
+  });
+  const overallRating =
+    typeof data.overallRating === "number"
+      ? data.overallRating
+      : typeof data.overall_rating === "number"
+        ? data.overall_rating
+        : typeof data.rating === "number"
+          ? data.rating
+          : 0;
 
   return {
     id,
@@ -135,21 +204,25 @@ function mapFeedbackData(id: string, data: FeedbackSnapshot): Feedback {
     userName: data.userName ?? "",
     text,
     message: data.message ?? text,
-    rating: typeof data.rating === "number" ? data.rating : 0,
+    rating: overallRating,
+    overallRating,
+    categoryRatings,
+    feedbackText: text,
     compoundScore,
+    vaderCompoundScore: compoundScore,
     positiveScore:
       typeof data.positiveScore === "number" ? data.positiveScore : undefined,
     neutralScore:
       typeof data.neutralScore === "number" ? data.neutralScore : undefined,
     negativeScore:
       typeof data.negativeScore === "number" ? data.negativeScore : undefined,
-    sentimentLabel: resolveFeedbackSentimentLabel({
-      compoundScore,
-      sentimentLabel: data.sentimentLabel ?? undefined,
-    }),
+    sentimentClassification,
+    sentimentLabel: sentimentClassification,
+    detectedAspects,
+    extractedKeywords,
     adminResponse: data.adminResponse ?? null,
     respondedAt: reviveTimestamp(data.respondedAt) ?? null,
-    createdAt: reviveTimestamp(data.createdAt) ?? undefined,
+    createdAt: reviveTimestamp(data.createdAt ?? data.created_at) ?? undefined,
   };
 }
 
@@ -193,23 +266,38 @@ export async function submitFeedback(
     throw new Error("You must be signed in to submit feedback.");
   }
 
-  const sentiment = analyzeSentiment(text);
-  const sentimentLabel = getSentimentLabel(sentiment.compound);
+  const analytics = analyzeFeedbackText(text);
+  const sentiment = analytics.sentiment;
+  const sentimentLabel = analytics.sentimentClassification;
+  const createdAt = serverTimestamp();
   const feedbackRef = await addDoc(collection(db, "feedback"), {
     roomId: normalizedRoomId,
     userId: currentUser.uid,
     userName: currentUser.displayName?.trim() ?? "",
     text,
     message: text,
+    feedbackText: text,
+    feedback_text: text,
     rating: 0,
+    overallRating: 0,
+    overall_rating: 0,
     compoundScore: sentiment.compound,
+    vaderCompoundScore: sentiment.compound,
+    vader_compound_score: sentiment.compound,
     positiveScore: sentiment.positive,
     neutralScore: sentiment.neutral,
     negativeScore: sentiment.negative,
+    detectedAspects: analytics.detectedAspects,
+    detected_aspects: analytics.detectedAspects,
+    extractedKeywords: analytics.extractedKeywords,
+    extracted_keywords: analytics.extractedKeywords,
+    sentimentClassification: sentimentLabel,
+    sentiment_classification: sentimentLabel,
     sentimentLabel,
     adminResponse: null,
     respondedAt: null,
-    createdAt: serverTimestamp(),
+    createdAt,
+    created_at: createdAt,
   });
 
   return {

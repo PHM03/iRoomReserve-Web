@@ -5,11 +5,23 @@ import { type SubmitEvent, useDeferredValue, useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Feedback, createFeedback, getAverageSentiment, getFeedbackByUser } from '@/lib/feedback/feedback';
 import { Reservation, getReservationsByUser } from '@/lib/reservations/reservations';
-import { analyzeFeedbackSentiment, getSentimentLabel } from '@/lib/ai/sentiment';
-import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
+import { getSentimentLabel } from '@/lib/ai/sentiment';
+import {
+  FEEDBACK_ASPECT_LABELS,
+  FEEDBACK_CATEGORY_KEYS,
+  FEEDBACK_CATEGORY_LABELS,
+  analyzeFeedbackText,
+  type FeedbackAspectKey,
+  type FeedbackCategoryRatingKey,
+  type FeedbackCategoryRatings,
+} from '@/lib/feedback/feedback-analytics';
+import { formatDate, formatDateTime, formatTimeRange } from '@/lib/utils/dateTime';
 
 function formatSentimentLabel(label: string) {
-  return label.charAt(0).toUpperCase() + label.slice(1);
+  return label
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 function getSentimentBadgeClasses(label: string) {
@@ -17,8 +29,16 @@ function getSentimentBadgeClasses(label: string) {
     return 'border-amber-500/30 bg-amber-500/10 text-amber-700';
   }
 
+  if (label === 'very_positive') {
+    return 'border-emerald-600/30 bg-emerald-600/15 text-emerald-800';
+  }
+
   if (label === 'positive') {
     return 'border-green-500/25 bg-green-500/10 text-green-700';
+  }
+
+  if (label === 'very_negative') {
+    return 'border-red-700/30 bg-red-700/15 text-red-800';
   }
 
   if (label === 'negative') {
@@ -26,6 +46,42 @@ function getSentimentBadgeClasses(label: string) {
   }
 
   return 'border-slate-500/25 bg-slate-500/10 text-slate-700';
+}
+
+const EMPTY_CATEGORY_RATINGS: Record<FeedbackCategoryRatingKey, number> = {
+  cleanliness: 0,
+  comfort: 0,
+  air_conditioning: 0,
+  equipment_projector: 0,
+  internet_connectivity: 0,
+};
+
+function getRatingText(rating: number) {
+  if (rating === 1) return 'Poor';
+  if (rating === 2) return 'Fair';
+  if (rating === 3) return 'Good';
+  if (rating === 4) return 'Very Good';
+  if (rating === 5) return 'Excellent';
+  return 'Not rated';
+}
+
+function getCompleteCategoryRatings(
+  ratings: Record<FeedbackCategoryRatingKey, number>
+): FeedbackCategoryRatings | null {
+  if (!FEEDBACK_CATEGORY_KEYS.every((key) => ratings[key] >= 1 && ratings[key] <= 5)) {
+    return null;
+  }
+
+  return { ...ratings } as FeedbackCategoryRatings;
+}
+
+function getAspectEntries(
+  aspects: Feedback['detectedAspects'],
+  sentiment: 'positive' | 'negative'
+) {
+  return Object.entries(aspects)
+    .filter(([, value]) => value === sentiment)
+    .map(([key]) => key as FeedbackAspectKey);
 }
 
 export default function FeedbackPage() {
@@ -37,6 +93,10 @@ export default function FeedbackPage() {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
+  const [categoryRatings, setCategoryRatings] =
+    useState<Record<FeedbackCategoryRatingKey, number>>(EMPTY_CATEGORY_RATINGS);
+  const [hoverCategoryRatings, setHoverCategoryRatings] =
+    useState<Record<FeedbackCategoryRatingKey, number>>(EMPTY_CATEGORY_RATINGS);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -45,9 +105,12 @@ export default function FeedbackPage() {
 
   const deferredComment = useDeferredValue(comment);
   const trimmedComment = comment.trim();
-  const sentimentPreview = analyzeFeedbackSentiment(deferredComment, rating);
-  const sentimentPreviewLabel = sentimentPreview.sentimentLabel;
+  const sentimentPreview = analyzeFeedbackText(deferredComment);
+  const sentimentPreviewLabel = sentimentPreview.sentimentClassification;
+  const selectedCategoryRatings = getCompleteCategoryRatings(categoryRatings);
   const hasSentimentPreview = rating > 0 || Boolean(trimmedComment);
+  const previewPositiveAspects = getAspectEntries(sentimentPreview.detectedAspects, 'positive');
+  const previewNegativeAspects = getAspectEntries(sentimentPreview.detectedAspects, 'negative');
 
   useEffect(() => {
     if (!firebaseUser) {
@@ -128,6 +191,8 @@ export default function FeedbackPage() {
     setSelectedReservation(null);
     setRating(0);
     setHoverRating(0);
+    setCategoryRatings(EMPTY_CATEGORY_RATINGS);
+    setHoverCategoryRatings(EMPTY_CATEGORY_RATINGS);
     setComment('');
     setSubmitSuccess(false);
     setRoomAverageSentiment(null);
@@ -139,6 +204,8 @@ export default function FeedbackPage() {
     setShowForm(true);
     setRating(0);
     setHoverRating(0);
+    setCategoryRatings(EMPTY_CATEGORY_RATINGS);
+    setHoverCategoryRatings(EMPTY_CATEGORY_RATINGS);
     setComment('');
     setSubmitSuccess(false);
     setRoomAverageSentiment(null);
@@ -147,7 +214,7 @@ export default function FeedbackPage() {
   const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!firebaseUser || !selectedReservation || rating === 0 || !trimmedComment) {
+    if (!firebaseUser || !selectedReservation || rating === 0 || !selectedCategoryRatings || !trimmedComment) {
       return;
     }
 
@@ -166,6 +233,7 @@ export default function FeedbackPage() {
         userName: displayName,
         message: trimmedComment,
         rating,
+        categoryRatings: selectedCategoryRatings,
       });
 
       const [nextFeedback, nextReservations, nextAverage] = await Promise.all([
@@ -201,6 +269,38 @@ export default function FeedbackPage() {
       </svg>
     ));
   };
+
+  const renderInteractiveStars = (
+    value: number,
+    hoverValue: number,
+    onChange: (nextRating: number) => void,
+    onHoverChange: (nextRating: number) => void,
+    size = 'w-8 h-8'
+  ) => (
+    <div className="flex items-center gap-1.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onChange(star)}
+          onMouseEnter={() => onHoverChange(star)}
+          onMouseLeave={() => onHoverChange(0)}
+          className="rounded-md p-0.5 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          aria-label={`${star} star${star > 1 ? 's' : ''}`}
+        >
+          <svg
+            className={`${size} ${
+              star <= (hoverValue || value) ? 'ui-text-yellow' : 'text-black/20'
+            } transition-colors`}
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
@@ -247,52 +347,66 @@ export default function FeedbackPage() {
                   </button>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-black mb-3">Rating</label>
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setRating(star)}
-                        onMouseEnter={() => setHoverRating(star)}
-                        onMouseLeave={() => setHoverRating(0)}
-                        className="transition-transform hover:scale-110"
-                      >
-                        <svg
-                          className={`w-8 h-8 ${
-                            star <= (hoverRating || rating) ? 'ui-text-yellow' : 'text-black'
-                          } transition-colors`}
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                      </button>
+                <section className="rounded-xl border border-dark/10 bg-white/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <label className="block text-sm font-bold text-black">Overall Rating</label>
+                      <p className="text-xs text-black/55">This remains the primary room score.</p>
+                    </div>
+                    <span className="text-xs font-bold text-black/60">{getRatingText(rating)}</span>
+                  </div>
+                  <div className="mt-3">
+                    {renderInteractiveStars(rating, hoverRating, setRating, setHoverRating)}
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-dark/10 bg-white/70 p-4">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-bold text-black">Category Ratings</h4>
+                      <p className="text-xs text-black/55">Rate the room conditions admins can act on.</p>
+                    </div>
+                    <span className="rounded-full border border-dark/10 bg-dark/5 px-2.5 py-1 text-[10px] font-bold text-black/55">
+                      {FEEDBACK_CATEGORY_KEYS.filter((key) => categoryRatings[key] > 0).length}/5 complete
+                    </span>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {FEEDBACK_CATEGORY_KEYS.map((key) => (
+                      <div key={key} className="rounded-xl border border-dark/8 bg-white p-3">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-xs font-bold text-black">{FEEDBACK_CATEGORY_LABELS[key]}</span>
+                          <span className="text-[10px] font-bold text-black/50">
+                            {categoryRatings[key] > 0 ? `${categoryRatings[key]}/5` : 'Required'}
+                          </span>
+                        </div>
+                        {renderInteractiveStars(
+                          categoryRatings[key],
+                          hoverCategoryRatings[key],
+                          (nextRating) =>
+                            setCategoryRatings((currentRatings) => ({
+                              ...currentRatings,
+                              [key]: nextRating,
+                            })),
+                          (nextRating) =>
+                            setHoverCategoryRatings((currentRatings) => ({
+                              ...currentRatings,
+                              [key]: nextRating,
+                            })),
+                          'w-5 h-5'
+                        )}
+                      </div>
                     ))}
                   </div>
-                  {rating > 0 && (
-                    <p className="text-xs text-black mt-1">
-                      {rating === 1
-                        ? 'Poor'
-                        : rating === 2
-                          ? 'Fair'
-                          : rating === 3
-                            ? 'Good'
-                            : rating === 4
-                              ? 'Very Good'
-                              : 'Excellent'}
-                    </p>
-                  )}
-                </div>
+                </section>
 
                 <div>
-                  <label className="block text-sm font-bold text-black mb-1.5">Comments</label>
+                  <label className="block text-sm font-bold text-black mb-1.5">Required Feedback</label>
                   <textarea
                     value={comment}
                     onChange={(event) => setComment(event.target.value)}
-                    className="glass-input w-full px-4 py-3 min-h-[120px] resize-none"
-                    placeholder="Share your experience with this room..."
+                    className="glass-input w-full px-4 py-3 min-h-[132px] resize-none"
+                    placeholder="Mention what worked, what failed, and which room areas need attention..."
+                    required
                   />
                 </div>
 
@@ -300,12 +414,12 @@ export default function FeedbackPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.18em] text-black">
-                        Sentiment Preview
+                        VADER Sentiment Preview
                       </p>
                       <p className="text-sm text-black mt-1">
                         {hasSentimentPreview
-                          ? `${formatSentimentLabel(sentimentPreviewLabel)} (${sentimentPreview.compound.toFixed(2)})`
-                          : 'Select a rating and start typing to preview the tone of your feedback.'}
+                          ? `${formatSentimentLabel(sentimentPreviewLabel)} (${sentimentPreview.sentiment.compound.toFixed(2)})`
+                          : 'Select ratings and start typing to preview sentiment analytics.'}
                       </p>
                     </div>
                     {hasSentimentPreview && (
@@ -319,28 +433,76 @@ export default function FeedbackPage() {
                     )}
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-black sm:grid-cols-5">
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-black sm:grid-cols-4">
                     <div>
-                      <p className="font-bold">Hybrid</p>
-                      <p>{sentimentPreview.compound.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="font-bold">Stars</p>
-                      <p>{sentimentPreview.starScore.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="font-bold">VADER</p>
-                      <p>{sentimentPreview.vaderCompound.toFixed(2)}</p>
+                      <p className="font-bold">Compound</p>
+                      <p>{sentimentPreview.sentiment.compound.toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="font-bold">Positive</p>
-                      <p>{Math.round(sentimentPreview.positive * 100)}%</p>
+                      <p>{Math.round(sentimentPreview.sentiment.positive * 100)}%</p>
+                    </div>
+                    <div>
+                      <p className="font-bold">Neutral</p>
+                      <p>{Math.round(sentimentPreview.sentiment.neutral * 100)}%</p>
                     </div>
                     <div>
                       <p className="font-bold">Negative</p>
-                      <p>{Math.round(sentimentPreview.negative * 100)}%</p>
+                      <p>{Math.round(sentimentPreview.sentiment.negative * 100)}%</p>
                     </div>
                   </div>
+
+                  {(previewPositiveAspects.length > 0 || previewNegativeAspects.length > 0) && (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-green-700">
+                          Positive Aspects
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {previewPositiveAspects.length > 0 ? (
+                            previewPositiveAspects.map((aspect) => (
+                              <span key={aspect} className="rounded-full border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-700">
+                                {FEEDBACK_ASPECT_LABELS[aspect]}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-black/45">None detected yet</span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-red-700">
+                          Negative Aspects
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {previewNegativeAspects.length > 0 ? (
+                            previewNegativeAspects.map((aspect) => (
+                              <span key={aspect} className="rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                                {FEEDBACK_ASPECT_LABELS[aspect]}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-black/45">None detected yet</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {sentimentPreview.extractedKeywords.length > 0 && (
+                    <div className="mt-4">
+                      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-black/45">
+                        Extracted Keywords
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {sentimentPreview.extractedKeywords.map((keyword) => (
+                          <span key={keyword} className="rounded-full border border-dark/10 bg-white px-2 py-0.5 text-[10px] font-bold text-black/60">
+                            {keyword}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <p className="mt-3 text-xs text-black">
                     {loadingRoomAverage
@@ -355,7 +517,7 @@ export default function FeedbackPage() {
 
                 <button
                   type="submit"
-                  disabled={submitting || rating === 0 || !trimmedComment}
+                  disabled={submitting || rating === 0 || !selectedCategoryRatings || !trimmedComment}
                   className="btn-primary w-full py-3 px-4 flex items-center justify-center"
                 >
                   {submitting ? (
@@ -452,6 +614,11 @@ export default function FeedbackPage() {
                   (typeof feedback.compoundScore === 'number'
                     ? getSentimentLabel(feedback.compoundScore)
                     : null);
+                const positiveAspects = getAspectEntries(feedback.detectedAspects, 'positive');
+                const negativeAspects = getAspectEntries(feedback.detectedAspects, 'negative');
+                const categoryEntries = FEEDBACK_CATEGORY_KEYS.filter(
+                  (key) => typeof feedback.categoryRatings[key] === 'number'
+                );
 
                 return (
                   <div
@@ -461,7 +628,10 @@ export default function FeedbackPage() {
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0">
                         <h4 className="text-sm font-bold text-black truncate">{feedback.roomName}</h4>
-                        <p className="text-xs text-black/55 mt-0.5">{feedback.buildingName}</p>
+                        <p className="text-xs text-black/55 mt-0.5">
+                          {feedback.buildingName}
+                          {feedback.createdAt ? ` | ${formatDateTime(feedback.createdAt)}` : ''}
+                        </p>
                       </div>
                       <div className="flex shrink-0">{renderStars(feedback.rating)}</div>
                     </div>
@@ -477,6 +647,68 @@ export default function FeedbackPage() {
                     )}
 
                     <p className="text-sm text-black/80 leading-relaxed">{feedback.message}</p>
+
+                    {categoryEntries.length > 0 && (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {categoryEntries.map((key) => (
+                          <div key={key} className="flex items-center justify-between rounded-lg border border-dark/8 bg-dark/3 px-2.5 py-2">
+                            <span className="text-[10px] font-bold text-black/55">
+                              {FEEDBACK_CATEGORY_LABELS[key]}
+                            </span>
+                            <span className="text-[10px] font-bold text-black">
+                              {feedback.categoryRatings[key]}/5
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {(positiveAspects.length > 0 || negativeAspects.length > 0) && (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-green-700">
+                            Positive Aspects
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {positiveAspects.length > 0 ? (
+                              positiveAspects.map((aspect) => (
+                                <span key={aspect} className="rounded-full border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-700">
+                                  {FEEDBACK_ASPECT_LABELS[aspect]}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-black/40">None</span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-red-700">
+                            Negative Aspects
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {negativeAspects.length > 0 ? (
+                              negativeAspects.map((aspect) => (
+                                <span key={aspect} className="rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                                  {FEEDBACK_ASPECT_LABELS[aspect]}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-black/40">None</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {feedback.extractedKeywords.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1">
+                        {feedback.extractedKeywords.slice(0, 8).map((keyword) => (
+                          <span key={keyword} className="rounded-full border border-dark/10 bg-dark/3 px-2 py-0.5 text-[10px] font-bold text-black/55">
+                            {keyword}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     {feedback.adminResponse && (
                       <div className="mt-3 rounded-xl border border-dark/10 bg-dark/3 p-3">

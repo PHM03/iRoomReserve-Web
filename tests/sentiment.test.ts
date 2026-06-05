@@ -77,8 +77,10 @@ describe('sentiment', () => {
   });
 
   it('labels compound scores using the configured thresholds', () => {
+    expect(getSentimentLabel(0.65)).toBe('very_positive');
     expect(getSentimentLabel(0.05)).toBe('positive');
     expect(getSentimentLabel(-0.05)).toBe('negative');
+    expect(getSentimentLabel(-0.65)).toBe('very_negative');
     expect(getSentimentLabel(0.01)).toBe('neutral');
   });
 

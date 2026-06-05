@@ -1,11 +1,17 @@
 import "server-only";
 
 import {
-  analyzeFeedbackSentiment,
   averageSentimentScores,
-  getSentimentLabel,
 } from "@/lib/ai/sentiment";
 import { db, serverTimestamp } from "@/lib/firebase/firebase-admin";
+import {
+  analyzeFeedbackText,
+  normalizeCategoryRatings,
+  normalizeDetectedAspects,
+  normalizeFeedbackKeywords,
+  type DetectedFeedbackAspects,
+  type FeedbackCategoryRatings,
+} from "@/lib/feedback/feedback-analytics";
 import {
   resolveFeedbackSentimentLabel,
   summarizeFeedbackSentiment,
@@ -29,18 +35,30 @@ export interface FeedbackCreateInput {
   userName: string;
   message: string;
   rating: number;
+  categoryRatings: FeedbackCategoryRatings;
 }
 
 export interface FeedbackRecord extends FeedbackSentimentFields {
   adminResponse: string | null;
   buildingId: string;
   buildingName: string;
+  categoryRatings: Partial<FeedbackCategoryRatings>;
+  category_ratings: Partial<FeedbackCategoryRatings>;
   compoundScore?: number;
+  created_at?: unknown;
   createdAt?: unknown;
+  detectedAspects: DetectedFeedbackAspects;
+  detected_aspects: DetectedFeedbackAspects;
+  extractedKeywords: string[];
+  extracted_keywords: string[];
+  feedbackText: string;
+  feedback_text: string;
   id: string;
   message: string;
   negativeScore?: number;
   neutralScore?: number;
+  overallRating: number;
+  overall_rating: number;
   positiveScore?: number;
   rating: number;
   reservationId: string;
@@ -48,9 +66,13 @@ export interface FeedbackRecord extends FeedbackSentimentFields {
   roomId: string;
   roomName: string;
   sentimentLabel: ReturnType<typeof resolveFeedbackSentimentLabel>;
+  sentimentClassification: ReturnType<typeof resolveFeedbackSentimentLabel>;
+  sentiment_classification: ReturnType<typeof resolveFeedbackSentimentLabel>;
   text: string;
   userId: string;
   userName: string;
+  vaderCompoundScore?: number;
+  vader_compound_score?: number;
 }
 
 export interface BuildingFeedbackSnapshot {
@@ -59,8 +81,16 @@ export interface BuildingFeedbackSnapshot {
 }
 
 type FeedbackDocumentData = Partial<FeedbackRecord> & {
+  category_ratings?: unknown;
+  created_at?: unknown;
+  detected_aspects?: unknown;
+  extracted_keywords?: unknown;
+  feedback_text?: string | null;
+  overall_rating?: number | null;
+  sentiment_classification?: string | null;
   sentimentLabel?: string | null;
   text?: string | null;
+  vader_compound_score?: number | null;
 };
 
 function getTimestampSeconds(value: unknown) {
@@ -99,44 +129,103 @@ function mapFeedbackDocument(
   feedbackDoc: FirebaseFirestore.QueryDocumentSnapshot
 ): FeedbackRecord {
   const data = feedbackDoc.data() as FeedbackDocumentData;
-  const text = data.text?.trim() || data.message?.trim() || "";
+  const text =
+    data.feedback_text?.trim() ||
+    data.feedbackText?.trim() ||
+    data.text?.trim() ||
+    data.message?.trim() ||
+    "";
+  const fallbackAnalytics = text ? analyzeFeedbackText(text) : null;
+  const normalizedAspects = normalizeDetectedAspects(
+    data.detectedAspects ?? data.detected_aspects
+  );
+  const detectedAspects =
+    Object.keys(normalizedAspects).length > 0
+      ? normalizedAspects
+      : (fallbackAnalytics?.detectedAspects ?? {});
+  const normalizedKeywords = normalizeFeedbackKeywords(
+    data.extractedKeywords ?? data.extracted_keywords
+  );
+  const extractedKeywords =
+    normalizedKeywords.length > 0
+      ? normalizedKeywords
+      : (fallbackAnalytics?.extractedKeywords ?? []);
+  const categoryRatings = normalizeCategoryRatings(
+    data.categoryRatings ?? data.category_ratings
+  );
+  const vaderCompoundScore =
+    typeof data.vaderCompoundScore === "number"
+      ? data.vaderCompoundScore
+      : typeof data.vader_compound_score === "number"
+        ? data.vader_compound_score
+        : typeof data.compoundScore === "number"
+          ? data.compoundScore
+          : undefined;
+  const sentimentClassification = resolveFeedbackSentimentLabel({
+    compoundScore: vaderCompoundScore,
+    detectedAspects,
+    sentimentClassification:
+      data.sentimentClassification ?? data.sentiment_classification ?? undefined,
+    sentimentLabel: data.sentimentLabel ?? undefined,
+    vaderCompoundScore,
+  });
+  const overallRating =
+    typeof data.overallRating === "number"
+      ? data.overallRating
+      : typeof data.overall_rating === "number"
+        ? data.overall_rating
+        : typeof data.rating === "number"
+          ? data.rating
+          : 0;
 
   return {
     adminResponse: data.adminResponse ?? null,
     buildingId: data.buildingId ?? "",
     buildingName: data.buildingName ?? "",
-    compoundScore:
-      typeof data.compoundScore === "number" ? data.compoundScore : undefined,
-    createdAt: data.createdAt,
+    categoryRatings,
+    category_ratings: categoryRatings,
+    compoundScore: vaderCompoundScore,
+    createdAt: data.createdAt ?? data.created_at,
+    created_at: data.created_at ?? data.createdAt,
+    detectedAspects,
+    detected_aspects: detectedAspects,
+    extractedKeywords,
+    extracted_keywords: extractedKeywords,
+    feedbackText: text,
+    feedback_text: text,
     id: feedbackDoc.id,
     message: data.message ?? text,
     negativeScore:
       typeof data.negativeScore === "number" ? data.negativeScore : undefined,
     neutralScore:
       typeof data.neutralScore === "number" ? data.neutralScore : undefined,
+    overallRating,
+    overall_rating: overallRating,
     positiveScore:
       typeof data.positiveScore === "number" ? data.positiveScore : undefined,
-    rating: typeof data.rating === "number" ? data.rating : 0,
+    rating: overallRating,
     reservationId: data.reservationId ?? "",
     respondedAt: data.respondedAt,
     roomId: data.roomId ?? "",
     roomName: data.roomName ?? "",
-    sentimentLabel: resolveFeedbackSentimentLabel({
-      compoundScore:
-        typeof data.compoundScore === "number" ? data.compoundScore : undefined,
-      sentimentLabel: data.sentimentLabel ?? undefined,
-    }),
+    sentimentClassification,
+    sentimentLabel: sentimentClassification,
+    sentiment_classification: sentimentClassification,
     text,
     userId: data.userId ?? "",
     userName: data.userName ?? "",
+    vaderCompoundScore,
+    vader_compound_score: vaderCompoundScore,
   };
 }
 
 export async function createFeedbackRecord(data: FeedbackCreateInput) {
   const adminIds = await getAssignedManagerIds(data.buildingId);
   const feedbackText = data.message.trim();
-  const sentiment = analyzeFeedbackSentiment(feedbackText, data.rating);
-  const sentimentLabel = getSentimentLabel(sentiment.compound);
+  const analytics = analyzeFeedbackText(feedbackText);
+  const sentiment = analytics.sentiment;
+  const sentimentClassification = analytics.sentimentClassification;
+  const createdAt = serverTimestamp();
 
   const feedbackRef = db.collection("feedback").doc();
   const batch = db.batch();
@@ -144,16 +233,31 @@ export async function createFeedbackRecord(data: FeedbackCreateInput) {
 
   batch.set(feedbackRef, {
     ...data,
+    categoryRatings: data.categoryRatings,
+    category_ratings: data.categoryRatings,
+    detectedAspects: analytics.detectedAspects,
+    detected_aspects: analytics.detectedAspects,
+    extractedKeywords: analytics.extractedKeywords,
+    extracted_keywords: analytics.extractedKeywords,
+    feedbackText,
+    feedback_text: feedbackText,
+    overallRating: data.rating,
+    overall_rating: data.rating,
     text: feedbackText,
     message: feedbackText,
     compoundScore: sentiment.compound,
     positiveScore: sentiment.positive,
     neutralScore: sentiment.neutral,
     negativeScore: sentiment.negative,
-    sentimentLabel,
+    sentimentClassification,
+    sentimentLabel: sentimentClassification,
+    sentiment_classification: sentimentClassification,
+    vaderCompoundScore: sentiment.compound,
+    vader_compound_score: sentiment.compound,
     adminResponse: null,
     respondedAt: null,
-    createdAt: serverTimestamp(),
+    createdAt,
+    created_at: createdAt,
   });
 
   adminIds.forEach((adminUid) => {
@@ -230,7 +334,20 @@ export async function getAverageFeedbackSentiment(roomId: string) {
 
   return averageSentimentScores(
     snapshot.docs.map((feedbackDoc) => {
-      const data = feedbackDoc.data() as { compoundScore?: unknown };
+      const data = feedbackDoc.data() as {
+        compoundScore?: unknown;
+        vaderCompoundScore?: unknown;
+        vader_compound_score?: unknown;
+      };
+
+      if (typeof data.vaderCompoundScore === "number") {
+        return data.vaderCompoundScore;
+      }
+
+      if (typeof data.vader_compound_score === "number") {
+        return data.vader_compound_score;
+      }
+
       return typeof data.compoundScore === "number" ? data.compoundScore : null;
     })
   );

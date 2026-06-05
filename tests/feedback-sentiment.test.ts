@@ -4,6 +4,7 @@ import {
   resolveFeedbackSentimentLabel,
   summarizeFeedbackSentiment,
 } from "../lib/feedback/feedback-sentiment";
+import { analyzeFeedbackText } from "../lib/feedback/feedback-analytics";
 
 describe("feedback sentiment helpers", () => {
   it("falls back to the compound score when the stored label is missing", () => {
@@ -17,33 +18,87 @@ describe("feedback sentiment helpers", () => {
         sentimentLabel: null,
       })
     ).toBe("negative");
+
+    expect(
+      resolveFeedbackSentimentLabel({
+        compoundScore: 0.82,
+        sentimentLabel: "positive",
+      })
+    ).toBe("very_positive");
   });
 
   it("builds an aggregate sentiment summary for a building", () => {
     const summary = summarizeFeedbackSentiment([
       {
         compoundScore: 0.8,
-        sentimentLabel: "positive"
+        detectedAspects: {
+          cleanliness: "positive",
+          comfort: "positive",
+        },
+        sentimentLabel: "positive",
       },
       {
-        compoundScore: -0.5,
-        sentimentLabel: "negative"
+        compoundScore: -0.75,
+        detected_aspects: {
+          air_conditioning: "negative",
+          internet: "negative",
+        },
+        sentimentLabel: "negative",
       },
       {
         compoundScore: 0.0,
-        sentimentLabel: "neutral"
+        detectedAspects: {
+          equipment: "positive",
+        },
+        sentimentLabel: "neutral",
       },
     ]);
 
-    expect(summary).toEqual({
-      averageCompoundScore: 0.1,
-      negativeCount: 1,
-      negativePercentage: 33.3,
+    expect(summary).toMatchObject({
+      averageCompoundScore: 0.017,
+      negativeCount: 0,
+      negativePercentage: 0,
       neutralCount: 1,
       neutralPercentage: 33.3,
-      positiveCount: 1,
-      positivePercentage: 33.3,
+      positiveCount: 0,
+      positivePercentage: 0,
       total: 3,
+      veryNegativeCount: 1,
+      veryNegativePercentage: 33.3,
+      veryPositiveCount: 1,
+      veryPositivePercentage: 33.3,
     });
+
+    expect(summary.sentimentDistribution).toEqual([
+      { count: 1, label: "very_positive", percentage: 33.3 },
+      { count: 0, label: "positive", percentage: 0 },
+      { count: 1, label: "neutral", percentage: 33.3 },
+      { count: 0, label: "negative", percentage: 0 },
+      { count: 1, label: "very_negative", percentage: 33.3 },
+    ]);
+    expect(summary.mostMentionedIssues).toEqual([
+      { aspect: "air_conditioning", count: 1, label: "Air Conditioning" },
+      { aspect: "internet", count: 1, label: "Internet" },
+    ]);
+    expect(summary.mostPraisedAspects).toEqual([
+      { aspect: "cleanliness", count: 1, label: "Cleanliness" },
+      { aspect: "comfort", count: 1, label: "Comfort" },
+      { aspect: "equipment", count: 1, label: "Equipment" },
+    ]);
+  });
+
+  it("detects room aspects and extracts reporting keywords", () => {
+    const analytics = analyzeFeedbackText(
+      "The room was clean and comfortable but the aircon was not cold."
+    );
+
+    expect(analytics.detectedAspects).toMatchObject({
+      air_conditioning: "negative",
+      cleanliness: "positive",
+      comfort: "positive",
+    });
+    expect(analytics.extractedKeywords).toEqual(
+      expect.arrayContaining(["aircon", "cleanliness", "comfort"])
+    );
   });
 });

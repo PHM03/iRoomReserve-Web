@@ -12,7 +12,12 @@ export interface HybridSentimentAnalysis extends SentimentAnalysis {
   vaderCompound: number;
 }
 
-export type SentimentLabel = "positive" | "neutral" | "negative";
+export type SentimentLabel =
+  | "very_positive"
+  | "positive"
+  | "neutral"
+  | "negative"
+  | "very_negative";
 export type HybridSentimentLabel = SentimentLabel | "conflicted";
 
 export const DEFAULT_SENTIMENT_ANALYSIS: Readonly<SentimentAnalysis>;

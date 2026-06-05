@@ -260,6 +260,14 @@ export const adminRequestCreateSchema = z.object({
 
 export const adminRequestRespondSchema = z.object({ responseText: nonEmptyString });
 
+const feedbackCategoryRatingsSchema = z.object({
+  cleanliness: z.number().int().min(1).max(5),
+  comfort: z.number().int().min(1).max(5),
+  air_conditioning: z.number().int().min(1).max(5),
+  equipment_projector: z.number().int().min(1).max(5),
+  internet_connectivity: z.number().int().min(1).max(5),
+});
+
 export const feedbackCreateSchema = z.object({
   roomId: nonEmptyString,
   roomName: nonEmptyString,
@@ -268,8 +276,9 @@ export const feedbackCreateSchema = z.object({
   reservationId: nonEmptyString,
   userId: nonEmptyString,
   userName: nonEmptyString,
-  message: z.string().trim(),
+  message: nonEmptyString,
   rating: z.number().int().min(1).max(5),
+  categoryRatings: feedbackCategoryRatingsSchema,
 });
 
 export const feedbackRespondSchema = z.object({ response: nonEmptyString });

@@ -6,8 +6,16 @@ import {
   resolveFeedbackSentimentLabel,
   type FeedbackSentimentSummary,
 } from '@/lib/feedback/feedback-sentiment';
+import {
+  FEEDBACK_ASPECT_LABELS,
+  FEEDBACK_CATEGORY_KEYS,
+  FEEDBACK_CATEGORY_LABELS,
+  SENTIMENT_DISTRIBUTION_ORDER,
+  type FeedbackAspectKey,
+} from '@/lib/feedback/feedback-analytics';
 import { respondToFeedback, type Feedback } from '@/lib/feedback/feedback';
 import type { Room } from '@/lib/rooms/rooms';
+import { formatDateTime } from '@/lib/utils/dateTime';
 import {
   formatSentimentLabel,
   getManagedBuildingOptionLabel,
@@ -42,6 +50,23 @@ function sortFloors(floors: string[]): string[] {
     };
     return rank(a) - rank(b);
   });
+}
+
+function getAspectEntries(
+  feedback: Feedback,
+  sentiment: 'positive' | 'negative'
+) {
+  return Object.entries(feedback.detectedAspects)
+    .filter(([, value]) => value === sentiment)
+    .map(([key]) => key as FeedbackAspectKey);
+}
+
+function getRankingBarWidth(count: number, maxCount: number) {
+  if (maxCount <= 0) {
+    return '0%';
+  }
+
+  return `${Math.max((count / maxCount) * 100, 8)}%`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -138,16 +163,25 @@ export default function AdminFeedbackTab({
     const defaultFloor = floorsInFeedback[0] ?? 'All';
     const hasMatchingFloor =
       floorFilter === 'All' || floorsInFeedback.includes(floorFilter);
+    const nextFloorFilter = !hasMatchingFloor
+      ? defaultFloor
+      : !floorFilter && defaultFloor
+        ? defaultFloor
+        : null;
 
-    if (!hasMatchingFloor) {
-      setFloorFilter(defaultFloor);
-      setRoomFilter('All');
+    if (!nextFloorFilter) {
       return;
     }
 
-    if (!floorFilter && defaultFloor) {
-      setFloorFilter(defaultFloor);
-    }
+    const timeoutId = window.setTimeout(() => {
+      setFloorFilter(nextFloorFilter);
+
+      if (!hasMatchingFloor) {
+        setRoomFilter('All');
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [floorFilter, floorsInFeedback]);
 
   const clearFilters = () => {
@@ -173,6 +207,19 @@ export default function AdminFeedbackTab({
     }`;
 
   // ─────────────────────────────────────────────────────────────────────────
+
+  const sentimentDistribution = feedbackSummary
+    ? SENTIMENT_DISTRIBUTION_ORDER.map(
+        (label) =>
+          feedbackSummary.sentimentDistribution.find((item) => item.label === label) ?? {
+            count: 0,
+            label,
+            percentage: 0,
+          }
+      )
+    : [];
+  const maxIssueCount = feedbackSummary?.mostMentionedIssues[0]?.count ?? 0;
+  const maxPraiseCount = feedbackSummary?.mostPraisedAspects[0]?.count ?? 0;
 
   return (
     <div>
@@ -215,46 +262,118 @@ export default function AdminFeedbackTab({
 
           {/* ── Existing summary cards — unchanged ── */}
           {feedbackSummary && (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="glass-card p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-black">Positive</p>
-                <p className="mt-2 text-2xl font-bold text-green-700">
-                  {feedbackSummary.positivePercentage.toFixed(1)}%
-                </p>
-                <p className="text-xs text-black">
-                  {feedbackSummary.positiveCount} of {feedbackSummary.total} entries
-                </p>
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {sentimentDistribution.map((item) => (
+                  <div key={item.label} className="glass-card p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-black/55">
+                        {formatSentimentLabel(item.label)}
+                      </p>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${getSentimentBadgeClasses(
+                          item.label
+                        )}`}
+                      >
+                        {item.count}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-2xl font-bold text-black">
+                      {item.percentage.toFixed(1)}%
+                    </p>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-dark/10">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${item.percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="glass-card p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-black">Neutral</p>
-                <p className="mt-2 text-2xl font-bold text-slate-700">
-                  {feedbackSummary.neutralPercentage.toFixed(1)}%
-                </p>
-                <p className="text-xs text-black">
-                  {feedbackSummary.neutralCount} of {feedbackSummary.total} entries
-                </p>
-              </div>
-              <div className="glass-card p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-black">Negative</p>
-                <p className="mt-2 text-2xl font-bold text-red-700">
-                  {feedbackSummary.negativePercentage.toFixed(1)}%
-                </p>
-                <p className="text-xs text-black">
-                  {feedbackSummary.negativeCount} of {feedbackSummary.total} entries
-                </p>
-              </div>
-              <div className="glass-card p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-black">
-                  Average Compound
-                </p>
-                <p className="mt-2 text-2xl font-bold text-black">
-                  {feedbackSummary.averageCompoundScore.toFixed(2)}
-                </p>
-                <p className="text-xs text-black">
-                  {formatSentimentLabel(
-                    resolveFeedbackSentimentLabel({ compoundScore: feedbackSummary.averageCompoundScore })
+
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="glass-card p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/55">
+                    Average VADER
+                  </p>
+                  <p className="mt-2 text-3xl font-bold text-black">
+                    {feedbackSummary.averageCompoundScore.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-black/55">
+                    {formatSentimentLabel(
+                      resolveFeedbackSentimentLabel({
+                        compoundScore: feedbackSummary.averageCompoundScore,
+                      })
+                    )}{' '}
+                    across {feedbackSummary.total} reviews
+                  </p>
+                </div>
+
+                <div className="glass-card p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-700">
+                      Most Mentioned Issues
+                    </p>
+                    <span className="text-[10px] font-bold text-black/45">Negative mentions</span>
+                  </div>
+                  {feedbackSummary.mostMentionedIssues.length === 0 ? (
+                    <p className="dashboard-empty-state rounded-xl px-3 py-4 text-center text-xs font-bold text-black/50">
+                      No negative aspect mentions yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {feedbackSummary.mostMentionedIssues.slice(0, 5).map((item, index) => (
+                        <div key={item.aspect}>
+                          <div className="mb-1 flex items-center justify-between text-xs">
+                            <span className="font-bold text-black">
+                              {index + 1}. {item.label}
+                            </span>
+                            <span className="font-bold text-red-700">{item.count}</span>
+                          </div>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-red-500/10">
+                            <div
+                              className="h-full rounded-full bg-red-500"
+                              style={{ width: getRankingBarWidth(item.count, maxIssueCount) }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </p>
+                </div>
+
+                <div className="glass-card p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-green-700">
+                      Most Praised Aspects
+                    </p>
+                    <span className="text-[10px] font-bold text-black/45">Positive mentions</span>
+                  </div>
+                  {feedbackSummary.mostPraisedAspects.length === 0 ? (
+                    <p className="dashboard-empty-state rounded-xl px-3 py-4 text-center text-xs font-bold text-black/50">
+                      No positive aspect mentions yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {feedbackSummary.mostPraisedAspects.slice(0, 5).map((item, index) => (
+                        <div key={item.aspect}>
+                          <div className="mb-1 flex items-center justify-between text-xs">
+                            <span className="font-bold text-black">
+                              {index + 1}. {item.label}
+                            </span>
+                            <span className="font-bold text-green-700">{item.count}</span>
+                          </div>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-green-500/10">
+                            <div
+                              className="h-full rounded-full bg-green-500"
+                              style={{ width: getRankingBarWidth(item.count, maxPraiseCount) }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -387,7 +506,15 @@ export default function AdminFeedbackTab({
               <p className="text-sm font-bold text-black/60">No reviews match your filters.</p>
             </div>
           ) : (
-            filteredFeedback.map((feedback) => (
+            filteredFeedback.map((feedback) => {
+              const sentimentLabel = resolveFeedbackSentimentLabel(feedback);
+              const positiveAspects = getAspectEntries(feedback, 'positive');
+              const negativeAspects = getAspectEntries(feedback, 'negative');
+              const categoryEntries = FEEDBACK_CATEGORY_KEYS.filter(
+                (key) => typeof feedback.categoryRatings[key] === 'number'
+              );
+
+              return (
               <div key={feedback.id} className="glass-card p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
@@ -403,9 +530,17 @@ export default function AdminFeedbackTab({
                       <p className="text-xs text-black">
                         {feedback.roomName} | {feedback.buildingName}
                       </p>
+                      <p className="mt-0.5 text-[11px] font-bold text-black/45">
+                        Submitted {feedback.createdAt ? formatDateTime(feedback.createdAt) : 'date unavailable'}
+                      </p>
                     </div>
                   </div>
-                  <StarRating rating={feedback.rating} />
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <StarRating rating={feedback.overallRating} />
+                    <span className="text-[10px] font-bold text-black/45">
+                      Overall {feedback.overallRating}/5
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mb-3 rounded-xl border border-dark/10 bg-dark/5 p-3">
@@ -415,7 +550,7 @@ export default function AdminFeedbackTab({
                         Sentiment Analysis
                       </p>
                       <p className="mt-1 text-sm text-black">
-                        {formatSentimentLabel(resolveFeedbackSentimentLabel(feedback))}
+                        {formatSentimentLabel(sentimentLabel)}
                         {typeof feedback.compoundScore === 'number'
                           ? ` (${feedback.compoundScore.toFixed(2)})`
                           : ''}
@@ -423,10 +558,10 @@ export default function AdminFeedbackTab({
                     </div>
                     <span
                       className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] ${getSentimentBadgeClasses(
-                        resolveFeedbackSentimentLabel(feedback)
+                        sentimentLabel
                       )}`}
                     >
-                      {formatSentimentLabel(resolveFeedbackSentimentLabel(feedback))}
+                      {formatSentimentLabel(sentimentLabel)}
                     </span>
                   </div>
 
@@ -436,7 +571,7 @@ export default function AdminFeedbackTab({
                     typeof feedback.negativeScore === 'number' && (
                       <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-black sm:grid-cols-4">
                         <div>
-                          <p className="font-bold">Compound</p>
+                          <p className="font-bold">VADER Compound</p>
                           <p>{feedback.compoundScore.toFixed(2)}</p>
                         </div>
                         <div>
@@ -456,6 +591,74 @@ export default function AdminFeedbackTab({
                 </div>
 
                 <p className="text-sm text-black mb-3 leading-relaxed">{feedback.message}</p>
+
+                {categoryEntries.length > 0 && (
+                  <div className="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                    {categoryEntries.map((key) => (
+                      <div key={key} className="rounded-xl border border-dark/10 bg-white/70 px-3 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">
+                          {FEEDBACK_CATEGORY_LABELS[key]}
+                        </p>
+                        <p className="mt-1 text-sm font-bold text-black">
+                          {feedback.categoryRatings[key]}/5
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mb-3 grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-green-700">
+                      Detected Positive Aspects
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {positiveAspects.length > 0 ? (
+                        positiveAspects.map((aspect) => (
+                          <span key={aspect} className="rounded-full border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-700">
+                            {FEEDBACK_ASPECT_LABELS[aspect]}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs font-bold text-black/40">None detected</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-red-700">
+                      Detected Negative Aspects
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {negativeAspects.length > 0 ? (
+                        negativeAspects.map((aspect) => (
+                          <span key={aspect} className="rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                            {FEEDBACK_ASPECT_LABELS[aspect]}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs font-bold text-black/40">None detected</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-3 rounded-xl border border-dark/10 bg-white/70 p-3">
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-black/45">
+                    Extracted Keywords
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {feedback.extractedKeywords.length > 0 ? (
+                      feedback.extractedKeywords.map((keyword) => (
+                        <span key={keyword} className="rounded-full border border-dark/10 bg-dark/5 px-2 py-0.5 text-[10px] font-bold text-black/60">
+                          {keyword}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs font-bold text-black/40">No keywords extracted</span>
+                    )}
+                  </div>
+                </div>
 
                 {feedback.adminResponse ? (
                   <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 mt-3">
@@ -502,7 +705,8 @@ export default function AdminFeedbackTab({
                   </button>
                 )}
               </div>
-            ))
+              );
+            })
           )}
         </div>
       )}

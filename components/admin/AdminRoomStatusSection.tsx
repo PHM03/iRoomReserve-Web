@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
+import type { SentimentLabel } from '@/lib/ai/sentiment';
 import type { Feedback } from '@/lib/feedback/feedback';
 import { resolveFeedbackSentimentLabel } from '@/lib/feedback/feedback-sentiment';
 import type { Reservation } from '@/lib/reservations/reservations';
@@ -65,7 +66,7 @@ interface RoomFeedbackStats {
   avgNeutral: number | null;
   avgNegative: number | null;
   totalFeedback: number;
-  sentimentLabel: 'positive' | 'neutral' | 'negative' | null;
+  sentimentLabel: SentimentLabel | null;
 }
 
 function computeRoomFeedbackStats(feedback: Feedback[]): RoomFeedbackStats {
@@ -125,7 +126,7 @@ function computeRoomUsageStats(history: RoomHistoryEntry[]): RoomUsageStats {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function SentimentDot({ label }: { label: 'positive' | 'neutral' | 'negative' | null }) {
+function SentimentDot({ label }: { label: SentimentLabel | null }) {
   if (!label) {
     return (
       <span
@@ -134,10 +135,12 @@ function SentimentDot({ label }: { label: 'positive' | 'neutral' | 'negative' | 
       />
     );
   }
-  const map = {
+  const map: Record<SentimentLabel, { bg: string; border: string; title: string }> = {
+    very_positive: { bg: 'bg-emerald-600', border: 'border-emerald-700/30', title: 'Excellent - very positive sentiment' },
     positive: { bg: 'bg-emerald-500', border: 'border-emerald-600/30', title: 'Good — positive sentiment' },
     neutral: { bg: 'bg-yellow-400', border: 'border-yellow-500/30', title: 'Needs improvement — neutral sentiment' },
     negative: { bg: 'bg-red-500', border: 'border-red-600/30', title: 'Bad — negative sentiment' },
+    very_negative: { bg: 'bg-red-700', border: 'border-red-800/30', title: 'Critical - very negative sentiment' },
   };
   const { bg, border, title } = map[label];
   return (
@@ -232,9 +235,11 @@ function ExpandedAnalytics({
                     <div className="relative h-2 w-full rounded-full bg-dark/10 overflow-hidden">
                       <div
                         className={`absolute top-0 h-full rounded-full ${
+                          feedbackStats.sentimentLabel === 'very_positive' ||
                           feedbackStats.sentimentLabel === 'positive'
                             ? 'bg-emerald-500'
-                            : feedbackStats.sentimentLabel === 'negative'
+                            : feedbackStats.sentimentLabel === 'negative' ||
+                                feedbackStats.sentimentLabel === 'very_negative'
                               ? 'bg-red-500'
                               : 'bg-yellow-400'
                         }`}
@@ -328,22 +333,29 @@ export default function AdminRoomStatusSection({
       return;
     }
 
+    let nextFloorFilter: string | null = null;
+
     if (!floorFilter) {
-      setFloorFilter(getPreferredDefaultFloorValue(floorOptions));
+      nextFloorFilter = getPreferredDefaultFloorValue(floorOptions);
+    } else if (floorFilter !== 'All') {
+      const hasMatchingFloor = floorOptionsWithAll.some(
+        (option) => option.value === floorFilter
+      );
+
+      if (!hasMatchingFloor) {
+        nextFloorFilter = getPreferredDefaultFloorValue(floorOptions);
+      }
+    }
+
+    if (!nextFloorFilter) {
       return;
     }
 
-    if (floorFilter === 'All') {
-      return;
-    }
+    const timeoutId = window.setTimeout(() => {
+      setFloorFilter(nextFloorFilter);
+    }, 0);
 
-    const hasMatchingFloor = floorOptionsWithAll.some(
-      (option) => option.value === floorFilter
-    );
-
-    if (!hasMatchingFloor) {
-      setFloorFilter(getPreferredDefaultFloorValue(floorOptions));
-    }
+    return () => window.clearTimeout(timeoutId);
   }, [floorFilter, floorOptions, floorOptionsWithAll]);
 
   // Per-room feedback map

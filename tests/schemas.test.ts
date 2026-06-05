@@ -197,6 +197,13 @@ describe('server schemas', () => {
         userName: 'Alex Student',
         message: 'Room was clean and ready.',
         rating: 5,
+        categoryRatings: {
+          cleanliness: 5,
+          comfort: 4,
+          air_conditioning: 4,
+          equipment_projector: 5,
+          internet_connectivity: 4,
+        },
       }).success
     ).toBe(true);
 
