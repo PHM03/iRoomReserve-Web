@@ -13,7 +13,9 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import {
   canReservationCheckIn,
   compareReservationSchedule,
+  getCurrentDateTimeStringInTimeZone,
   getReservationRoomStatus,
+  isReservationActiveTimeSlot,
 } from '@/lib/rooms/roomStatus';
 import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
 
@@ -36,7 +38,6 @@ export default function MemberDashboard({
   const { firebaseUser } = useAuth();
   const uid = firebaseUser?.uid;
   const [reservationHistory, setReservationHistory] = useState<Reservation[]>([]);
-  const todayStr = new Date().toISOString().split('T')[0];
   const [rooms, setRooms] = useState<Room[]>([]);
 
   useEffect(() => {
@@ -94,14 +95,21 @@ export default function MemberDashboard({
     .filter((reservation) => reservation.status === 'approved')
     .sort(compareReservationSchedule);
   const approvedCount = approvedReservations.length;
+  const currentDateTime = getCurrentDateTimeStringInTimeZone();
   const activeReservation =
     approvedReservations.find(
       (reservation) =>
-        reservation.checkedInAt || reservation.date === todayStr
-    ) ?? approvedReservations[0];
+        (Boolean(reservation.checkedInAt) && !reservation.occupancyReleasedAt) ||
+        isReservationActiveTimeSlot(reservation)
+    ) ?? null;
 
   const upcomingReservations = approvedReservations
-    .filter((reservation) => reservation.date >= todayStr)
+    .filter(
+      (reservation) =>
+        reservation.date > currentDateTime.date ||
+        (reservation.date === currentDateTime.date &&
+          reservation.startTime > currentDateTime.time)
+    )
     .slice(0, 3);
   const recentActivity = reservationHistory.slice(0, 3);
 
@@ -173,9 +181,9 @@ export default function MemberDashboard({
             </>
           ) : (
             <div className="text-center py-2">
-              <p className="text-sm text-black font-bold">No active room</p>
+              <p className="text-sm text-black font-bold">No reserved room right now</p>
               <p className="text-[10px] text-black mt-0.5">
-                You have no approved reservation right now
+                You do not have a room reserved for the current time
               </p>
             </div>
           )}
