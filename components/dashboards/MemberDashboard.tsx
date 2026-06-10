@@ -115,25 +115,29 @@ export default function MemberDashboard({
 
   return (
     <main className="relative z-10 mx-auto max-w-7xl px-4 pb-24 pt-[100px] sm:px-6 lg:px-8 md:pb-8">
-      <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-10">
         <div className={`${dashboardPanelClasses} px-6 py-4`}>
-          <h2 className="text-2xl font-bold text-gray-800">
-            Welcome, {firstName} {welcomeEmoji}
-          </h2>
-          <p className="text-gray-600 mt-1">
-            Here&apos;s an overview of your reservations
-          </p>
-        </div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">
+                Welcome, {firstName} {welcomeEmoji}
+              </h2>
+              <p className="mt-1 text-gray-600">
+                Here&apos;s an overview of your reservations
+              </p>
+            </div>
 
-        <Link
-          href="/dashboard/reserve"
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#a12124] px-5 py-3 text-sm font-bold text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8e1d20] hover:shadow-2xl hover:shadow-primary/30"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          <span>New Reservation</span>
-        </Link>
+            <Link
+              href="/dashboard/reserve"
+              className="inline-flex items-center justify-center gap-2 self-center sm:self-auto rounded-2xl bg-[#a12124] px-5 py-3 text-sm font-bold text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8e1d20] hover:shadow-2xl hover:shadow-primary/30"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>New Reservation</span>
+            </Link>
+          </div>
+        </div>
       </div>
 
       <div className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-3">
