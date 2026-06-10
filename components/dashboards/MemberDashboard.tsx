@@ -372,7 +372,6 @@ export default function MemberDashboard({
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <StatusBadge status={reservation.status} />
-                      <StatusBadge status={getRoomStatus(reservation)} />
                     </div>
                   </div>
                 ))}
