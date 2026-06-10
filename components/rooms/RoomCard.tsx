@@ -3,7 +3,7 @@
 import React from 'react';
 
 interface RoomCardProps {
-  availability: 'Available' | 'Occupied';
+  availability: 'Available' | 'Reserved' | 'Occupied';
   buildingName?: string;
   campusName: string;
   disabled?: boolean;
@@ -14,13 +14,25 @@ interface RoomCardProps {
 }
 
 function getAccentClass(availability: RoomCardProps['availability']) {
-  return availability === 'Available'
-    ? 'border-green-500/45'
-    : 'border-orange-500/45';
+  switch (availability) {
+    case 'Available':
+      return 'border-green-500/45';
+    case 'Reserved':
+      return 'border-blue-500/45';
+    default:
+      return 'border-orange-500/45';
+  }
 }
 
 function getAvailabilityClass(availability: RoomCardProps['availability']) {
-  return availability === 'Available' ? 'ui-badge-green' : 'ui-badge-orange';
+  switch (availability) {
+    case 'Available':
+      return 'ui-badge-green';
+    case 'Reserved':
+      return 'ui-badge-blue';
+    default:
+      return 'ui-badge-orange';
+  }
 }
 
 export default function RoomCard({
@@ -33,7 +45,7 @@ export default function RoomCard({
   onClick,
   roomType,
 }: Readonly<RoomCardProps>) {
-  const isAvailable = availability === 'Available';
+  const canViewReservationDetails = !disabled;
 
   return (
     <button
@@ -78,10 +90,12 @@ export default function RoomCard({
       <div className="mt-4 border-t border-dark/5 pt-4">
         <span
           className={`text-sm font-bold transition-colors ${
-            isAvailable ? 'text-primary hover:text-primary-hover' : 'text-black/60'
+            canViewReservationDetails
+              ? 'text-primary hover:text-primary-hover'
+              : 'text-black/60'
           }`}
         >
-          {isAvailable ? 'View reservation details' : 'Currently occupied'}
+          {canViewReservationDetails ? 'View reservation details' : 'Unavailable'}
         </span>
       </div>
     </button>

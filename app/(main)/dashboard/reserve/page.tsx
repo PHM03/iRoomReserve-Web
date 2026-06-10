@@ -261,8 +261,26 @@ function getRoomCampus(room: Room): ReservationCampus | null {
   });
 }
 
-function getRoomAvailability(room: Room): 'Available' | 'Occupied' {
-  return room.status === 'Available' ? 'Available' : 'Occupied';
+function getRoomAvailability(
+  room: Room,
+  reservations: Reservation[]
+): 'Available' | 'Reserved' | 'Occupied' {
+  const approvedReservations = reservations.filter(
+    (reservation) => reservation.roomId === room.id && reservation.status === 'approved'
+  );
+  const checkedInReservation = approvedReservations.find(
+    (reservation) => Boolean(reservation.checkedInAt) && !reservation.occupancyReleasedAt
+  );
+
+  if (checkedInReservation) {
+    return 'Occupied';
+  }
+
+  if (approvedReservations.length > 0 || room.status === 'Reserved') {
+    return 'Reserved';
+  }
+
+  return 'Available';
 }
 
 function matchesRoomType(room: Room, filter: Exclude<RoomFilterKey, 'available'>): boolean {
@@ -617,9 +635,14 @@ export default function ReserveRoomPage() {
   const normalizedProfileRole = normalizeRole(profile?.role) ?? USER_ROLES.STUDENT;
   const isStudentReservation = normalizedProfileRole === USER_ROLES.STUDENT;
   const isFacultyReservation = normalizedProfileRole === USER_ROLES.FACULTY;
+  const selectedRoomAvailability = selectedRoom
+    ? getRoomAvailability(selectedRoom, assistantReservations)
+    : null;
   const selectedRoomCampusName = selectedCampus
     ? getCampusName(selectedCampus)
     : selectedBuildingName || 'Unknown campus';
+  const isSelectedRoomAvailable =
+    selectedRoomAvailability !== null && selectedRoomAvailability !== 'Occupied';
   const selectedTimeslot = {
     date: reservationDate,
     startTime,
@@ -861,6 +884,7 @@ export default function ReserveRoomPage() {
 
   function canProceedToEquipment(): boolean {
     if (
+      !isSelectedRoomAvailable ||
       !startTime ||
       !endTime ||
       !programDepartmentOrganization ||
@@ -1595,7 +1619,7 @@ export default function ReserveRoomPage() {
                             return (
                               <RoomCard
                                 key={room.id}
-                                availability={getRoomAvailability(room)}
+                                availability={getRoomAvailability(room, assistantReservations)}
                                 buildingName={room.buildingName}
                                 campusName={
                                   roomCampus
@@ -1679,9 +1703,9 @@ export default function ReserveRoomPage() {
                     <span className="glass-badge rounded-full px-3 py-1 text-xs font-bold text-black">
                       {selectedRoom.roomType || 'Room'}
                     </span>
-                    <span className="glass-badge rounded-full px-3 py-1 text-xs font-bold text-black">
-                      {getRoomAvailability(selectedRoom)}
-                    </span>
+                      <span className="glass-badge rounded-full px-3 py-1 text-xs font-bold text-black">
+                        {selectedRoomAvailability ?? 'Available'}
+                      </span>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <div className="rounded-xl border border-white/45 bg-white/85 p-3 shadow-sm backdrop-blur-xl">
@@ -1992,11 +2016,16 @@ export default function ReserveRoomPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
+                  {selectedRoomAvailability === 'Occupied' && (
+                    <p className="text-xs font-bold ui-text-red">
+                      This room is no longer available. Please go back and choose another room before continuing.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
 
-            {selectedRoom && selectedRoom.status === 'Available' && currentStep === 3 && (
+            {selectedRoom && selectedRoomAvailability !== 'Occupied' && currentStep === 3 && (
               <div>
                 <div className="mb-4 flex items-center gap-2">
                   <button
@@ -2202,6 +2231,34 @@ export default function ReserveRoomPage() {
                     )}
                   </button>
                 </form>
+              </div>
+            )}
+
+            {selectedRoom && selectedRoomAvailability === 'Occupied' && currentStep === 3 && (
+              <div className="dashboard-empty-state rounded-2xl p-8 text-center">
+                <p className="text-sm font-bold text-black">
+                  This room is no longer available.
+                </p>
+                <p className="mt-1 text-xs text-black">
+                  The room status changed while you were filling out the reservation. Go back to the details step
+                  or choose another room from the list.
+                </p>
+                <div className="mt-4 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDetailsStep(2)}
+                    className="rounded-xl border border-dark/10 bg-dark/5 px-4 py-2 text-sm font-bold text-black transition-all hover:bg-primary/10 hover:text-primary"
+                  >
+                    Back to Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBackToRoomList}
+                    className="btn-primary px-4 py-2 text-sm"
+                  >
+                    Choose Another Room
+                  </button>
+                </div>
               </div>
             )}
           </>
