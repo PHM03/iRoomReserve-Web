@@ -415,6 +415,16 @@ export default function ReserveRoomPage() {
     const intervalId = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(intervalId);
   }, []);
+  useEffect(() => {
+    const profileOrganizationName =
+      profile?.accountType === 'organization' ? profile.organizationName?.trim() : '';
+
+    if (!profileOrganizationName) {
+      return;
+    }
+
+    setProgramDepartmentOrganization((current) => current || profileOrganizationName);
+  }, [profile?.accountType, profile?.organizationName]);
 
   useEffect(() => {
     logAssistantAuthState({

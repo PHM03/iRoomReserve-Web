@@ -36,6 +36,12 @@ import { auth, db } from "@/lib/firebase/firebase";
 import { type ReservationCampus } from "@/lib/buildings/campuses";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
 
+export type AccountType = "individual" | "organization";
+
+export function normalizeAccountType(value?: string | null): AccountType {
+  return value === "organization" ? "organization" : "individual";
+}
+
 const MANAGED_ROLE_QUERY_VALUES = [
   USER_ROLES.STUDENT,
   USER_ROLES.FACULTY,
@@ -108,7 +114,11 @@ export async function registerWithEmail(
   password: string,
   firstName: string,
   lastName: string,
-  role: string = USER_ROLES.STUDENT
+  role: string = USER_ROLES.STUDENT,
+  account: {
+    accountType?: AccountType | string | null;
+    organizationName?: string | null;
+  } = {}
 ) {
   let actualRole = normalizeRole(role) ?? USER_ROLES.STUDENT;
 
@@ -125,6 +135,7 @@ export async function registerWithEmail(
   await updateProfile(credential.user, { displayName: `${firstName} ${lastName}` });
 
   const status = actualRole === USER_ROLES.STUDENT ? "approved" : "pending";
+  const accountType = normalizeAccountType(account.accountType);
 
   await saveUserProfile(credential.user.uid, {
     firstName,
@@ -132,6 +143,9 @@ export async function registerWithEmail(
     email,
     role: actualRole,
     status,
+    accountType,
+    organizationName:
+      accountType === "organization" ? account.organizationName?.trim() || null : null,
   });
 
   await sendEmailVerification(credential.user);
@@ -304,6 +318,8 @@ export async function getUserProfile(uid: string) {
     campusName?: string;
     assignedBuilding?: string;
     assignedBuildingId?: string;
+    accountType?: AccountType | string | null;
+    organizationName?: string | null;
     assignedBuildings?: unknown;
     assignedBuildingIds?: string[];
   };
@@ -333,6 +349,42 @@ export async function resendVerificationEmail(email: string, password: string) {
   }
 }
 
+export async function updateAccountSettings(
+  uid: string,
+  data: {
+    firstName: string;
+    lastName: string;
+    accountType: AccountType;
+    organizationName?: string | null;
+  }
+) {
+  const normalizedFirstName = data.firstName.trim();
+  const normalizedLastName = data.lastName.trim();
+  const accountType = normalizeAccountType(data.accountType);
+  const organizationName =
+    accountType === "organization"
+      ? data.organizationName?.trim() || null
+      : null;
+
+  await setDoc(
+    doc(db, "users", uid),
+    {
+      firstName: normalizedFirstName,
+      lastName: normalizedLastName,
+      accountType,
+      organizationName,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  if (auth.currentUser?.uid === uid) {
+    await updateProfile(auth.currentUser, {
+      displayName: `${normalizedFirstName} ${normalizedLastName}`.trim(),
+    });
+  }
+}
+
 export async function saveUserProfile(
   uid: string,
   data: {
@@ -341,6 +393,8 @@ export async function saveUserProfile(
     email: string;
     role?: string;
     status?: string;
+    accountType?: AccountType | string | null;
+    organizationName?: string | null;
     campus?: ReservationCampus | null;
     campusName?: CampusName | null;
   }
@@ -351,6 +405,15 @@ export async function saveUserProfile(
       ...data,
       email: data.email.toLowerCase(),
       ...(data.role ? { role: normalizeRole(data.role) ?? data.role } : {}),
+      ...(data.accountType
+        ? {
+            accountType: normalizeAccountType(data.accountType),
+            organizationName:
+              data.accountType === "organization"
+                ? data.organizationName?.trim() || null
+                : null,
+          }
+        : {}),
       ...(data.campus
         ? { campusName: data.campusName ?? getCampusName(data.campus) }
         : {}),

@@ -15,6 +15,7 @@ import {
   shouldDeleteNotificationOnClick,
 } from '@/lib/notifications/notifications';
 import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
+import AccountSettingsModal from '@/components/auth/AccountSettingsModal';
 
 export type AdminTab =
   | 'dashboard'
@@ -129,6 +130,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserTooltip, setShowUserTooltip] = useState(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -352,6 +354,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   };
 
   return (
+    <>
     <nav
       ref={navRef}
       className="glass-nav fixed top-0 left-0 right-0 z-50 border-white/40 bg-white/90 shadow-xl backdrop-blur-xl"
@@ -459,6 +462,22 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                 )}
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setShowAccountSettings(true)}
+              className={navIconButtonClasses}
+              title="Account settings"
+              aria-label="Account settings"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5.121 17.804A8.966 8.966 0 0112 15c2.21 0 4.236.8 5.879 2.129M15 11a3 3 0 11-6 0 3 3 0 016 0zm6 1a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </button>
             <div ref={notificationRef} className="relative">
               <button
                 onClick={() => setShowNotifications((prev) => !prev)}
@@ -693,6 +712,11 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
         </div>
       ) : null}
     </nav>
+    <AccountSettingsModal
+      open={showAccountSettings}
+      onClose={() => setShowAccountSettings(false)}
+    />
+    </>
   );
 };
 

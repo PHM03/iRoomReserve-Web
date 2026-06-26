@@ -13,6 +13,8 @@ interface UserProfile {
   email: string;
   role: string;
   status: string;
+  accountType?: 'individual' | 'organization';
+  organizationName?: string | null;
   campus?: ReservationCampus | null;
   campusName?: CampusName | null;
 }
@@ -21,6 +23,7 @@ interface AuthContextType {
   firebaseUser: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  reloadProfile: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -32,6 +35,7 @@ const AuthContext = createContext<AuthContextType>({
   firebaseUser: null,
   profile: null,
   loading: true,
+  reloadProfile: async () => {},
   logout: async () => {},
 });
 
@@ -42,6 +46,25 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const prevUidRef = useRef<string | null>(null);
+
+  const applyProfile = (data: Awaited<ReturnType<typeof getUserProfile>> | null) => {
+    if (data) {
+      setProfile({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        role: data.role || 'Student',
+        status: data.status || 'approved',
+        accountType: data.accountType === 'organization' ? 'organization' : 'individual',
+        organizationName:
+          typeof data.organizationName === 'string' ? data.organizationName : null,
+        campus: (data as Record<string, unknown>).campus as ReservationCampus | null | undefined,
+        campusName: (data as Record<string, unknown>).campusName as CampusName | null | undefined,
+      });
+    } else {
+      setProfile(null);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -55,19 +78,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         }
         prevUidRef.current = user.uid;
         const data = await getUserProfile(user.uid);
-        if (data) {
-          setProfile({
-            firstName: data.firstName,
-            lastName: data.lastName,
-            email: data.email,
-            role: data.role || 'Student',
-            status: data.status || 'approved',
-            campus: (data as Record<string, unknown>).campus as ReservationCampus | null | undefined,
-            campusName: (data as Record<string, unknown>).campusName as CampusName | null | undefined,
-          });
-        } else {
-          setProfile(null);
-        }
+        applyProfile(data);
       } else {
         prevUidRef.current = null;
         setProfile(null);
@@ -78,6 +89,16 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
 
     return () => unsubscribe();
   }, []);
+
+  const reloadProfile = async () => {
+    if (!firebaseUser) {
+      setProfile(null);
+      return;
+    }
+
+    const data = await getUserProfile(firebaseUser.uid);
+    applyProfile(data);
+  };
 
   const handleLogout = async () => {
     await firebaseLogout();
@@ -91,6 +112,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         firebaseUser,
         profile,
         loading,
+        reloadProfile,
         logout: handleLogout,
       }}
     >

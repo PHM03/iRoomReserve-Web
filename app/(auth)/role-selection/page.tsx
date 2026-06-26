@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { USER_ROLES } from '@/lib/auth/roles';
-import { isAllowedEmail, saveUserProfile, logout } from '@/lib/auth/auth';
+import { isAllowedEmail, saveUserProfile, logout, type AccountType } from '@/lib/auth/auth';
 import Toast from '@/components/ui/Toast';
 
 export default function RoleSelectionPage() {
@@ -14,6 +14,9 @@ export default function RoleSelectionPage() {
       typeof USER_ROLES.STUDENT | typeof USER_ROLES.FACULTY | typeof USER_ROLES.UTILITY
     >(USER_ROLES.STUDENT);
     const [loading, setLoading] = useState(false);
+    const [accountType, setAccountType] = useState<AccountType>('individual');
+    const [organizationName, setOrganizationName] = useState('');
+    const [errorMessage, setErrorMessage] = useState('');
     const [showToast, setShowToast] = useState(false);
     const handleToastClose = useCallback(() => setShowToast(false), []);
     const email = firebaseUser?.email ?? profile?.email ?? '';
@@ -53,6 +56,13 @@ export default function RoleSelectionPage() {
 
     const handleConfirm = async () => {
         if (!firebaseUser) return;
+        setErrorMessage('');
+
+        if (accountType === 'organization' && !organizationName.trim()) {
+            setErrorMessage('Please enter your organization name.');
+            return;
+        }
+
         setLoading(true);
         try {
         if (!isSchoolEmail && selectedRole !== USER_ROLES.UTILITY) {
@@ -67,6 +77,8 @@ export default function RoleSelectionPage() {
             email: firebaseUser.email || '',
             role: selectedRole,
             status,
+            accountType,
+            organizationName: accountType === 'organization' ? organizationName.trim() : null,
         });
 
         if (selectedRole === 'Student') {
@@ -145,6 +157,50 @@ export default function RoleSelectionPage() {
             ))}
           </div>
 
+
+          <div className="mb-6">
+            <span className="mb-1.5 block text-sm font-bold text-black">Account Type</span>
+            <div className="grid grid-cols-2 gap-2 rounded-xl border border-dark/10 bg-dark/5 p-1">
+              {([
+                { label: 'Individual', value: 'individual' as const },
+                { label: 'Organization', value: 'organization' as const },
+              ]).map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => setAccountType(type.value)}
+                  className={`rounded-lg px-3 py-2.5 text-sm font-bold transition-all ${
+                    accountType === type.value
+                      ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                      : 'text-black hover:bg-primary/10 hover:text-primary'
+                  }`}
+                >
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {accountType === 'organization' ? (
+            <div className="mb-6">
+              <label htmlFor="roleSelectionOrganizationName" className="mb-1.5 block text-sm font-bold text-black">
+                Organization Name
+              </label>
+              <input
+                id="roleSelectionOrganizationName"
+                type="text"
+                value={organizationName}
+                onChange={(event) => setOrganizationName(event.target.value)}
+                className="glass-input w-full px-4 py-3"
+                placeholder="Enter organization name"
+                autoComplete="organization"
+              />
+            </div>
+          ) : null}
+
+          {errorMessage ? (
+            <p className="mb-4 text-sm font-bold ui-text-red">{errorMessage}</p>
+          ) : null}
           <button
             type="button"
             onClick={handleConfirm}

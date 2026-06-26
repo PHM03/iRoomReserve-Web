@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import AuthAlert from '@/components/auth/AuthAlert';
 import Toast from '@/components/ui/Toast';
 import { USER_ROLES } from '@/lib/auth/roles';
-import { registerWithEmail, getAuthErrorMessage } from '@/lib/auth/auth';
+import { registerWithEmail, getAuthErrorMessage, type AccountType } from '@/lib/auth/auth';
 
 interface EyeIconProps {
   open: boolean;
@@ -28,6 +28,8 @@ function RegisterForm() {
   const role = getRoleDisplayName(selectedRole);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [accountType, setAccountType] = useState<AccountType>('individual');
+  const [organizationName, setOrganizationName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -57,6 +59,11 @@ function RegisterForm() {
       return;
     }
 
+    if (accountType === 'organization' && !organizationName.trim()) {
+      setErrorMessage('Please enter your organization name');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setErrorMessage('Passwords do not match');
       return;
@@ -71,7 +78,10 @@ function RegisterForm() {
     setLoading(true);
 
     try {
-      const result = await registerWithEmail(email, password, firstName, lastName, role);
+      const result = await registerWithEmail(email, password, firstName, lastName, role, {
+        accountType,
+        organizationName,
+      });
       const determinedRole = result.actualRole;
       setShowToast(true);
       // Store determined role for toast message
@@ -203,6 +213,46 @@ function RegisterForm() {
               </div>
             </div>
 
+
+            <div>
+              <span className="block text-sm font-bold text-black mb-1.5">Account Type</span>
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-dark/10 bg-dark/5 p-1">
+                {([
+                  { label: 'Individual', value: 'individual' as const },
+                  { label: 'Organization', value: 'organization' as const },
+                ]).map((type) => (
+                  <button
+                    key={type.value}
+                    type="button"
+                    onClick={() => setAccountType(type.value)}
+                    className={`rounded-lg px-3 py-2.5 text-sm font-bold transition-all ${
+                      accountType === type.value
+                        ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                        : 'text-black hover:bg-primary/10 hover:text-primary'
+                    }`}
+                  >
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {accountType === 'organization' ? (
+              <div>
+                <label htmlFor="organizationName" className="block text-sm font-bold text-black mb-1.5">
+                  Organization Name
+                </label>
+                <input
+                  type="text"
+                  id="organizationName"
+                  value={organizationName}
+                  onChange={(event) => setOrganizationName(event.target.value)}
+                  className="glass-input w-full px-4 py-3"
+                  placeholder="Enter organization name"
+                  autoComplete="organization"
+                />
+              </div>
+            ) : null}
             <div>
               <label htmlFor="registerEmail" className="block text-sm font-bold text-black mb-1.5">
                 Email Address
