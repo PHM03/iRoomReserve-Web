@@ -705,6 +705,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     buildingId,
     buildingName,
     activeBuildingLabel,
+    currentUserId: firebaseUser?.uid ?? '',
     campus: managedCampus ?? null,
     activeScheduleSemester,
     activeScheduleAcademicYear,

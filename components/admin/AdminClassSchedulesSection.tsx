@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
 import type { Room } from '@/lib/rooms/rooms';
+import {
+  parseScheduleExcelFile,
+  type ExcelScheduleImportCandidate,
+} from '@/lib/schedules/excelScheduleImport';
+import type { ScheduleAcademicYear, ScheduleSemester } from '@/lib/schedules/scheduleContext';
 import type { Schedule } from '@/lib/schedules/schedules';
 import {
   findScheduleConflicts,
@@ -12,8 +17,10 @@ import {
 } from '@/lib/schedules/scheduleConflicts';
 import {
   DAY_NAMES,
+  addSchedule,
   formatTime12h,
   getScheduleDisplayTitle,
+  type ScheduleInput,
 } from '@/lib/schedules/schedules';
 import { getCampusTimeRule, validateScheduleTimes } from '@/lib/schedules/scheduleTimeRules';
 
@@ -110,6 +117,10 @@ interface AdminClassSchedulesSectionProps {
   onSaveSchedule: () => void;
   onEditSchedule: (schedule: Schedule) => void;
   onDeleteSchedule: (scheduleId: string) => Promise<void>;
+  buildingId: string;
+  currentUserId?: string | null;
+  activeScheduleSemester: ScheduleSemester;
+  activeScheduleAcademicYear: ScheduleAcademicYear;
   campus?: string | null;
   className?: string;
 }
@@ -144,6 +155,14 @@ function getScheduleBlockHeight(startTime: string, endTime: string) {
 
 type DayScheduleSlotStatus = 'available' | 'scheduled' | 'selected' | 'conflict';
 
+type ImportPreviewStatus = 'valid' | 'invalid' | 'conflict';
+
+type ImportPreviewRow = ExcelScheduleImportCandidate & {
+  existingConflicts: Schedule[];
+  status: ImportPreviewStatus;
+  validationErrors: string[];
+};
+
 export default function AdminClassSchedulesSection({
   schedules,
   allSchedules,
@@ -173,12 +192,23 @@ export default function AdminClassSchedulesSection({
   onSaveSchedule,
   onEditSchedule,
   onDeleteSchedule,
+  buildingId,
+  currentUserId = null,
+  activeScheduleSemester,
+  activeScheduleAcademicYear,
   campus = null,
   className = '',
 }: Readonly<AdminClassSchedulesSectionProps>) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingSchedule, setDeletingSchedule] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [importFileName, setImportFileName] = useState('');
+  const [parsedImportRows, setParsedImportRows] = useState<ExcelScheduleImportCandidate[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [parsingImport, setParsingImport] = useState(false);
+  const [savingImport, setSavingImport] = useState(false);
 
   // Clear the time error whenever the form is hidden (cancelled / saved)
   useEffect(() => {
@@ -294,6 +324,113 @@ export default function AdminClassSchedulesSection({
     schedRoomId,
     schedStart,
   ]);
+  const importPreviewRows = useMemo<ImportPreviewRow[]>(
+    () =>
+      parsedImportRows.map((row, rowIndex) => {
+        const validationErrors = [...row.errors];
+
+        if (!row.roomId) {
+          validationErrors.push('Room is required.');
+        }
+
+        if (row.buildingId && buildingId && row.buildingId !== buildingId) {
+          validationErrors.push('Room belongs to another building.');
+        }
+
+        if (!row.startTime || !row.endTime) {
+          validationErrors.push('Start and end times are required.');
+        }
+
+        if (!row.subject.trim()) {
+          validationErrors.push('Subject is required.');
+        }
+
+        if (!row.section.trim()) {
+          validationErrors.push('Section is required.');
+        }
+
+        const timeError =
+          row.startTime && row.endTime
+            ? validateScheduleTimes(row.startTime, row.endTime, campus)
+            : null;
+
+        if (timeError) {
+          validationErrors.push(timeError);
+        }
+
+        const existingConflicts =
+          row.roomId && row.startTime && row.endTime
+            ? findScheduleConflicts(allSchedules, {
+                academicYear: activeScheduleAcademicYear,
+                dayOfWeek: row.dayOfWeek,
+                endTime: row.endTime,
+                roomId: row.roomId,
+                semester: activeScheduleSemester,
+                startTime: row.startTime,
+              })
+            : [];
+        const duplicateImportConflict = parsedImportRows.some(
+          (otherRow, otherRowIndex) =>
+            otherRowIndex !== rowIndex &&
+            otherRow.roomId === row.roomId &&
+            otherRow.dayOfWeek === row.dayOfWeek &&
+            otherRow.startTime &&
+            otherRow.endTime &&
+            row.startTime &&
+            row.endTime &&
+            timeRangesOverlap(
+              otherRow.startTime,
+              otherRow.endTime,
+              row.startTime,
+              row.endTime
+            )
+        );
+
+        if (existingConflicts.length > 0) {
+          validationErrors.push(SCHEDULE_CONFLICT_MESSAGE);
+        }
+
+        if (duplicateImportConflict) {
+          validationErrors.push('Overlaps another row in this import.');
+        }
+
+        const uniqueValidationErrors = [...new Set(validationErrors)];
+        const hasConflict =
+          existingConflicts.length > 0 || duplicateImportConflict;
+
+        return {
+          ...row,
+          existingConflicts,
+          status:
+            uniqueValidationErrors.length === 0
+              ? 'valid'
+              : hasConflict
+                ? 'conflict'
+                : 'invalid',
+          validationErrors: uniqueValidationErrors,
+        };
+      }),
+    [
+      activeScheduleAcademicYear,
+      activeScheduleSemester,
+      allSchedules,
+      buildingId,
+      campus,
+      parsedImportRows,
+    ]
+  );
+  const validImportRows = useMemo(
+    () => importPreviewRows.filter((row) => row.status === 'valid'),
+    [importPreviewRows]
+  );
+  const invalidImportCount = importPreviewRows.filter(
+    (row) => row.status !== 'valid'
+  ).length;
+  const hasImportPreview =
+    parsingImport ||
+    parsedImportRows.length > 0 ||
+    Boolean(importError) ||
+    Boolean(importSuccess);
 
   function clearErrors() {
     setFormError(null);
@@ -350,6 +487,117 @@ export default function AdminClassSchedulesSection({
       setShowDeleteConfirm(false);
     }
   }
+
+  function clearImportState() {
+    setImportFileName('');
+    setParsedImportRows([]);
+    setImportError(null);
+    setImportSuccess(null);
+    setParsingImport(false);
+  }
+
+  async function handleImportFileChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    if (!/\.(xlsx|xls)$/i.test(file.name)) {
+      clearImportState();
+      setImportError('Upload an .xlsx or .xls file.');
+      return;
+    }
+
+    setImportFileName(file.name);
+    setParsedImportRows([]);
+    setImportError(null);
+    setImportSuccess(null);
+    setParsingImport(true);
+
+    try {
+      const result = await parseScheduleExcelFile(file, rooms);
+      setParsedImportRows(result.rows);
+      setImportError(result.errors.length > 0 ? result.errors.join(' ') : null);
+
+      if (result.rows.length === 0 && result.errors.length === 0) {
+        setImportError('No class schedule blocks were detected.');
+      }
+    } catch (error) {
+      console.warn('Failed to parse schedule import:', error);
+      setImportError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to parse the Excel schedule.'
+      );
+    } finally {
+      setParsingImport(false);
+    }
+  }
+
+  async function handleConfirmImport() {
+    if (!currentUserId) {
+      setImportError('Sign in again before importing schedules.');
+      return;
+    }
+
+    if (!buildingId || validImportRows.length === 0) {
+      return;
+    }
+
+    setSavingImport(true);
+    setImportError(null);
+    setImportSuccess(null);
+
+    try {
+      for (const row of validImportRows) {
+        const courseCode = row.courseCode.trim() || row.subject.trim();
+        const data: ScheduleInput = {
+          academicYear: activeScheduleAcademicYear,
+          buildingId,
+          courseCode,
+          courseName: row.subject.trim(),
+          createdBy: currentUserId,
+          dayOfWeek: row.dayOfWeek,
+          endTime: row.endTime,
+          instructorName: row.instructorName.trim() || 'Imported Schedule',
+          roomId: row.roomId,
+          roomName: row.roomName,
+          section: row.section.trim(),
+          semester: activeScheduleSemester,
+          startTime: row.startTime,
+          subjectName: getScheduleDisplayTitle({
+            courseCode,
+            section: row.section.trim(),
+            subjectName: row.subject.trim(),
+          }),
+        };
+
+        await addSchedule(data);
+      }
+
+      const skippedCount = invalidImportCount;
+      setImportSuccess(
+        `Imported ${validImportRows.length} schedule${
+          validImportRows.length === 1 ? '' : 's'
+        }.${skippedCount > 0 ? ` Skipped ${skippedCount} flagged row${skippedCount === 1 ? '' : 's'}.` : ''}`
+      );
+      setParsedImportRows([]);
+      setImportFileName('');
+    } catch (error) {
+      console.warn('Failed to import schedules:', error);
+      setImportError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to save imported schedules.'
+      );
+    } finally {
+      setSavingImport(false);
+    }
+  }
   const currentDay = new Date().getDay();
   const timetableHeight = (TIMETABLE_END_HOUR - TIMETABLE_START_HOUR) * PIXELS_PER_HOUR;
 
@@ -359,12 +607,29 @@ export default function AdminClassSchedulesSection({
     >
       <div className="mb-5 flex items-center justify-between">
         <h3 className="text-xl font-bold text-black">Class Schedules</h3>
-        <button
-          onClick={onToggleForm}
-          className="rounded-lg border-0 bg-[#8B0000] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#6e0000]"
-        >
-          {showScheduleForm ? 'Cancel' : '+ Add Schedule'}
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <input
+            ref={importFileInputRef}
+            type="file"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            onChange={handleImportFileChange}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => importFileInputRef.current?.click()}
+            disabled={parsingImport || savingImport || rooms.length === 0}
+            className="rounded-lg border border-[#8B0000] bg-white px-4 py-2 text-sm font-bold text-[#8B0000] transition-colors hover:bg-[#fff0f0] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {parsingImport ? 'Reading...' : 'Import Excel'}
+          </button>
+          <button
+            onClick={onToggleForm}
+            className="rounded-lg border-0 bg-[#8B0000] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#6e0000]"
+          >
+            {showScheduleForm ? 'Cancel' : '+ Add Schedule'}
+          </button>
+        </div>
       </div>
 
       {showScheduleForm ? (
@@ -633,6 +898,162 @@ export default function AdminClassSchedulesSection({
                 </div>
               </div>
             </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {hasImportPreview ? (
+        <div className="mb-6 rounded-xl border border-gray-200 bg-[#faf7f7] p-4">
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h4 className="text-sm font-bold text-black">Import Preview</h4>
+              <p className="text-xs text-black/65">
+                {importFileName || 'Excel schedule'} | {validImportRows.length} ready
+                {invalidImportCount > 0 ? ` | ${invalidImportCount} flagged` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={clearImportState}
+              disabled={savingImport}
+              className="w-fit rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel Import
+            </button>
+          </div>
+
+          {importError ? (
+            <p className="mb-3 rounded-lg bg-red-50 px-4 py-2 text-sm font-medium text-red-700">
+              {importError}
+            </p>
+          ) : null}
+
+          {importSuccess ? (
+            <p className="mb-3 rounded-lg bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+              {importSuccess}
+            </p>
+          ) : null}
+
+          {parsingImport ? (
+            <p className="rounded-lg bg-white px-4 py-3 text-sm font-medium text-black/70">
+              Reading schedule file...
+            </p>
+          ) : null}
+
+          {importPreviewRows.length > 0 ? (
+            <>
+              <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                <table className="min-w-[860px] w-full border-collapse text-left text-xs">
+                  <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
+                    <tr>
+                      <th className="px-3 py-2 font-bold">Source</th>
+                      <th className="px-3 py-2 font-bold">Room</th>
+                      <th className="px-3 py-2 font-bold">Day</th>
+                      <th className="px-3 py-2 font-bold">Time</th>
+                      <th className="px-3 py-2 font-bold">Subject</th>
+                      <th className="px-3 py-2 font-bold">Section</th>
+                      <th className="px-3 py-2 font-bold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreviewRows.map((row) => {
+                      const rowClass =
+                        row.status === 'valid'
+                          ? 'bg-white'
+                          : row.status === 'conflict'
+                            ? 'bg-red-50'
+                            : 'bg-amber-50';
+                      const statusLabel =
+                        row.status === 'valid'
+                          ? 'Ready'
+                          : row.status === 'conflict'
+                            ? 'Conflict'
+                            : 'Invalid';
+
+                      return (
+                        <tr
+                          key={row.id}
+                          className={`border-t border-gray-100 align-top ${rowClass}`}
+                        >
+                          <td className="px-3 py-2 text-gray-600">
+                            {row.sourceSheet} {row.sourceCell}
+                          </td>
+                          <td className="px-3 py-2 font-semibold text-black">
+                            {row.roomName || row.detectedRoomName || '-'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">{row.dayName}</td>
+                          <td className="px-3 py-2 text-gray-700">
+                            {row.startTime && row.endTime
+                              ? `${formatTime12h(row.startTime)} - ${formatTime12h(row.endTime)}`
+                              : '-'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            {row.subject || '-'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            {row.section || '-'}
+                          </td>
+                          <td className="px-3 py-2">
+                            <p
+                              className={`font-bold ${
+                                row.status === 'valid'
+                                  ? 'text-green-700'
+                                  : row.status === 'conflict'
+                                    ? 'text-red-700'
+                                    : 'text-amber-700'
+                              }`}
+                            >
+                              {statusLabel}
+                            </p>
+                            {row.validationErrors.length > 0 ? (
+                              <p className="mt-1 max-w-[16rem] text-[11px] leading-snug text-gray-700">
+                                {row.validationErrors.join(' ')}
+                              </p>
+                            ) : null}
+                            {row.existingConflicts.length > 0 ? (
+                              <p className="mt-1 max-w-[16rem] text-[11px] leading-snug text-red-700">
+                                Existing:{' '}
+                                {row.existingConflicts
+                                  .map((schedule) => getScheduleDisplayTitle(schedule))
+                                  .join(', ')}
+                              </p>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={clearImportState}
+                  disabled={savingImport}
+                  className="rounded-lg border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmImport}
+                  disabled={
+                    savingImport ||
+                    parsingImport ||
+                    validImportRows.length === 0 ||
+                    !currentUserId
+                  }
+                  className="rounded-lg bg-[#8B0000] px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-[#6e0000] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingImport
+                    ? 'Importing...'
+                    : `Import ${validImportRows.length} Schedule${
+                        validImportRows.length === 1 ? '' : 's'
+                      }`}
+                </button>
+              </div>
+            </>
           ) : null}
         </div>
       ) : null}

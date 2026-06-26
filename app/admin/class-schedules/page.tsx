@@ -20,7 +20,11 @@ import {
   type ScheduleAcademicYear,
   type ScheduleSemester,
 } from '@/lib/schedules/scheduleContext';
-import { getScheduleDisplayTitle, type Schedule } from '@/lib/schedules/schedules';
+import {
+  getScheduleDisplayTitle,
+  onSchedulesByBuilding,
+  type Schedule,
+} from '@/lib/schedules/schedules';
 
 type ScheduleFilterFields = Schedule & {
   floor?: unknown;
@@ -103,6 +107,7 @@ export default function AdminClassSchedulesPage() {
   const [selectedAcademicYear, setSelectedAcademicYear] =
     useState<ScheduleAcademicYear>('A.Y. 2025-2026');
   const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
+  const [allBuildingSchedules, setAllBuildingSchedules] = useState<Schedule[]>([]);
   const {
     managedBuildings,
     buildingId,
@@ -139,6 +144,7 @@ export default function AdminClassSchedulesPage() {
     campus,
     activeScheduleSemester,
     activeScheduleAcademicYear,
+    currentUserId,
     switchingScheduleContext,
     handleSwitchScheduleContext,
   } = useAdminStatusPages({
@@ -167,6 +173,22 @@ export default function AdminClassSchedulesPage() {
   useEffect(() => {
     setSelectedAcademicYear(activeScheduleAcademicYear);
   }, [activeScheduleAcademicYear]);
+
+  useEffect(() => {
+    if (!buildingId || !currentUserId) {
+      setAllBuildingSchedules([]);
+      return;
+    }
+
+    return onSchedulesByBuilding(
+      buildingId,
+      {
+        academicYear: activeScheduleAcademicYear,
+        semester: activeScheduleSemester,
+      },
+      setAllBuildingSchedules
+    );
+  }, [activeScheduleAcademicYear, activeScheduleSemester, buildingId, currentUserId]);
 
   useEffect(() => {
     if (availableFloors.length === 0) {
@@ -449,7 +471,7 @@ export default function AdminClassSchedulesPage() {
 
           <AdminClassSchedulesSection
             schedules={filteredSchedules}
-            allSchedules={schedules}
+            allSchedules={allBuildingSchedules}
             rooms={rooms}
             showScheduleForm={showScheduleForm}
             schedRoomId={schedRoomId}
@@ -476,6 +498,10 @@ export default function AdminClassSchedulesPage() {
             onSaveSchedule={handleSaveSchedule}
             onEditSchedule={handleEditSchedule}
             onDeleteSchedule={handleDeleteSchedule}
+            buildingId={buildingId}
+            currentUserId={currentUserId}
+            activeScheduleSemester={activeScheduleSemester}
+            activeScheduleAcademicYear={activeScheduleAcademicYear}
             campus={campus}
           />
 
