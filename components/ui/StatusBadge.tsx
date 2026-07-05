@@ -10,6 +10,7 @@ export type StatusBadgeValue =
   | 'Vacant'
   | 'pending'
   | 'approved'
+  | 'expired'
   | 'rejected'
   | 'completed'
   | 'cancelled'
@@ -42,6 +43,8 @@ function getBadgeStyle(status: string): string {
       return 'ui-badge-green';
     case 'pending':
       return 'ui-badge-yellow';
+    case 'expired':
+      return 'ui-badge-gray';
     case 'Connecting...':
       return 'ui-badge-orange';
     case 'completed':

@@ -24,12 +24,55 @@ interface MemberDashboardProps {
   welcomeEmoji: string;
 }
 
+type RecentActivityStatus = Reservation['status'] | 'expired';
+
 const dashboardPanelClasses =
   'rounded-2xl border border-white/35 bg-white/75 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl';
 const dashboardCardClasses =
   'relative overflow-hidden rounded-2xl border border-white/35 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/85 hover:shadow-2xl';
 const iconTileClasses =
   'flex h-10 w-10 items-center justify-center rounded-2xl border border-white/40 bg-white/70 shadow-sm backdrop-blur-xl';
+
+function getReservationDateList(reservation: Reservation) {
+  return reservation.dates?.length
+    ? reservation.dates
+    : reservation.date
+      ? [reservation.date]
+      : [];
+}
+
+function getRecentActivityStatus(
+  reservation: Reservation,
+  currentDate: string
+): RecentActivityStatus {
+  const reservationDates = getReservationDateList(reservation);
+  const isPastApprovedReservation =
+    reservation.status === 'approved' &&
+    !reservation.checkedInAt &&
+    reservationDates.length > 0 &&
+    reservationDates.every((date) => date < currentDate);
+
+  return isPastApprovedReservation ? 'expired' : reservation.status;
+}
+
+function getRecentActivityAccentClass(status: RecentActivityStatus) {
+  switch (status) {
+    case 'approved':
+      return 'bg-green-400';
+    case 'expired':
+      return 'bg-gray-400';
+    case 'rejected':
+      return 'bg-red-400';
+    case 'completed':
+      return 'bg-yellow-400';
+    case 'cancelled':
+      return 'bg-gray-400';
+    case 'pending':
+      return 'bg-blue-400';
+    default:
+      return 'bg-dark/30';
+  }
+}
 
 export default function MemberDashboard({
   firstName,
@@ -354,39 +397,34 @@ export default function MemberDashboard({
               </div>
             ) : (
               <div className="divide-y divide-white/35">
-                {recentActivity.map((reservation) => (
-                  <div
-                    key={reservation.id}
-                    className="flex items-center gap-4 p-4 transition-all duration-300 hover:bg-white/80"
-                  >
-                    <span
-                      className={`w-2.5 h-full min-h-[40px] rounded-full shrink-0 ${
-                        reservation.status === 'approved'
-                          ? 'bg-green-400'
-                          : reservation.status === 'rejected'
-                            ? 'bg-red-400'
-                            : reservation.status === 'completed'
-                              ? 'bg-yellow-400'
-                              : reservation.status === 'cancelled'
-                                ? 'bg-gray-400'
-                                : reservation.status === 'pending'
-                                  ? 'bg-blue-400'
-                                  : 'bg-dark/30'
-                      }`}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-bold text-black">
-                        {reservation.roomName} | {reservation.buildingName}
-                      </h4>
-                      <p className="text-xs text-black mt-0.5">
-                        {formatDate(reservation.date)} | {formatTimeRange(reservation.startTime, reservation.endTime)}
-                      </p>
+                {recentActivity.map((reservation) => {
+                  const recentActivityStatus = getRecentActivityStatus(
+                    reservation,
+                    currentDateTime.date
+                  );
+
+                  return (
+                    <div
+                      key={reservation.id}
+                      className="flex items-center gap-4 p-4 transition-all duration-300 hover:bg-white/80"
+                    >
+                      <span
+                        className={`w-2.5 h-full min-h-[40px] rounded-full shrink-0 ${getRecentActivityAccentClass(recentActivityStatus)}`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-bold text-black">
+                          {reservation.roomName} | {reservation.buildingName}
+                        </h4>
+                        <p className="text-xs text-black mt-0.5">
+                          {formatDate(reservation.date)} | {formatTimeRange(reservation.startTime, reservation.endTime)}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <StatusBadge status={recentActivityStatus} />
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <StatusBadge status={reservation.status} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
