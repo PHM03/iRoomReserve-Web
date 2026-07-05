@@ -700,7 +700,7 @@ export default function AdminClassSchedulesSection({
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-black">Section</label>
+              <label className="mb-1 block text-xs font-bold text-black">Program, Year, and Section</label>
               <input
                 value={schedSection}
                 onChange={(event) => {
@@ -1111,7 +1111,7 @@ export default function AdminClassSchedulesSection({
                     type="button"
                     onClick={() => onEditSchedule(schedule)}
                     title={`${schedule.courseName ?? schedule.subjectName} | ${schedule.section ?? ''} | ${schedule.instructorName} | ${schedule.courseCode ?? ''} | ${formatTime12h(schedule.startTime)} - ${formatTime12h(schedule.endTime)}`}
-                    className={`absolute left-2 right-2 overflow-hidden rounded-md border-l-[3px] px-2 py-1 text-left text-xs transition-all hover:shadow-[0_2px_6px_rgba(0,0,0,0.1)] ${
+                    className={`absolute left-2 right-2 overflow-hidden rounded-md border-l-[3px] px-2 py-1 text-center text-xs transition-all hover:shadow-[0_2px_6px_rgba(0,0,0,0.1)] ${
                       conflictingScheduleIds.has(schedule.id)
                         ? 'border-red-700 bg-red-100 ring-2 ring-red-400/70 hover:bg-red-200'
                         : 'border-[#8B0000] bg-[#fde8e8] hover:bg-[#f9c8c8]'
