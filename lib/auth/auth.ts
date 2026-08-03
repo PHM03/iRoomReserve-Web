@@ -1,11 +1,14 @@
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   GoogleAuthProvider,
+  reauthenticateWithCredential,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithPopup,  
   signOut,
+  updatePassword,
   updateProfile,
 } from "firebase/auth";
 import {
@@ -354,25 +357,27 @@ export async function updateAccountSettings(
   data: {
     firstName: string;
     lastName: string;
-    accountType: AccountType;
+    accountType?: AccountType;
     organizationName?: string | null;
   }
 ) {
   const normalizedFirstName = data.firstName.trim();
   const normalizedLastName = data.lastName.trim();
-  const accountType = normalizeAccountType(data.accountType);
+  const accountType =
+    data.accountType === undefined ? undefined : normalizeAccountType(data.accountType);
   const organizationName =
-    accountType === "organization"
-      ? data.organizationName?.trim() || null
-      : null;
+    accountType === undefined
+      ? undefined
+      : accountType === "organization"
+        ? data.organizationName?.trim() || null
+        : null;
 
   await setDoc(
     doc(db, "users", uid),
     {
       firstName: normalizedFirstName,
       lastName: normalizedLastName,
-      accountType,
-      organizationName,
+      ...(accountType !== undefined ? { accountType, organizationName } : {}),
       updatedAt: serverTimestamp(),
     },
     { merge: true }
@@ -383,6 +388,24 @@ export async function updateAccountSettings(
       displayName: `${normalizedFirstName} ${normalizedLastName}`.trim(),
     });
   }
+}
+
+export async function changeCurrentUserPassword(
+  currentPassword: string,
+  newPassword: string
+) {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser?.email) {
+    throw { code: "auth/user-not-found" };
+  }
+
+  const credential = EmailAuthProvider.credential(
+    currentUser.email,
+    currentPassword
+  );
+  await reauthenticateWithCredential(currentUser, credential);
+  await updatePassword(currentUser, newPassword);
 }
 
 export async function saveUserProfile(

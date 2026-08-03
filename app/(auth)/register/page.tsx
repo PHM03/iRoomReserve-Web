@@ -6,6 +6,7 @@ import AuthAlert from '@/components/auth/AuthAlert';
 import Toast from '@/components/ui/Toast';
 import { USER_ROLES } from '@/lib/auth/roles';
 import { registerWithEmail, getAuthErrorMessage, type AccountType } from '@/lib/auth/auth';
+import { validatePassword } from '@/lib/auth/password';
 
 interface EyeIconProps {
   open: boolean;
@@ -42,13 +43,6 @@ function RegisterForm() {
   const router = useRouter();
 
   const handleToastClose = useCallback(() => setShowToast(false), []);
-
-  const validatePassword = (pw: string): string | null => {
-    if (pw.length < 8) return 'Password must be at least 8 characters';
-    if (!/[A-Z]/.test(pw)) return 'Password must include at least one uppercase letter';
-    if (!/[0-9]/.test(pw)) return 'Password must include at least one number';
-    return null;
-  };
 
   const handleSubmit = async (event: React.SubmitEvent) => {
     event.preventDefault();
