@@ -3,64 +3,15 @@ import "server-only";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import firebaseAdminConfig from "@/lib/server/firebase-admin-config";
 
-const FIREBASE_ADMIN_ENV_ALIASES = {
-  projectId: ["FIREBASE_ADMIN_PROJECT_ID", "FIREBASE_PROJECT_ID"],
-  clientEmail: ["FIREBASE_ADMIN_CLIENT_EMAIL", "FIREBASE_CLIENT_EMAIL"],
-  privateKey: ["FIREBASE_ADMIN_PRIVATE_KEY", "FIREBASE_PRIVATE_KEY"],
-} as const;
+const {
+  clearInvalidProxyEnv,
+  getFirebaseAdminCredentialConfig,
+  hasFirebaseAdminConfig,
+} = firebaseAdminConfig;
 
-function clearInvalidProxyEnv() {
-  const proxyKeys = [
-    "HTTP_PROXY",
-    "HTTPS_PROXY",
-    "ALL_PROXY",
-    "http_proxy",
-    "https_proxy",
-    "all_proxy",
-  ] as const;
-
-  proxyKeys.forEach((key) => {
-    const value = process.env[key]?.trim();
-
-    if (
-      value === "http://127.0.0.1:9" ||
-      value === "https://127.0.0.1:9"
-    ) {
-      delete process.env[key];
-    }
-  });
-}
-
-function getEnvValue(key: keyof typeof FIREBASE_ADMIN_ENV_ALIASES) {
-  const matchedKey = FIREBASE_ADMIN_ENV_ALIASES[key].find(
-    (envKey) => process.env[envKey]?.trim()
-  );
-
-  return matchedKey ? process.env[matchedKey]?.trim() : undefined;
-}
-
-function getPrivateKey() {
-  const rawValue = getEnvValue("privateKey");
-
-  if (!rawValue) {
-    return undefined;
-  }
-
-  const unwrappedValue =
-    (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
-    (rawValue.startsWith("'") && rawValue.endsWith("'"))
-      ? rawValue.slice(1, -1)
-      : rawValue;
-
-  return unwrappedValue.replace(/\\n/g, "\n");
-}
-
-export function hasFirebaseAdminConfig() {
-  return Boolean(
-    getEnvValue("projectId") && getEnvValue("clientEmail") && getPrivateKey()
-  );
-}
+export { hasFirebaseAdminConfig };
 
 function getAdminApp() {
   if (!hasFirebaseAdminConfig()) {
@@ -78,11 +29,7 @@ function getAdminApp() {
 
   return initializeApp(
     {
-      credential: cert({
-        projectId: getEnvValue("projectId"),
-        clientEmail: getEnvValue("clientEmail"),
-        privateKey: getPrivateKey(),
-      }),
+      credential: cert(getFirebaseAdminCredentialConfig()),
     },
     "firebase-admin-server"
   );

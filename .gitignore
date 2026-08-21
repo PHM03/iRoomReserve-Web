@@ -13,6 +13,9 @@
 
 # testing
 /coverage
+/data/sentiment-evaluation.csv
+/reports/sentiment-evaluation-report.json
+/reports/sentiment-evaluation-pii-review.json
 
 # next.js
 /.next/

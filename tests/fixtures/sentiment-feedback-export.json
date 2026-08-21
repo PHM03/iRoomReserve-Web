@@ -1,0 +1,20 @@
+[
+  {
+    "feedback_text": "  Clean   and quiet room.  ",
+    "userId": "ignored-user-id",
+    "roomId": "ignored-room-id",
+    "rating": 5
+  },
+  {
+    "feedbackText": "Clean and quiet room.",
+    "documentId": "ignored-duplicate-doc-id"
+  },
+  {
+    "message": "Projector was broken; contact test@example.edu.",
+    "reservationId": "ignored-reservation-id",
+    "compoundScore": -0.5
+  },
+  {
+    "text": "   "
+  }
+]
