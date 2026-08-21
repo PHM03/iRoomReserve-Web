@@ -201,6 +201,7 @@ export default function AdminClassSchedulesSection({
 }: Readonly<AdminClassSchedulesSectionProps>) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showOverrideConfirm, setShowOverrideConfirm] = useState(false);
+  const [showImportOverrideConfirm, setShowImportOverrideConfirm] = useState(false);
   const [deletingSchedule, setDeletingSchedule] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -424,6 +425,17 @@ export default function AdminClassSchedulesSection({
     () => importPreviewRows.filter((row) => row.status === 'valid'),
     [importPreviewRows]
   );
+  const overridableImportRows = useMemo(
+    () =>
+      importPreviewRows.filter(
+        (row) =>
+          row.existingConflicts.length > 0 &&
+          row.validationErrors.every(
+            (error) => error === SCHEDULE_CONFLICT_MESSAGE
+          )
+      ),
+    [importPreviewRows]
+  );
   const invalidImportCount = importPreviewRows.filter(
     (row) => row.status !== 'valid'
   ).length;
@@ -501,6 +513,7 @@ export default function AdminClassSchedulesSection({
     setImportError(null);
     setImportSuccess(null);
     setParsingImport(false);
+    setShowImportOverrideConfirm(false);
   }
 
   async function handleImportFileChange(
@@ -545,13 +558,17 @@ export default function AdminClassSchedulesSection({
     }
   }
 
-  async function handleConfirmImport() {
+  async function handleConfirmImport(overrideExisting = false) {
     if (!currentUserId) {
       setImportError('Sign in again before importing schedules.');
       return;
     }
 
-    if (!buildingId || validImportRows.length === 0) {
+    const rowsToImport = overrideExisting
+      ? [...validImportRows, ...overridableImportRows]
+      : validImportRows;
+
+    if (!buildingId || rowsToImport.length === 0) {
       return;
     }
 
@@ -560,7 +577,7 @@ export default function AdminClassSchedulesSection({
     setImportSuccess(null);
 
     try {
-      for (const row of validImportRows) {
+      for (const row of rowsToImport) {
         const courseCode = row.courseCode.trim() || row.subject.trim();
         const data: ScheduleInput = {
           academicYear: activeScheduleAcademicYear,
@@ -583,17 +600,21 @@ export default function AdminClassSchedulesSection({
           }),
         };
 
-        await addSchedule(data);
+        await addSchedule(
+          data,
+          overrideExisting ? row.existingConflicts.map((schedule) => schedule.id) : []
+        );
       }
 
-      const skippedCount = invalidImportCount;
+      const skippedCount = importPreviewRows.length - rowsToImport.length;
       setImportSuccess(
-        `Imported ${validImportRows.length} schedule${
-          validImportRows.length === 1 ? '' : 's'
+        `${overrideExisting ? 'Overrode conflicts and imported' : 'Imported'} ${rowsToImport.length} schedule${
+          rowsToImport.length === 1 ? '' : 's'
         }.${skippedCount > 0 ? ` Skipped ${skippedCount} flagged row${skippedCount === 1 ? '' : 's'}.` : ''}`
       );
       setParsedImportRows([]);
       setImportFileName('');
+      setShowImportOverrideConfirm(false);
     } catch (error) {
       console.warn('Failed to import schedules:', error);
       setImportError(
@@ -1083,7 +1104,20 @@ export default function AdminClassSchedulesSection({
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirmImport}
+                  onClick={() => setShowImportOverrideConfirm(true)}
+                  disabled={
+                    savingImport ||
+                    parsingImport ||
+                    overridableImportRows.length === 0 ||
+                    !currentUserId
+                  }
+                  className="rounded-lg border border-red-600 bg-white px-5 py-2 text-sm font-bold text-red-600 transition-colors hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Override &amp; Import {overridableImportRows.length}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmImport()}
                   disabled={
                     savingImport ||
                     parsingImport ||
@@ -1096,9 +1130,43 @@ export default function AdminClassSchedulesSection({
                     ? 'Importing...'
                     : `Import ${validImportRows.length} Schedule${
                         validImportRows.length === 1 ? '' : 's'
-                      }`}
+                  }`}
                 </button>
               </div>
+
+              {showImportOverrideConfirm ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                  <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                    <h4 className="mb-2 text-base font-bold text-gray-900">
+                      Override Imported Schedule Conflicts?
+                    </h4>
+                    <p className="mb-6 text-sm text-gray-600">
+                      This will replace the existing schedules that conflict with{' '}
+                      {overridableImportRows.length} imported row
+                      {overridableImportRows.length === 1 ? '' : 's'}.
+                      Other flagged rows will remain skipped.
+                    </p>
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowImportOverrideConfirm(false)}
+                        disabled={savingImport}
+                        className="rounded-lg border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmImport(true)}
+                        disabled={savingImport}
+                        className="rounded-lg bg-red-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                      >
+                        Override &amp; Import
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </>
           ) : null}
         </div>
