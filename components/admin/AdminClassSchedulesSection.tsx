@@ -114,7 +114,7 @@ interface AdminClassSchedulesSectionProps {
   onSchedEndChange: (value: string) => void;
   scheduleSaveError: string | null;
   onClearScheduleSaveError: () => void;
-  onSaveSchedule: () => void;
+  onSaveSchedule: (overrideScheduleIds?: string[]) => void;
   onEditSchedule: (schedule: Schedule) => void;
   onDeleteSchedule: (scheduleId: string) => Promise<void>;
   buildingId: string;
@@ -200,6 +200,7 @@ export default function AdminClassSchedulesSection({
   className = '',
 }: Readonly<AdminClassSchedulesSectionProps>) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showOverrideConfirm, setShowOverrideConfirm] = useState(false);
   const [deletingSchedule, setDeletingSchedule] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -469,12 +470,18 @@ export default function AdminClassSchedulesSection({
 
     if (liveConflictMessage) {
       clearErrors();
-      setFormError(liveConflictMessage);
+      setShowOverrideConfirm(true);
       return;
     }
 
     clearErrors();
     onSaveSchedule();
+  }
+
+  function handleConfirmOverride() {
+    setShowOverrideConfirm(false);
+    clearErrors();
+    onSaveSchedule(conflictingSchedules.map((schedule) => schedule.id));
   }
 
   async function handleConfirmDelete() {
@@ -855,8 +862,7 @@ export default function AdminClassSchedulesSection({
                 !schedRoomId ||
                 !schedCourseName.trim() ||
                 !schedCourseCode.trim() ||
-                !schedSection.trim() ||
-                Boolean(liveConflictMessage)
+                !schedSection.trim()
               }
               className="btn-primary px-6 py-2.5 text-sm disabled:opacity-50"
             >
@@ -894,6 +900,46 @@ export default function AdminClassSchedulesSection({
                     className="rounded-lg bg-red-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
                   >
                     {deletingSchedule ? 'Deleting...' : 'Yes, Delete'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {showOverrideConfirm ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                <h4 className="mb-2 text-base font-bold text-gray-900">
+                  Override Existing Schedule?
+                </h4>
+                <p className="mb-3 text-sm text-gray-600">
+                  This will permanently replace the overlapping schedule
+                  {conflictingSchedules.length === 1 ? '' : 's'} with this one.
+                </p>
+                <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+                  {conflictingSchedules.map((schedule) => (
+                    <p key={schedule.id}>
+                      {getScheduleDisplayTitle(schedule)} ·{' '}
+                      {formatTime12h(schedule.startTime)}–{formatTime12h(schedule.endTime)}
+                    </p>
+                  ))}
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowOverrideConfirm(false)}
+                    disabled={addingSchedule}
+                    className="rounded-lg border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmOverride}
+                    disabled={addingSchedule}
+                    className="rounded-lg bg-red-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Override Schedule
                   </button>
                 </div>
               </div>

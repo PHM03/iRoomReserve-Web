@@ -54,7 +54,9 @@ export async function PATCH(
     assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
 
     const { scheduleId } = await params;
-    const payload = scheduleUpdateSchema.parse(await request.json());
+    const { overrideScheduleIds = [], ...payload } = scheduleUpdateSchema.parse(
+      await request.json()
+    );
     const existingSchedule = await getScheduleRecord(scheduleId);
     const mergedSchedule = {
       ...existingSchedule,
@@ -85,20 +87,28 @@ export async function PATCH(
       mergedSchedule.startTime &&
       mergedSchedule.endTime
     ) {
-      await assertNoScheduleConflict(
-        {
-          academicYear: mergedSchedule.academicYear ?? null,
-          dayOfWeek: mergedSchedule.dayOfWeek,
-          endTime: mergedSchedule.endTime,
-          roomId: mergedSchedule.roomId,
-          semester: mergedSchedule.semester ?? null,
-          startTime: mergedSchedule.startTime,
-        },
-        { excludeScheduleId: scheduleId }
-      );
-    }
+      const conflictSchedule = {
+        academicYear: mergedSchedule.academicYear ?? null,
+        dayOfWeek: mergedSchedule.dayOfWeek,
+        endTime: mergedSchedule.endTime,
+        roomId: mergedSchedule.roomId,
+        semester: mergedSchedule.semester ?? null,
+        startTime: mergedSchedule.startTime,
+      };
 
-    await updateScheduleRecord(scheduleId, payload);
+      if (overrideScheduleIds.length === 0) {
+        await assertNoScheduleConflict(conflictSchedule, {
+          excludeScheduleId: scheduleId,
+        });
+      }
+
+      await updateScheduleRecord(scheduleId, payload, {
+        conflictSchedule,
+        overrideScheduleIds,
+      });
+    } else {
+      await updateScheduleRecord(scheduleId, payload);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

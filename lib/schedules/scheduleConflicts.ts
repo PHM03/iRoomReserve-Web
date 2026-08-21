@@ -1,5 +1,5 @@
 export const SCHEDULE_CONFLICT_MESSAGE =
-  'This room already has a schedule that overlaps with your selected time. Please choose a different time or room.';
+  'This room already has a schedule that overlaps with your selected time. Choose a different time or room, or override the existing schedule.';
 
 export interface ScheduleConflictComparable {
   academicYear?: string | null;

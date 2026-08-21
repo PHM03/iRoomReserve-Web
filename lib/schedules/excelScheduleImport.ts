@@ -21,6 +21,16 @@ interface ParsedBlockContent {
   subject: string;
 }
 
+interface ListColumnMap {
+  courseCode: number | null;
+  day: number;
+  instructorName: number | null;
+  room: number;
+  section: number | null;
+  subject: number;
+  time: number;
+}
+
 export interface ExcelScheduleImportCandidate {
   id: string;
   sourceSheet: string;
@@ -186,6 +196,67 @@ function detectDay(value: string): number | null {
   for (const token of tokens) {
     if (token in DAY_ALIASES) {
       return DAY_ALIASES[token];
+    }
+  }
+
+  return null;
+}
+
+function detectListColumn(value: string): keyof ListColumnMap | null {
+  const normalized = normalizeSearchText(value);
+
+  if (/^(room|room name|classroom)$/.test(normalized)) return "room";
+  if (/^(course code|subject code|code)$/.test(normalized)) return "courseCode";
+  if (/^(professor|prof|instructor|teacher|faculty)$/.test(normalized)) {
+    return "instructorName";
+  }
+  if (/^(course name|subject|subject name|course|class name)$/.test(normalized)) {
+    return "subject";
+  }
+  if (/^(time|class time|schedule time|time slot)$/.test(normalized)) {
+    return "time";
+  }
+  if (/^(day|day of week|weekday)$/.test(normalized)) return "day";
+  if (/^(section|program and section|program section|program)$/.test(normalized)) {
+    return "section";
+  }
+
+  return null;
+}
+
+function findListColumns(
+  sheet: XLSX.WorkSheet,
+  merges: XLSX.Range[],
+  range: XLSX.Range
+): { columns: ListColumnMap; row: number } | null {
+  for (let row = range.s.r; row <= range.e.r; row += 1) {
+    const columns: Partial<ListColumnMap> = {};
+
+    for (let col = range.s.c; col <= range.e.c; col += 1) {
+      const column = detectListColumn(getEffectiveCellText(sheet, merges, row, col));
+      if (column && columns[column] === undefined) {
+        columns[column] = col;
+      }
+    }
+
+    if (
+      columns.room !== undefined &&
+      columns.subject !== undefined &&
+      columns.time !== undefined &&
+      columns.day !== undefined
+    ) {
+      return {
+        columns: {
+          courseCode: columns.courseCode ?? null,
+          day: columns.day,
+          instructorName: columns.instructorName ?? null,
+          room: columns.room,
+          section: columns.section ?? null,
+          subject: columns.subject,
+          time: columns.time,
+        },
+        row,
+      };
     }
   }
 
@@ -570,6 +641,125 @@ function parseBlockContent(text: string): ParsedBlockContent {
   };
 }
 
+function parseListSheet(
+  workbookSheet: XLSX.WorkSheet,
+  sheetName: string,
+  rooms: Room[],
+  range: XLSX.Range,
+  merges: XLSX.Range[],
+  header: { columns: ListColumnMap; row: number }
+): ExcelScheduleImportResult {
+  const rows: ExcelScheduleImportCandidate[] = [];
+
+  for (let row = header.row + 1; row <= range.e.r; row += 1) {
+    const roomText = getEffectiveCellText(
+      workbookSheet,
+      merges,
+      row,
+      header.columns.room
+    );
+    const subject = getEffectiveCellText(
+      workbookSheet,
+      merges,
+      row,
+      header.columns.subject
+    );
+    const timeText = getEffectiveCellText(
+      workbookSheet,
+      merges,
+      row,
+      header.columns.time
+    );
+    const dayText = getEffectiveCellText(
+      workbookSheet,
+      merges,
+      row,
+      header.columns.day
+    );
+
+    if (!roomText && !subject && !timeText && !dayText) {
+      continue;
+    }
+
+    const room = findRoomByName(rooms, roomText);
+    const dayOfWeek = detectDay(dayText);
+    const parsedTime = parseTimeRange(timeText);
+    const section =
+      header.columns.section === null
+        ? ""
+        : getEffectiveCellText(
+            workbookSheet,
+            merges,
+            row,
+            header.columns.section
+          );
+    const courseCode =
+      header.columns.courseCode === null
+        ? subject
+        : getEffectiveCellText(
+            workbookSheet,
+            merges,
+            row,
+            header.columns.courseCode
+          ) || subject;
+    const instructorName =
+      header.columns.instructorName === null
+        ? "Imported Schedule"
+        : getEffectiveCellText(
+            workbookSheet,
+            merges,
+            row,
+            header.columns.instructorName
+          ) || "Imported Schedule";
+    const errors: string[] = [];
+
+    if (!roomText) {
+      errors.push("Room is required.");
+    } else if (!room) {
+      errors.push(`Room "${roomText}" was not found in this building.`);
+    }
+
+    if (dayOfWeek === null) {
+      errors.push(`Day "${dayText}" was not recognized.`);
+    }
+
+    if (!parsedTime || parsedTime.endMinutes === null) {
+      errors.push(`Time "${timeText}" was not recognized.`);
+    }
+
+    if (!subject) {
+      errors.push("Subject is required.");
+    }
+
+    if (!section) {
+      errors.push("Section is required.");
+    }
+
+    rows.push({
+      buildingId: room?.buildingId ?? "",
+      courseCode,
+      dayName: dayOfWeek === null ? dayText : DAY_LABELS[dayOfWeek],
+      dayOfWeek: dayOfWeek ?? 0,
+      detectedRoomName: roomText,
+      endTime: parsedTime && parsedTime.endMinutes !== null
+        ? minutesToTime(parsedTime.endMinutes)
+        : "",
+      errors,
+      id: `${sheetName}-${row}-${rows.length}`,
+      instructorName,
+      roomId: room?.id ?? "",
+      roomName: room?.name ?? roomText,
+      section,
+      sourceCell: XLSX.utils.encode_cell({ c: header.columns.room, r: row }),
+      sourceSheet: sheetName,
+      startTime: parsedTime ? minutesToTime(parsedTime.startMinutes) : "",
+      subject,
+    });
+  }
+
+  return { errors: [], rows };
+}
+
 function parseSheet(
   workbookSheet: XLSX.WorkSheet,
   sheetName: string,
@@ -582,6 +772,19 @@ function parseSheet(
 
   const range = XLSX.utils.decode_range(ref);
   const merges = (workbookSheet["!merges"] ?? []) as XLSX.Range[];
+  const listHeader = findListColumns(workbookSheet, merges, range);
+
+  if (listHeader) {
+    return parseListSheet(
+      workbookSheet,
+      sheetName,
+      rooms,
+      range,
+      merges,
+      listHeader
+    );
+  }
+
   const header = findHeaderRow(workbookSheet, merges, range);
 
   if (!header) {

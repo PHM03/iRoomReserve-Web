@@ -252,6 +252,7 @@ describe('server schemas', () => {
         semester: '1st Semester',
         academicYear: 'A.Y. 2025-2026',
         createdBy: 'admin-1',
+        overrideScheduleIds: ['schedule-previous'],
       }).success
     ).toBe(true);
   });

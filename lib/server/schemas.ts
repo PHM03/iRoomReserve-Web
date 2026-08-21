@@ -320,7 +320,7 @@ export const roomStatusUpdateSchema = z.object({
     .optional(),
 });
 
-export const scheduleInputSchema = z.object({
+const scheduleBaseSchema = z.object({
   roomId: nonEmptyString,
   roomName: nonEmptyString,
   buildingId: nonEmptyString,
@@ -337,7 +337,15 @@ export const scheduleInputSchema = z.object({
   createdBy: nonEmptyString,
 });
 
-export const scheduleUpdateSchema = scheduleInputSchema
+const scheduleOverrideSchema = z.object({
+  overrideScheduleIds: z.array(nonEmptyString).max(20).optional(),
+});
+
+export const scheduleInputSchema = scheduleBaseSchema.merge(scheduleOverrideSchema);
+
+export const scheduleUpdateSchema = scheduleBaseSchema
+  .partial()
+  .merge(scheduleOverrideSchema)
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: "At least one schedule field must be provided." });
 

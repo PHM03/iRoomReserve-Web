@@ -81,9 +81,15 @@ export function getScheduleDisplayTitle(schedule: Pick<Schedule, "courseCode" | 
   return courseCode || section || schedule.subjectName;
 }
 
-export async function addSchedule(data: ScheduleInput): Promise<string> {
+export async function addSchedule(
+  data: ScheduleInput,
+  overrideScheduleIds: string[] = []
+): Promise<string> {
   const payload = await apiRequest<{ id: string }>("/api/schedules", {
-    body: data,
+    body:
+      overrideScheduleIds.length > 0
+        ? { ...data, overrideScheduleIds }
+        : data,
     method: "POST",
   });
 
@@ -92,10 +98,14 @@ export async function addSchedule(data: ScheduleInput): Promise<string> {
 
 export async function updateSchedule(
   scheduleId: string,
-  data: Partial<Omit<Schedule, "id" | "createdAt" | "updatedAt">>
+  data: Partial<Omit<Schedule, "id" | "createdAt" | "updatedAt">>,
+  overrideScheduleIds: string[] = []
 ): Promise<void> {
   await apiRequest(`/api/schedules/${scheduleId}`, {
-    body: data,
+    body:
+      overrideScheduleIds.length > 0
+        ? { ...data, overrideScheduleIds }
+        : data,
     method: "PATCH",
   });
 }

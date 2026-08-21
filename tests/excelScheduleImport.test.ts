@@ -92,4 +92,57 @@ describe('Excel schedule import parser', () => {
       'Room "999" was not found in this building.'
     );
   });
+
+  it('parses row-based schedule lists with the supplied Excel column labels', () => {
+    const workbook = createWorkbook([
+      [],
+      [
+        'Room',
+        'Course Code',
+        'Professor',
+        'Course Name',
+        'Time',
+        'Day',
+        'Program and Section',
+      ],
+      [
+        'GD3 312',
+        'IT 301',
+        'Prof. Reyes',
+        'Software Engineering',
+        '7:00 A.M. - 12:00 A.M.',
+        'Monday',
+        'BSIT 3A',
+      ],
+      [
+        'GD3 312',
+        'IT 302',
+        'Prof. Cruz',
+        'Database Systems',
+        '1:00 P.M. - 5:00 P.M.',
+        'Friday',
+        'BSIT 3B',
+      ],
+    ]);
+
+    const result = parseScheduleWorkbook(workbook, rooms);
+
+    expect(result.errors).toEqual([]);
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[0]).toMatchObject({
+      roomId: 'room-312',
+      courseCode: 'IT 301',
+      instructorName: 'Prof. Reyes',
+      dayOfWeek: 1,
+      startTime: '07:00',
+      endTime: '12:00',
+      subject: 'Software Engineering',
+      section: 'BSIT 3A',
+    });
+    expect(result.rows[1]).toMatchObject({
+      dayOfWeek: 5,
+      startTime: '13:00',
+      endTime: '17:00',
+    });
+  });
 });

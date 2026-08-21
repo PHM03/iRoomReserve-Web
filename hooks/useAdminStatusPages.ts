@@ -406,7 +406,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     }
   };
 
-  const handleSaveSchedule = async () => {
+  const handleSaveSchedule = async (overrideScheduleIds: string[] = []) => {
     if (
       !buildingId ||
       !schedRoomId ||
@@ -438,7 +438,18 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       { excludeScheduleId: editingScheduleId }
     );
 
-    if (conflictingSchedules.length > 0) {
+    const conflictingScheduleIds = new Set(
+      conflictingSchedules.map((schedule) => schedule.id)
+    );
+    const requestedOverrideIds = new Set(overrideScheduleIds);
+    const isConfirmedOverride =
+      conflictingScheduleIds.size > 0 &&
+      conflictingScheduleIds.size === requestedOverrideIds.size &&
+      [...conflictingScheduleIds].every((scheduleId) =>
+        requestedOverrideIds.has(scheduleId)
+      );
+
+    if (conflictingSchedules.length > 0 && !isConfirmedOverride) {
       setScheduleSaveError(SCHEDULE_CONFLICT_MESSAGE);
       return;
     }
@@ -465,7 +476,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
           dayOfWeek: schedDay,
           startTime: schedStart,
           endTime: schedEnd,
-        });
+        }, overrideScheduleIds);
       } else {
         const data: ScheduleInput = {
           roomId: schedRoomId,
@@ -488,7 +499,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
           createdBy: firebaseUser?.uid || '',
         };
 
-        await addSchedule(data);
+        await addSchedule(data, overrideScheduleIds);
       }
 
       resetScheduleForm();

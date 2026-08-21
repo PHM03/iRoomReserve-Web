@@ -135,7 +135,9 @@ export async function POST(request: NextRequest) {
     assertAuthenticated(authContext);
     assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
 
-    const payload = scheduleInputSchema.parse(await request.json());
+    const { overrideScheduleIds = [], ...payload } = scheduleInputSchema.parse(
+      await request.json()
+    );
     assertCanManageBuilding(authContext, payload.buildingId);
 
     // Server-side campus time range validation
@@ -145,9 +147,11 @@ export async function POST(request: NextRequest) {
       throw new ApiError(400, "invalid_time_range", timeError);
     }
 
-    await assertNoScheduleConflict(payload);
+    if (overrideScheduleIds.length === 0) {
+      await assertNoScheduleConflict(payload);
+    }
 
-    const id = await createScheduleRecord(payload);
+    const id = await createScheduleRecord(payload, overrideScheduleIds);
     return NextResponse.json({ id });
   } catch (error) {
     return handleApiError(error);
