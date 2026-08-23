@@ -68,6 +68,7 @@ interface ReservationRecord {
   endTime: string;
   programDepartmentOrganization?: string;
   purpose: string;
+  isEvent?: "Yes" | "No";
   approvalDocumentName?: string;
   approvalDocumentUrl?: string;
   approvalDocumentPath?: string;
@@ -114,6 +115,7 @@ interface ReservationCreateBaseInput {
   endTime: string;
   programDepartmentOrganization: string;
   purpose: string;
+  isEvent: "Yes" | "No";
   approvalDocumentName?: string;
   approvalDocumentUrl?: string;
   approvalDocumentPath?: string;
@@ -926,6 +928,7 @@ export async function createReservationRecord(data: ReservationCreateInput) {
       endTime: data.endTime,
       programDepartmentOrganization: data.programDepartmentOrganization,
       purpose: data.purpose,
+      isEvent: data.isEvent,
       ...(data.approvalDocumentName
         ? { approvalDocumentName: data.approvalDocumentName }
         : {}),
@@ -1024,6 +1027,7 @@ export async function createRecurringReservationRecord(
         endTime: data.endTime,
         programDepartmentOrganization: data.programDepartmentOrganization,
         purpose: data.purpose,
+        isEvent: data.isEvent,
         ...(data.approvalDocumentName
           ? { approvalDocumentName: data.approvalDocumentName }
           : {}),

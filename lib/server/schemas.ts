@@ -135,6 +135,7 @@ const reservationCommonSchema = z.object({
   endTime: timeString,
   programDepartmentOrganization: nonEmptyString,
   purpose: nonEmptyString,
+  isEvent: z.enum(["Yes", "No"]).default("No"),
   approvalDocumentName: nonEmptyString.optional(),
   approvalDocumentUrl: z.string().trim().url().optional(),
   approvalDocumentPath: nonEmptyString.optional(),

@@ -1222,6 +1222,7 @@ export default function ReserveRoomPage() {
         endTime,
         programDepartmentOrganization,
         purpose,
+        isEvent: isEventReservation ? ('Yes' as const) : ('No' as const),
         ...(uploadedApprovalDocument
           ? {
               approvalDocumentMimeType: uploadedApprovalDocument.contentType,

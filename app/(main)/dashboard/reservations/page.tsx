@@ -412,6 +412,11 @@ export default function MyReservationsPage() {
                         <h3 className="text-base font-bold text-black">
                           {reservation.roomName}
                         </h3>
+                        {reservation.isEvent === 'Yes' && (
+                          <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-100 px-2.5 py-0.5 text-xs font-bold leading-5 text-violet-800">
+                            Event
+                          </span>
+                        )}
                         <StatusBadge status={reservation.status} />
                         <StatusBadge status={roomStatus} />
                       </div>

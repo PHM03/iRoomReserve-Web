@@ -36,6 +36,7 @@ describe('server schemas', () => {
         endTime: '09:00',
         programDepartmentOrganization: 'BSIT',
         purpose: 'Study session',
+        isEvent: 'Yes',
         ...approvalDocument,
         advisorEmail: 'advisor@sdca.edu.ph',
         dsasEmail: 'dsas@sdca.edu.ph',
@@ -64,12 +65,37 @@ describe('server schemas', () => {
         endTime: '09:00',
         programDepartmentOrganization: 'BSIT',
         purpose: 'Study session',
+        isEvent: 'No',
         ...approvalDocument,
         buildingAdminEmail: 'building-admin@sdca.edu.ph',
       },
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it('rejects reservation event values other than Yes or No', () => {
+    const result = createReservationSchema.safeParse({
+      type: 'single',
+      reservation: {
+        userId: 'user-1',
+        userName: 'Alex Faculty',
+        userRole: 'Faculty Professor',
+        roomId: 'room-1',
+        roomName: 'Room 101',
+        buildingId: 'building-1',
+        buildingName: 'Main Building',
+        campus: 'main',
+        date: '2026-03-25',
+        startTime: '08:00',
+        endTime: '09:00',
+        programDepartmentOrganization: 'BSIT',
+        purpose: 'Study session',
+        isEvent: 'Maybe',
+      },
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it('normalizes campus and user role aliases in reservation payloads', () => {

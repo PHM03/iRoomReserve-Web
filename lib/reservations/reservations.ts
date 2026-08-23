@@ -24,6 +24,8 @@ import { type RoomCheckInMethod } from "@/lib/rooms/roomStatus";
 import { groupReservationsForDisplay } from "@/lib/reservations/reservation-groups";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
 
+export type EventReservationValue = "Yes" | "No";
+
 export interface Reservation {
   id: string;
   userId: string;
@@ -39,6 +41,7 @@ export interface Reservation {
   endTime: string;
   programDepartmentOrganization?: string;
   purpose: string;
+  isEvent?: EventReservationValue;
   approvalDocumentName?: string;
   approvalDocumentUrl?: string;
   approvalDocumentPath?: string;
