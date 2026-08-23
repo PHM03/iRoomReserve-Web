@@ -37,10 +37,10 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "iRoomReserve",
-    template: "%s | iRoomReserve",
+    default: "e-RoomReserve",
+    template: "%s | e-RoomReserve",
   },
-  applicationName: "iRoomReserve",
+  applicationName: "e-RoomReserve",
   description: "Smart Room Reservation and Occupancy Monitoring System for St. Dominic College of Asia",
   manifest: "/manifest.json",
   icons: {
