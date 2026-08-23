@@ -323,6 +323,7 @@ export default function ReserveRoomPage() {
   const [endTime, setEndTime] = useState('');
   const [programDepartmentOrganization, setProgramDepartmentOrganization] = useState('');
   const [purpose, setPurpose] = useState('');
+  const [isEventReservation, setIsEventReservation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [createdCount, setCreatedCount] = useState(0);
@@ -822,6 +823,7 @@ export default function ReserveRoomPage() {
     setEndTime('');
     setProgramDepartmentOrganization('');
     setPurpose('');
+    setIsEventReservation(false);
     setSubmitError('');
     setTimeError('');
     setApprovalEmailError('');
@@ -1992,7 +1994,35 @@ export default function ReserveRoomPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-sm font-bold text-black">Purpose</label>
+                    <div className="mb-1.5 flex flex-wrap items-center gap-3">
+                      <label className="block text-sm font-bold text-black">
+                        {isEventReservation ? 'Name of the Event' : 'Purpose'}
+                      </label>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={isEventReservation}
+                        aria-label="Is this reservation for an event?"
+                        onClick={() => setIsEventReservation((currentValue) => !currentValue)}
+                        className="flex shrink-0 items-center gap-2 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                      >
+                        <span className="text-xs font-bold text-black">
+                          Is this reservation for an event?
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
+                            isEventReservation ? 'bg-primary' : 'bg-black/20'
+                          }`}
+                        >
+                          <span
+                            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                              isEventReservation ? 'translate-x-4' : 'translate-x-0.5'
+                            }`}
+                          />
+                        </span>
+                      </button>
+                    </div>
                     <input
                       type="text"
                       value={purpose}
