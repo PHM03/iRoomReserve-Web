@@ -37,6 +37,7 @@ import {
   sendQueuedPushNotifications,
   type AppNotificationInput,
 } from "@/lib/server/services/push-notifications";
+import { syncReservationStatuses } from "@/lib/server/services/reservation-status-sync";
 
 type ReservationStatus =
   | "pending"
@@ -1272,6 +1273,14 @@ export async function approveReservationRecord(
 
     await batch.commit();
     await sendQueuedPushNotifications(queuedNotifications);
+    await syncReservationStatuses(
+      approvalResult.groupedReservations.map((reservation) => ({
+        id: reservation.id,
+        roomId: reservation.roomId,
+        roomName: reservation.roomName,
+        status: "approved" as const,
+      }))
+    );
   } catch (error) {
     logReservationServiceError("approveReservationRecord", error, {
       reservationId,
@@ -1383,6 +1392,14 @@ export async function rejectReservationRecord(
 
     await batch.commit();
     await sendQueuedPushNotifications(queuedNotifications);
+    await syncReservationStatuses(
+      rejectionResult.groupedReservations.map((reservation) => ({
+        id: reservation.id,
+        roomId: reservation.roomId,
+        roomName: reservation.roomName,
+        status: "rejected" as const,
+      }))
+    );
   } catch (error) {
     logReservationServiceError("rejectReservationRecord", error, {
       reservationId,
@@ -1471,6 +1488,14 @@ export async function cancelReservationRecord(
 
     await batch.commit();
     await sendQueuedPushNotifications(queuedNotifications);
+    await syncReservationStatuses(
+      reservationsToCancel.map((reservationToCancel) => ({
+        id: reservationToCancel.id,
+        roomId: reservationToCancel.roomId,
+        roomName: reservationToCancel.roomName,
+        status: "cancelled" as const,
+      }))
+    );
   } catch (error) {
     logReservationServiceError("cancelReservationRecord", error, {
       reservationId,
@@ -1958,6 +1983,14 @@ export async function completeReservationRecord(
 
     await batch.commit();
     await sendQueuedPushNotifications(queuedNotifications);
+    await syncReservationStatuses([
+      {
+        id: reservation.id,
+        roomId: reservation.roomId,
+        roomName: reservation.roomName,
+        status: "completed",
+      },
+    ]);
   } catch (error) {
     logReservationServiceError("completeReservationRecord", error, {
       reservationId,
@@ -2033,6 +2066,14 @@ export async function confirmFinishedReservationRecord(
     });
 
     await batch.commit();
+    await syncReservationStatuses([
+      {
+        id: reservation.id,
+        roomId: reservation.roomId,
+        roomName: reservation.roomName,
+        status: "completed",
+      },
+    ]);
   } catch (error) {
     logReservationServiceError("confirmFinishedReservationRecord", error, {
       reservationId,
