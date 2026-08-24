@@ -131,7 +131,7 @@ function RegisterForm() {
       {/* Header */}
       <div className="glass-nav py-4 px-4 relative z-10">
         <div className="max-w-md mx-auto">
-          <h1 className="text-xl font-bold text-black">iRoomReserve</h1>
+          <h1 className="text-xl font-bold text-black">e-RoomReserve</h1>
           <p className="text-sm text-black">St. Dominic College of Asia</p>
         </div>
       </div>
@@ -346,7 +346,7 @@ function RegisterForm() {
       {/* Footer */}
       <div className="glass-nav py-4 relative z-10">
         <div className="max-w-md mx-auto text-center text-xs text-black font-bold">
-          iRoomReserve v1.0 — SDCA Capstone Project
+          e-RoomReserve v1.0 — SDCA Capstone Project
         </div>
       </div>
     </div>

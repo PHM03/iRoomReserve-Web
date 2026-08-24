@@ -96,12 +96,12 @@ function AdminLayoutInner({ children }: Readonly<AdminLayoutProps>) {
 
   useEffect(() => {
     const pathTitles: Record<string, string> = {
-      '/admin/room-status': 'iRoomReserve | Room Status Monitor',
-      '/admin/ble-status': 'iRoomReserve | BLE Beacon Status',
-      '/admin/class-schedules': 'iRoomReserve | Class Schedules',
+      '/admin/room-status': 'e-RoomReserve | Room Status Monitor',
+      '/admin/ble-status': 'e-RoomReserve | BLE Beacon Status',
+      '/admin/class-schedules': 'e-RoomReserve | Class Schedules',
     };
 
-    document.title = pathTitles[pathname] ?? 'iRoomReserve | Admin';
+    document.title = pathTitles[pathname] ?? 'e-RoomReserve | Admin';
   }, [pathname]);
 
   if (loading || !firebaseUser || !canRenderAdminLayout) {

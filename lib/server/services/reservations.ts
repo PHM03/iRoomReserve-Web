@@ -478,8 +478,8 @@ export async function validateReservationApprover(input: {
         400,
         "approver_not_found",
         expectedRole === "advisor"
-          ? "The adviser, department head, or professor email must belong to an approved iRoomReserve faculty account."
-          : "The building admin email must belong to an approved iRoomReserve administrator account."
+          ? "The adviser, department head, or professor email must belong to an approved e-RoomReserve faculty account."
+          : "The building admin email must belong to an approved e-RoomReserve administrator account."
       );
     }
 
@@ -490,7 +490,7 @@ export async function validateReservationApprover(input: {
       throw new ApiError(
         400,
         "invalid_approver_role",
-        "The adviser, department head, or professor email must belong to an approved faculty iRoomReserve account."
+        "The adviser, department head, or professor email must belong to an approved faculty e-RoomReserve account."
       );
     }
 
@@ -501,7 +501,7 @@ export async function validateReservationApprover(input: {
       throw new ApiError(
         400,
         "invalid_approver_role",
-        "The building admin email must belong to an approved iRoomReserve administrator account."
+        "The building admin email must belong to an approved e-RoomReserve administrator account."
       );
     }
 

@@ -103,7 +103,7 @@ export default function RoleSelectionPage() {
             <Toast
                 message={
                     selectedRole === USER_ROLES.STUDENT
-                    ? 'Account created! Welcome to iRoomReserve.'
+                    ? 'Account created! Welcome to e-RoomReserve.'
                     : selectedRole === USER_ROLES.FACULTY
                         ? 'Account created as Faculty Professor! Your registration is pending for Admin approval.'
                         : selectedRole === USER_ROLES.UTILITY
@@ -123,7 +123,7 @@ export default function RoleSelectionPage() {
       {/* Header */}
       <div className="glass-nav py-4 px-4 relative z-10">
         <div className="max-w-md mx-auto">
-          <h1 className="text-xl font-bold text-black">iRoomReserve</h1>
+          <h1 className="text-xl font-bold text-black">e-RoomReserve</h1>
           <p className="text-sm text-black">St. Dominic College of Asia</p>
         </div>
       </div>
@@ -225,7 +225,7 @@ export default function RoleSelectionPage() {
       {/* Footer */}
       <div className="glass-nav py-4 relative z-10">
         <div className="max-w-md mx-auto text-center text-xs text-black font-bold">
-          iRoomReserve v1.0 — SDCA Capstone Project
+          e-RoomReserve v1.0 — SDCA Capstone Project
         </div>
       </div>
     </div>

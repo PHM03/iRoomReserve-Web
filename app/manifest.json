@@ -1,6 +1,6 @@
 {
-  "name": "iRoomReserve",
-  "short_name": "iRoomReserve",
+  "name": "e-RoomReserve",
+  "short_name": "e-RoomReserve",
   "description": "Smart Room Reservation and Occupancy Monitoring System for St. Dominic College of Asia",
   "start_url": "/",
   "display": "standalone",

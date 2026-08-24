@@ -321,7 +321,7 @@ export default function BleStatus({
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-xs text-black/80">
             <li>Open your phone&apos;s Bluetooth settings.</li>
             <li>Pair with the room beacon named {beaconName}.</li>
-            <li>Return to iRoomReserve and wait for the live status to refresh.</li>
+            <li>Return to e-RoomReserve and wait for the live status to refresh.</li>
           </ol>
 
           <button

@@ -363,7 +363,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
         <div className="flex items-center justify-between gap-3 py-4 xl:gap-5">
           <div className="flex min-w-0 items-center">
             <h1 className="truncate text-lg text-[#343434] sm:text-xl" style={navbarBoldStyle}>
-              iRoomReserve
+              e-RoomReserve
             </h1>
           </div>
 

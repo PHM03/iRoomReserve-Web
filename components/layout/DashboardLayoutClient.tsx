@@ -50,19 +50,19 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
 
   useEffect(() => {
     const tabTitles: Record<string, string> = {
-      dashboard: "iRoomReserve | Dashboard",
-      pending: "iRoomReserve | Pending",
-      "manage-rooms": "iRoomReserve | Manage Rooms",
-      feedback: "iRoomReserve | Feedback",
-      "reservation-history": "iRoomReserve | Reservation History",
-      inbox: "iRoomReserve | Inbox",
-      "status-scheduling": "iRoomReserve | Status & Scheduling",
-      "room-status-monitor": "iRoomReserve | Room Status Monitor",
-      "ble-beacon-status": "iRoomReserve | BLE Beacon Status",
-      "class-schedules": "iRoomReserve | Class Schedules",
-      reserve: "iRoomReserve | Reserve",
-      "my-reservations": "iRoomReserve | My Reservations",
-      "room-status": "iRoomReserve | Room Status",
+      dashboard: "e-RoomReserve | Dashboard",
+      pending: "e-RoomReserve | Pending",
+      "manage-rooms": "e-RoomReserve | Manage Rooms",
+      feedback: "e-RoomReserve | Feedback",
+      "reservation-history": "e-RoomReserve | Reservation History",
+      inbox: "e-RoomReserve | Inbox",
+      "status-scheduling": "e-RoomReserve | Status & Scheduling",
+      "room-status-monitor": "e-RoomReserve | Room Status Monitor",
+      "ble-beacon-status": "e-RoomReserve | BLE Beacon Status",
+      "class-schedules": "e-RoomReserve | Class Schedules",
+      reserve: "e-RoomReserve | Reserve",
+      "my-reservations": "e-RoomReserve | My Reservations",
+      "room-status": "e-RoomReserve | Room Status",
     };
     const pathToTab: Record<string, string> = {
       "/dashboard/inbox": "inbox",
@@ -85,7 +85,7 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
     const currentTab =
       pathname === "/dashboard" ? dashboardTab : pathToTab[pathname];
     document.title =
-      tabTitles[currentTab ?? ""] ?? "iRoomReserve | Dashboard";
+      tabTitles[currentTab ?? ""] ?? "e-RoomReserve | Dashboard";
   }, [activeTab, pathname, requestedTab]);
 
   // Show loading while auth resolves

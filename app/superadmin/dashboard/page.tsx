@@ -267,7 +267,7 @@ export default function SuperAdminDashboard() {
                 </svg>
               </div>
               <div>
-                <h1 className="text-lg font-bold text-black">iRoomReserve</h1>
+                <h1 className="text-lg font-bold text-black">e-RoomReserve</h1>
                 <p className="text-[10px] text-black -mt-0.5 font-bold">Super Admin Dashboard</p>
               </div>
             </div>

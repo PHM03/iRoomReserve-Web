@@ -124,7 +124,7 @@ export default function RoomAvailabilityPicker({
           </div>
         )}
 
-        {/* Per-component scoped styling so the picker matches the iRoomReserve glass theme. */}
+        {/* Per-component scoped styling so the picker matches the e-RoomReserve glass theme. */}
         <style>{`
           .rdp-root {
             --rdp-accent-color: #a12124;

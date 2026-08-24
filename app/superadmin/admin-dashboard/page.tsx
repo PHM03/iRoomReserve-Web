@@ -252,7 +252,7 @@ function SuperAdminCampusNavBar({
         <div className="flex justify-between py-5">
           <div className="flex items-center">
             <h1 className="text-xl text-[#343434]" style={navbarBoldStyle}>
-              iRoomReserve
+              e-RoomReserve
             </h1>
           </div>
 
