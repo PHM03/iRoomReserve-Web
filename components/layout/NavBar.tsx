@@ -361,8 +361,8 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-3 py-4 xl:gap-5">
-          <div className="flex min-w-0 items-center">
-            <h1 className="truncate text-lg text-[#343434] sm:text-xl" style={navbarBoldStyle}>
+          <div className="flex shrink-0 items-center">
+            <h1 className="whitespace-nowrap text-lg text-[#343434] sm:text-xl" style={navbarBoldStyle}>
               e-RoomReserve
             </h1>
           </div>
@@ -440,18 +440,23 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
           </div>
 
           <div className="flex shrink-0 items-center space-x-1 sm:space-x-2">
-            <div className="hidden sm:flex items-center space-x-2">
+            <div className="flex items-center space-x-2">
               <div
                 className="relative"
                 onMouseEnter={() => setShowUserTooltip(true)}
                 onMouseLeave={() => setShowUserTooltip(false)}
               >
-                <div
-                  className="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm cursor-default"
+                <button
+                  type="button"
+                  onClick={() => setShowAccountSettings(true)}
+                  className="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm transition-colors hover:bg-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/50"
                   style={navbarBoldStyle}
+                  title="Account settings"
+                  aria-label="Open account settings"
+                  aria-haspopup="dialog"
                 >
                   {user.initials}
-                </div>
+                </button>
                 {showUserTooltip && (
                   <div className="dashboard-dropdown absolute right-0 top-full z-50 mt-2 w-52 rounded-2xl p-3">
                     <p className="text-xs font-bold text-black capitalize">{user.role}</p>
@@ -462,22 +467,6 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                 )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowAccountSettings(true)}
-              className={navIconButtonClasses}
-              title="Account settings"
-              aria-label="Account settings"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5.121 17.804A8.966 8.966 0 0112 15c2.21 0 4.236.8 5.879 2.129M15 11a3 3 0 11-6 0 3 3 0 016 0zm6 1a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </button>
             <div ref={notificationRef} className="relative">
               <button
                 onClick={() => setShowNotifications((prev) => !prev)}
