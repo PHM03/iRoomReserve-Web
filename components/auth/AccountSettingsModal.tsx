@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
+import Toast from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import {
   changeCurrentUserPassword,
@@ -57,6 +58,7 @@ export default function AccountSettingsModal({
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [showToast, setShowToast] = useState(false);
   const [showPasswordFields, setShowPasswordFields] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -70,9 +72,11 @@ export default function AccountSettingsModal({
   const isStudentAccount = normalizeRole(profile?.role) === USER_ROLES.STUDENT;
   const hasPasswordProvider =
     firebaseUser?.providerData.some((provider) => provider.providerId === 'password') ?? false;
+  const handleToastClose = useCallback(() => setShowToast(false), []);
 
   useEffect(() => {
     if (!open) {
+      setShowToast(false);
       return;
     }
 
@@ -102,6 +106,7 @@ export default function AccountSettingsModal({
     event.preventDefault();
     setErrorMessage('');
     setSuccessMessage('');
+    setShowToast(false);
 
     const normalizedFirstName = firstName.trim();
     const normalizedLastName = lastName.trim();
@@ -139,6 +144,7 @@ export default function AccountSettingsModal({
       });
       await reloadProfile();
       setSuccessMessage('Account settings saved.');
+      setShowToast(true);
     } catch (error) {
       console.warn('Failed to update account settings:', error);
       setErrorMessage('Unable to save account settings. Please try again.');
@@ -203,7 +209,13 @@ export default function AccountSettingsModal({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl border border-white/40 bg-white/95 p-6 shadow-2xl backdrop-blur-xl">
+      <Toast
+        message="Changes saved successfully."
+        type="success"
+        show={showToast}
+        onClose={handleToastClose}
+      />
+      <div className="w-full max-w-lg max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-white/40 bg-white/95 p-6 shadow-2xl backdrop-blur-xl">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-black">Account Settings</h2>
