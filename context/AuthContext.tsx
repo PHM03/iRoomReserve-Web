@@ -15,6 +15,7 @@ interface UserProfile {
   role: string;
   status: string;
   gender?: UserGender | null;
+  accountConfigurationReminderDismissed?: boolean;
   accountType?: 'individual' | 'organization';
   organizationName?: string | null;
   campus?: ReservationCampus | null;
@@ -58,6 +59,8 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         role: data.role || 'Student',
         status: data.status || 'approved',
         gender: data.gender ?? null,
+        accountConfigurationReminderDismissed:
+          data.accountConfigurationReminderDismissed === true,
         accountType: data.accountType === 'organization' ? 'organization' : 'individual',
         organizationName:
           typeof data.organizationName === 'string' ? data.organizationName : null,

@@ -15,6 +15,7 @@ import {
   shouldDeleteNotificationOnClick,
 } from '@/lib/notifications/notifications';
 import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
+import { dismissAccountConfigurationReminder } from '@/lib/auth/auth';
 import AccountSettingsModal from '@/components/auth/AccountSettingsModal';
 
 export type AdminTab =
@@ -124,13 +125,18 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [isMobileStatusMenuOpen, setIsMobileStatusMenuOpen] = useState(false);
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, profile } = useAuth();
   const { setSelectedBuildingId } = useAdminTab();
   const uid = firebaseUser?.uid;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserTooltip, setShowUserTooltip] = useState(false);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [showAccountReminder, setShowAccountReminder] = useState(false);
+  const accountReminderSessionRef = useRef<{ uid: string | null; shown: boolean }>({
+    uid: null,
+    shown: false,
+  });
   const router = useRouter();
   const pathname = usePathname();
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -171,6 +177,28 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   }, [uid]);
 
   useEffect(() => {
+    if (!uid) {
+      accountReminderSessionRef.current = { uid: null, shown: false };
+      setShowAccountReminder(false);
+      return;
+    }
+
+    if (accountReminderSessionRef.current.uid !== uid) {
+      accountReminderSessionRef.current = { uid, shown: false };
+    }
+
+    if (
+      !accountReminderSessionRef.current.shown &&
+      profile &&
+      (profile.gender === null || profile.gender === undefined) &&
+      profile.accountConfigurationReminderDismissed !== true
+    ) {
+      accountReminderSessionRef.current.shown = true;
+      setShowAccountReminder(true);
+    }
+  }, [uid, profile?.gender, profile?.accountConfigurationReminderDismissed]);
+
+  useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       if (
         notificationRef.current &&
@@ -194,6 +222,25 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     }
 
     router.push('/');
+  };
+
+  const handleConfigureAccount = () => {
+    setShowAccountReminder(false);
+    setShowAccountSettings(true);
+  };
+
+  const handleDismissAccountReminder = async () => {
+    setShowAccountReminder(false);
+
+    if (!uid) {
+      return;
+    }
+
+    try {
+      await dismissAccountConfigurationReminder(uid);
+    } catch (error) {
+      console.warn('Failed to persist account configuration reminder dismissal:', error);
+    }
   };
 
   const defaultLinks = isUtilityRole
@@ -448,7 +495,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
               >
                 <button
                   type="button"
-                  onClick={() => setShowAccountSettings(true)}
+                  onClick={handleConfigureAccount}
                   className="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm transition-colors hover:bg-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/50"
                   style={navbarBoldStyle}
                   title="Account settings"
@@ -457,7 +504,38 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                 >
                   {user.initials}
                 </button>
-                {showUserTooltip && (
+                {showAccountReminder ? (
+                  <div
+                    className="dashboard-dropdown absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl p-3"
+                    role="dialog"
+                    aria-label="Account configuration reminder"
+                  >
+                    <span
+                      aria-hidden
+                      className="absolute -top-1.5 right-4 h-3 w-3 rotate-45 border-l border-t border-white/70 bg-white"
+                    />
+                    <p className="relative text-sm font-bold text-black">
+                      Finish configuring your account?
+                    </p>
+                    <div className="relative mt-3 flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={handleConfigureAccount}
+                        className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-primary-hover"
+                      >
+                        Configure Account
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDismissAccountReminder()}
+                        className="text-[11px] font-bold text-black/60 transition-colors hover:text-primary"
+                      >
+                        Don&apos;t remind me
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {showUserTooltip && !showAccountReminder && (
                   <div className="dashboard-dropdown absolute right-0 top-full z-50 mt-2 w-52 rounded-2xl p-3">
                     <p className="text-xs font-bold text-black capitalize">{user.role}</p>
                     {user.email && (

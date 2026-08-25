@@ -331,6 +331,7 @@ export async function getUserProfile(uid: string) {
     assignedBuildingId?: string;
     accountType?: AccountType | string | null;
     organizationName?: string | null;
+    accountConfigurationReminderDismissed?: boolean;
     assignedBuildings?: unknown;
     assignedBuildingIds?: string[];
   };
@@ -342,6 +343,8 @@ export async function getUserProfile(uid: string) {
   return {
     ...data,
     gender: normalizeUserGender(privateProfile?.gender),
+    accountConfigurationReminderDismissed:
+      data.accountConfigurationReminderDismissed === true,
     role: normalizeRole(data.role) ?? data.role,
     campus,
     campusName,
@@ -409,6 +412,17 @@ export async function updateAccountSettings(
       displayName: `${normalizedFirstName} ${normalizedLastName}`.trim(),
     });
   }
+}
+
+export async function dismissAccountConfigurationReminder(uid: string) {
+  await setDoc(
+    doc(db, "users", uid),
+    {
+      accountConfigurationReminderDismissed: true,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 export async function changeCurrentUserPassword(
