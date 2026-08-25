@@ -121,8 +121,6 @@ export default function AdminClassSchedulesPage() {
     setSchedRoomId,
     schedCourseName,
     setSchedCourseName,
-    schedCourseCode,
-    setSchedCourseCode,
     schedSection,
     setSchedSection,
     schedInstructor,
@@ -476,7 +474,6 @@ export default function AdminClassSchedulesPage() {
             showScheduleForm={showScheduleForm}
             schedRoomId={schedRoomId}
             schedCourseName={schedCourseName}
-            schedCourseCode={schedCourseCode}
             schedSection={schedSection}
             schedInstructor={schedInstructor}
             schedDay={schedDay}
@@ -487,7 +484,6 @@ export default function AdminClassSchedulesPage() {
             onToggleForm={toggleScheduleForm}
             onSchedRoomIdChange={handleScheduleFormRoomChange}
             onSchedCourseNameChange={setSchedCourseName}
-            onSchedCourseCodeChange={setSchedCourseCode}
             onSchedSectionChange={setSchedSection}
             onSchedInstructorChange={setSchedInstructor}
             onSchedDayChange={setSchedDay}

@@ -93,12 +93,11 @@ describe('Excel schedule import parser', () => {
     );
   });
 
-  it('parses row-based schedule lists with the supplied Excel column labels', () => {
+  it('parses row-based schedule lists without a Course Code column', () => {
     const workbook = createWorkbook([
       [],
       [
         'Room',
-        'Course Code',
         'Professor',
         'Course Name',
         'Time',
@@ -107,7 +106,6 @@ describe('Excel schedule import parser', () => {
       ],
       [
         'GD3 312',
-        'IT 301',
         'Prof. Reyes',
         'Software Engineering',
         '7:00 A.M. - 12:00 A.M.',
@@ -116,7 +114,6 @@ describe('Excel schedule import parser', () => {
       ],
       [
         'GD3 312',
-        'IT 302',
         'Prof. Cruz',
         'Database Systems',
         '1:00 P.M. - 5:00 P.M.',
@@ -131,7 +128,7 @@ describe('Excel schedule import parser', () => {
     expect(result.rows).toHaveLength(2);
     expect(result.rows[0]).toMatchObject({
       roomId: 'room-312',
-      courseCode: 'IT 301',
+      courseCode: 'Software Engineering',
       instructorName: 'Prof. Reyes',
       dayOfWeek: 1,
       startTime: '07:00',
@@ -144,5 +141,45 @@ describe('Excel schedule import parser', () => {
       startTime: '13:00',
       endTime: '17:00',
     });
+  });
+
+  it('accepts Instructor as an alternative to the Professor column label', () => {
+    const workbook = createWorkbook([
+      ['Room', 'Instructor', 'Course Name', 'Time', 'Day', 'Program and Section'],
+      ['312', 'Prof. Santos', 'Web Development', '8:00 AM - 9:00 AM', 'Monday', 'BSIT 2A'],
+    ]);
+
+    const result = parseScheduleWorkbook(workbook, rooms);
+
+    expect(result.errors).toEqual([]);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      instructorName: 'Prof. Santos',
+      subject: 'Web Development',
+    });
+  });
+
+  it('parses letter weekday values in a Day column', () => {
+    const workbook = createWorkbook([
+      ['Room', 'Course Name', 'Time', 'Day', 'Program and Section'],
+      ['312', 'Monday Class', '8:00 AM - 9:00 AM', 'M', 'BSIT 1A'],
+      ['312', 'Tuesday Class', '9:00 AM - 10:00 AM', 'T', 'BSIT 1A'],
+      ['312', 'Wednesday Class', '10:00 AM - 11:00 AM', 'W', 'BSIT 1A'],
+      ['312', 'Thursday Class', '11:00 AM - 12:00 PM', 'H', 'BSIT 1A'],
+      ['312', 'Friday Class', '1:00 PM - 2:00 PM', 'F', 'BSIT 1A'],
+    ]);
+
+    const result = parseScheduleWorkbook(workbook, rooms);
+
+    expect(result.errors).toEqual([]);
+    expect(result.rows.map((row) => row.dayOfWeek)).toEqual([1, 2, 3, 4, 5]);
+    expect(result.rows.map((row) => row.dayName)).toEqual([
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+    ]);
+    expect(result.rows.every((row) => row.errors.length === 0)).toBe(true);
   });
 });

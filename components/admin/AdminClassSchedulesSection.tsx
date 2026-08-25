@@ -95,7 +95,6 @@ interface AdminClassSchedulesSectionProps {
   showScheduleForm: boolean;
   schedRoomId: string;
   schedCourseName: string;
-  schedCourseCode: string;
   schedSection: string;
   schedInstructor: string;
   schedDay: number;
@@ -106,7 +105,6 @@ interface AdminClassSchedulesSectionProps {
   onToggleForm: () => void;
   onSchedRoomIdChange: (value: string) => void;
   onSchedCourseNameChange: (value: string) => void;
-  onSchedCourseCodeChange: (value: string) => void;
   onSchedSectionChange: (value: string) => void;
   onSchedInstructorChange: (value: string) => void;
   onSchedDayChange: (value: number) => void;
@@ -170,7 +168,6 @@ export default function AdminClassSchedulesSection({
   showScheduleForm,
   schedRoomId,
   schedCourseName,
-  schedCourseCode,
   schedSection,
   schedInstructor,
   schedDay,
@@ -181,7 +178,6 @@ export default function AdminClassSchedulesSection({
   onToggleForm,
   onSchedRoomIdChange,
   onSchedCourseNameChange,
-  onSchedCourseCodeChange,
   onSchedSectionChange,
   onSchedInstructorChange,
   onSchedDayChange,
@@ -716,18 +712,6 @@ export default function AdminClassSchedulesSection({
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-black">Course Code</label>
-              <input
-                value={schedCourseCode}
-                onChange={(event) => {
-                  clearErrors();
-                  onSchedCourseCodeChange(event.target.value);
-                }}
-                placeholder="e.g. IT 101"
-                className="glass-input w-full px-4 py-2.5 text-sm"
-              />
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-bold text-black">Program, Year, and Section</label>
               <input
                 value={schedSection}
@@ -739,7 +723,7 @@ export default function AdminClassSchedulesSection({
                 className="glass-input w-full px-4 py-2.5 text-sm"
               />
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-bold text-black">
                 Instructor
               </label>
@@ -882,7 +866,6 @@ export default function AdminClassSchedulesSection({
                 addingSchedule ||
                 !schedRoomId ||
                 !schedCourseName.trim() ||
-                !schedCourseCode.trim() ||
                 !schedSection.trim()
               }
               className="btn-primary px-6 py-2.5 text-sm disabled:opacity-50"

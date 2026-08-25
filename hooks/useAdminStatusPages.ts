@@ -143,7 +143,6 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [schedRoomId, setSchedRoomId] = useState('');
   const [schedCourseName, setSchedCourseName] = useState('');
-  const [schedCourseCode, setSchedCourseCode] = useState('');
   const [schedSection, setSchedSection] = useState('');
   const [schedInstructor, setSchedInstructor] = useState('');
   const [schedDay, setSchedDay] = useState<number>(1);
@@ -346,7 +345,6 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     setScheduleSaveError(null);
     setSchedRoomId('');
     setSchedCourseName('');
-    setSchedCourseCode('');
     setSchedSection('');
     setSchedInstructor('');
     setSchedDay(1);
@@ -411,7 +409,6 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       !buildingId ||
       !schedRoomId ||
       !schedCourseName.trim() ||
-      !schedCourseCode.trim() ||
       !schedSection.trim() ||
       !schedInstructor.trim() ||
       !schedStart ||
@@ -459,18 +456,19 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
 
     try {
       const room = rooms.find((nextRoom) => nextRoom.id === schedRoomId);
+      const courseCode = schedCourseName.trim();
 
       if (editingScheduleId) {
         await updateSchedule(editingScheduleId, {
           roomId: schedRoomId,
           roomName: room?.name || '',
           subjectName: getScheduleDisplayTitle({
-            courseCode: schedCourseCode.trim(),
+            courseCode,
             section: schedSection.trim(),
             subjectName: schedCourseName.trim(),
           }),
           courseName: schedCourseName.trim(),
-          courseCode: schedCourseCode.trim(),
+          courseCode,
           section: schedSection.trim(),
           instructorName: schedInstructor.trim(),
           dayOfWeek: schedDay,
@@ -483,12 +481,12 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
           roomName: room?.name || '',
           buildingId,
           subjectName: getScheduleDisplayTitle({
-            courseCode: schedCourseCode.trim(),
+            courseCode,
             section: schedSection.trim(),
             subjectName: schedCourseName.trim(),
           }),
           courseName: schedCourseName.trim(),
-          courseCode: schedCourseCode.trim(),
+          courseCode,
           section: schedSection.trim(),
           instructorName: schedInstructor.trim(),
           dayOfWeek: schedDay,
@@ -520,7 +518,6 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     setEditingScheduleId(schedule.id);
     setSchedRoomId(schedule.roomId);
     setSchedCourseName(schedule.courseName ?? schedule.subjectName);
-    setSchedCourseCode(schedule.courseCode ?? '');
     setSchedSection(schedule.section ?? '');
     setSchedInstructor(schedule.instructorName);
     setSchedDay(schedule.dayOfWeek);
@@ -731,8 +728,6 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     setSchedRoomId,
     schedCourseName,
     setSchedCourseName,
-    schedCourseCode,
-    setSchedCourseCode,
     schedSection,
     setSchedSection,
     schedInstructor,

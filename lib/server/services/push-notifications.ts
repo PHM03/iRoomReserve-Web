@@ -24,7 +24,7 @@ const EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send";
 const GOOGLE_OAUTH_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 const RESERVATION_UPDATES_CHANNEL_ID = "reservation-updates";
-const APP_URL = "https://iroomreserve.vercel.app";
+const APP_URL = "https://eroomreserve.vercel.app";
 
 let hasWarnedAboutEmailConfiguration = false;
 
