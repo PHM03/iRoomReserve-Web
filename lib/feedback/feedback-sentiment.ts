@@ -11,6 +11,27 @@ import {
   type DetectedFeedbackAspects,
   type FeedbackAspectKey,
 } from "./feedback-analytics";
+import {
+  normalizeUserGender,
+  USER_GENDER_LABELS,
+  USER_GENDER_VALUES,
+  type UserGender,
+} from "../auth/profile-types";
+
+export const FEEDBACK_GENDER_GROUP_ORDER: FeedbackGenderGroup[] = [
+  ...USER_GENDER_VALUES,
+  "not_specified",
+];
+
+export type FeedbackGenderGroup = UserGender | "not_specified";
+
+export interface FeedbackGenderSentimentSummary {
+  group: FeedbackGenderGroup;
+  label: string;
+  total: number;
+  suppressed: boolean;
+  summary: FeedbackSentimentSummary | null;
+}
 
 export interface FeedbackSentimentFields {
   compoundScore?: number | null;
@@ -64,6 +85,7 @@ export interface FeedbackSentimentSummary {
   veryNegativePercentage: number;
   veryPositiveCount: number;
   veryPositivePercentage: number;
+  genderBreakdown?: FeedbackGenderSentimentSummary[];
 }
 
 function isSentimentLabel(value: unknown): value is SentimentLabel {
@@ -227,4 +249,44 @@ export function summarizeFeedbackSentiment(
   };
 
   return summary;
+}
+
+export function getFeedbackGenderGroup(value: unknown): FeedbackGenderGroup {
+  return normalizeUserGender(value) ?? "not_specified";
+}
+
+export function getFeedbackGenderLabel(group: FeedbackGenderGroup) {
+  return group === "not_specified" ? "Not specified" : USER_GENDER_LABELS[group];
+}
+
+/**
+ * Gender is resolved from the user's current profile at read time. It is not
+ * copied into feedback documents, so historical feedback follows the current
+ * profile value rather than a gender snapshot from submission time.
+ */
+export function summarizeFeedbackSentimentByGender(
+  feedbackItems: Array<FeedbackSentimentFields & { gender?: unknown }>,
+  minimumSampleSize = 5
+): FeedbackGenderSentimentSummary[] {
+  const groups = new Map<FeedbackGenderGroup, Array<FeedbackSentimentFields>>();
+
+  feedbackItems.forEach((feedback) => {
+    const group = getFeedbackGenderGroup(feedback.gender);
+    const groupItems = groups.get(group) ?? [];
+    groupItems.push(feedback);
+    groups.set(group, groupItems);
+  });
+
+  return FEEDBACK_GENDER_GROUP_ORDER.filter((group) => groups.has(group)).map((group) => {
+    const groupItems = groups.get(group) ?? [];
+    const suppressed = groupItems.length < minimumSampleSize;
+
+    return {
+      group,
+      label: getFeedbackGenderLabel(group),
+      total: groupItems.length,
+      suppressed,
+      summary: suppressed ? null : summarizeFeedbackSentiment(groupItems),
+    };
+  });
 }

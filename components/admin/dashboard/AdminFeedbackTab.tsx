@@ -69,6 +69,14 @@ function getRankingBarWidth(count: number, maxCount: number) {
   return `${Math.max((count / maxCount) * 100, 8)}%`;
 }
 
+function getBroadSentimentPercentages(summary: FeedbackSentimentSummary) {
+  return {
+    positive: summary.veryPositivePercentage + summary.positivePercentage,
+    neutral: summary.neutralPercentage,
+    negative: summary.negativePercentage + summary.veryNegativePercentage,
+  };
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AdminFeedbackTab({
@@ -375,6 +383,97 @@ export default function AdminFeedbackTab({
                   )}
                 </div>
               </div>
+
+              {(feedbackSummary.genderBreakdown?.length ?? 0) > 0 && (
+                <div className="glass-card p-4">
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/55">
+                        Sentiment by Gender
+                      </p>
+                      <p className="mt-1 text-xs text-black/55">
+                        Building-wide comparison using each author&apos;s current optional profile value.
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold text-black/45">
+                      Groups under 5 samples are suppressed
+                    </span>
+                  </div>
+
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {feedbackSummary.genderBreakdown?.map((group) => (
+                      <div key={group.group} className="rounded-xl border border-dark/10 bg-white/65 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-bold text-black">{group.label}</p>
+                            <p className="mt-0.5 text-[11px] font-bold text-black/45">
+                              {group.total} feedback {group.total === 1 ? 'sample' : 'samples'}
+                            </p>
+                          </div>
+                          {group.suppressed ? (
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold text-amber-800">
+                              Insufficient data
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {group.suppressed || !group.summary ? (
+                          <p className="mt-4 text-xs font-bold text-black/50">
+                            Sentiment metrics are hidden until this group has at least 5 feedback samples.
+                          </p>
+                        ) : (
+                          <>
+                            <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">
+                                  Average VADER
+                                </p>
+                                <p className="mt-1 text-xl font-bold text-black">
+                                  {group.summary.averageCompoundScore.toFixed(2)}
+                                </p>
+                              </div>
+                              {Object.entries(getBroadSentimentPercentages(group.summary)).map(
+                                ([label, percentage]) => (
+                                  <div key={label}>
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">
+                                      {label}
+                                    </p>
+                                    <p className="mt-1 text-xl font-bold text-black">
+                                      {percentage.toFixed(1)}%
+                                    </p>
+                                  </div>
+                                )
+                              )}
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                              {SENTIMENT_DISTRIBUTION_ORDER.map((label) => {
+                                const item = group.summary?.sentimentDistribution.find(
+                                  (entry) => entry.label === label
+                                );
+
+                                return (
+                                  <div key={label} className="rounded-lg border border-dark/10 bg-dark/5 px-2 py-2">
+                                    <p className="truncate text-[10px] font-bold text-black/55">
+                                      {formatSentimentLabel(label)}
+                                    </p>
+                                    <p className="mt-1 text-sm font-bold text-black">
+                                      {item?.percentage.toFixed(1) ?? '0.0'}%
+                                    </p>
+                                    <p className="text-[10px] font-bold text-black/40">
+                                      {item?.count ?? 0} samples
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

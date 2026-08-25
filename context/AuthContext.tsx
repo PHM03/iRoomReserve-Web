@@ -6,6 +6,7 @@ import { auth } from '@/lib/firebase/firebase';
 import { getUserProfile, logout as firebaseLogout } from '@/lib/auth/auth';
 import { type CampusName } from '@/lib/buildings/campusAssignments';
 import { type ReservationCampus } from '@/lib/buildings/campuses';
+import type { UserGender } from '@/lib/auth/profile-types';
 
 interface UserProfile {
   firstName: string;
@@ -13,6 +14,7 @@ interface UserProfile {
   email: string;
   role: string;
   status: string;
+  gender?: UserGender | null;
   accountType?: 'individual' | 'organization';
   organizationName?: string | null;
   campus?: ReservationCampus | null;
@@ -55,6 +57,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         email: data.email,
         role: data.role || 'Student',
         status: data.status || 'approved',
+        gender: data.gender ?? null,
         accountType: data.accountType === 'organization' ? 'organization' : 'individual',
         organizationName:
           typeof data.organizationName === 'string' ? data.organizationName : null,

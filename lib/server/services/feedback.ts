@@ -14,6 +14,7 @@ import {
 } from "@/lib/feedback/feedback-analytics";
 import {
   resolveFeedbackSentimentLabel,
+  summarizeFeedbackSentimentByGender,
   summarizeFeedbackSentiment,
   type FeedbackSentimentFields,
   type FeedbackSentimentSummary,
@@ -304,7 +305,10 @@ export async function getFeedbackRecordsByBuilding(
   if (!normalizedBuildingId) {
     return {
       feedback: [],
-      summary: summarizeFeedbackSentiment([]),
+      summary: {
+        ...summarizeFeedbackSentiment([]),
+        genderBreakdown: [],
+      },
     };
   }
 
@@ -313,10 +317,37 @@ export async function getFeedbackRecordsByBuilding(
     .where("buildingId", "==", normalizedBuildingId)
     .get();
   const feedback = snapshot.docs.map(mapFeedbackDocument).sort(sortFeedbackRecords);
+  const userIds = [...new Set(feedback.map((item) => item.userId).filter(Boolean))];
+  const genderByUserId = new Map<string, unknown>();
+
+  await Promise.all(
+    userIds.map(async (userId) => {
+      const profileSnapshot = await db
+        .collection("users")
+        .doc(userId)
+        .collection("private")
+        .doc("profile")
+        .get();
+
+      if (profileSnapshot.exists) {
+        genderByUserId.set(userId, profileSnapshot.data()?.gender);
+      }
+    })
+  );
+
+  const genderBreakdown = summarizeFeedbackSentimentByGender(
+    feedback.map((item) => ({
+      ...item,
+      gender: genderByUserId.get(item.userId),
+    }))
+  );
 
   return {
     feedback,
-    summary: summarizeFeedbackSentiment(feedback),
+    summary: {
+      ...summarizeFeedbackSentiment(feedback),
+      genderBreakdown,
+    },
   };
 }
 

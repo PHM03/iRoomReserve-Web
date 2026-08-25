@@ -38,6 +38,11 @@ import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
 import { auth, db } from "@/lib/firebase/firebase";
 import { type ReservationCampus } from "@/lib/buildings/campuses";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
+import {
+  buildUserGenderUpdate,
+  normalizeUserGender,
+  type UserGender,
+} from "@/lib/auth/profile-types";
 
 export type AccountType = "individual" | "organization";
 
@@ -306,7 +311,10 @@ export async function seedSuperAdmin() {
 }
 
 export async function getUserProfile(uid: string) {
-  const snapshot = await getDoc(doc(db, "users", uid));
+  const [snapshot, privateProfileSnapshot] = await Promise.all([
+    getDoc(doc(db, "users", uid)),
+    getDoc(doc(db, "users", uid, "private", "profile")),
+  ]);
   if (!snapshot.exists()) {
     return null;
   }
@@ -326,10 +334,14 @@ export async function getUserProfile(uid: string) {
     assignedBuildings?: unknown;
     assignedBuildingIds?: string[];
   };
+  const privateProfile = privateProfileSnapshot.exists()
+    ? (privateProfileSnapshot.data() as { gender?: unknown })
+    : null;
   const { campus, campusName } = resolveCampusAssignment(data);
 
   return {
     ...data,
+    gender: normalizeUserGender(privateProfile?.gender),
     role: normalizeRole(data.role) ?? data.role,
     campus,
     campusName,
@@ -359,6 +371,7 @@ export async function updateAccountSettings(
     lastName: string;
     accountType?: AccountType;
     organizationName?: string | null;
+    gender?: UserGender | null;
   }
 ) {
   const normalizedFirstName = data.firstName.trim();
@@ -382,6 +395,14 @@ export async function updateAccountSettings(
     },
     { merge: true }
   );
+
+  if (data.gender !== undefined) {
+    await setDoc(
+      doc(db, "users", uid, "private", "profile"),
+      buildUserGenderUpdate(data.gender, serverTimestamp()),
+      { merge: true }
+    );
+  }
 
   if (auth.currentUser?.uid === uid) {
     await updateProfile(auth.currentUser, {

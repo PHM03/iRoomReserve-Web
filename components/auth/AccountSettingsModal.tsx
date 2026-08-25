@@ -11,6 +11,11 @@ import {
 } from '@/lib/auth/auth';
 import { validatePassword } from '@/lib/auth/password';
 import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
+import {
+  USER_GENDER_LABELS,
+  USER_GENDER_VALUES,
+  type UserGender,
+} from '@/lib/auth/profile-types';
 
 interface AccountSettingsModalProps {
   open: boolean;
@@ -46,6 +51,7 @@ export default function AccountSettingsModal({
   const { firebaseUser, profile, reloadProfile } = useAuth();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [gender, setGender] = useState<UserGender | ''>('');
   const [accountType, setAccountType] = useState<AccountType>('individual');
   const [organizationName, setOrganizationName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -72,6 +78,7 @@ export default function AccountSettingsModal({
 
     setFirstName(profile?.firstName ?? '');
     setLastName(profile?.lastName ?? '');
+    setGender(profile?.gender ?? '');
     setAccountType(normalizeAccountType(profile?.accountType));
     setOrganizationName(profile?.organizationName ?? '');
     setErrorMessage('');
@@ -121,6 +128,7 @@ export default function AccountSettingsModal({
       await updateAccountSettings(firebaseUser.uid, {
         firstName: normalizedFirstName,
         lastName: normalizedLastName,
+        gender: gender || null,
         ...(isStudentAccount
           ? {
               accountType,
@@ -242,6 +250,28 @@ export default function AccountSettingsModal({
                   autoComplete="family-name"
                 />
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="accountGender" className="mb-1.5 block text-sm font-bold text-black">
+                Gender <span className="font-normal text-black/50">(optional)</span>
+              </label>
+              <select
+                id="accountGender"
+                value={gender}
+                onChange={(event) => setGender(event.target.value as UserGender | '')}
+                className="glass-input w-full px-4 py-3"
+              >
+                <option value="">Not specified</option>
+                {USER_GENDER_VALUES.map((value) => (
+                  <option key={value} value={value}>
+                    {USER_GENDER_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-black/55">
+                This is optional and is used only for aggregated sentiment analytics.
+              </p>
             </div>
 
             {isStudentAccount ? (

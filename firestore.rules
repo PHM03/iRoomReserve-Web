@@ -132,6 +132,23 @@ service cloud.firestore {
       allow create, update: if isSignedIn() && request.auth.uid == userId;
     }
 
+    // Optional self-reported gender is kept outside the broadly readable user
+    // profile document. Analytics reads this through the Admin SDK instead.
+    match /users/{userId}/private/profile {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create, update: if isSignedIn() &&
+        request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly(["gender", "updatedAt"]) &&
+        request.resource.data.gender in [
+          null,
+          "male",
+          "female",
+          "non_binary",
+          "prefer_not_to_say"
+        ];
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
     match /notifications/{docId} {
       allow read, update, delete: if isSignedIn() && request.auth.uid == resource.data.recipientUid;
     }
