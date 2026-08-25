@@ -104,6 +104,7 @@ interface ReservationRecord {
 }
 
 interface ReservationCreateBaseInput {
+  dcSpaceEventId?: string;
   userId: string;
   userName: string;
   userRole: string;
@@ -931,6 +932,9 @@ export async function createReservationRecord(data: ReservationCreateInput) {
       programDepartmentOrganization: data.programDepartmentOrganization,
       purpose: data.purpose,
       isEvent: data.isEvent,
+      ...(data.dcSpaceEventId?.trim()
+        ? { dcSpaceEventId: data.dcSpaceEventId.trim() }
+        : {}),
       ...(data.approvalDocumentName
         ? { approvalDocumentName: data.approvalDocumentName }
         : {}),
