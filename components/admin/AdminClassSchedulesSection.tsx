@@ -438,8 +438,16 @@ export default function AdminClassSchedulesSection({
   const hasImportPreview =
     parsingImport ||
     parsedImportRows.length > 0 ||
-    Boolean(importError) ||
-    Boolean(importSuccess);
+    Boolean(importError);
+
+  useEffect(() => {
+    if (!importSuccess) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setImportSuccess(null), 3500);
+    return () => window.clearTimeout(timeoutId);
+  }, [importSuccess]);
 
   function clearErrors() {
     setFormError(null);
@@ -603,14 +611,15 @@ export default function AdminClassSchedulesSection({
       }
 
       const skippedCount = importPreviewRows.length - rowsToImport.length;
+      setParsedImportRows([]);
+      setImportFileName('');
+      setImportError(null);
+      setShowImportOverrideConfirm(false);
       setImportSuccess(
         `${overrideExisting ? 'Overrode conflicts and imported' : 'Imported'} ${rowsToImport.length} schedule${
           rowsToImport.length === 1 ? '' : 's'
         }.${skippedCount > 0 ? ` Skipped ${skippedCount} flagged row${skippedCount === 1 ? '' : 's'}.` : ''}`
       );
-      setParsedImportRows([]);
-      setImportFileName('');
-      setShowImportOverrideConfirm(false);
     } catch (error) {
       console.warn('Failed to import schedules:', error);
       setImportError(
@@ -655,6 +664,15 @@ export default function AdminClassSchedulesSection({
           </button>
         </div>
       </div>
+
+      {importSuccess ? (
+        <div
+          role="status"
+          className="fixed bottom-6 right-6 z-50 rounded-lg bg-green-700 px-4 py-3 text-sm font-medium text-white shadow-lg"
+        >
+          {importSuccess}
+        </div>
+      ) : null}
 
       {showScheduleForm ? (
         <div className="mb-6 space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
@@ -1155,7 +1173,7 @@ export default function AdminClassSchedulesSection({
         </div>
       ) : null}
 
-      <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
+      <div>
         <div
           className="grid w-full"
           style={{
