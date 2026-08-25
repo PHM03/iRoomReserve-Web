@@ -114,6 +114,20 @@ export async function deleteSchedule(scheduleId: string): Promise<void> {
   await apiRequest(`/api/schedules/${scheduleId}`, { method: "DELETE" });
 }
 
+export async function clearRoomSchedules(input: {
+  roomId: string;
+  buildingId: string;
+  semester: ScheduleSemester;
+  academicYear: ScheduleAcademicYear;
+}): Promise<number> {
+  const payload = await apiRequest<{ deletedCount: number }>("/api/schedules", {
+    method: "DELETE",
+    params: input,
+  });
+
+  return payload.deletedCount;
+}
+
 function filterSchedulesByContext(
   schedules: Schedule[],
   context: ScheduleContext

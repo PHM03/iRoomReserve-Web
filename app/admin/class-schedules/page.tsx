@@ -21,6 +21,7 @@ import {
   type ScheduleSemester,
 } from '@/lib/schedules/scheduleContext';
 import {
+  clearRoomSchedules,
   getScheduleDisplayTitle,
   onSchedulesByBuilding,
   type Schedule,
@@ -346,6 +347,39 @@ export default function AdminClassSchedulesPage() {
     academicYear: selectedAcademicYear,
     semester: selectedSemester,
   });
+  const selectedRoomDetails = rooms.find(
+    (room) =>
+      room.buildingId === buildingId &&
+      getStoredRoomFloor(room) === selectedFloor &&
+      (room.id === selectedRoom || getRoomFilterValue(room) === selectedRoom)
+  );
+  const selectedRoomId = selectedRoomDetails?.id ?? '';
+  const selectedRoomScheduleCount = allBuildingSchedules.filter(
+    (schedule) => schedule.roomId === selectedRoomId
+  ).length;
+
+  const handleClearRoomSchedules = async () => {
+    if (!selectedRoomId || !buildingId) {
+      return;
+    }
+
+    try {
+      await clearRoomSchedules({
+        roomId: selectedRoomId,
+        buildingId,
+        semester: activeScheduleSemester,
+        academicYear: activeScheduleAcademicYear,
+      });
+    } catch (error) {
+      console.warn('Failed to clear room schedules:', error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Failed to clear the room schedule. Please try again.'
+      );
+      throw error;
+    }
+  };
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10">
@@ -494,6 +528,10 @@ export default function AdminClassSchedulesPage() {
             onSaveSchedule={handleSaveSchedule}
             onEditSchedule={handleEditSchedule}
             onDeleteSchedule={handleDeleteSchedule}
+            selectedRoomId={selectedRoomId}
+            selectedRoomName={selectedRoomDetails?.name ?? 'this room'}
+            roomScheduleCount={selectedRoomScheduleCount}
+            onClearRoomSchedules={handleClearRoomSchedules}
             buildingId={buildingId}
             currentUserId={currentUserId}
             activeScheduleSemester={activeScheduleSemester}

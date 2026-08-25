@@ -157,3 +157,69 @@ export async function POST(request: NextRequest) {
     return handleApiError(error);
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const authContext = await getRequestAuthContext(request);
+    assertAuthenticated(authContext);
+    assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
+
+    const { searchParams } = new URL(request.url);
+    const roomId = searchParams.get("roomId");
+    const buildingId = searchParams.get("buildingId");
+    const semester = searchParams.get("semester");
+    const academicYear = searchParams.get("academicYear");
+
+    if (!roomId || !buildingId || !semester || !academicYear) {
+      throw new ApiError(
+        400,
+        "invalid_clear_request",
+        "Room, building, semester, and academic year are required."
+      );
+    }
+
+    assertCanManageBuilding(authContext, buildingId);
+
+    const adminDb = getOptionalAdminDb();
+    if (!adminDb) {
+      throw new Error(
+        "Firebase Admin Firestore is not configured. Set FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY."
+      );
+    }
+
+    const roomSnapshot = await adminDb.collection("rooms").doc(roomId).get();
+    if (!roomSnapshot.exists || roomSnapshot.data()?.buildingId !== buildingId) {
+      throw new ApiError(404, "room_not_found", "Room not found in this building.");
+    }
+
+    const snapshot = await adminDb
+      .collection("schedules")
+      .where("roomId", "==", roomId)
+      .get();
+    const schedulesToDelete = snapshot.docs.filter((scheduleDoc) => {
+      const data = scheduleDoc.data() as {
+        buildingId?: string;
+        semester?: string;
+        academicYear?: string;
+      };
+
+      return (
+        data.buildingId === buildingId &&
+        data.semester === semester &&
+        data.academicYear === academicYear
+      );
+    });
+
+    for (let index = 0; index < schedulesToDelete.length; index += 500) {
+      const batch = adminDb.batch();
+      schedulesToDelete.slice(index, index + 500).forEach((scheduleDoc) => {
+        batch.delete(scheduleDoc.ref);
+      });
+      await batch.commit();
+    }
+
+    return NextResponse.json({ deletedCount: schedulesToDelete.length });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

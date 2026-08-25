@@ -115,6 +115,10 @@ interface AdminClassSchedulesSectionProps {
   onSaveSchedule: (overrideScheduleIds?: string[]) => void;
   onEditSchedule: (schedule: Schedule) => void;
   onDeleteSchedule: (scheduleId: string) => Promise<void>;
+  selectedRoomId: string;
+  selectedRoomName: string;
+  roomScheduleCount: number;
+  onClearRoomSchedules: () => Promise<void>;
   buildingId: string;
   currentUserId?: string | null;
   activeScheduleSemester: ScheduleSemester;
@@ -153,7 +157,7 @@ function getScheduleBlockHeight(startTime: string, endTime: string) {
 
 type DayScheduleSlotStatus = 'available' | 'scheduled' | 'selected' | 'conflict';
 
-type ImportPreviewStatus = 'valid' | 'invalid' | 'conflict';
+type ImportPreviewStatus = 'valid' | 'invalid' | 'conflict' | 'success';
 
 type ImportPreviewRow = ExcelScheduleImportCandidate & {
   existingConflicts: Schedule[];
@@ -188,6 +192,10 @@ export default function AdminClassSchedulesSection({
   onSaveSchedule,
   onEditSchedule,
   onDeleteSchedule,
+  selectedRoomId,
+  selectedRoomName,
+  roomScheduleCount,
+  onClearRoomSchedules,
   buildingId,
   currentUserId = null,
   activeScheduleSemester,
@@ -196,9 +204,11 @@ export default function AdminClassSchedulesSection({
   className = '',
 }: Readonly<AdminClassSchedulesSectionProps>) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showClearRoomConfirm, setShowClearRoomConfirm] = useState(false);
   const [showOverrideConfirm, setShowOverrideConfirm] = useState(false);
   const [showImportOverrideConfirm, setShowImportOverrideConfirm] = useState(false);
   const [deletingSchedule, setDeletingSchedule] = useState(false);
+  const [clearingRoomSchedules, setClearingRoomSchedules] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const [importFileName, setImportFileName] = useState('');
@@ -207,6 +217,9 @@ export default function AdminClassSchedulesSection({
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [parsingImport, setParsingImport] = useState(false);
   const [savingImport, setSavingImport] = useState(false);
+  const [successfulImportRowIds, setSuccessfulImportRowIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // Clear the time error whenever the form is hidden (cancelled / saved)
   useEffect(() => {
@@ -393,19 +406,22 @@ export default function AdminClassSchedulesSection({
         }
 
         const uniqueValidationErrors = [...new Set(validationErrors)];
+        const importedSuccessfully = successfulImportRowIds.has(row.id);
         const hasConflict =
           existingConflicts.length > 0 || duplicateImportConflict;
 
         return {
           ...row,
-          existingConflicts,
+          existingConflicts: importedSuccessfully ? [] : existingConflicts,
           status:
-            uniqueValidationErrors.length === 0
+            importedSuccessfully
+              ? 'success'
+              : uniqueValidationErrors.length === 0
               ? 'valid'
               : hasConflict
                 ? 'conflict'
                 : 'invalid',
-          validationErrors: uniqueValidationErrors,
+          validationErrors: importedSuccessfully ? [] : uniqueValidationErrors,
         };
       }),
     [
@@ -415,6 +431,7 @@ export default function AdminClassSchedulesSection({
       buildingId,
       campus,
       parsedImportRows,
+      successfulImportRowIds,
     ]
   );
   const validImportRows = useMemo(
@@ -433,7 +450,7 @@ export default function AdminClassSchedulesSection({
     [importPreviewRows]
   );
   const invalidImportCount = importPreviewRows.filter(
-    (row) => row.status !== 'valid'
+    (row) => row.status !== 'valid' && row.status !== 'success'
   ).length;
   const hasImportPreview =
     parsingImport ||
@@ -518,6 +535,7 @@ export default function AdminClassSchedulesSection({
     setImportSuccess(null);
     setParsingImport(false);
     setShowImportOverrideConfirm(false);
+    setSuccessfulImportRowIds(new Set());
   }
 
   async function handleImportFileChange(
@@ -538,6 +556,7 @@ export default function AdminClassSchedulesSection({
 
     setImportFileName(file.name);
     setParsedImportRows([]);
+    setSuccessfulImportRowIds(new Set());
     setImportError(null);
     setImportSuccess(null);
     setParsingImport(true);
@@ -579,6 +598,7 @@ export default function AdminClassSchedulesSection({
     setSavingImport(true);
     setImportError(null);
     setImportSuccess(null);
+    setSuccessfulImportRowIds(new Set());
 
     try {
       for (const row of rowsToImport) {
@@ -608,9 +628,11 @@ export default function AdminClassSchedulesSection({
           data,
           overrideExisting ? row.existingConflicts.map((schedule) => schedule.id) : []
         );
+        setSuccessfulImportRowIds((currentIds) => new Set(currentIds).add(row.id));
       }
 
       const skippedCount = importPreviewRows.length - rowsToImport.length;
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 900));
       setParsedImportRows([]);
       setImportFileName('');
       setImportError(null);
@@ -666,12 +688,18 @@ export default function AdminClassSchedulesSection({
       </div>
 
       {importSuccess ? (
-        <div
+        <p
           role="status"
-          className="fixed bottom-6 right-6 z-50 rounded-lg bg-green-700 px-4 py-3 text-sm font-medium text-white shadow-lg"
+          className="mb-5 rounded-lg bg-green-50 px-4 py-3 text-sm font-medium text-green-700"
         >
           {importSuccess}
-        </div>
+        </p>
+      ) : null}
+
+      {savingImport ? (
+        <p role="status" className="mb-5 rounded-lg bg-[#faf7f7] px-4 py-3 text-sm font-medium text-black/70">
+          Importing schedules...
+        </p>
       ) : null}
 
       {showScheduleForm ? (
@@ -1026,13 +1054,15 @@ export default function AdminClassSchedulesSection({
                   <tbody>
                     {importPreviewRows.map((row) => {
                       const rowClass =
-                        row.status === 'valid'
+                        row.status === 'success' || row.status === 'valid'
                           ? 'bg-white'
                           : row.status === 'conflict'
                             ? 'bg-red-50'
                             : 'bg-amber-50';
                       const statusLabel =
-                        row.status === 'valid'
+                        row.status === 'success'
+                          ? 'Successful'
+                          : row.status === 'valid'
                           ? 'Ready'
                           : row.status === 'conflict'
                             ? 'Conflict'
@@ -1066,6 +1096,8 @@ export default function AdminClassSchedulesSection({
                               className={`font-bold ${
                                 row.status === 'valid'
                                   ? 'text-green-700'
+                                  : row.status === 'success'
+                                    ? 'text-green-700'
                                   : row.status === 'conflict'
                                     ? 'text-red-700'
                                     : 'text-amber-700'
@@ -1158,7 +1190,10 @@ export default function AdminClassSchedulesSection({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleConfirmImport(true)}
+                        onClick={() => {
+                          setShowImportOverrideConfirm(false);
+                          void handleConfirmImport(true);
+                        }}
                         disabled={savingImport}
                         className="rounded-lg bg-red-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
                       >
@@ -1168,6 +1203,7 @@ export default function AdminClassSchedulesSection({
                   </div>
                 </div>
               ) : null}
+
             </>
           ) : null}
         </div>
@@ -1257,6 +1293,62 @@ export default function AdminClassSchedulesSection({
           ))}
         </div>
       </div>
+
+      <div className="mt-6 flex flex-col items-end gap-2 border-t border-gray-200 pt-5">
+        <button
+          type="button"
+          onClick={() => setShowClearRoomConfirm(true)}
+          disabled={!selectedRoomId || roomScheduleCount === 0 || clearingRoomSchedules}
+          className="rounded-lg border border-red-600 bg-white px-5 py-2.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Clear Room&apos;s Schedule
+        </button>
+        {!selectedRoomId ? (
+          <p className="text-xs text-gray-500">Select a room above to clear its schedule.</p>
+        ) : roomScheduleCount === 0 ? (
+          <p className="text-xs text-gray-500">This room has no current schedules to clear.</p>
+        ) : null}
+      </div>
+
+      {showClearRoomConfirm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h4 className="mb-2 text-base font-bold text-gray-900">
+              Clear Room&apos;s Schedule?
+            </h4>
+            <p className="mb-6 text-sm text-gray-500">
+              Are you sure you want to delete all {roomScheduleCount} current schedule{roomScheduleCount === 1 ? '' : 's'} for{' '}
+              <span className="font-semibold text-gray-800">{selectedRoomName}</span>? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowClearRoomConfirm(false)}
+                disabled={clearingRoomSchedules}
+                className="rounded-lg border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setClearingRoomSchedules(true);
+                  try {
+                    await onClearRoomSchedules();
+                    setShowClearRoomConfirm(false);
+                  } finally {
+                    setClearingRoomSchedules(false);
+                  }
+                }}
+                disabled={clearingRoomSchedules}
+                className="rounded-lg bg-red-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+              >
+                {clearingRoomSchedules ? 'Clearing...' : 'Yes, Clear Schedule'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
