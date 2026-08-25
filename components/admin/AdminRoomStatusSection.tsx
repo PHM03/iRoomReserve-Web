@@ -1,10 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import type { SentimentLabel } from '@/lib/ai/sentiment';
 import type { Feedback } from '@/lib/feedback/feedback';
-import { resolveFeedbackSentimentLabel } from '@/lib/feedback/feedback-sentiment';
+import {
+  resolveFeedbackSentimentLabel,
+  summarizeFeedbackSentiment,
+  summarizeFeedbackSentimentByRoom,
+  type FeedbackRoomSentimentSummary,
+  type FeedbackSentimentSummary,
+} from '@/lib/feedback/feedback-sentiment';
 import type { Reservation } from '@/lib/reservations/reservations';
 import {
   getPreferredDefaultFloorValue,
@@ -12,7 +18,11 @@ import {
 } from '@/lib/buildings/floorLabels';
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
 import type { Room } from '@/lib/rooms/rooms';
-import { StarRating } from '@/components/admin/dashboard/shared';
+import {
+  formatSentimentLabel,
+  getSentimentBadgeClasses,
+  StarRating,
+} from '@/components/admin/dashboard/shared';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -106,6 +116,9 @@ interface RoomUsageStats {
   hoursByDay: number[]; // index 0=Sun, 1=Mon, ..., 6=Sat
 }
 
+type SentimentSummaryMode = 'building' | 'room';
+type RoomSentimentSort = 'worst' | 'best' | 'feedback' | 'name';
+
 function computeRoomUsageStats(history: RoomHistoryEntry[]): RoomUsageStats {
   const hoursByDay = [0, 0, 0, 0, 0, 0, 0];
   let totalHours = 0;
@@ -122,6 +135,50 @@ function computeRoomUsageStats(history: RoomHistoryEntry[]): RoomUsageStats {
   }
 
   return { totalHours, hoursByDay };
+}
+
+function getSummarySentimentLabel(summary: FeedbackSentimentSummary | null) {
+  if (!summary || summary.total === 0) {
+    return null;
+  }
+
+  return resolveFeedbackSentimentLabel({
+    compoundScore: summary.averageCompoundScore,
+  });
+}
+
+function sortRoomSentimentSummaries(
+  summaries: FeedbackRoomSentimentSummary[],
+  sort: RoomSentimentSort
+) {
+  return [...summaries].sort((left, right) => {
+    if (sort === 'name') {
+      return left.roomName.localeCompare(right.roomName);
+    }
+
+    if (sort === 'feedback') {
+      return right.total - left.total || left.roomName.localeCompare(right.roomName);
+    }
+
+    const leftScore = left.summary?.averageCompoundScore ?? null;
+    const rightScore = right.summary?.averageCompoundScore ?? null;
+
+    if (leftScore === null && rightScore === null) {
+      return left.roomName.localeCompare(right.roomName);
+    }
+
+    if (leftScore === null) {
+      return 1;
+    }
+
+    if (rightScore === null) {
+      return -1;
+    }
+
+    return sort === 'worst'
+      ? leftScore - rightScore || left.roomName.localeCompare(right.roomName)
+      : rightScore - leftScore || left.roomName.localeCompare(right.roomName);
+  });
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -293,6 +350,259 @@ function ExpandedAnalytics({
   );
 }
 
+function SentimentDistribution({ summary }: { summary: FeedbackSentimentSummary }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {summary.sentimentDistribution.map((item) => (
+        <span
+          key={item.label}
+          className="rounded-full border border-dark/10 bg-dark/5 px-2 py-1 text-[10px] font-bold text-black/65"
+        >
+          {formatSentimentLabel(item.label)} {item.count} ({item.percentage}%)
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function getAspectTooltip(item: { label: string; tone: 'positive' | 'negative' }) {
+  const aspectName = item.label.toLowerCase();
+
+  return item.tone === 'positive'
+    ? `This room's ${aspectName} is a positive aspect.`
+    : `This room's ${aspectName} could be improved.`;
+}
+
+function AspectBadge({
+  item,
+}: {
+  item: {
+    aspect: string;
+    label: string;
+    tone: 'positive' | 'negative';
+  };
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipId = useId();
+  const tooltip = getAspectTooltip(item);
+
+  return (
+    <span
+      className="relative inline-flex"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      <span
+        tabIndex={0}
+        role="img"
+        aria-label={tooltip}
+        aria-describedby={tooltipId}
+        onFocus={() => setShowTooltip(true)}
+        onBlur={() => setShowTooltip(false)}
+        className={`inline-flex cursor-help rounded-full border px-2 py-1 text-[10px] font-bold outline-none focus:ring-2 focus:ring-primary/40 ${
+          item.tone === 'positive'
+            ? 'border-green-500/25 bg-green-500/10 text-green-700'
+            : 'border-red-500/25 bg-red-500/10 text-red-700'
+        }`}
+      >
+        {item.label}
+      </span>
+      <span
+        id={tooltipId}
+        role="tooltip"
+        aria-hidden={!showTooltip}
+        className={`dashboard-dropdown pointer-events-none absolute bottom-full left-1/2 z-[100] mb-2 w-max max-w-56 -translate-x-1/2 rounded-xl px-2.5 py-2 text-[11px] font-semibold text-black shadow-lg transition-opacity ${
+          showTooltip ? 'visible opacity-100' : 'invisible opacity-0'
+        }`}
+      >
+        {tooltip}
+      </span>
+    </span>
+  );
+}
+
+function AspectBadges({
+  items,
+}: {
+  items: Array<{
+    aspect: string;
+    label: string;
+    tone: 'positive' | 'negative';
+  }>;
+}) {
+  if (items.length === 0) {
+    return <span className="font-bold text-black/45">No aspects detected</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((item) => {
+        return <AspectBadge key={`${item.tone}-${item.aspect}`} item={item} />;
+      })}
+    </div>
+  );
+}
+
+function KeyAspectBadges({ summary }: { summary: FeedbackSentimentSummary }) {
+  const keyAspects = [
+    ...summary.mostPraisedAspects.slice(0, 3).map((item) => ({
+      ...item,
+      tone: 'positive' as const,
+    })),
+    ...summary.mostMentionedIssues.slice(0, 3).map((item) => ({
+      ...item,
+      tone: 'negative' as const,
+    })),
+  ];
+
+  return <AspectBadges items={keyAspects} />;
+}
+
+function SentimentSummaryDetails({ summary }: { summary: FeedbackSentimentSummary }) {
+  const sentimentLabel = getSummarySentimentLabel(summary);
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-black/45">Feedback</p>
+          <p className="text-lg font-extrabold text-black">{summary.total}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-black/45">Avg. VADER</p>
+          <p className="text-lg font-extrabold text-black">{summary.averageCompoundScore.toFixed(3)}</p>
+        </div>
+        <div className="sm:col-span-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-black/45">Sentiment</p>
+          {sentimentLabel ? (
+            <span
+              className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${getSentimentBadgeClasses(sentimentLabel)}`}
+            >
+              {formatSentimentLabel(sentimentLabel)}
+            </span>
+          ) : (
+            <p className="mt-1 text-sm font-bold text-black/50">No feedback</p>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-black/45">
+          Sentiment distribution
+        </p>
+        <SentimentDistribution summary={summary} />
+      </div>
+
+      {(summary.mostMentionedIssues.length > 0 || summary.mostPraisedAspects.length > 0) && (
+        <div className="grid gap-3 text-xs sm:grid-cols-2">
+          {summary.mostMentionedIssues.length > 0 && (
+            <div>
+              <p className="mb-1 font-bold text-black/55">Most mentioned issues</p>
+              <p className="text-black/70">
+                {summary.mostMentionedIssues.slice(0, 3).map((item) => item.label).join(', ')}
+              </p>
+            </div>
+          )}
+          {summary.mostPraisedAspects.length > 0 && (
+            <div>
+              <p className="mb-1 font-bold text-black/55">Most praised aspects</p>
+              <p className="text-black/70">
+                {summary.mostPraisedAspects.slice(0, 3).map((item) => item.label).join(', ')}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+function RoomSentimentSummaryTable({
+  summaries,
+  sort,
+  onSortChange,
+}: {
+  summaries: FeedbackRoomSentimentSummary[];
+  sort: RoomSentimentSort;
+  onSortChange: (sort: RoomSentimentSort) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-extrabold text-black">Room sentiment summary</p>
+        <label className="flex items-center gap-2 text-xs font-bold text-black/60">
+          <span>Sort rooms:</span>
+          <select
+            value={sort}
+            onChange={(event) => onSortChange(event.target.value as RoomSentimentSort)}
+            className="glass-input px-3 py-2 text-xs"
+          >
+            <option value="worst">Worst sentiment first</option>
+            <option value="best">Best sentiment first</option>
+            <option value="feedback">Most feedback</option>
+            <option value="name">Room name</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-dark/10 bg-white/60">
+        <table className="min-w-full text-left text-xs">
+          <thead className="border-b border-dark/10 bg-dark/5 text-[10px] uppercase tracking-widest text-black/50">
+            <tr>
+              <th className="px-3 py-2.5 font-extrabold">Room</th>
+              <th className="px-3 py-2.5 font-extrabold">Feedback</th>
+              <th className="px-3 py-2.5 font-extrabold">Avg. Score</th>
+              <th className="px-3 py-2.5 font-extrabold">Sentiment</th>
+              <th className="px-3 py-2.5 font-extrabold">Distribution</th>
+              <th className="px-3 py-2.5 font-extrabold">Key aspects</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-dark/10">
+            {summaries.map((room) => {
+              const sentimentLabel = getSummarySentimentLabel(room.summary);
+
+              return (
+                <tr key={room.roomId}>
+                  <td className="whitespace-nowrap px-3 py-3 font-extrabold text-black">{room.roomName}</td>
+                  <td className="whitespace-nowrap px-3 py-3 font-bold text-black/70">{room.total}</td>
+                  <td className="whitespace-nowrap px-3 py-3 font-bold text-black/70">
+                    {room.summary ? room.summary.averageCompoundScore.toFixed(3) : '—'}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3">
+                    {sentimentLabel ? (
+                      <span
+                        className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${getSentimentBadgeClasses(sentimentLabel)}`}
+                      >
+                        {formatSentimentLabel(sentimentLabel)}
+                      </span>
+                    ) : (
+                      <span className="font-bold text-black/45">No feedback</span>
+                    )}
+                  </td>
+                  <td className="min-w-[280px] px-3 py-3">
+                    {room.summary ? (
+                      <SentimentDistribution summary={room.summary} />
+                    ) : (
+                      <span className="font-bold text-black/45">No feedback</span>
+                    )}
+                  </td>
+                  <td className="min-w-[240px] px-3 py-3 align-top">
+                    {room.summary ? (
+                      <KeyAspectBadges summary={room.summary} />
+                    ) : (
+                      <span className="font-bold text-black/45">No feedback</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminRoomStatusSection({
@@ -310,6 +620,8 @@ export default function AdminRoomStatusSection({
   const [search, setSearch] = useState('');
   const [floorFilter, setFloorFilter] = useState<string>('');
   const [expandedRoomId, setExpandedRoomId] = useState<string | null>(null);
+  const [summaryMode, setSummaryMode] = useState<SentimentSummaryMode>('building');
+  const [roomSentimentSort, setRoomSentimentSort] = useState<RoomSentimentSort>('worst');
 
   // Unique floors for filter
   const floorOptions = useMemo(
@@ -390,6 +702,26 @@ export default function AdminRoomStatusSection({
     });
   }, [rooms, search, floorFilter]);
 
+  const summaryFeedback = useMemo(() => {
+    const visibleRoomIds = new Set(filteredRooms.map((room) => room.id));
+    return feedbackList.filter((feedback) => visibleRoomIds.has(feedback.roomId));
+  }, [feedbackList, filteredRooms]);
+
+  const buildingSentimentSummary = useMemo(
+    () => summarizeFeedbackSentiment(summaryFeedback),
+    [summaryFeedback]
+  );
+
+  const roomSentimentSummaries = useMemo(
+    () => summarizeFeedbackSentimentByRoom(filteredRooms, feedbackList),
+    [feedbackList, filteredRooms]
+  );
+
+  const sortedRoomSentimentSummaries = useMemo(
+    () => sortRoomSentimentSummaries(roomSentimentSummaries, roomSentimentSort),
+    [roomSentimentSort, roomSentimentSummaries]
+  );
+
   const desktopGridTemplateColumns = useMemo(() => {
     const longestRoomNameLength = rooms.reduce(
       (maxLength, room) => Math.max(maxLength, room.name.trim().length),
@@ -444,10 +776,55 @@ export default function AdminRoomStatusSection({
             onChange={setFloorFilter}
           />
 
+          <label className="flex items-center gap-2 text-xs font-bold text-black/60">
+            <span className="whitespace-nowrap">Summary by:</span>
+            <select
+              aria-label="Summary by"
+              value={summaryMode}
+              onChange={(event) => setSummaryMode(event.target.value as SentimentSummaryMode)}
+              className="glass-input h-9 px-3 text-xs font-bold text-black"
+            >
+              <option value="building">Building</option>
+              <option value="room">Room</option>
+            </select>
+          </label>
+
           <span className="text-[11px] font-bold text-black/40 ml-auto whitespace-nowrap">
             {filteredRooms.length} of {rooms.length} rooms
           </span>
         </div>
+      </div>
+
+      <div className="glass-card mb-4 p-4">
+        {summaryMode === 'building' ? (
+          <div className="space-y-3">
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-widest text-black/40">
+                Building sentiment summary
+              </p>
+              <p className="mt-1 text-xs text-black/55">
+                Aggregated for {buildingName ?? 'the selected building'} and the active room filters.
+              </p>
+            </div>
+            {buildingSentimentSummary.total === 0 ? (
+              <p className="dashboard-empty-state rounded-xl px-3 py-3 text-xs text-black/55">
+                No feedback for the selected building and filters.
+              </p>
+            ) : (
+              <SentimentSummaryDetails summary={buildingSentimentSummary} />
+            )}
+          </div>
+        ) : sortedRoomSentimentSummaries.length === 0 ? (
+          <p className="dashboard-empty-state rounded-xl px-3 py-3 text-xs text-black/55">
+            No rooms match your filters.
+          </p>
+        ) : (
+          <RoomSentimentSummaryTable
+            summaries={sortedRoomSentimentSummaries}
+            sort={roomSentimentSort}
+            onSortChange={setRoomSentimentSort}
+          />
+        )}
       </div>
 
       {/* ── Legend ── */}

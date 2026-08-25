@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getFeedbackGenderGroup,
   resolveFeedbackSentimentLabel,
+  summarizeFeedbackSentimentByRoom,
   summarizeFeedbackSentimentByGender,
   summarizeFeedbackSentiment,
 } from "../lib/feedback/feedback-sentiment";
@@ -87,6 +88,101 @@ describe("feedback sentiment helpers", () => {
       { aspect: "comfort", count: 1, label: "Comfort" },
       { aspect: "equipment", count: 1, label: "Equipment" },
     ]);
+  });
+
+  it("groups stored sentiment by room and keeps rooms without feedback visible", () => {
+    const summaries = summarizeFeedbackSentimentByRoom(
+      [
+        { id: "room-101", name: "101" },
+        { id: "room-102", name: "102" },
+      ],
+      [
+        { roomId: "room-101", compoundScore: -0.8 },
+        { roomId: "room-101", compoundScore: 0.4 },
+      ]
+    );
+
+    expect(summaries[0]).toMatchObject({
+      roomId: "room-101",
+      roomName: "101",
+      total: 2,
+      summary: expect.objectContaining({
+        averageCompoundScore: -0.2,
+        total: 2,
+      }),
+    });
+    expect(summaries[1]).toEqual({
+      roomId: "room-102",
+      roomName: "102",
+      total: 0,
+      summary: null,
+    });
+  });
+
+  it("aggregates room aspects across feedback and supports the top-three display limit", () => {
+    const summaries = summarizeFeedbackSentimentByRoom(
+      [{ id: "room-101", name: "101" }],
+      [
+        {
+          roomId: "room-101",
+          compoundScore: 0.4,
+          detectedAspects: {
+            cleanliness: "positive",
+            equipment: "positive",
+            seating: "positive",
+            lighting: "positive",
+            comfort: "negative",
+            air_conditioning: "negative",
+            internet: "negative",
+          },
+        },
+        {
+          roomId: "room-101",
+          compoundScore: -0.2,
+          detected_aspects: {
+            cleanliness: "positive",
+            comfort: "negative",
+            lighting: "negative",
+          },
+        },
+      ]
+    );
+
+    const summary = summaries[0].summary;
+    expect(summary).toBeTruthy();
+    expect(summary?.total).toBe(2);
+    expect(summary?.averageCompoundScore).toBe(0.1);
+    expect(summary?.mostPraisedAspects.slice(0, 3)).toEqual([
+      { aspect: "cleanliness", count: 2, label: "Cleanliness" },
+      { aspect: "equipment", count: 1, label: "Equipment" },
+      { aspect: "lighting", count: 1, label: "Lighting" },
+    ]);
+    expect(summary?.mostPraisedAspects.slice(0, 3)).toHaveLength(3);
+    expect(summary?.mostMentionedIssues.slice(0, 3)).toEqual([
+      { aspect: "comfort", count: 2, label: "Comfort" },
+      { aspect: "air_conditioning", count: 1, label: "Air Conditioning" },
+      { aspect: "internet", count: 1, label: "Internet" },
+    ]);
+    expect(summary?.mostMentionedIssues.slice(0, 3)).toHaveLength(3);
+    expect([
+      ...(summary?.mostPraisedAspects.slice(0, 3) ?? []),
+      ...(summary?.mostMentionedIssues.slice(0, 3) ?? []),
+    ]).toHaveLength(6);
+  });
+
+  it("returns no detected aspects for feedback without stored aspects", () => {
+    const summaries = summarizeFeedbackSentimentByRoom(
+      [{ id: "room-102", name: "102" }],
+      [{ roomId: "room-102", compoundScore: 0.2 }]
+    );
+
+    expect(summaries[0]).toMatchObject({
+      total: 1,
+      summary: expect.objectContaining({
+        mostPraisedAspects: [],
+        mostMentionedIssues: [],
+      }),
+    });
   });
 
   it("detects room aspects and extracts reporting keywords", () => {

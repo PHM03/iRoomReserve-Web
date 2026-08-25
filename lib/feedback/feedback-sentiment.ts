@@ -88,6 +88,13 @@ export interface FeedbackSentimentSummary {
   genderBreakdown?: FeedbackGenderSentimentSummary[];
 }
 
+export interface FeedbackRoomSentimentSummary {
+  roomId: string;
+  roomName: string;
+  total: number;
+  summary: FeedbackSentimentSummary | null;
+}
+
 function isSentimentLabel(value: unknown): value is SentimentLabel {
   return SENTIMENT_DISTRIBUTION_ORDER.includes(value as SentimentLabel);
 }
@@ -249,6 +256,34 @@ export function summarizeFeedbackSentiment(
   };
 
   return summary;
+}
+
+export function summarizeFeedbackSentimentByRoom(
+  rooms: Array<{ id: string; name: string }>,
+  feedbackItems: Array<FeedbackSentimentFields & { roomId?: string }>
+): FeedbackRoomSentimentSummary[] {
+  const feedbackByRoom = new Map<string, Array<FeedbackSentimentFields>>();
+
+  feedbackItems.forEach((feedback) => {
+    if (!feedback.roomId) {
+      return;
+    }
+
+    const roomFeedback = feedbackByRoom.get(feedback.roomId) ?? [];
+    roomFeedback.push(feedback);
+    feedbackByRoom.set(feedback.roomId, roomFeedback);
+  });
+
+  return rooms.map((room) => {
+    const roomFeedback = feedbackByRoom.get(room.id) ?? [];
+
+    return {
+      roomId: room.id,
+      roomName: room.name,
+      total: roomFeedback.length,
+      summary: roomFeedback.length > 0 ? summarizeFeedbackSentiment(roomFeedback) : null,
+    };
+  });
 }
 
 export function getFeedbackGenderGroup(value: unknown): FeedbackGenderGroup {
