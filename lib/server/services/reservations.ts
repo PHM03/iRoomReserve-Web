@@ -65,6 +65,7 @@ interface ReservationRecord {
   buildingName: string;
   campus: ReservationCampus;
   date: string;
+  dcSpaceEventId?: string | null;
   startTime: string;
   endTime: string;
   programDepartmentOrganization?: string;
@@ -1275,6 +1276,7 @@ export async function approveReservationRecord(
     await sendQueuedPushNotifications(queuedNotifications);
     await syncReservationStatuses(
       approvalResult.groupedReservations.map((reservation) => ({
+        dcSpaceEventId: reservation.dcSpaceEventId,
         id: reservation.id,
         roomId: reservation.roomId,
         roomName: reservation.roomName,
@@ -1394,6 +1396,7 @@ export async function rejectReservationRecord(
     await sendQueuedPushNotifications(queuedNotifications);
     await syncReservationStatuses(
       rejectionResult.groupedReservations.map((reservation) => ({
+        dcSpaceEventId: reservation.dcSpaceEventId,
         id: reservation.id,
         roomId: reservation.roomId,
         roomName: reservation.roomName,
@@ -1490,6 +1493,7 @@ export async function cancelReservationRecord(
     await sendQueuedPushNotifications(queuedNotifications);
     await syncReservationStatuses(
       reservationsToCancel.map((reservationToCancel) => ({
+        dcSpaceEventId: reservationToCancel.dcSpaceEventId,
         id: reservationToCancel.id,
         roomId: reservationToCancel.roomId,
         roomName: reservationToCancel.roomName,
@@ -1985,6 +1989,7 @@ export async function completeReservationRecord(
     await sendQueuedPushNotifications(queuedNotifications);
     await syncReservationStatuses([
       {
+        dcSpaceEventId: reservation.dcSpaceEventId,
         id: reservation.id,
         roomId: reservation.roomId,
         roomName: reservation.roomName,
@@ -2068,6 +2073,7 @@ export async function confirmFinishedReservationRecord(
     await batch.commit();
     await syncReservationStatuses([
       {
+        dcSpaceEventId: reservation.dcSpaceEventId,
         id: reservation.id,
         roomId: reservation.roomId,
         roomName: reservation.roomName,

@@ -10,6 +10,7 @@ type SyncableReservationStatus =
   | "cancelled";
 
 export interface ReservationStatusSyncInput {
+  dcSpaceEventId?: string | null;
   id: string;
   roomId: string;
   roomName: string;
@@ -17,6 +18,7 @@ export interface ReservationStatusSyncInput {
 }
 
 interface ReservationStatusSyncPayload {
+  eventId?: string;
   reservationId: string;
   status: SyncableReservationStatus;
   room: {
@@ -25,6 +27,36 @@ interface ReservationStatusSyncPayload {
     capacity: number;
   };
   updatedAt: string;
+}
+
+function getDcSpaceEventId(responseBody: unknown, reservationId: string) {
+  if (!responseBody || typeof responseBody !== "object") {
+    return null;
+  }
+
+  const reservation = (responseBody as { reservation?: unknown }).reservation;
+  if (!reservation || typeof reservation !== "object") {
+    return null;
+  }
+
+  const result = reservation as {
+    dcSpaceEventId?: unknown;
+    eventId?: unknown;
+    reservationId?: unknown;
+  };
+
+  if (result.reservationId !== reservationId) {
+    console.warn("[reservation-status-sync] Ignoring mismatched response", {
+      expectedReservationId: reservationId,
+      responseReservationId: result.reservationId,
+    });
+    return null;
+  }
+
+  const eventId = result.eventId ?? result.dcSpaceEventId;
+  return typeof eventId === "string" && eventId.trim().length > 0
+    ? eventId.trim()
+    : null;
 }
 
 function getIntegrationConfig() {
@@ -72,6 +104,10 @@ export async function syncReservationStatuses(
         updatedAt: new Date().toISOString(),
       };
 
+      if (reservation.dcSpaceEventId?.trim()) {
+        payload.eventId = reservation.dcSpaceEventId.trim();
+      }
+
       const response = await fetch(config.endpoint, {
         method: "POST",
         headers: {
@@ -84,6 +120,16 @@ export async function syncReservationStatuses(
 
       if (!response.ok) {
         throw new Error(`Partner API responded with ${response.status}.`);
+      }
+
+      const responseBody: unknown = await response.json().catch(() => null);
+      const dcSpaceEventId = getDcSpaceEventId(responseBody, reservation.id);
+
+      if (dcSpaceEventId) {
+        await db.collection("reservations").doc(reservation.id).set(
+          { dcSpaceEventId },
+          { merge: true }
+        );
       }
     })
   ).then((results) => {

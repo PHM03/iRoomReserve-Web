@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import NavBar from '@/components/layout/NavBar';
+import DcSpaceEventApprovedModal from '@/components/integrations/DcSpaceEventApprovedModal';
 import { useAdminTab } from '@/context/AdminTabContext';
 import { USER_ROLES } from '@/lib/auth/roles';
 import Link from 'next/link';
@@ -256,6 +257,8 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
             onTabChange: setActiveTab
           } : {})}
         />
+
+        <DcSpaceEventApprovedModal key={firebaseUser.uid} userId={firebaseUser.uid} />
 
         {children}
       </div>

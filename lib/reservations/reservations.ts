@@ -41,6 +41,7 @@ export interface Reservation {
   endTime: string;
   programDepartmentOrganization?: string;
   purpose: string;
+  dcSpaceEventId?: string | null;
   isEvent?: EventReservationValue;
   approvalDocumentName?: string;
   approvalDocumentUrl?: string;
