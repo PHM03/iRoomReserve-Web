@@ -1284,9 +1284,6 @@ export default function AdminClassSchedulesSection({
                     <p className="whitespace-normal break-words text-[10px] leading-tight text-[#666666]">
                       {schedule.instructorName}
                     </p>
-                    <p className="whitespace-normal break-words text-[10px] leading-tight text-[#666666]">
-                      {schedule.courseCode ?? getScheduleDisplayTitle(schedule)}
-                    </p>
                   </button>
                 ))}
             </div>
