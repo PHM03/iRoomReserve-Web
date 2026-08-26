@@ -17,9 +17,13 @@ import { auth, db } from "@/lib/firebase/firebase";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
 import {
   resolveFeedbackSentimentLabel,
+  type FeedbackGenderSentimentSummary,
   type FeedbackSentimentFields,
   type FeedbackSentimentSummary,
 } from "@/lib/feedback/feedback-sentiment";
+import type {
+  FeedbackAnalyticsPeriod,
+} from "@/lib/feedback/feedback-period";
 import {
   type SentimentAnalysis,
   type SentimentLabel,
@@ -84,6 +88,7 @@ export interface SubmitFeedbackResult {
 export interface BuildingFeedbackResult {
   feedback: Feedback[];
   summary: FeedbackSentimentSummary;
+  genderBreakdownByPeriod?: Partial<Record<FeedbackAnalyticsPeriod, FeedbackGenderSentimentSummary[]>>;
 }
 
 type TimestampLike =
@@ -386,6 +391,7 @@ export async function getFeedbackByBuilding(
   const payload = await apiRequest<{
     feedback: Array<FeedbackSnapshot & { id: string }>;
     summary: FeedbackSentimentSummary;
+    genderBreakdownByPeriod?: BuildingFeedbackResult['genderBreakdownByPeriod'];
   }>("/api/feedback", {
     method: "GET",
     params: { buildingId },
@@ -394,6 +400,7 @@ export async function getFeedbackByBuilding(
   return {
     feedback: payload.feedback.map(mapApiFeedback),
     summary: payload.summary,
+    genderBreakdownByPeriod: payload.genderBreakdownByPeriod,
   };
 }
 

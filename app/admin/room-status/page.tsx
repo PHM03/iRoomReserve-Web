@@ -82,6 +82,7 @@ export default function AdminRoomStatusPage() {
           />
 
           <AdminRoomStatusSection
+            buildingId={buildingId}
             buildingName={buildingName}
             rooms={rooms}
             statusMonitorFloorGroups={statusMonitorFloorGroups}

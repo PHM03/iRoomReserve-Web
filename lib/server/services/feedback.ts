@@ -14,11 +14,17 @@ import {
 } from "@/lib/feedback/feedback-analytics";
 import {
   resolveFeedbackSentimentLabel,
+  type FeedbackGenderSentimentSummary,
   summarizeFeedbackSentimentByGender,
   summarizeFeedbackSentiment,
   type FeedbackSentimentFields,
   type FeedbackSentimentSummary,
 } from "@/lib/feedback/feedback-sentiment";
+import {
+  FEEDBACK_ANALYTICS_PERIODS,
+  filterFeedbackByPeriod,
+  type FeedbackAnalyticsPeriod,
+} from "@/lib/feedback/feedback-period";
 import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
 import {
   queueNotificationWrite,
@@ -79,6 +85,7 @@ export interface FeedbackRecord extends FeedbackSentimentFields {
 export interface BuildingFeedbackSnapshot {
   feedback: FeedbackRecord[];
   summary: FeedbackSentimentSummary;
+  genderBreakdownByPeriod: Partial<Record<FeedbackAnalyticsPeriod, FeedbackGenderSentimentSummary[]>>;
 }
 
 type FeedbackDocumentData = Partial<FeedbackRecord> & {
@@ -309,6 +316,7 @@ export async function getFeedbackRecordsByBuilding(
         ...summarizeFeedbackSentiment([]),
         genderBreakdown: [],
       },
+      genderBreakdownByPeriod: {},
     };
   }
 
@@ -335,12 +343,19 @@ export async function getFeedbackRecordsByBuilding(
     })
   );
 
-  const genderBreakdown = summarizeFeedbackSentimentByGender(
-    feedback.map((item) => ({
+  const withGender = (items: FeedbackRecord[]) => items.map((item) => ({
       ...item,
       gender: genderByUserId.get(item.userId),
-    }))
-  );
+    }));
+  const genderBreakdown = summarizeFeedbackSentimentByGender(withGender(feedback));
+  const genderBreakdownByPeriod = Object.fromEntries(
+    FEEDBACK_ANALYTICS_PERIODS.map((period) => [
+      period,
+      summarizeFeedbackSentimentByGender(
+        withGender(filterFeedbackByPeriod(feedback, period).items)
+      ),
+    ])
+  ) as Partial<Record<FeedbackAnalyticsPeriod, FeedbackGenderSentimentSummary[]>>;
 
   return {
     feedback,
@@ -348,6 +363,7 @@ export async function getFeedbackRecordsByBuilding(
       ...summarizeFeedbackSentiment(feedback),
       genderBreakdown,
     },
+    genderBreakdownByPeriod,
   };
 }
 

@@ -20,7 +20,7 @@ import { fetchAdminDashboardSnapshot } from '@/lib/admin/adminDashboard';
 import type { AdminDashboardSummary } from '@/lib/admin/adminDashboard';
 import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
 import { getBuildingById } from '@/lib/buildings/buildings';
-import { getFeedbackByBuilding } from '@/lib/feedback/feedback';
+import { getFeedbackByBuilding, type BuildingFeedbackResult } from '@/lib/feedback/feedback';
 import type { Feedback } from '@/lib/feedback/feedback';
 import type { FeedbackSentimentSummary } from '@/lib/feedback/feedback-sentiment';
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
@@ -81,6 +81,8 @@ export default function AdminDashboard({
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
   const [feedbackSummary, setFeedbackSummary] =
     useState<FeedbackSentimentSummary | null>(null);
+  const [genderBreakdownByPeriod, setGenderBreakdownByPeriod] =
+    useState<BuildingFeedbackResult['genderBreakdownByPeriod']>({});
   const [roomHistory, setRoomHistory] = useState<RoomHistoryEntry[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [buildingFloors, setBuildingFloors] = useState(0);
@@ -100,6 +102,7 @@ export default function AdminDashboard({
         const feedbackSnapshot = await getFeedbackByBuilding(buildingId);
         setFeedbackList(feedbackSnapshot.feedback);
         setFeedbackSummary(feedbackSnapshot.summary);
+        setGenderBreakdownByPeriod(feedbackSnapshot.genderBreakdownByPeriod ?? {});
         return;
       }
 
@@ -137,6 +140,7 @@ export default function AdminDashboard({
       if (activeTab === 'feedback') {
         setFeedbackList([]);
         setFeedbackSummary(null);
+        setGenderBreakdownByPeriod({});
       }
     }
   }, [activeTab, buildingId, firebaseUser?.uid]);
@@ -364,6 +368,7 @@ export default function AdminDashboard({
           buildingId={buildingId}
           feedbackList={feedbackList}
           feedbackSummary={feedbackSummary}
+          genderBreakdownByPeriod={genderBreakdownByPeriod}
           managedBuildings={managedBuildings}
           onBuildingChange={setSelectedBuildingId}
           onReload={reloadDashboard}

@@ -4,8 +4,20 @@ import { useEffect, useMemo, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import {
   resolveFeedbackSentimentLabel,
+  summarizeFeedbackSentiment,
   type FeedbackSentimentSummary,
 } from '@/lib/feedback/feedback-sentiment';
+import {
+  FEEDBACK_ANALYTICS_PERIODS,
+  compareFeedbackPeriods,
+  scopeFeedbackToBuilding,
+  type FeedbackAnalyticsPeriod,
+} from '@/lib/feedback/feedback-period';
+import {
+  buildFeedbackInsights,
+  type FeedbackInsights,
+} from '@/lib/feedback/feedback-insights';
+import type { BuildingFeedbackResult } from '@/lib/feedback/feedback';
 import {
   FEEDBACK_ASPECT_LABELS,
   FEEDBACK_CATEGORY_KEYS,
@@ -33,6 +45,7 @@ interface AdminFeedbackTabProps {
   buildingId: string;
   feedbackList: Feedback[];
   feedbackSummary: FeedbackSentimentSummary | null;
+  genderBreakdownByPeriod?: BuildingFeedbackResult['genderBreakdownByPeriod'];
   managedBuildings: BuildingOption[];
   onBuildingChange: (buildingId: string) => void;
   onReload: () => Promise<void>;
@@ -77,6 +90,58 @@ function getBroadSentimentPercentages(summary: FeedbackSentimentSummary) {
   };
 }
 
+function TrendInsightsSection({ insights }: { insights: FeedbackInsights }) {
+  const sentimentMessage = {
+    improving: 'Overall sentiment is improving compared with the previous period.',
+    declining: 'Overall sentiment is declining compared with the previous period.',
+    stable: 'Overall sentiment is stable compared with the previous period.',
+    not_enough_data: 'Not enough data to compare sentiment with the previous period.',
+  }[insights.sentimentDirection];
+
+  const roomAttentionMessage = insights.roomNeedingAttention
+    ? `${insights.roomNeedingAttention.roomName} has the lowest average sentiment among rooms with sufficient feedback.`
+    : 'Not enough data to identify a room trend.';
+  const bestRoomMessage = insights.bestRoom
+    ? `${insights.bestRoom.roomName} has the highest average sentiment among rooms with sufficient feedback.`
+    : 'Not enough data to identify a room trend.';
+  const concernMessage = insights.topConcern
+    ? `${insights.topConcern.label} was the most frequently mentioned concern.`
+    : 'Not enough data to identify a dominant concern.';
+  const praisedMessage = insights.mostPraised
+    ? `${insights.mostPraised.label} received the most positive mentions.`
+    : 'Not enough data to identify a dominant praised aspect.';
+
+  const cards = [
+    { title: 'Sentiment Trend', message: sentimentMessage, marker: '📈', tone: 'text-primary' },
+    { title: 'Room Needing Attention', message: roomAttentionMessage, marker: '⚠️', tone: 'text-amber-700' },
+    { title: 'Best-Performing Room', message: bestRoomMessage, marker: '🏆', tone: 'text-emerald-700' },
+    { title: 'Top Concern', message: concernMessage, marker: '🔴', tone: 'text-red-700' },
+    { title: 'Most Praised', message: praisedMessage, marker: '🟢', tone: 'text-emerald-700' },
+  ];
+
+  return (
+    <div className="glass-card p-4">
+      <div className="mb-3">
+        <h3 className="text-base font-bold text-black">Trend Insights</h3>
+        <p className="mt-1 text-xs text-black/55">
+          Plain-language highlights from the selected building and reporting period.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {cards.map((card) => (
+          <div key={card.title} className="rounded-xl border border-dark/10 bg-white/65 p-3">
+            <p className={`text-xs font-bold ${card.tone}`}>
+              <span aria-hidden="true" className="mr-1">{card.marker}</span>
+              {card.title}
+            </p>
+            <p className="mt-2 text-xs leading-5 text-black/70">{card.message}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AdminFeedbackTab({
@@ -84,6 +149,7 @@ export default function AdminFeedbackTab({
   buildingId,
   feedbackList,
   feedbackSummary,
+  genderBreakdownByPeriod = {},
   managedBuildings,
   onBuildingChange,
   onReload,
@@ -98,6 +164,38 @@ export default function AdminFeedbackTab({
   const [starFilter, setStarFilter] = useState<number | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<FeedbackAnalyticsPeriod>('all_time');
+  const [analyticsNow] = useState(() => new Date());
+
+  const buildingFeedbackList = useMemo(
+    () => scopeFeedbackToBuilding(feedbackList, buildingId),
+    [buildingId, feedbackList]
+  );
+
+  const selectedPeriodFeedback = useMemo(
+    () => compareFeedbackPeriods(buildingFeedbackList, analyticsPeriod, analyticsNow),
+    [analyticsNow, analyticsPeriod, buildingFeedbackList]
+  );
+
+  const selectedFeedbackSummary = useMemo(() => {
+    if (!selectedPeriodFeedback.configured || selectedPeriodFeedback.currentItems.length === 0) {
+      return null;
+    }
+
+    if (analyticsPeriod === 'all_time' && feedbackSummary) {
+      return feedbackSummary;
+    }
+
+    return {
+      ...summarizeFeedbackSentiment(selectedPeriodFeedback.currentItems),
+      genderBreakdown: genderBreakdownByPeriod[analyticsPeriod] ?? [],
+    };
+  }, [
+    analyticsPeriod,
+    feedbackSummary,
+    genderBreakdownByPeriod,
+    selectedPeriodFeedback,
+  ]);
 
   const handleRespondFeedback = async (feedbackId: string) => {
     if (!responseText.trim()) return;
@@ -123,7 +221,7 @@ export default function AdminFeedbackTab({
   // Unique floors present in current feedback (not all rooms — only reviewed rooms)
   const floorsInFeedback = useMemo(() => {
     const floorsFromRooms = new Set<string>();
-    feedbackList.forEach((f) => {
+    buildingFeedbackList.forEach((f) => {
       const floor = roomFloorMap.get(f.roomId);
       if (floor) floorsFromRooms.add(floor);
     });
@@ -132,7 +230,7 @@ export default function AdminFeedbackTab({
       rooms.forEach((r) => floorsFromRooms.add(r.floor));
     }
     return sortFloors(Array.from(floorsFromRooms));
-  }, [feedbackList, roomFloorMap, rooms]);
+  }, [buildingFeedbackList, roomFloorMap, rooms]);
 
   // Rooms on the selected floor
   const roomsOnFloor = useMemo(() => {
@@ -143,7 +241,7 @@ export default function AdminFeedbackTab({
   // ── Filter logic ─────────────────────────────────────────────────────────
 
   const filteredFeedback = useMemo(() => {
-    return feedbackList.filter((f) => {
+    return buildingFeedbackList.filter((f) => {
       if (floorFilter !== 'All') {
         const floor = roomFloorMap.get(f.roomId);
         if (floor !== floorFilter) return false;
@@ -162,10 +260,24 @@ export default function AdminFeedbackTab({
       }
       return true;
     });
-  }, [feedbackList, floorFilter, roomFilter, starFilter, dateFrom, dateTo, roomFloorMap]);
+  }, [buildingFeedbackList, floorFilter, roomFilter, starFilter, dateFrom, dateTo, roomFloorMap]);
 
   const hasActiveFilters =
     floorFilter !== 'All' || roomFilter !== 'All' || starFilter !== null || !!dateFrom || !!dateTo;
+
+  const insightPeriodFeedback = useMemo(
+    () => compareFeedbackPeriods(filteredFeedback, analyticsPeriod, analyticsNow),
+    [analyticsNow, analyticsPeriod, filteredFeedback]
+  );
+
+  const feedbackInsights = useMemo(
+    () => buildFeedbackInsights(
+      insightPeriodFeedback.currentItems,
+      insightPeriodFeedback.previousItems,
+      insightPeriodFeedback.comparable,
+    ),
+    [insightPeriodFeedback]
+  );
 
   useEffect(() => {
     const defaultFloor = floorsInFeedback[0] ?? 'All';
@@ -216,18 +328,18 @@ export default function AdminFeedbackTab({
 
   // ─────────────────────────────────────────────────────────────────────────
 
-  const sentimentDistribution = feedbackSummary
+  const sentimentDistribution = selectedFeedbackSummary
     ? SENTIMENT_DISTRIBUTION_ORDER.map(
         (label) =>
-          feedbackSummary.sentimentDistribution.find((item) => item.label === label) ?? {
+          selectedFeedbackSummary.sentimentDistribution.find((item) => item.label === label) ?? {
             count: 0,
             label,
             percentage: 0,
           }
       )
     : [];
-  const maxIssueCount = feedbackSummary?.mostMentionedIssues[0]?.count ?? 0;
-  const maxPraiseCount = feedbackSummary?.mostPraisedAspects[0]?.count ?? 0;
+  const maxIssueCount = selectedFeedbackSummary?.mostMentionedIssues[0]?.count ?? 0;
+  const maxPraiseCount = selectedFeedbackSummary?.mostPraisedAspects[0]?.count ?? 0;
 
   return (
     <div>
@@ -235,7 +347,7 @@ export default function AdminFeedbackTab({
       <div className="relative z-[60] mb-6 flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-xl font-bold text-gray-800">Room Feedback</h3>
-          <span className="text-sm text-gray-600">{feedbackList.length} total</span>
+          <span className="text-sm text-gray-600">{buildingFeedbackList.length} total</span>
         </div>
         {managedBuildings.length > 1 ? (
           <div className="w-full sm:ml-auto sm:w-72">
@@ -257,7 +369,7 @@ export default function AdminFeedbackTab({
         )}
       </div>
 
-      {feedbackList.length === 0 ? (
+      {buildingFeedbackList.length === 0 ? (
         <div className="glass-card p-4">
           <div className="dashboard-empty-state rounded-2xl p-12 text-center">
           <div className="text-4xl mb-3">Feedback</div>
@@ -269,7 +381,49 @@ export default function AdminFeedbackTab({
         <div className="space-y-4">
 
           {/* ── Existing summary cards — unchanged ── */}
-          {feedbackSummary && (
+          <div className="glass-card p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-base font-bold text-black">Feedback Analytics</h3>
+                <p className="mt-1 text-xs text-black/55">
+                  Existing feedback analytics for the selected reporting period.
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-xs font-bold text-black/60">
+                <span className="whitespace-nowrap">Period:</span>
+                <select
+                  aria-label="Feedback analytics period"
+                  value={analyticsPeriod}
+                  onChange={(event) =>
+                    setAnalyticsPeriod(event.target.value as FeedbackAnalyticsPeriod)
+                  }
+                  className="glass-input h-9 px-3 text-xs font-bold text-black"
+                >
+                  {FEEDBACK_ANALYTICS_PERIODS.map((period) => (
+                    <option key={period} value={period}>
+                      {period === 'all_time'
+                        ? 'All Time'
+                        : period[0].toUpperCase() + period.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          {!selectedPeriodFeedback.configured ? (
+            <div className="glass-card p-6">
+              <p className="dashboard-empty-state rounded-xl px-3 py-5 text-center text-xs font-bold text-black/50">
+                {selectedPeriodFeedback.message}
+              </p>
+            </div>
+          ) : !selectedFeedbackSummary ? (
+            <div className="glass-card p-6">
+              <p className="dashboard-empty-state rounded-xl px-3 py-5 text-center text-xs font-bold text-black/50">
+                No feedback available for this period.
+              </p>
+            </div>
+          ) : (
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 {sentimentDistribution.map((item) => (
@@ -305,15 +459,15 @@ export default function AdminFeedbackTab({
                     Average VADER
                   </p>
                   <p className="mt-2 text-3xl font-bold text-black">
-                    {feedbackSummary.averageCompoundScore.toFixed(2)}
+                    {selectedFeedbackSummary.averageCompoundScore.toFixed(2)}
                   </p>
                   <p className="text-xs text-black/55">
                     {formatSentimentLabel(
                       resolveFeedbackSentimentLabel({
-                        compoundScore: feedbackSummary.averageCompoundScore,
+                        compoundScore: selectedFeedbackSummary.averageCompoundScore,
                       })
                     )}{' '}
-                    across {feedbackSummary.total} reviews
+                    across {selectedFeedbackSummary.total} reviews
                   </p>
                 </div>
 
@@ -324,13 +478,13 @@ export default function AdminFeedbackTab({
                     </p>
                     <span className="text-[10px] font-bold text-black/45">Negative mentions</span>
                   </div>
-                  {feedbackSummary.mostMentionedIssues.length === 0 ? (
+                  {selectedFeedbackSummary.mostMentionedIssues.length === 0 ? (
                     <p className="dashboard-empty-state rounded-xl px-3 py-4 text-center text-xs font-bold text-black/50">
                       No negative aspect mentions yet.
                     </p>
                   ) : (
                     <div className="space-y-2.5">
-                      {feedbackSummary.mostMentionedIssues.slice(0, 5).map((item, index) => (
+                      {selectedFeedbackSummary.mostMentionedIssues.slice(0, 5).map((item, index) => (
                         <div key={item.aspect}>
                           <div className="mb-1 flex items-center justify-between text-xs">
                             <span className="font-bold text-black">
@@ -357,13 +511,13 @@ export default function AdminFeedbackTab({
                     </p>
                     <span className="text-[10px] font-bold text-black/45">Positive mentions</span>
                   </div>
-                  {feedbackSummary.mostPraisedAspects.length === 0 ? (
+                  {selectedFeedbackSummary.mostPraisedAspects.length === 0 ? (
                     <p className="dashboard-empty-state rounded-xl px-3 py-4 text-center text-xs font-bold text-black/50">
                       No positive aspect mentions yet.
                     </p>
                   ) : (
                     <div className="space-y-2.5">
-                      {feedbackSummary.mostPraisedAspects.slice(0, 5).map((item, index) => (
+                      {selectedFeedbackSummary.mostPraisedAspects.slice(0, 5).map((item, index) => (
                         <div key={item.aspect}>
                           <div className="mb-1 flex items-center justify-between text-xs">
                             <span className="font-bold text-black">
@@ -384,7 +538,7 @@ export default function AdminFeedbackTab({
                 </div>
               </div>
 
-              {(feedbackSummary.genderBreakdown?.length ?? 0) > 0 && (
+              {(selectedFeedbackSummary.genderBreakdown?.length ?? 0) > 0 && (
                 <div className="glass-card p-4">
                   <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -401,7 +555,7 @@ export default function AdminFeedbackTab({
                   </div>
 
                   <div className="grid gap-3 xl:grid-cols-2">
-                    {feedbackSummary.genderBreakdown?.map((group) => (
+                    {selectedFeedbackSummary.genderBreakdown?.map((group) => (
                       <div key={group.group} className="rounded-xl border border-dark/10 bg-white/65 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -476,6 +630,10 @@ export default function AdminFeedbackTab({
               )}
             </div>
           )}
+
+          {insightPeriodFeedback.configured && insightPeriodFeedback.currentItems.length > 0 ? (
+            <TrendInsightsSection insights={feedbackInsights} />
+          ) : null}
 
           {/* ── Filter controls ── */}
           <div className="glass-card p-4 space-y-3">
@@ -582,7 +740,7 @@ export default function AdminFeedbackTab({
                 <span className={hasActiveFilters ? 'text-primary' : 'text-black'}>
                   {filteredFeedback.length}
                 </span>{' '}
-                of {feedbackList.length} reviews
+                of {buildingFeedbackList.length} reviews
               </p>
               {hasActiveFilters && (
                 <button
