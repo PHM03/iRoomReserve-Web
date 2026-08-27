@@ -1,3 +1,10 @@
+import {
+  DEFAULT_SCHEDULE_CONTEXT,
+  getScheduleAcademicYearAtOffset,
+  getScheduleSemesterDateRange,
+  type ScheduleContext,
+} from '../schedules/scheduleContext';
+
 export const FEEDBACK_ANALYTICS_PERIODS = [
   'all_time',
   'weekly',
@@ -33,13 +40,21 @@ function getPeriodRange(
   period: FeedbackAnalyticsPeriod,
   now: Date,
   periodOffset = 0,
+  scheduleContext: ScheduleContext = DEFAULT_SCHEDULE_CONTEXT,
 ): DateRange | null {
   if (period === 'all_time') {
     return null;
   }
 
   if (period === 'semester') {
-    return null;
+    const academicYear = getScheduleAcademicYearAtOffset(
+      scheduleContext.academicYear,
+      periodOffset,
+    );
+
+    return academicYear
+      ? getScheduleSemesterDateRange(academicYear, scheduleContext.semester)
+      : null;
   }
 
   if (period === 'weekly') {
@@ -109,12 +124,24 @@ export function filterFeedbackByPeriod<T extends { createdAt?: unknown }>(
   items: T[],
   period: FeedbackAnalyticsPeriod,
   now = new Date(),
+  scheduleContext: ScheduleContext = DEFAULT_SCHEDULE_CONTEXT,
 ): FeedbackPeriodResult<T> {
   if (period === 'semester') {
+    const range = getPeriodRange(period, now, 0, scheduleContext);
+    if (!range) {
+      return {
+        items: [],
+        configured: false,
+        message: 'The selected academic semester is not configured.',
+      };
+    }
+
     return {
-      items: [],
-      configured: false,
-      message: 'Semester date ranges are not configured in the current academic-period settings.',
+      items: items.filter((item) => {
+        const date = getTimestampDate(item.createdAt);
+        return date !== null && date >= range.start && date < range.end;
+      }),
+      configured: true,
     };
   }
 
@@ -144,14 +171,32 @@ export function compareFeedbackPeriods<T extends { createdAt?: unknown }>(
   items: T[],
   period: FeedbackAnalyticsPeriod,
   now = new Date(),
+  scheduleContext: ScheduleContext = DEFAULT_SCHEDULE_CONTEXT,
 ): FeedbackPeriodComparison<T> {
   if (period === 'semester') {
+    const currentRange = getPeriodRange(period, now, 0, scheduleContext);
+    if (!currentRange) {
+      return {
+        currentItems: [],
+        previousItems: [],
+        configured: false,
+        comparable: false,
+        message: 'The selected academic semester is not configured.',
+      };
+    }
+
+    const previousRange = getPeriodRange(period, now, -1, scheduleContext);
+    const filterByRange = (range: DateRange) => items.filter((item) => {
+      const date = getTimestampDate(item.createdAt);
+      return date !== null && date >= range.start && date < range.end;
+    });
+
     return {
-      currentItems: [],
-      previousItems: [],
-      configured: false,
-      comparable: false,
-      message: 'Semester date ranges are not configured in the current academic-period settings.',
+      currentItems: filterByRange(currentRange),
+      previousItems: previousRange ? filterByRange(previousRange) : [],
+      configured: true,
+      comparable: previousRange !== null,
+      message: previousRange ? undefined : 'No previous academic year is configured for comparison.',
     };
   }
 
@@ -164,8 +209,8 @@ export function compareFeedbackPeriods<T extends { createdAt?: unknown }>(
     };
   }
 
-  const currentRange = getPeriodRange(period, now);
-  const previousRange = getPeriodRange(period, now, -1);
+  const currentRange = getPeriodRange(period, now, 0, scheduleContext);
+  const previousRange = getPeriodRange(period, now, -1, scheduleContext);
   if (!currentRange || !previousRange) {
     return {
       currentItems: [],

@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { buildSentimentTrend } from '../lib/feedback/feedback-trend';
+import { scopeFeedback } from '../lib/feedback/feedback-scope';
+import { summarizeFeedbackSentimentByRoom } from '../lib/feedback/feedback-sentiment';
+import type { ScheduleContext } from '../lib/schedules/scheduleContext';
 
 function feedback(input: {
   date: string;
+  roomId?: string;
+  buildingId?: string;
   compoundScore?: number;
   vaderCompoundScore?: number;
 }) {
   return {
     id: input.date,
-    roomId: 'room-1',
+    roomId: input.roomId ?? 'room-1',
     roomName: 'Room 1',
-    buildingId: 'building-1',
+    buildingId: input.buildingId ?? 'building-1',
     buildingName: 'Building 1',
     reservationId: 'reservation-1',
     userId: 'user-1',
@@ -78,11 +83,89 @@ describe('buildSentimentTrend', () => {
     expect(yearly.buckets[0].averageCompoundScore).toBe(0.6);
   });
 
-  it('does not invent semester dates when no date range is configured', () => {
-    const result = buildSentimentTrend([], 'semester', new Date('2026-08-26T12:00:00'));
+  it('builds semester buckets from the selected academic year and semester', () => {
+    const context: ScheduleContext = {
+      academicYear: 'A.Y. 2026-2027',
+      semester: '1st Semester',
+    };
+    const result = buildSentimentTrend(
+      [
+        feedback({ date: '2026-08-24T09:00:00', compoundScore: 0.6 }),
+        feedback({ date: '2027-01-01T00:00:00', compoundScore: -0.6 }),
+      ],
+      'semester',
+      new Date('2026-08-26T12:00:00'),
+      context,
+    );
 
-    expect(result.configured).toBe(false);
-    expect(result.buckets).toEqual([]);
-    expect(result.message).toContain('Semester date ranges');
+    expect(result.configured).toBe(true);
+    expect(result.buckets).toHaveLength(5);
+    expect(result.buckets[0].averageCompoundScore).toBe(0.6);
+    expect(result.buckets[0].feedbackCount).toBe(1);
+    expect(result.buckets.every((bucket) => bucket.averageCompoundScore !== -0.6)).toBe(true);
+  });
+
+  it('uses stored feedback dates to create all-time monthly buckets', () => {
+    const result = buildSentimentTrend(
+      [
+        feedback({ date: '2026-01-05T09:00:00', compoundScore: 0.6 }),
+        feedback({ date: '2026-03-05T09:00:00', compoundScore: -0.2 }),
+      ],
+      'all_time',
+      new Date('2026-08-26T12:00:00'),
+    );
+
+    expect(result.configured).toBe(true);
+    expect(result.buckets).toHaveLength(3);
+    expect(result.buckets[0].averageCompoundScore).toBe(0.6);
+    expect(result.buckets[1].averageCompoundScore).toBeNull();
+    expect(result.buckets[2].averageCompoundScore).toBe(-0.2);
+  });
+
+  it('applies building, floor, and room scope before trend and room-summary aggregation', () => {
+    const rooms = [
+      { id: 'room-101', name: 'Room 101', buildingId: 'building-1', floor: '1' },
+      { id: 'room-201', name: 'Room 201', buildingId: 'building-1', floor: '2' },
+      { id: 'digi-101', name: 'Digi 101', buildingId: 'building-2', floor: '1' },
+    ];
+    const items = [
+      feedback({ date: '2026-08-24T09:00:00', roomId: 'room-101', compoundScore: 0.2 }),
+      feedback({ date: '2026-08-24T10:00:00', roomId: 'room-201', compoundScore: 0.8 }),
+      feedback({ date: '2026-08-24T11:00:00', roomId: 'digi-101', buildingId: 'building-2', compoundScore: -1 }),
+    ];
+
+    const buildingFeedback = scopeFeedback(items, {
+      buildingId: 'building-1',
+      rooms,
+      scope: 'building',
+    });
+    const floorFeedback = scopeFeedback(items, {
+      buildingId: 'building-1',
+      floor: '2',
+      rooms,
+      scope: 'floor',
+    });
+    const roomFeedback = scopeFeedback(items, {
+      buildingId: 'building-1',
+      roomId: 'room-101',
+      rooms,
+      scope: 'room',
+    });
+    const now = new Date('2026-08-26T12:00:00');
+
+    const buildingTrend = buildSentimentTrend(buildingFeedback, 'weekly', now);
+    const floorTrend = buildSentimentTrend(floorFeedback, 'weekly', now);
+    const roomTrend = buildSentimentTrend(roomFeedback, 'weekly', now);
+
+    expect(buildingTrend.buckets[1].feedbackCount).toBe(2);
+    expect(floorTrend.buckets[1].feedbackCount).toBe(1);
+    expect(floorTrend.buckets[1].averageCompoundScore).toBe(0.8);
+    expect(roomTrend.buckets[1].feedbackCount).toBe(1);
+    expect(roomTrend.buckets[1].averageCompoundScore).toBe(0.2);
+
+    const roomSummaries = summarizeFeedbackSentimentByRoom(rooms, floorFeedback);
+    expect(roomSummaries.find((room) => room.roomId === 'room-201')?.total).toBe(1);
+    expect(roomSummaries.find((room) => room.roomId === 'room-101')?.total).toBe(0);
+    expect(roomSummaries.find((room) => room.roomId === 'digi-101')?.total).toBe(0);
   });
 });

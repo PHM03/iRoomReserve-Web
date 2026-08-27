@@ -5,12 +5,6 @@ import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import type { SentimentLabel } from '@/lib/ai/sentiment';
 import type { Feedback } from '@/lib/feedback/feedback';
 import {
-  buildSentimentTrend,
-  SENTIMENT_TREND_PERIODS,
-  type SentimentTrendBucket,
-  type SentimentTrendPeriod,
-} from '@/lib/feedback/feedback-trend';
-import {
   resolveFeedbackSentimentLabel,
   summarizeFeedbackSentiment,
   summarizeFeedbackSentimentByRoom,
@@ -24,6 +18,11 @@ import {
 } from '@/lib/buildings/floorLabels';
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
 import type { Room } from '@/lib/rooms/rooms';
+import {
+  scopeFeedback,
+  type FeedbackAnalyticsScope,
+} from '@/lib/feedback/feedback-scope';
+import SentimentTrendSection from '@/components/admin/dashboard/SentimentTrendSection';
 import {
   formatSentimentLabel,
   getSentimentBadgeClasses,
@@ -123,7 +122,7 @@ interface RoomUsageStats {
   hoursByDay: number[]; // index 0=Sun, 1=Mon, ..., 6=Sat
 }
 
-type SentimentSummaryMode = 'building' | 'room';
+type SentimentSummaryMode = FeedbackAnalyticsScope;
 type RoomSentimentSort = 'worst' | 'best' | 'feedback' | 'name';
 
 function computeRoomUsageStats(history: RoomHistoryEntry[]): RoomUsageStats {
@@ -610,216 +609,6 @@ function RoomSentimentSummaryTable({
   );
 }
 
-function getTrendPath(buckets: SentimentTrendBucket[], width: number, height: number) {
-  const points = buckets
-    .map((bucket, index) => {
-      if (bucket.averageCompoundScore === null) {
-        return null;
-      }
-
-      const x = buckets.length === 1 ? width / 2 : (index / (buckets.length - 1)) * width;
-      const y = height - ((bucket.averageCompoundScore + 1) / 2) * height;
-      return `${x.toFixed(2)},${Math.max(0, Math.min(height, y)).toFixed(2)}`;
-    });
-
-  const paths: string[] = [];
-  let currentPath: string[] = [];
-  points.forEach((point) => {
-    if (point === null) {
-      if (currentPath.length > 0) {
-        paths.push(currentPath.join(' L '));
-        currentPath = [];
-      }
-      return;
-    }
-
-    currentPath.push(point);
-  });
-  if (currentPath.length > 0) {
-    paths.push(currentPath.join(' L '));
-  }
-
-  return paths.map((path) => `M ${path}`).join(' ');
-}
-
-function SentimentTrendChart({ buckets }: { buckets: SentimentTrendBucket[] }) {
-  const chartWidth = 720;
-  const chartHeight = 210;
-  const chartLeft = 44;
-  const chartTop = 18;
-  const chartBottom = 44;
-  const plotWidth = chartWidth - chartLeft - 12;
-  const plotHeight = chartHeight - chartTop - chartBottom;
-  const trendPath = getTrendPath(buckets, plotWidth, plotHeight);
-  const yTicks = [-1, -0.5, 0, 0.5, 1];
-
-  return (
-    <div className="space-y-2">
-      <div className="overflow-x-auto">
-        <svg
-          role="img"
-          aria-label="Sentiment Trend line chart"
-          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-          className="h-auto min-w-[620px] w-full"
-        >
-          {yTicks.map((tick) => {
-            const y = chartTop + plotHeight - ((tick + 1) / 2) * plotHeight;
-            return (
-              <g key={tick}>
-                <line
-                  x1={chartLeft}
-                  x2={chartWidth - 12}
-                  y1={y}
-                  y2={y}
-                  className="stroke-black/10"
-                  strokeDasharray="3 4"
-                />
-                <text
-                  x={chartLeft - 8}
-                  y={y + 3}
-                  textAnchor="end"
-                  className="fill-black/50 text-[10px] font-bold"
-                >
-                  {tick.toFixed(1)}
-                </text>
-              </g>
-            );
-          })}
-
-          <line
-            x1={chartLeft}
-            x2={chartLeft}
-            y1={chartTop}
-            y2={chartTop + plotHeight}
-            className="stroke-black/20"
-          />
-          <line
-            x1={chartLeft}
-            x2={chartWidth - 12}
-            y1={chartTop + plotHeight}
-            y2={chartTop + plotHeight}
-            className="stroke-black/20"
-          />
-
-          <g transform={`translate(${chartLeft}, ${chartTop})`}>
-            {trendPath ? (
-              <path
-                d={trendPath}
-                fill="none"
-                className="stroke-primary"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ) : null}
-            {buckets.map((bucket, index) => {
-              const x = buckets.length === 1 ? plotWidth / 2 : (index / (buckets.length - 1)) * plotWidth;
-              const y = bucket.averageCompoundScore === null
-                ? plotHeight
-                : plotHeight - ((bucket.averageCompoundScore + 1) / 2) * plotHeight;
-
-              return (
-                <g key={bucket.key}>
-                  {bucket.averageCompoundScore !== null ? (
-                    <circle
-                      cx={x}
-                      cy={y}
-                      r="4.5"
-                      className="fill-primary stroke-white"
-                      strokeWidth="2"
-                      tabIndex={0}
-                    >
-                      <title>
-                        {`${bucket.label}: ${bucket.averageCompoundScore.toFixed(3)} average VADER compound score`}
-                      </title>
-                    </circle>
-                  ) : null}
-                  <text
-                    x={x}
-                    y={plotHeight + 28}
-                    textAnchor="middle"
-                    className="fill-black/55 text-[10px] font-bold"
-                    transform={`rotate(${buckets.length > 7 ? -35 : 0} ${x} ${plotHeight + 28})`}
-                  >
-                    {bucket.label}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-      </div>
-      <p className="text-[10px] font-bold text-black/40">
-        Scores range from −1 to +1. Buckets without scored feedback remain empty.
-      </p>
-    </div>
-  );
-}
-
-function SentimentTrendSection({
-  feedbackList,
-}: {
-  feedbackList: Feedback[];
-}) {
-  const [period, setPeriod] = useState<SentimentTrendPeriod>('weekly');
-  const [analyticsNow] = useState(() => new Date());
-  const trend = useMemo(
-    () => buildSentimentTrend(feedbackList, period, analyticsNow),
-    [analyticsNow, feedbackList, period]
-  );
-
-  return (
-    <div className="glass-card mb-4 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-base font-extrabold text-black">Room Analytics</p>
-          <p className="mt-1 max-w-2xl text-xs text-black/55">
-            Average stored VADER compound sentiment over time for the selected building.
-          </p>
-        </div>
-        <label className="flex items-center gap-2 text-xs font-bold text-black/60">
-          <span className="whitespace-nowrap">Period:</span>
-          <select
-            aria-label="Room analytics period"
-            value={period}
-            onChange={(event) => setPeriod(event.target.value as SentimentTrendPeriod)}
-            className="glass-input h-9 px-3 text-xs font-bold text-black"
-          >
-            {SENTIMENT_TREND_PERIODS.map((option) => (
-              <option key={option} value={option}>
-                {option[0].toUpperCase() + option.slice(1)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="mt-4 rounded-2xl border border-dark/10 bg-white/55 p-3 sm:p-4">
-        <p className="text-sm font-extrabold text-black">Sentiment Trend</p>
-        <p className="mt-1 text-xs text-black/55">
-          Average VADER compound score for each {period === 'weekly' ? 'day' : period === 'monthly' ? 'week' : 'month'} in the selected period.
-        </p>
-        <div className="mt-3">
-          {!trend.configured ? (
-            <p className="dashboard-empty-state rounded-xl px-3 py-8 text-center text-xs text-black/55">
-              {trend.message}
-            </p>
-          ) : trend.buckets.every((bucket) => bucket.averageCompoundScore === null) ? (
-            <>
-              <SentimentTrendChart buckets={trend.buckets} />
-              <p className="dashboard-empty-state mt-2 rounded-xl px-3 py-3 text-center text-xs text-black/55">
-                No scored feedback in this period.
-              </p>
-            </>
-          ) : (
-            <SentimentTrendChart buckets={trend.buckets} />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminRoomStatusSection({
@@ -839,11 +628,18 @@ export default function AdminRoomStatusSection({
   const [floorFilter, setFloorFilter] = useState<string>('');
   const [expandedRoomId, setExpandedRoomId] = useState<string | null>(null);
   const [summaryMode, setSummaryMode] = useState<SentimentSummaryMode>('building');
+  const [sentimentFloor, setSentimentFloor] = useState('');
+  const [sentimentRoomId, setSentimentRoomId] = useState('');
   const [roomSentimentSort, setRoomSentimentSort] = useState<RoomSentimentSort>('worst');
 
   const buildingFeedbackList = useMemo(
     () => feedbackList.filter((feedback) => feedback.buildingId === buildingId),
     [buildingId, feedbackList]
+  );
+
+  const buildingRooms = useMemo(
+    () => rooms.filter((room) => room.buildingId === buildingId),
+    [buildingId, rooms]
   );
 
   // Unique floors for filter
@@ -862,6 +658,36 @@ export default function AdminRoomStatusSection({
     () => [...floorOptions, { value: 'All', label: 'All Floors' }],
     [floorOptions]
   );
+
+  const selectedSentimentFloor = floorOptions.some((option) => option.value === sentimentFloor)
+    ? sentimentFloor
+    : floorOptions[0]?.value ?? '';
+  const selectedSentimentRoomId = buildingRooms.some((room) => room.id === sentimentRoomId)
+    ? sentimentRoomId
+    : buildingRooms[0]?.id ?? '';
+
+  const scopedSentimentFeedback = useMemo(
+    () => scopeFeedback(buildingFeedbackList, {
+      buildingId,
+      floor: selectedSentimentFloor,
+      roomId: selectedSentimentRoomId,
+      rooms: buildingRooms,
+      scope: summaryMode,
+    }),
+    [buildingFeedbackList, buildingId, buildingRooms, selectedSentimentFloor, selectedSentimentRoomId, summaryMode]
+  );
+
+  const scopedSentimentRooms = useMemo(() => {
+    if (summaryMode === 'floor') {
+      return buildingRooms.filter((room) => room.floor === selectedSentimentFloor);
+    }
+
+    if (summaryMode === 'room') {
+      return buildingRooms.filter((room) => room.id === selectedSentimentRoomId);
+    }
+
+    return buildingRooms;
+  }, [buildingRooms, selectedSentimentFloor, selectedSentimentRoomId, summaryMode]);
 
   useEffect(() => {
     if (floorOptions.length === 0) {
@@ -918,26 +744,21 @@ export default function AdminRoomStatusSection({
   // Filtered rooms
   const filteredRooms = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rooms.filter((room) => {
+    return buildingRooms.filter((room) => {
       if (q && !room.name.toLowerCase().includes(q)) return false;
       if (floorFilter !== 'All' && room.floor !== floorFilter) return false;
       return true;
     });
-  }, [rooms, search, floorFilter]);
-
-  const summaryFeedback = useMemo(() => {
-    const visibleRoomIds = new Set(filteredRooms.map((room) => room.id));
-    return buildingFeedbackList.filter((feedback) => visibleRoomIds.has(feedback.roomId));
-  }, [buildingFeedbackList, filteredRooms]);
+  }, [buildingRooms, search, floorFilter]);
 
   const buildingSentimentSummary = useMemo(
-    () => summarizeFeedbackSentiment(summaryFeedback),
-    [summaryFeedback]
+    () => summarizeFeedbackSentiment(scopedSentimentFeedback),
+    [scopedSentimentFeedback]
   );
 
   const roomSentimentSummaries = useMemo(
-    () => summarizeFeedbackSentimentByRoom(filteredRooms, buildingFeedbackList),
-    [buildingFeedbackList, filteredRooms]
+    () => summarizeFeedbackSentimentByRoom(scopedSentimentRooms, scopedSentimentFeedback),
+    [scopedSentimentFeedback, scopedSentimentRooms]
   );
 
   const sortedRoomSentimentSummaries = useMemo(
@@ -1000,17 +821,46 @@ export default function AdminRoomStatusSection({
           />
 
           <label className="flex items-center gap-2 text-xs font-bold text-black/60">
-            <span className="whitespace-nowrap">Summary by:</span>
+            <span className="whitespace-nowrap">Analyze by:</span>
             <select
-              aria-label="Summary by"
+              aria-label="Analyze sentiment by"
               value={summaryMode}
               onChange={(event) => setSummaryMode(event.target.value as SentimentSummaryMode)}
               className="glass-input h-9 px-3 text-xs font-bold text-black"
             >
               <option value="building">Building</option>
+              <option value="floor">Floor</option>
               <option value="room">Room</option>
             </select>
           </label>
+
+          {summaryMode !== 'building' ? (
+            <select
+              aria-label="Sentiment analysis floor"
+              value={selectedSentimentFloor}
+              onChange={(event) => setSentimentFloor(event.target.value)}
+              className="glass-input h-9 px-3 text-xs font-bold text-black"
+            >
+              {floorOptions.length === 0 ? <option value="">No floors</option> : null}
+              {floorOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          ) : null}
+
+          {summaryMode === 'room' ? (
+            <select
+              aria-label="Sentiment analysis room"
+              value={selectedSentimentRoomId}
+              onChange={(event) => setSentimentRoomId(event.target.value)}
+              className="glass-input h-9 min-w-[180px] px-3 text-xs font-bold text-black"
+            >
+              {buildingRooms.length === 0 ? <option value="">No rooms</option> : null}
+              {buildingRooms.map((room) => (
+                <option key={room.id} value={room.id}>{room.name}</option>
+              ))}
+            </select>
+          ) : null}
 
           <span className="text-[11px] font-bold text-black/40 ml-auto whitespace-nowrap">
             {filteredRooms.length} of {rooms.length} rooms
@@ -1026,12 +876,12 @@ export default function AdminRoomStatusSection({
                 Building sentiment summary
               </p>
               <p className="mt-1 text-xs text-black/55">
-                Aggregated for {buildingName ?? 'the selected building'} and the active room filters.
+                Aggregated for {buildingName ?? 'the selected building'} and the selected analysis scope.
               </p>
             </div>
             {buildingSentimentSummary.total === 0 ? (
               <p className="dashboard-empty-state rounded-xl px-3 py-3 text-xs text-black/55">
-                No feedback for the selected building and filters.
+                No feedback for the selected building and analysis scope.
               </p>
             ) : (
               <SentimentSummaryDetails summary={buildingSentimentSummary} />
@@ -1050,7 +900,7 @@ export default function AdminRoomStatusSection({
         )}
       </div>
 
-      <SentimentTrendSection feedbackList={buildingFeedbackList} />
+      <SentimentTrendSection feedbackList={scopedSentimentFeedback} />
 
       {/* ── Legend ── */}
       <div className="bg-white rounded-xl px-4 py-2.5 mb-3 shadow-sm ring-1 ring-black/5 flex items-center gap-4">

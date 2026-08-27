@@ -46,6 +46,7 @@ export interface Feedback {
   reservationId: string;
   userId: string;
   userName: string;
+  gender?: unknown;
   text: string;
   message: string;
   rating: number;
@@ -207,6 +208,7 @@ function mapFeedbackData(id: string, data: FeedbackSnapshot): Feedback {
     reservationId: data.reservationId ?? "",
     userId: data.userId ?? "",
     userName: data.userName ?? "",
+    gender: data.gender,
     text,
     message: data.message ?? text,
     rating: overallRating,

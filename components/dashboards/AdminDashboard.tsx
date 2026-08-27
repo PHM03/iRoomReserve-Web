@@ -97,12 +97,25 @@ export default function AdminDashboard({
       return;
     }
 
+    const isFeedbackTab = activeTab === 'feedback';
+
     try {
-      if (activeTab === 'feedback') {
-        const feedbackSnapshot = await getFeedbackByBuilding(buildingId);
+      if (isFeedbackTab) {
+        const [feedbackSnapshot, roomSnapshot] = await Promise.all([
+          getFeedbackByBuilding(buildingId),
+          fetchAdminDashboardSnapshot(buildingId, {
+            includeApprovedReservations: false,
+            includePendingRequests: false,
+            includeRoomHistory: false,
+            includeRooms: true,
+            includeSchedules: false,
+            includeSummary: false,
+          }),
+        ]);
         setFeedbackList(feedbackSnapshot.feedback);
         setFeedbackSummary(feedbackSnapshot.summary);
         setGenderBreakdownByPeriod(feedbackSnapshot.genderBreakdownByPeriod ?? {});
+        setRooms(roomSnapshot.rooms);
         return;
       }
 

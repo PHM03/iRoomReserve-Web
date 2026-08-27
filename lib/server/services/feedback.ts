@@ -60,6 +60,7 @@ export interface FeedbackRecord extends FeedbackSentimentFields {
   extracted_keywords: string[];
   feedbackText: string;
   feedback_text: string;
+  gender?: unknown;
   id: string;
   message: string;
   negativeScore?: number;
@@ -358,7 +359,7 @@ export async function getFeedbackRecordsByBuilding(
   ) as Partial<Record<FeedbackAnalyticsPeriod, FeedbackGenderSentimentSummary[]>>;
 
   return {
-    feedback,
+    feedback: withGender(feedback),
     summary: {
       ...summarizeFeedbackSentiment(feedback),
       genderBreakdown,

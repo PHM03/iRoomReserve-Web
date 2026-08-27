@@ -1,13 +1,17 @@
 import type { Feedback } from '@/lib/feedback/feedback';
+import {
+  FEEDBACK_ANALYTICS_PERIODS,
+  type FeedbackAnalyticsPeriod,
+} from './feedback-period';
+import {
+  DEFAULT_SCHEDULE_CONTEXT,
+  getScheduleSemesterDateRange,
+  type ScheduleContext,
+} from '../schedules/scheduleContext';
 
-export const SENTIMENT_TREND_PERIODS = [
-  'weekly',
-  'monthly',
-  'semester',
-  'yearly',
-] as const;
+export const SENTIMENT_TREND_PERIODS = FEEDBACK_ANALYTICS_PERIODS;
 
-export type SentimentTrendPeriod = (typeof SENTIMENT_TREND_PERIODS)[number];
+export type SentimentTrendPeriod = FeedbackAnalyticsPeriod;
 
 export interface SentimentTrendBucket {
   key: string;
@@ -148,12 +152,44 @@ function createMonthlyWeekBuckets(range: DateRange) {
   return buckets;
 }
 
-function createBuckets(period: SentimentTrendPeriod, now: Date): SentimentTrendResult {
-  if (period === 'semester') {
+function getAllTimeRange(feedbackItems: Feedback[]) {
+  const dates = feedbackItems
+    .map(getFeedbackDate)
+    .filter((date): date is Date => date !== null)
+    .sort((left, right) => left.getTime() - right.getTime());
+
+  if (dates.length === 0) {
+    return null;
+  }
+
+  const start = startOfMonth(dates[0]);
+  const end = addMonths(startOfMonth(dates[dates.length - 1]), 1);
+  return { start, end };
+}
+
+function createBuckets(
+  period: SentimentTrendPeriod,
+  now: Date,
+  feedbackItems: Feedback[],
+  scheduleContext: ScheduleContext,
+): SentimentTrendResult {
+  if (period === 'all_time') {
+    const range = getAllTimeRange(feedbackItems);
     return {
-      buckets: [],
-      configured: false,
-      message: 'Semester date ranges are not configured for this building yet.',
+      buckets: range ? createMonthlyBuckets(range) : [],
+      configured: true,
+    };
+  }
+
+  if (period === 'semester') {
+    const range = getScheduleSemesterDateRange(
+      scheduleContext.academicYear,
+      scheduleContext.semester,
+    );
+
+    return {
+      buckets: createMonthlyBuckets(range),
+      configured: true,
     };
   }
 
@@ -176,8 +212,9 @@ export function buildSentimentTrend(
   feedbackItems: Feedback[],
   period: SentimentTrendPeriod,
   now = new Date(),
+  scheduleContext: ScheduleContext = DEFAULT_SCHEDULE_CONTEXT,
 ): SentimentTrendResult {
-  const result = createBuckets(period, now);
+  const result = createBuckets(period, now, feedbackItems, scheduleContext);
 
   if (!result.configured) {
     return result;

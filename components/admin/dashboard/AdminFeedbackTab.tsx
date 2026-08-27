@@ -1,18 +1,25 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import {
   resolveFeedbackSentimentLabel,
   summarizeFeedbackSentiment,
+  summarizeFeedbackSentimentByGender,
   type FeedbackSentimentSummary,
 } from '@/lib/feedback/feedback-sentiment';
 import {
   FEEDBACK_ANALYTICS_PERIODS,
   compareFeedbackPeriods,
+  filterFeedbackByPeriod,
   scopeFeedbackToBuilding,
   type FeedbackAnalyticsPeriod,
 } from '@/lib/feedback/feedback-period';
+import {
+  FEEDBACK_ANALYTICS_SCOPES,
+  scopeFeedback,
+  type FeedbackAnalyticsScope,
+} from '@/lib/feedback/feedback-scope';
 import {
   buildFeedbackInsights,
   type FeedbackInsights,
@@ -27,6 +34,13 @@ import {
 } from '@/lib/feedback/feedback-analytics';
 import { respondToFeedback, type Feedback } from '@/lib/feedback/feedback';
 import type { Room } from '@/lib/rooms/rooms';
+import {
+  DEFAULT_SCHEDULE_CONTEXT,
+  SCHEDULE_ACADEMIC_YEARS,
+  SCHEDULE_SEMESTERS,
+  type ScheduleAcademicYear,
+  type ScheduleSemester,
+} from '@/lib/schedules/scheduleContext';
 import { formatDateTime } from '@/lib/utils/dateTime';
 import {
   formatSentimentLabel,
@@ -95,7 +109,7 @@ function TrendInsightsSection({ insights }: { insights: FeedbackInsights }) {
     improving: 'Overall sentiment is improving compared with the previous period.',
     declining: 'Overall sentiment is declining compared with the previous period.',
     stable: 'Overall sentiment is stable compared with the previous period.',
-    not_enough_data: 'Not enough data to compare sentiment with the previous period.',
+    not_enough_data: 'Not enough data to determine a trend.',
   }[insights.sentimentDirection];
 
   const roomAttentionMessage = insights.roomNeedingAttention
@@ -158,14 +172,25 @@ export default function AdminFeedbackTab({
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
 
-  // Filter state
-  const [floorFilter, setFloorFilter] = useState('');
-  const [roomFilter, setRoomFilter] = useState('All');
+  const [feedbackScope, setFeedbackScope] = useState<FeedbackAnalyticsScope>('floor');
+  const [feedbackFloor, setFeedbackFloor] = useState('');
+  const [feedbackRoomId, setFeedbackRoomId] = useState('');
   const [starFilter, setStarFilter] = useState<number | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [analyticsPeriod, setAnalyticsPeriod] = useState<FeedbackAnalyticsPeriod>('all_time');
+  const [analyticsAcademicYear, setAnalyticsAcademicYear] = useState<ScheduleAcademicYear>(
+    DEFAULT_SCHEDULE_CONTEXT.academicYear,
+  );
+  const [analyticsSemester, setAnalyticsSemester] = useState<ScheduleSemester>(
+    DEFAULT_SCHEDULE_CONTEXT.semester,
+  );
   const [analyticsNow] = useState(() => new Date());
+
+  const analyticsScheduleContext = useMemo(
+    () => ({ academicYear: analyticsAcademicYear, semester: analyticsSemester }),
+    [analyticsAcademicYear, analyticsSemester],
+  );
 
   const buildingFeedbackList = useMemo(
     () => scopeFeedbackToBuilding(feedbackList, buildingId),
@@ -173,8 +198,13 @@ export default function AdminFeedbackTab({
   );
 
   const selectedPeriodFeedback = useMemo(
-    () => compareFeedbackPeriods(buildingFeedbackList, analyticsPeriod, analyticsNow),
-    [analyticsNow, analyticsPeriod, buildingFeedbackList]
+    () => compareFeedbackPeriods(
+      buildingFeedbackList,
+      analyticsPeriod,
+      analyticsNow,
+      analyticsScheduleContext,
+    ),
+    [analyticsNow, analyticsPeriod, analyticsScheduleContext, buildingFeedbackList]
   );
 
   const selectedFeedbackSummary = useMemo(() => {
@@ -188,7 +218,9 @@ export default function AdminFeedbackTab({
 
     return {
       ...summarizeFeedbackSentiment(selectedPeriodFeedback.currentItems),
-      genderBreakdown: genderBreakdownByPeriod[analyticsPeriod] ?? [],
+      genderBreakdown: analyticsPeriod === 'semester'
+        ? summarizeFeedbackSentimentByGender(selectedPeriodFeedback.currentItems)
+        : genderBreakdownByPeriod[analyticsPeriod] ?? [],
     };
   }, [
     analyticsPeriod,
@@ -211,42 +243,44 @@ export default function AdminFeedbackTab({
 
   // ── Derived data ─────────────────────────────────────────────────────────
 
-  // roomId → floor
-  const roomFloorMap = useMemo(() => {
-    const map = new Map<string, string>();
-    rooms.forEach((r) => map.set(r.id, r.floor));
-    return map;
-  }, [rooms]);
-
-  // Unique floors present in current feedback (not all rooms — only reviewed rooms)
-  const floorsInFeedback = useMemo(() => {
-    const floorsFromRooms = new Set<string>();
-    buildingFeedbackList.forEach((f) => {
-      const floor = roomFloorMap.get(f.roomId);
-      if (floor) floorsFromRooms.add(floor);
-    });
-    // Fall back to all room floors if map is empty (rooms prop not provided)
-    if (floorsFromRooms.size === 0 && rooms.length > 0) {
-      rooms.forEach((r) => floorsFromRooms.add(r.floor));
-    }
-    return sortFloors(Array.from(floorsFromRooms));
-  }, [buildingFeedbackList, roomFloorMap, rooms]);
-
-  // Rooms on the selected floor
-  const roomsOnFloor = useMemo(() => {
-    if (floorFilter === 'All') return [];
-    return rooms.filter((r) => r.floor === floorFilter);
-  }, [rooms, floorFilter]);
+  const buildingRooms = useMemo(
+    () => rooms.filter((room) => room.buildingId === buildingId),
+    [buildingId, rooms],
+  );
+  const floorOptions = useMemo(
+    () => sortFloors([...new Set(buildingRooms.map((room) => room.floor))]),
+    [buildingRooms],
+  );
+  const roomOptions = useMemo(
+    () => [...buildingRooms].sort((left, right) => left.name.localeCompare(right.name)),
+    [buildingRooms],
+  );
+  const selectedFeedbackFloor = floorOptions.includes(feedbackFloor)
+    ? feedbackFloor
+    : floorOptions[0] ?? '';
+  const selectedFeedbackRoomId = roomOptions.some((room) => room.id === feedbackRoomId)
+    ? feedbackRoomId
+    : roomOptions[0]?.id ?? '';
 
   // ── Filter logic ─────────────────────────────────────────────────────────
 
+  const scopedFeedback = useMemo(() => scopeFeedback(buildingFeedbackList, {
+      buildingId,
+      floor: selectedFeedbackFloor,
+      roomId: selectedFeedbackRoomId,
+      rooms: buildingRooms,
+      scope: feedbackScope,
+    }), [buildingFeedbackList, buildingId, buildingRooms, feedbackScope, selectedFeedbackFloor, selectedFeedbackRoomId]);
+
   const filteredFeedback = useMemo(() => {
-    return buildingFeedbackList.filter((f) => {
-      if (floorFilter !== 'All') {
-        const floor = roomFloorMap.get(f.roomId);
-        if (floor !== floorFilter) return false;
-      }
-      if (roomFilter !== 'All' && f.roomId !== roomFilter) return false;
+    const periodFeedback = filterFeedbackByPeriod(
+      scopedFeedback,
+      analyticsPeriod,
+      analyticsNow,
+      analyticsScheduleContext,
+    );
+
+    return periodFeedback.items.filter((f) => {
       if (starFilter !== null && Math.round(f.rating) !== starFilter) return false;
       if (dateFrom && f.createdAt) {
         const feedbackDate = f.createdAt.toDate();
@@ -260,14 +294,19 @@ export default function AdminFeedbackTab({
       }
       return true;
     });
-  }, [buildingFeedbackList, floorFilter, roomFilter, starFilter, dateFrom, dateTo, roomFloorMap]);
+  }, [analyticsNow, analyticsPeriod, analyticsScheduleContext, dateFrom, dateTo, scopedFeedback, starFilter]);
 
   const hasActiveFilters =
-    floorFilter !== 'All' || roomFilter !== 'All' || starFilter !== null || !!dateFrom || !!dateTo;
+    feedbackScope !== 'floor' || starFilter !== null || !!dateFrom || !!dateTo;
 
   const insightPeriodFeedback = useMemo(
-    () => compareFeedbackPeriods(filteredFeedback, analyticsPeriod, analyticsNow),
-    [analyticsNow, analyticsPeriod, filteredFeedback]
+    () => compareFeedbackPeriods(
+      buildingFeedbackList,
+      analyticsPeriod,
+      analyticsNow,
+      analyticsScheduleContext,
+    ),
+    [analyticsNow, analyticsPeriod, analyticsScheduleContext, buildingFeedbackList]
   );
 
   const feedbackInsights = useMemo(
@@ -279,52 +318,14 @@ export default function AdminFeedbackTab({
     [insightPeriodFeedback]
   );
 
-  useEffect(() => {
-    const defaultFloor = floorsInFeedback[0] ?? 'All';
-    const hasMatchingFloor =
-      floorFilter === 'All' || floorsInFeedback.includes(floorFilter);
-    const nextFloorFilter = !hasMatchingFloor
-      ? defaultFloor
-      : !floorFilter && defaultFloor
-        ? defaultFloor
-        : null;
-
-    if (!nextFloorFilter) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setFloorFilter(nextFloorFilter);
-
-      if (!hasMatchingFloor) {
-        setRoomFilter('All');
-      }
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [floorFilter, floorsInFeedback]);
-
   const clearFilters = () => {
-    setFloorFilter(floorsInFeedback[0] ?? 'All');
-    setRoomFilter('All');
+    setFeedbackScope('floor');
+    setFeedbackFloor(floorOptions[0] ?? '');
+    setFeedbackRoomId('');
     setStarFilter(null);
     setDateFrom('');
     setDateTo('');
   };
-
-  const handleFloorChange = (floor: string) => {
-    setFloorFilter(floor);
-    setRoomFilter('All');
-  };
-
-  // ── Shared pill class ─────────────────────────────────────────────────────
-
-  const pillClass = (active: boolean) =>
-    `px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
-      active
-        ? 'bg-primary text-white border-primary'
-        : 'border-white/45 bg-white/85 text-black/65 shadow-sm hover:bg-white hover:text-black'
-    }`;
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -408,8 +409,42 @@ export default function AdminFeedbackTab({
                   ))}
                 </select>
               </label>
+              {analyticsPeriod === 'semester' ? (
+                <>
+                  <label className="flex items-center gap-2 text-xs font-bold text-black/60">
+                    <span className="whitespace-nowrap">Academic Year:</span>
+                    <select
+                      aria-label="Feedback analytics academic year"
+                      value={analyticsAcademicYear}
+                      onChange={(event) => setAnalyticsAcademicYear(event.target.value as ScheduleAcademicYear)}
+                      className="glass-input h-9 px-3 text-xs font-bold text-black"
+                    >
+                      {SCHEDULE_ACADEMIC_YEARS.map((academicYear) => (
+                        <option key={academicYear} value={academicYear}>{academicYear}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-black/60">
+                    <span className="whitespace-nowrap">Semester:</span>
+                    <select
+                      aria-label="Feedback analytics semester"
+                      value={analyticsSemester}
+                      onChange={(event) => setAnalyticsSemester(event.target.value as ScheduleSemester)}
+                      className="glass-input h-9 px-3 text-xs font-bold text-black"
+                    >
+                      {SCHEDULE_SEMESTERS.map((semester) => (
+                        <option key={semester} value={semester}>{semester}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              ) : null}
             </div>
           </div>
+
+          {insightPeriodFeedback.configured ? (
+            <TrendInsightsSection insights={feedbackInsights} />
+          ) : null}
 
           {!selectedPeriodFeedback.configured ? (
             <div className="glass-card p-6">
@@ -631,59 +666,45 @@ export default function AdminFeedbackTab({
             </div>
           )}
 
-          {insightPeriodFeedback.configured && insightPeriodFeedback.currentItems.length > 0 ? (
-            <TrendInsightsSection insights={feedbackInsights} />
-          ) : null}
-
-          {/* ── Filter controls ── */}
-          <div className="glass-card p-4 space-y-3">
-
-            {/* Floor pills */}
-            {floorsInFeedback.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">
-                  Floor
-                </span>
-                {floorsInFeedback.map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => handleFloorChange(f)}
-                    className={pillClass(floorFilter === f)}
-                  >
-                    {f}
-                  </button>
+          {/* ── Feedback list scope and secondary filters ── */}
+          <div className="glass-card space-y-3 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-extrabold text-black/60">Show feedback by:</span>
+              <select
+                aria-label="Feedback list scope"
+                value={feedbackScope}
+                onChange={(event) => setFeedbackScope(event.target.value as FeedbackAnalyticsScope)}
+                className="glass-input h-8 px-3 text-xs font-bold text-black"
+              >
+                {FEEDBACK_ANALYTICS_SCOPES.map((scope) => (
+                  <option key={scope} value={scope}>
+                    {scope[0].toUpperCase() + scope.slice(1)}
+                  </option>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => handleFloorChange('All')}
-                  className={pillClass(floorFilter === 'All')}
-                >
-                  All Floors
-                </button>
-              </div>
-            )}
-
-            {/* Room dropdown — appears only when a floor is selected */}
-            {floorFilter !== 'All' && roomsOnFloor.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">
-                  Room
-                </span>
+              </select>
+              {feedbackScope === 'floor' ? (
                 <select
-                  value={roomFilter}
-                  onChange={(e) => setRoomFilter(e.target.value)}
-                  className="glass-input h-8 px-3 text-xs font-bold text-black min-w-[180px]"
+                  aria-label="Feedback list floor"
+                  value={selectedFeedbackFloor}
+                  onChange={(event) => setFeedbackFloor(event.target.value)}
+                  className="glass-input h-8 px-3 text-xs font-bold text-black"
                 >
-                  <option value="All">All Rooms on {floorFilter}</option>
-                  {roomsOnFloor.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
+                  {floorOptions.length === 0 ? <option value="">No floors</option> : null}
+                  {floorOptions.map((floor) => <option key={floor} value={floor}>{floor}</option>)}
                 </select>
-              </div>
-            )}
+              ) : null}
+              {feedbackScope === 'room' ? (
+                <select
+                  aria-label="Feedback list room"
+                  value={selectedFeedbackRoomId}
+                  onChange={(event) => setFeedbackRoomId(event.target.value)}
+                  className="glass-input h-8 min-w-[180px] px-3 text-xs font-bold text-black"
+                >
+                  {roomOptions.length === 0 ? <option value="">No rooms</option> : null}
+                  {roomOptions.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+                </select>
+              ) : null}
+            </div>
 
             {/* Star rating pills */}
             <div className="flex flex-wrap items-center gap-2">
