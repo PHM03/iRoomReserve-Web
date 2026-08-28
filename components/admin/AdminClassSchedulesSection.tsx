@@ -125,6 +125,8 @@ interface AdminClassSchedulesSectionProps {
   activeScheduleAcademicYear: ScheduleAcademicYear;
   campus?: string | null;
   className?: string;
+  enableExcelImport?: boolean;
+  enableClearRoom?: boolean;
 }
 
 const TIMETABLE_START_HOUR = 7;
@@ -202,6 +204,8 @@ export default function AdminClassSchedulesSection({
   activeScheduleAcademicYear,
   campus = null,
   className = '',
+  enableExcelImport = true,
+  enableClearRoom = true,
 }: Readonly<AdminClassSchedulesSectionProps>) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearRoomConfirm, setShowClearRoomConfirm] = useState(false);
@@ -663,21 +667,25 @@ export default function AdminClassSchedulesSection({
       <div className="mb-5 flex items-center justify-between">
         <h3 className="text-xl font-bold text-black">Class Schedules</h3>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <input
-            ref={importFileInputRef}
-            type="file"
-            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-            onChange={handleImportFileChange}
-            className="hidden"
-          />
-          <button
-            type="button"
-            onClick={() => importFileInputRef.current?.click()}
-            disabled={parsingImport || savingImport || rooms.length === 0}
-            className="rounded-lg border border-[#8B0000] bg-white px-4 py-2 text-sm font-bold text-[#8B0000] transition-colors hover:bg-[#fff0f0] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {parsingImport ? 'Reading...' : 'Import Excel'}
-          </button>
+          {enableExcelImport ? (
+            <>
+              <input
+                ref={importFileInputRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                onChange={handleImportFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => importFileInputRef.current?.click()}
+                disabled={parsingImport || savingImport || rooms.length === 0}
+                className="rounded-lg border border-[#8B0000] bg-white px-4 py-2 text-sm font-bold text-[#8B0000] transition-colors hover:bg-[#fff0f0] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {parsingImport ? 'Reading...' : 'Import Excel'}
+              </button>
+            </>
+          ) : null}
           <button
             onClick={onToggleForm}
             className="rounded-lg border-0 bg-[#8B0000] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#6e0000]"
@@ -1291,23 +1299,25 @@ export default function AdminClassSchedulesSection({
         </div>
       </div>
 
-      <div className="mt-6 flex flex-col items-end gap-2 border-t border-gray-200 pt-5">
-        <button
-          type="button"
-          onClick={() => setShowClearRoomConfirm(true)}
-          disabled={!selectedRoomId || roomScheduleCount === 0 || clearingRoomSchedules}
-          className="rounded-lg border border-red-600 bg-white px-5 py-2.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Clear Room&apos;s Schedule
-        </button>
-        {!selectedRoomId ? (
-          <p className="text-xs text-gray-500">Select a room above to clear its schedule.</p>
-        ) : roomScheduleCount === 0 ? (
-          <p className="text-xs text-gray-500">This room has no current schedules to clear.</p>
-        ) : null}
-      </div>
+      {enableClearRoom ? (
+        <div className="mt-6 flex flex-col items-end gap-2 border-t border-gray-200 pt-5">
+          <button
+            type="button"
+            onClick={() => setShowClearRoomConfirm(true)}
+            disabled={!selectedRoomId || roomScheduleCount === 0 || clearingRoomSchedules}
+            className="rounded-lg border border-red-600 bg-white px-5 py-2.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Clear Room&apos;s Schedule
+          </button>
+          {!selectedRoomId ? (
+            <p className="text-xs text-gray-500">Select a room above to clear its schedule.</p>
+          ) : roomScheduleCount === 0 ? (
+            <p className="text-xs text-gray-500">This room has no current schedules to clear.</p>
+          ) : null}
+        </div>
+      ) : null}
 
-      {showClearRoomConfirm ? (
+      {enableClearRoom && showClearRoomConfirm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <h4 className="mb-2 text-base font-bold text-gray-900">

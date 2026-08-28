@@ -10,5 +10,11 @@ interface FacultyDashboardProps {
 export default function FacultyDashboard({
   firstName,
 }: Readonly<FacultyDashboardProps>) {
-  return <MemberDashboard firstName={firstName} welcomeEmoji="📚" />;
+  return (
+    <MemberDashboard
+      firstName={firstName}
+      showScheduleManagement
+      welcomeEmoji="📚"
+    />
+  );
 }
