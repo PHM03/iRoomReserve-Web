@@ -17,8 +17,8 @@ const ROLE_ALIASES: Record<string, UserRole> = {
   "utility staff": USER_ROLES.UTILITY,
   admin: USER_ROLES.ADMIN,
   administrator: USER_ROLES.ADMIN,
-  "building admin": USER_ROLES.BUILDING_ADMIN,
-  building_admin: USER_ROLES.BUILDING_ADMIN,
+  "building admin": USER_ROLES.ADMIN,
+  building_admin: USER_ROLES.ADMIN,
   "super admin": USER_ROLES.SUPER_ADMIN,
 };
 
@@ -49,5 +49,5 @@ export function isFacultyRole(role?: string | null): boolean {
 }
 
 export function isBuildingAdminRole(role?: string | null): boolean {
-  return normalizeRole(role) === USER_ROLES.BUILDING_ADMIN;
+  return isAdminRole(role);
 }

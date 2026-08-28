@@ -6,7 +6,7 @@ import { auth } from '@/lib/firebase/firebase';
 import { getUserProfile, logout as firebaseLogout } from '@/lib/auth/auth';
 import { type CampusName } from '@/lib/buildings/campusAssignments';
 import { type ReservationCampus } from '@/lib/buildings/campuses';
-import type { UserGender } from '@/lib/auth/profile-types';
+import { normalizeAssignedRoomIds, type UserGender } from '@/lib/auth/profile-types';
 
 interface UserProfile {
   firstName: string;
@@ -20,6 +20,7 @@ interface UserProfile {
   organizationName?: string | null;
   campus?: ReservationCampus | null;
   campusName?: CampusName | null;
+  assignedRoomIds?: string[];
 }
 
 interface AuthContextType {
@@ -58,6 +59,9 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         email: data.email,
         role: data.role || 'Student',
         status: data.status || 'approved',
+        assignedRoomIds: normalizeAssignedRoomIds(
+          (data as Record<string, unknown>).assignedRoomIds
+        ),
         gender: data.gender ?? null,
         accountConfigurationReminderDismissed:
           data.accountConfigurationReminderDismissed === true,

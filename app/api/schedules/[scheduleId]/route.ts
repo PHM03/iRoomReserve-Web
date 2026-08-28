@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { USER_ROLES } from "@/lib/auth/roles";
 import { db } from "@/lib/firebase/firebase-admin";
 import { ApiError, handleApiError } from "@/lib/server/api-error";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
-import {
-  assertAuthenticated,
-  assertCanManageBuilding,
-  assertRole,
-} from "@/lib/server/route-guards";
 import { scheduleUpdateSchema } from "@/lib/server/schemas";
 import {
   assertNoScheduleConflict,
@@ -17,6 +11,11 @@ import {
 } from "@/lib/server/services/schedules";
 import { inferCampusFromBuilding } from "@/lib/buildings/campuses";
 import { validateScheduleTimes } from "@/lib/schedules/scheduleTimeRules";
+import {
+  assertScheduleAccess,
+} from "@/lib/server/schedule-authorization";
+
+export const runtime = "nodejs";
 
 interface StoredScheduleRecord {
   academicYear?: string;
@@ -49,26 +48,38 @@ export async function PATCH(
   { params }: { params: Promise<{ scheduleId: string }> }
 ) {
   try {
-    const authContext = await getRequestAuthContext(request);
-    assertAuthenticated(authContext);
-    assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
+    const authContext = await getRequestAuthContext(request, {
+      allowCompatibilityHeaders: false,
+    });
+    await assertScheduleAccess(authContext, {
+      operation: "write",
+      requireRoom: false,
+    });
 
     const { scheduleId } = await params;
     const { overrideScheduleIds = [], ...payload } = scheduleUpdateSchema.parse(
       await request.json()
     );
     const existingSchedule = await getScheduleRecord(scheduleId);
+    await assertScheduleAccess(authContext, {
+      operation: "write",
+      roomId: existingSchedule.roomId,
+      buildingId: existingSchedule.buildingId,
+    });
     const mergedSchedule = {
       ...existingSchedule,
       ...payload,
     };
     const buildingId = mergedSchedule.buildingId;
 
-    if (!buildingId) {
-      throw new ApiError(400, "missing_building", "Schedule is missing a building.");
-    }
+    await assertScheduleAccess(authContext, {
+      operation: "write",
+      roomId: mergedSchedule.roomId,
+      buildingId,
+    });
 
-    assertCanManageBuilding(authContext, buildingId);
+    const safePayload = { ...payload };
+    delete safePayload.createdBy;
 
     // Server-side campus time range validation (only when times are being updated)
     const campus = inferCampusFromBuilding({ id: buildingId });
@@ -102,12 +113,12 @@ export async function PATCH(
         });
       }
 
-      await updateScheduleRecord(scheduleId, payload, {
+      await updateScheduleRecord(scheduleId, safePayload, {
         conflictSchedule,
         overrideScheduleIds,
       });
     } else {
-      await updateScheduleRecord(scheduleId, payload);
+      await updateScheduleRecord(scheduleId, safePayload);
     }
 
     return NextResponse.json({ ok: true });
@@ -121,18 +132,23 @@ export async function DELETE(
   { params }: { params: Promise<{ scheduleId: string }> }
 ) {
   try {
-    const authContext = await getRequestAuthContext(request);
-    assertAuthenticated(authContext);
-    assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
+    const authContext = await getRequestAuthContext(request, {
+      allowCompatibilityHeaders: false,
+    });
+    await assertScheduleAccess(authContext, {
+      operation: "write",
+      requireRoom: false,
+    });
 
     const { scheduleId } = await params;
-    const buildingId = (await getScheduleRecord(scheduleId)).buildingId;
+    const existingSchedule = await getScheduleRecord(scheduleId);
+    const buildingId = existingSchedule.buildingId;
 
-    if (!buildingId) {
-      throw new ApiError(400, "missing_building", "Schedule is missing a building.");
-    }
-
-    assertCanManageBuilding(authContext, buildingId);
+    await assertScheduleAccess(authContext, {
+      operation: "write",
+      roomId: existingSchedule.roomId,
+      buildingId,
+    });
     await deleteScheduleRecord(scheduleId);
 
     return NextResponse.json({ ok: true });

@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { USER_ROLES } from "@/lib/auth/roles";
 import { handleApiError, ApiError } from "@/lib/server/api-error";
 import { getOptionalAdminDb } from "@/lib/server/firebase-admin";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
-import {
-  assertAuthenticated,
-  assertCanManageBuilding,
-  assertRole,
-} from "@/lib/server/route-guards";
 import { scheduleInputSchema } from "@/lib/server/schemas";
 import {
   assertNoScheduleConflict,
@@ -20,6 +14,11 @@ import {
   doesScheduleMatchContext,
   normalizeScheduleContext,
 } from "@/lib/schedules/scheduleContext";
+import {
+  assertScheduleAccess,
+} from "@/lib/server/schedule-authorization";
+
+export const runtime = "nodejs";
 
 interface ScheduleRecord {
   id: string;
@@ -41,11 +40,18 @@ interface ScheduleRecord {
 
 export async function GET(request: NextRequest) {
   try {
-    const authContext = await getRequestAuthContext(request);
-    assertAuthenticated(authContext);
-
+    const authContext = await getRequestAuthContext(request, {
+      allowCompatibilityHeaders: false,
+    });
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get("roomId");
+    const requestedBuildingId = searchParams.get("buildingId");
+    const normalizedRoomId = roomId?.trim() ?? "";
+    const room = await assertScheduleAccess(authContext, {
+      operation: "read",
+      roomId,
+      buildingId: requestedBuildingId,
+    });
     const adminDb = getOptionalAdminDb();
 
     if (!adminDb) {
@@ -54,17 +60,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!roomId) {
+    if (!room) {
       return NextResponse.json([]);
     }
 
-    const roomSnapshot = await adminDb.collection("rooms").doc(roomId).get();
-    if (!roomSnapshot.exists) {
-      return NextResponse.json([]);
-    }
-
-    const roomData = roomSnapshot.data() as { buildingId?: string };
-    const buildingId = roomData.buildingId ?? "";
+    const buildingId = room.buildingId ?? "";
     const buildingSnapshot = buildingId
       ? await adminDb.collection("buildings").doc(buildingId).get()
       : null;
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
 
     const snapshot = await adminDb
       .collection("schedules")
-      .where("roomId", "==", roomId)
+      .where("roomId", "==", normalizedRoomId)
       .get();
 
     const schedules: ScheduleRecord[] = snapshot.docs
@@ -131,14 +131,19 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authContext = await getRequestAuthContext(request);
-    assertAuthenticated(authContext);
-    assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
-
+    const authContext = await getRequestAuthContext(request, {
+      allowCompatibilityHeaders: false,
+    });
     const { overrideScheduleIds = [], ...payload } = scheduleInputSchema.parse(
       await request.json()
     );
-    assertCanManageBuilding(authContext, payload.buildingId);
+    await assertScheduleAccess(authContext, {
+      operation: "write",
+      roomId: payload.roomId,
+      buildingId: payload.buildingId,
+    });
+
+    const safePayload = { ...payload, createdBy: authContext.uid! };
 
     // Server-side campus time range validation
     const campus = inferCampusFromBuilding({ id: payload.buildingId });
@@ -151,7 +156,7 @@ export async function POST(request: NextRequest) {
       await assertNoScheduleConflict(payload);
     }
 
-    const id = await createScheduleRecord(payload, overrideScheduleIds);
+    const id = await createScheduleRecord(safePayload, overrideScheduleIds);
     return NextResponse.json({ id });
   } catch (error) {
     return handleApiError(error);
@@ -160,10 +165,9 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const authContext = await getRequestAuthContext(request);
-    assertAuthenticated(authContext);
-    assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
-
+    const authContext = await getRequestAuthContext(request, {
+      allowCompatibilityHeaders: false,
+    });
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get("roomId");
     const buildingId = searchParams.get("buildingId");
@@ -178,7 +182,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    assertCanManageBuilding(authContext, buildingId);
+    await assertScheduleAccess(authContext, {
+      operation: "write",
+      roomId,
+      buildingId,
+    });
 
     const adminDb = getOptionalAdminDb();
     if (!adminDb) {
@@ -187,14 +195,9 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const roomSnapshot = await adminDb.collection("rooms").doc(roomId).get();
-    if (!roomSnapshot.exists || roomSnapshot.data()?.buildingId !== buildingId) {
-      throw new ApiError(404, "room_not_found", "Room not found in this building.");
-    }
-
     const snapshot = await adminDb
       .collection("schedules")
-      .where("roomId", "==", roomId)
+      .where("roomId", "==", roomId.trim())
       .get();
     const schedulesToDelete = snapshot.docs.filter((scheduleDoc) => {
       const data = scheduleDoc.data() as {

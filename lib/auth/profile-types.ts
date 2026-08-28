@@ -31,3 +31,18 @@ export function buildUserGenderUpdate(gender: unknown, updatedAt: unknown) {
     updatedAt,
   };
 }
+
+export function normalizeAssignedRoomIds(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return [
+    ...new Set(
+      value
+        .filter((roomId): roomId is string => typeof roomId === "string")
+        .map((roomId) => roomId.trim())
+        .filter(Boolean)
+    ),
+  ];
+}

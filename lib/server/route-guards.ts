@@ -9,6 +9,12 @@ export function assertAuthenticated(context: RequestAuthContext) {
   }
 }
 
+export function assertVerifiedAuthentication(context: RequestAuthContext) {
+  if (!context.verified || !context.uid) {
+    throw new ApiError(401, "unauthenticated", "A verified authentication token is required.");
+  }
+}
+
 export function assertOwnsResource(
   context: RequestAuthContext,
   resourceOwnerUid: string

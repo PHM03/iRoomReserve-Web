@@ -3,6 +3,7 @@ import "server-only";
 import type { NextRequest } from "next/server";
 
 import { normalizeAssignedBuildings } from "@/lib/admin/assignedBuildings";
+import { normalizeAssignedRoomIds } from "@/lib/auth/profile-types";
 import { type ReservationCampus } from "@/lib/buildings/campuses";
 import { auth as adminAuth, db } from "@/lib/firebase/firebase-admin";
 import { normalizeRole, type UserRole } from "@/lib/auth/roles";
@@ -11,35 +12,42 @@ import { resolveCampusAssignment } from "@/lib/buildings/campusAssignments";
 export interface RequestAuthContext {
   uid: string | null;
   role: UserRole | null;
+  status?: string | null;
   email: string | null;
   campus: ReservationCampus | null;
   assignedBuildingId: string | null;
   assignedBuildingIds: string[];
+  assignedRoomIds?: string[];
   verified: boolean;
 }
 
 interface UserProfileData {
   role?: string;
+  status?: string | null;
   email?: string | null;
   campus?: string | null;
   campusName?: string | null;
   assignedBuildingId?: string | null;
   assignedBuilding?: string | null;
   assignedBuildingIds?: string[];
+  assignedRoomIds?: unknown;
   assignedBuildings?: unknown;
 }
 
 interface GetRequestAuthContextOptions {
   includeProfile?: boolean;
+  allowCompatibilityHeaders?: boolean;
 }
 
 function getEmptyProfileContext() {
   return {
     role: null,
+    status: null,
     email: null,
     campus: null,
     assignedBuildingId: null,
     assignedBuildingIds: [] as string[],
+    assignedRoomIds: [] as string[],
   };
 }
 
@@ -59,11 +67,16 @@ async function getProfileContext(uid: string) {
 
   return {
     role: normalizeRole(profileData.role),
+    status:
+      typeof profileData.status === "string"
+        ? profileData.status.trim().toLowerCase()
+        : null,
     email: profileData.email?.trim().toLowerCase() ?? null,
     campus,
     assignedBuildingId:
       assignedBuildings[0]?.id ?? profileData.assignedBuildingId ?? null,
     assignedBuildingIds: assignedBuildings.map((building) => building.id),
+    assignedRoomIds: normalizeAssignedRoomIds(profileData.assignedRoomIds),
   };
 }
 
@@ -71,12 +84,14 @@ export async function getRequestAuthContext(
   request: NextRequest,
   options: GetRequestAuthContextOptions = {}
 ): Promise<RequestAuthContext> {
-  const { includeProfile = true } = options;
-  const fallbackUid = request.headers.get("x-user-id");
-  const fallbackRole = normalizeRole(request.headers.get("x-user-role"));
+  const { includeProfile = true, allowCompatibilityHeaders = true } = options;
+  const fallbackUid = allowCompatibilityHeaders
+    ? request.headers.get("x-user-id")
+    : null;
+  const fallbackRole = allowCompatibilityHeaders
+    ? normalizeRole(request.headers.get("x-user-role"))
+    : null;
   const authHeader = request.headers.get("authorization");
-
-  console.log("Auth header:", authHeader);
 
   if (authHeader?.startsWith("Bearer ")) {
     try {
@@ -87,15 +102,17 @@ export async function getRequestAuthContext(
       return {
         uid: decoded.uid,
         role: profileContext.role ?? fallbackRole,
+        status: profileContext.status,
         email: profileContext.email ?? decoded.email?.trim().toLowerCase() ?? null,
         campus: profileContext.campus,
         assignedBuildingId: profileContext.assignedBuildingId,
         assignedBuildingIds: profileContext.assignedBuildingIds,
+        assignedRoomIds: profileContext.assignedRoomIds,
         verified: true,
       };
     } catch (error) {
       console.warn("Firebase ID token verification failed", { error });
-      // Fall through to compatibility headers when the bearer token is invalid.
+      // Compatibility headers remain available only to legacy routes that opt in.
     }
   }
 
@@ -107,10 +124,12 @@ export async function getRequestAuthContext(
   return {
     uid: fallbackUid,
     role: fallbackProfileContext.role ?? fallbackRole,
+    status: fallbackProfileContext.status,
     email: fallbackProfileContext.email,
     campus: fallbackProfileContext.campus,
     assignedBuildingId: fallbackProfileContext.assignedBuildingId,
     assignedBuildingIds: fallbackProfileContext.assignedBuildingIds,
+    assignedRoomIds: fallbackProfileContext.assignedRoomIds,
     verified: false,
   };
 }

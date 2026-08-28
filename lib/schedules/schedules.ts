@@ -1,7 +1,11 @@
 import {
   collection,
+  doc,
+  getDoc,
   onSnapshot,
   query,
+  type DocumentData,
+  type Query,
   Unsubscribe,
   where,
   Timestamp,
@@ -11,6 +15,8 @@ import { apiRequest } from "@/lib/api/client";
 import { auth, db } from "@/lib/firebase/firebase";
 import { formatTime } from "@/lib/utils/dateTime";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
+import { normalizeAssignedRoomIds } from "@/lib/auth/profile-types";
+import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
 import {
   doesScheduleMatchContext,
   type ScheduleAcademicYear,
@@ -39,6 +45,105 @@ export interface Schedule {
 }
 
 export type ScheduleInput = Omit<Schedule, "id" | "createdAt" | "updatedAt">;
+
+async function getRestrictedScheduleRoomIds(): Promise<string[] | null> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) {
+    return [];
+  }
+
+  const profileSnapshot = await getDoc(doc(db, "users", uid));
+  if (!profileSnapshot.exists()) {
+    return [];
+  }
+
+  const profile = profileSnapshot.data() as {
+    role?: string;
+    status?: string;
+    assignedRoomIds?: unknown;
+  };
+  const role = normalizeRole(profile.role);
+  if (role !== USER_ROLES.FACULTY && role !== USER_ROLES.UTILITY) {
+    return null;
+  }
+
+  if (
+    typeof profile.status !== "string" ||
+    profile.status.trim().toLowerCase() !== "approved"
+  ) {
+    return [];
+  }
+
+  return normalizeAssignedRoomIds(profile.assignedRoomIds) ?? [];
+}
+
+function mapScheduleDocument(scheduleDoc: { id: string; data: () => DocumentData }): Schedule {
+  return {
+    id: scheduleDoc.id,
+    ...scheduleDoc.data(),
+  } as Schedule;
+}
+
+function subscribeToScheduleQueries(
+  queries: Query<DocumentData>[],
+  activeContext: ScheduleContext | null,
+  callback: (schedules: Schedule[]) => void
+): Unsubscribe {
+  if (queries.length === 0) {
+    return () => {};
+  }
+
+  const listener = createGuardedSnapshotCallback(callback);
+  const schedulesByQuery = new Map<number, Schedule[]>();
+  const emit = () => {
+    const schedules = [...schedulesByQuery.values()].flat();
+    listener.emit(
+      (activeContext ? filterSchedulesByContext(schedules, activeContext) : schedules).sort(
+        sortSchedules
+      )
+    );
+  };
+
+  const unsubscribers = queries.map((scheduleQuery, queryIndex) =>
+    onSnapshot(
+      scheduleQuery,
+      (snapshot) => {
+        if (listener.isCancelled()) {
+          return;
+        }
+        schedulesByQuery.set(queryIndex, snapshot.docs.map(mapScheduleDocument));
+        emit();
+      },
+      (error) => {
+        if (!listener.isCancelled()) {
+          console.warn("Firestore listener error (schedule authorization query):", error);
+        }
+      }
+    )
+  );
+
+  return listener.wrap(() => unsubscribers.forEach((unsubscribe) => unsubscribe()));
+}
+
+function buildBuildingRoomQueries(buildingIds: string[], roomIds: string[]) {
+  const queries: Query<DocumentData>[] = [];
+  const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
+  const uniqueRoomIds = [...new Set(roomIds.filter(Boolean))];
+
+  for (const buildingId of uniqueBuildingIds) {
+    for (const roomId of uniqueRoomIds) {
+      queries.push(
+        query(
+          collection(db, "schedules"),
+          where("buildingId", "==", buildingId),
+          where("roomId", "==", roomId)
+        )
+      );
+    }
+  }
+
+  return queries;
+}
 
 export const DAY_NAMES = [
   "Sunday",
@@ -153,42 +258,40 @@ export function onSchedulesByBuilding(
     return () => {};
   }
 
-  const q = query(
-    collection(db, "schedules"),
-    where("buildingId", "==", buildingId)
-  );
   const listener = createGuardedSnapshotCallback(callback);
-  const unsubscribe = onSnapshot(
-    q,
-    (snapshot) => {
-      const mappedSchedules = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...d.data()
-        }) as Schedule);
-      const schedules = (
-        activeContext
-          ? filterSchedulesByContext(mappedSchedules, activeContext)
-          : mappedSchedules
-      ).sort(sortSchedules);
-      console.log("[schedules] onSchedulesByBuilding snapshot", {
-        buildingId,
-        count: schedules.length,
-        empty: schedules.length === 0,
-      });
-      listener.emit(schedules);
-    },
-    (error) => {
-      if (listener.isCancelled()) {
+  let cancelled = false;
+  let unsubscribe: Unsubscribe = () => {};
+
+  void getRestrictedScheduleRoomIds()
+    .then((assignedRoomIds) => {
+      if (cancelled) {
         return;
       }
-      console.log("[schedules] onSchedulesByBuilding error", {
-        buildingId,
-        error,
+
+      const queries =
+        assignedRoomIds === null
+          ? [
+              query(
+                collection(db, "schedules"),
+                where("buildingId", "==", buildingId)
+              ),
+            ]
+          : buildBuildingRoomQueries([buildingId], assignedRoomIds);
+
+      unsubscribe = subscribeToScheduleQueries(queries, activeContext, (schedules) => {
+        listener.emit(schedules);
       });
-      console.warn("Firestore listener error (schedules):", error);
-    }
-  );
-  return listener.wrap(unsubscribe);
+    })
+    .catch((error) => {
+      if (!cancelled) {
+        console.warn("Unable to load schedule authorization context:", error);
+      }
+    });
+
+  return listener.wrap(() => {
+    cancelled = true;
+    unsubscribe();
+  });
 }
 
 export async function getSchedulesByRoomId(roomId: string): Promise<Schedule[]> {
@@ -229,40 +332,35 @@ export function onSchedulesByBuildingIds(
   }
 
   const listener = createGuardedSnapshotCallback(callback);
-  const schedulesByChunk = new Map<number, Schedule[]>();
-  const buildingChunks = chunkValues(uniqueBuildingIds, 10);
+  let cancelled = false;
+  let unsubscribe: Unsubscribe = () => {};
 
-  const emit = () => {
-    listener.emit([...schedulesByChunk.values()].flat().sort(sortSchedules));
-  };
-
-  const unsubscribers = buildingChunks.map((buildingChunk, chunkIndex) =>
-    onSnapshot(
-      query(collection(db, "schedules"), where("buildingId", "in", buildingChunk)),
-      (snapshot) => {
-        if (listener.isCancelled()) {
-          return;
-        }
-        schedulesByChunk.set(
-          chunkIndex,
-          snapshot.docs.map((scheduleDoc) => ({
-            id: scheduleDoc.id,
-            ...scheduleDoc.data(),
-          })) as Schedule[]
-        );
-        emit();
-      },
-      (error) => {
-        if (listener.isCancelled()) {
-          return;
-        }
-        console.warn("Firestore listener error (schedules by building ids):", error);
+  void getRestrictedScheduleRoomIds()
+    .then((assignedRoomIds) => {
+      if (cancelled) {
+        return;
       }
-    )
-  );
+
+      const queries =
+        assignedRoomIds === null
+          ? chunkValues(uniqueBuildingIds, 10).map((buildingChunk) =>
+              query(collection(db, "schedules"), where("buildingId", "in", buildingChunk))
+            )
+          : buildBuildingRoomQueries(uniqueBuildingIds, assignedRoomIds);
+
+      unsubscribe = subscribeToScheduleQueries(queries, null, (schedules) => {
+        listener.emit(schedules);
+      });
+    })
+    .catch((error) => {
+      if (!cancelled) {
+        console.warn("Unable to load schedule authorization context:", error);
+      }
+    });
 
   return listener.wrap(() => {
-    unsubscribers.forEach((unsubscribe) => unsubscribe());
+    cancelled = true;
+    unsubscribe();
   });
 }
 
@@ -294,59 +392,34 @@ export function onSchedulesByBuildingRoomIds(
   }
 
   const listener = createGuardedSnapshotCallback(callback);
-  const schedulesByChunk = new Map<number, Schedule[]>();
-  const roomIdChunks = chunkValues(uniqueRoomIds, 10);
+  let cancelled = false;
+  let unsubscribe: Unsubscribe = () => {};
 
-  const emit = () => {
-    listener.emit(
-      filterSchedulesByContext([...schedulesByChunk.values()].flat(), activeContext).sort(
-        sortSchedules
-      )
-    );
-  };
-
-  const unsubscribers = roomIdChunks.map((roomIdChunk, chunkIndex) =>
-    onSnapshot(
-      query(
-        collection(db, "schedules"),
-        where("buildingId", "==", buildingId),
-        where("roomId", "in", roomIdChunk)
-      ),
-      (snapshot) => {
-        if (listener.isCancelled()) {
-          return;
-        }
-
-        // ── DEBUG: raw Firestore documents ───────────────────────────────
-        console.group(`[DEBUG] onSchedulesByBuildingRoomIds snapshot — chunk ${chunkIndex}`);
-        console.log('Query: schedules WHERE buildingId ==', buildingId, 'AND roomId IN', roomIdChunk);
-        console.log('Raw docs returned:', snapshot.size);
-        snapshot.docs.forEach((d) =>
-          console.log(' •', d.id, JSON.stringify(d.data()))
-        );
-        console.groupEnd();
-        // ─────────────────────────────────────────────────────────────────
-
-        schedulesByChunk.set(
-          chunkIndex,
-          snapshot.docs.map((scheduleDoc) => ({
-            id: scheduleDoc.id,
-            ...scheduleDoc.data(),
-          })) as Schedule[]
-        );
-        emit();
-      },
-      (error) => {
-        if (listener.isCancelled()) {
-          return;
-        }
-        console.warn("Firestore listener error (schedules by building+room ids):", error);
+  void getRestrictedScheduleRoomIds()
+    .then((assignedRoomIds) => {
+      if (cancelled) {
+        return;
       }
-    )
-  );
+
+      const queryRoomIds =
+        assignedRoomIds === null
+          ? uniqueRoomIds
+          : uniqueRoomIds.filter((roomId) => assignedRoomIds.includes(roomId));
+      unsubscribe = subscribeToScheduleQueries(
+        buildBuildingRoomQueries([buildingId], queryRoomIds),
+        activeContext,
+        (schedules) => listener.emit(schedules)
+      );
+    })
+    .catch((error) => {
+      if (!cancelled) {
+        console.warn("Unable to load schedule authorization context:", error);
+      }
+    });
 
   return listener.wrap(() => {
-    unsubscribers.forEach((unsubscribe) => unsubscribe());
+    cancelled = true;
+    unsubscribe();
   });
 }
 
@@ -375,25 +448,34 @@ export function isRoomInClass(
 export function onAllSchedules(
   callback: (schedules: Schedule[]) => void
 ): Unsubscribe {
-  const q = query(collection(db, "schedules"));
   const listener = createGuardedSnapshotCallback(callback);
-  const unsubscribe = onSnapshot(
-    q,
-    (snapshot) => {
-      const schedules: Schedule[] = snapshot.docs
-        .map((d) => ({
-          id: d.id,
-          ...d.data()
-        }) as Schedule)
-        .sort(sortSchedules);
-      listener.emit(schedules);
-    },
-    (error) => {
-      if (listener.isCancelled()) {
+  let cancelled = false;
+  let unsubscribe: Unsubscribe = () => {};
+
+  void getRestrictedScheduleRoomIds()
+    .then((assignedRoomIds) => {
+      if (cancelled) {
         return;
       }
-      console.warn("Firestore listener error (all schedules):", error);
-    }
-  );
-  return listener.wrap(unsubscribe);
+
+      const queries =
+        assignedRoomIds === null
+          ? [query(collection(db, "schedules"))]
+          : assignedRoomIds.map((roomId) =>
+              query(collection(db, "schedules"), where("roomId", "==", roomId))
+            );
+      unsubscribe = subscribeToScheduleQueries(queries, null, (schedules) => {
+        listener.emit(schedules);
+      });
+    })
+    .catch((error) => {
+      if (!cancelled) {
+        console.warn("Unable to load schedule authorization context:", error);
+      }
+    });
+
+  return listener.wrap(() => {
+    cancelled = true;
+    unsubscribe();
+  });
 }

@@ -119,6 +119,20 @@ service cloud.firestore {
       );
     }
 
+    function canReadSchedule() {
+      return isSignedIn() && (
+        !hasUserProfile() ||
+        (!isFacultyRoleValue(userProfile().role) &&
+         !isUtilityRoleValue(userProfile().role)) ||
+        (
+          userProfile().status == "approved" &&
+          userProfile().assignedRoomIds is list &&
+          resource.data.roomId is string &&
+          resource.data.roomId in userProfile().assignedRoomIds
+        )
+      );
+    }
+
     function canReadBuildingFeedback(buildingId) {
       return canReadManagedBuildingData(buildingId);
     }
@@ -129,7 +143,12 @@ service cloud.firestore {
         || isPrivilegedUser()
         || isApprovedUser()
       );
-      allow create, update: if isSignedIn() && request.auth.uid == userId;
+      // Room assignments are server-managed. Self-service profile writes may
+      // not add, change, or remove assignedRoomIds.
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+        !request.resource.data.keys().hasAny(["assignedRoomIds"]);
+      allow update: if isSignedIn() && request.auth.uid == userId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(["assignedRoomIds"]);
     }
 
     // Optional self-reported gender is kept outside the broadly readable user
@@ -194,7 +213,7 @@ service cloud.firestore {
     }
 
     match /schedules/{docId} {
-      allow read: if request.auth != null;
+      allow read: if canReadSchedule();
       allow write: if false;
     }
 
