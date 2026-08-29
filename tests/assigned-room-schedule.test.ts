@@ -35,12 +35,12 @@ describe('assigned-room schedule UI data', () => {
       'utf8'
     );
 
-    expect(facultyDashboard).not.toContain('AssignedRoomScheduleSection');
-    expect(facultyDashboard).not.toContain('showScheduleManagement');
-    expect(memberDashboard).not.toContain('AssignedRoomScheduleSection');
-    expect(memberDashboard).not.toContain('showScheduleManagement');
-    expect(scheduleSection).not.toContain('Faculty Professor');
+    expect(facultyDashboard).toContain('showScheduleManagement');
+    expect(memberDashboard).toContain('AssignedRoomScheduleSection');
+    expect(memberDashboard).toContain('showScheduleManagement');
+    expect(scheduleSection).toContain('Faculty Professor');
     expect(scheduleSection).toContain('Utility Staff');
+    expect(scheduleSection).toContain('readOnly={isUtilityStaff}');
   });
 
   it('shows room and campus context in the selector label', () => {

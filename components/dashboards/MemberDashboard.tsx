@@ -18,10 +18,12 @@ import {
   isReservationActiveTimeSlot,
 } from '@/lib/rooms/roomStatus';
 import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
+import AssignedRoomScheduleSection from '@/components/schedules/AssignedRoomScheduleSection';
 
 interface MemberDashboardProps {
   firstName: string;
   welcomeEmoji: string;
+  showScheduleManagement?: boolean;
 }
 
 type RecentActivityStatus = Reservation['status'] | 'expired';
@@ -77,6 +79,7 @@ function getRecentActivityAccentClass(status: RecentActivityStatus) {
 export default function MemberDashboard({
   firstName,
   welcomeEmoji,
+  showScheduleManagement = false,
 }: Readonly<MemberDashboardProps>) {
   const { firebaseUser } = useAuth();
   const uid = firebaseUser?.uid;
@@ -436,6 +439,12 @@ export default function MemberDashboard({
           reservations={reservationHistory}
         />
 
+        {showScheduleManagement ? (
+          <AssignedRoomScheduleSection
+            className="w-full"
+            roleLabel="Faculty Professor"
+          />
+        ) : null}
       </div>
     </main>
   );

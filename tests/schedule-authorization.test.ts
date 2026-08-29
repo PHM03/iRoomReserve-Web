@@ -87,7 +87,8 @@ describe("schedule authorization", () => {
         context(USER_ROLES.UTILITY, "approved", "main"),
         "room-A",
         { buildingId: "gd2" },
-        "gd2"
+        "gd2",
+        { operation: "read" }
       )
     ).not.toThrow();
   });
@@ -124,12 +125,27 @@ describe("schedule authorization", () => {
     ).not.toThrow();
   });
 
-  it("does not grant Faculty unrestricted schedule writes", () => {
-    expectForbidden(
-      () => assertScheduleOperation(context(USER_ROLES.FACULTY), "write"),
-      "forbidden"
-    );
+  it("allows Faculty schedule writes without room assignments", () => {
+    for (const operation of ["create", "edit", "delete", "clear"] as const) {
+      expect(() =>
+        assertAssignedScheduleRoom(
+          context(USER_ROLES.FACULTY),
+          `faculty-${operation}-room`,
+          { buildingId: "building-A" },
+          "building-A"
+        )
+      ).not.toThrow();
+    }
   });
+
+  it.each(["CREATE", "UPDATE", "DELETE", "CLEAR-ROOM"])(
+    "denies Utility Staff %s schedule writes",
+    () => {
+      const utility = context(USER_ROLES.UTILITY, "approved", "main");
+
+      expectForbidden(() => assertScheduleOperation(utility, "write"), "forbidden");
+    }
+  );
 
   it("does not use instructorName as a Faculty schedule ownership key", () => {
     const policySource = readFileSync(
@@ -161,13 +177,31 @@ describe("schedule authorization", () => {
     const utility = context(USER_ROLES.UTILITY, "approved", "main");
 
     expect(() =>
-      assertAssignedScheduleRoom(utility, "main-campus-room", { buildingId: "gd1" }, "gd1")
+      assertAssignedScheduleRoom(
+        utility,
+        "main-campus-room",
+        { buildingId: "gd1" },
+        "gd1",
+        { operation: "read" }
+      )
     ).not.toThrow();
     expect(() =>
-      assertAssignedScheduleRoom(utility, "main-campus-room-2", { buildingId: "gd2" }, "gd2")
+      assertAssignedScheduleRoom(
+        utility,
+        "main-campus-room-2",
+        { buildingId: "gd2" },
+        "gd2",
+        { operation: "read" }
+      )
     ).not.toThrow();
     expect(() =>
-      assertAssignedScheduleRoom(utility, "main-campus-room-3", { buildingId: "gd3" }, "gd3")
+      assertAssignedScheduleRoom(
+        utility,
+        "main-campus-room-3",
+        { buildingId: "gd3" },
+        "gd3",
+        { operation: "read" }
+      )
     ).not.toThrow();
     expectForbidden(
       () =>
@@ -175,7 +209,8 @@ describe("schedule authorization", () => {
           utility,
           "digi-campus-room",
           { buildingId: "sdca-digital-campus" },
-          "sdca-digital-campus"
+          "sdca-digital-campus",
+          { operation: "read" }
         ),
       "forbidden"
     );
@@ -189,11 +224,19 @@ describe("schedule authorization", () => {
         utility,
         "digi-campus-room",
         { buildingId: "sdca-digital-campus" },
-        "sdca-digital-campus"
+        "sdca-digital-campus",
+        { operation: "read" }
       )
     ).not.toThrow();
     expectForbidden(
-      () => assertAssignedScheduleRoom(utility, "main-campus-room", { buildingId: "gd3" }, "gd3"),
+      () =>
+        assertAssignedScheduleRoom(
+          utility,
+          "main-campus-room",
+          { buildingId: "gd3" },
+          "gd3",
+          { operation: "read" }
+        ),
       "forbidden"
     );
   });

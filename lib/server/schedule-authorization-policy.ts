@@ -38,7 +38,7 @@ export function assertScheduleOperation(
   if (
     context.role !== USER_ROLES.ADMIN &&
     context.role !== USER_ROLES.SUPER_ADMIN &&
-    !isRoomScopedScheduleRole(context.role)
+    context.role !== USER_ROLES.FACULTY
   ) {
     throw new ApiError(403, "forbidden", "You do not have permission to access schedules.");
   }

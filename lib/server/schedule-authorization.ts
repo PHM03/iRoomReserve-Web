@@ -1,6 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/firebase/firebase-admin";
+import { USER_ROLES } from "@/lib/auth/roles";
 import { ApiError } from "@/lib/server/api-error";
 import type { RequestAuthContext } from "@/lib/server/request-auth";
 import { assertCanManageBuilding } from "@/lib/server/route-guards";
@@ -60,7 +61,7 @@ export async function assertScheduleAccess(
   if (
     options.operation === "write" &&
     options.buildingId &&
-    !isRoomScopedScheduleRole(context.role)
+    (context.role === USER_ROLES.ADMIN || context.role === USER_ROLES.SUPER_ADMIN)
   ) {
     assertCanManageBuilding(context, options.buildingId.trim());
   }

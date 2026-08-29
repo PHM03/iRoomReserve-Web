@@ -127,6 +127,7 @@ interface AdminClassSchedulesSectionProps {
   className?: string;
   enableExcelImport?: boolean;
   enableClearRoom?: boolean;
+  readOnly?: boolean;
 }
 
 const TIMETABLE_START_HOUR = 7;
@@ -206,6 +207,7 @@ export default function AdminClassSchedulesSection({
   className = '',
   enableExcelImport = true,
   enableClearRoom = true,
+  readOnly = false,
 }: Readonly<AdminClassSchedulesSectionProps>) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearRoomConfirm, setShowClearRoomConfirm] = useState(false);
@@ -667,7 +669,7 @@ export default function AdminClassSchedulesSection({
       <div className="mb-5 flex items-center justify-between">
         <h3 className="text-xl font-bold text-black">Class Schedules</h3>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {enableExcelImport ? (
+          {!readOnly && enableExcelImport ? (
             <>
               <input
                 ref={importFileInputRef}
@@ -686,12 +688,14 @@ export default function AdminClassSchedulesSection({
               </button>
             </>
           ) : null}
-          <button
-            onClick={onToggleForm}
-            className="rounded-lg border-0 bg-[#8B0000] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#6e0000]"
-          >
-            {showScheduleForm ? 'Cancel' : '+ Add Schedule'}
-          </button>
+          {!readOnly ? (
+            <button
+              onClick={onToggleForm}
+              className="rounded-lg border-0 bg-[#8B0000] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#6e0000]"
+            >
+              {showScheduleForm ? 'Cancel' : '+ Add Schedule'}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -710,7 +714,7 @@ export default function AdminClassSchedulesSection({
         </p>
       ) : null}
 
-      {showScheduleForm ? (
+      {showScheduleForm && !readOnly ? (
         <div className="mb-6 space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
@@ -1268,7 +1272,8 @@ export default function AdminClassSchedulesSection({
                   <button
                     key={schedule.id}
                     type="button"
-                    onClick={() => onEditSchedule(schedule)}
+                    onClick={readOnly ? undefined : () => onEditSchedule(schedule)}
+                    disabled={readOnly}
                     title={`${schedule.courseName ?? schedule.subjectName} | ${schedule.section ?? ''} | ${schedule.instructorName} | ${schedule.courseCode ?? ''} | ${formatTime12h(schedule.startTime)} - ${formatTime12h(schedule.endTime)}`}
                     className={`absolute left-2 right-2 overflow-hidden rounded-md border-l-[3px] px-2 py-1 text-center text-xs transition-all hover:shadow-[0_2px_6px_rgba(0,0,0,0.1)] ${
                       conflictingScheduleIds.has(schedule.id)
