@@ -126,9 +126,35 @@ service cloud.firestore {
          !isUtilityRoleValue(userProfile().role)) ||
         (
           userProfile().status == "approved" &&
-          userProfile().assignedRoomIds is list &&
-          resource.data.roomId is string &&
-          resource.data.roomId in userProfile().assignedRoomIds
+          isFacultyRoleValue(userProfile().role)
+        ) ||
+        (
+          userProfile().status == "approved" &&
+          isUtilityRoleValue(userProfile().role) &&
+          resource.data.buildingId is string &&
+          (
+            userProfile().assignedBuildingId == resource.data.buildingId ||
+            (
+              userProfile().assignedBuildingIds is list &&
+              resource.data.buildingId in userProfile().assignedBuildingIds
+            ) ||
+            (
+              userProfile().campus == "main" &&
+              resource.data.buildingId in ["gd1", "gd2", "gd3"]
+            ) ||
+            (
+              userProfile().campus == "digi" &&
+              resource.data.buildingId == "sdca-digital-campus"
+            ) ||
+            (
+              userProfile().campusName == "SDCA Main Campus" &&
+              resource.data.buildingId in ["gd1", "gd2", "gd3"]
+            ) ||
+            (
+              userProfile().campusName == "SDCA Digi Campus" &&
+              resource.data.buildingId == "sdca-digital-campus"
+            )
+          )
         )
       );
     }
@@ -143,12 +169,8 @@ service cloud.firestore {
         || isPrivilegedUser()
         || isApprovedUser()
       );
-      // Room assignments are server-managed. Self-service profile writes may
-      // not add, change, or remove assignedRoomIds.
-      allow create: if isSignedIn() && request.auth.uid == userId &&
-        !request.resource.data.keys().hasAny(["assignedRoomIds"]);
-      allow update: if isSignedIn() && request.auth.uid == userId &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(["assignedRoomIds"]);
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && request.auth.uid == userId;
     }
 
     // Optional self-reported gender is kept outside the broadly readable user

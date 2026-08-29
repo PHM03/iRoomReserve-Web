@@ -42,7 +42,6 @@ import {
   buildUserGenderUpdate,
   normalizeUserGender,
   type UserGender,
-  normalizeAssignedRoomIds,
 } from "@/lib/auth/profile-types";
 
 export type AccountType = "individual" | "organization";
@@ -335,7 +334,6 @@ export async function getUserProfile(uid: string) {
     accountConfigurationReminderDismissed?: boolean;
     assignedBuildings?: unknown;
     assignedBuildingIds?: string[];
-    assignedRoomIds?: unknown;
   };
   const privateProfile = privateProfileSnapshot.exists()
     ? (privateProfileSnapshot.data() as { gender?: unknown })
@@ -348,7 +346,6 @@ export async function getUserProfile(uid: string) {
     accountConfigurationReminderDismissed:
       data.accountConfigurationReminderDismissed === true,
     role: normalizeRole(data.role) ?? data.role,
-    assignedRoomIds: normalizeAssignedRoomIds(data.assignedRoomIds),
     campus,
     campusName,
   };
@@ -493,7 +490,6 @@ export interface ManagedUser {
   status: string;
   campus?: ReservationCampus | null;
   campusName?: CampusName | null;
-  assignedRoomIds?: string[];
   updatedAt?: { seconds: number; nanoseconds: number };
 }
 
@@ -508,7 +504,6 @@ function mapManagedUser(
     email: String(data.email || ""),
     role: normalizeRole(String(data.role || "")) ?? String(data.role || ""),
     status: String(data.status || ""),
-    assignedRoomIds: normalizeAssignedRoomIds(data.assignedRoomIds),
     ...resolveCampusAssignment({
       assignedBuilding:
         typeof data.assignedBuilding === "string"

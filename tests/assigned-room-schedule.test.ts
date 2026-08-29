@@ -1,10 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import {
-  ASSIGNED_ROOM_EMPTY_STATE,
-  getAssignedRoomDisplayLabel,
-  getAssignedRoomOptions,
-} from '../lib/schedules/assignedRoomSchedule';
+import { getAssignedRoomDisplayLabel } from '../lib/schedules/assignedRoomSchedule';
 
 function room(input: Partial<Parameters<typeof getAssignedRoomDisplayLabel>[0]>) {
   return {
@@ -23,24 +21,26 @@ function room(input: Partial<Parameters<typeof getAssignedRoomDisplayLabel>[0]>)
 }
 
 describe('assigned-room schedule UI data', () => {
-  it('keeps only assigned rooms and sorts multiple campuses deterministically', () => {
-    const rooms = [
-      room({ id: 'SDCA-201', name: '201', buildingId: 'sdca-digital-campus', buildingName: 'Digi Campus' }),
-      room({ id: 'GD3-501', name: '501', buildingId: 'gd3', buildingName: 'Main Campus' }),
-      room({ id: 'GD3-999', name: '999', buildingId: 'gd3', buildingName: 'Main Campus' }),
-    ];
-
-    expect(getAssignedRoomOptions(rooms, ['GD3-501', 'SDCA-201']).map((item) => item.id)).toEqual([
-      'SDCA-201',
-      'GD3-501',
-    ]);
-  });
-
-  it('does not create a fallback room list for empty assignments', () => {
-    expect(getAssignedRoomOptions([room({ id: 'GD3-501' })], [])).toEqual([]);
-    expect(ASSIGNED_ROOM_EMPTY_STATE).toBe(
-      'No rooms have been assigned to your account yet.'
+  it('removes Faculty integration while retaining the Utility schedule surface', () => {
+    const facultyDashboard = readFileSync(
+      resolve(process.cwd(), 'components', 'dashboards', 'FacultyDashboard.tsx'),
+      'utf8'
     );
+    const memberDashboard = readFileSync(
+      resolve(process.cwd(), 'components', 'dashboards', 'MemberDashboard.tsx'),
+      'utf8'
+    );
+    const scheduleSection = readFileSync(
+      resolve(process.cwd(), 'components', 'schedules', 'AssignedRoomScheduleSection.tsx'),
+      'utf8'
+    );
+
+    expect(facultyDashboard).not.toContain('AssignedRoomScheduleSection');
+    expect(facultyDashboard).not.toContain('showScheduleManagement');
+    expect(memberDashboard).not.toContain('AssignedRoomScheduleSection');
+    expect(memberDashboard).not.toContain('showScheduleManagement');
+    expect(scheduleSection).not.toContain('Faculty Professor');
+    expect(scheduleSection).toContain('Utility Staff');
   });
 
   it('shows room and campus context in the selector label', () => {

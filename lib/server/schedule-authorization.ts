@@ -7,6 +7,7 @@ import { assertCanManageBuilding } from "@/lib/server/route-guards";
 import {
   assertScheduleOperation,
   assertScheduleRoomAssignment,
+  assertUtilityScheduleBuildingAccess,
   isRoomScopedScheduleRole,
   type ScheduleOperation,
 } from "@/lib/server/schedule-authorization-policy";
@@ -53,6 +54,8 @@ export async function assertScheduleAccess(
     room,
     options.buildingId
   );
+
+  assertUtilityScheduleBuildingAccess(context, room.buildingId?.trim() ?? "");
 
   if (
     options.operation === "write" &&

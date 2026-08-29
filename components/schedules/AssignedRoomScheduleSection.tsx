@@ -4,15 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 
 import AdminClassSchedulesSection from '@/components/admin/AdminClassSchedulesSection';
 import { useAuth } from '@/context/AuthContext';
-import { normalizeAssignedRoomIds } from '@/lib/auth/profile-types';
 import { onBuildingById } from '@/lib/buildings/buildings';
+import { getManagedBuildingIdsForCampus } from '@/lib/buildings/campusAssignments';
 import { inferCampusFromBuilding } from '@/lib/buildings/campuses';
-import type { Room } from '@/lib/rooms/rooms';
-import {
-  ASSIGNED_ROOM_EMPTY_STATE,
-  getAssignedRoomDisplayLabel,
-  getAssignedRoomOptions,
-} from '@/lib/schedules/assignedRoomSchedule';
+import { onRoomsByBuildingIds, type Room } from '@/lib/rooms/rooms';
+import { getAssignedRoomDisplayLabel } from '@/lib/schedules/assignedRoomSchedule';
 import {
   DEFAULT_SCHEDULE_CONTEXT,
   normalizeScheduleContext,
@@ -31,7 +27,7 @@ import {
 
 interface AssignedRoomScheduleSectionProps {
   className?: string;
-  roleLabel: 'Faculty Professor' | 'Utility Staff';
+  roleLabel: 'Utility Staff';
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -66,23 +62,20 @@ export default function AssignedRoomScheduleSection({
   const [activeScheduleAcademicYear, setActiveScheduleAcademicYear] =
     useState<ScheduleAcademicYear>(DEFAULT_SCHEDULE_CONTEXT.academicYear);
 
-  const assignedRoomIds = useMemo(
-    () => normalizeAssignedRoomIds(profile?.assignedRoomIds) ?? [],
-    [profile?.assignedRoomIds]
+  const authorizedBuildingIds = useMemo(
+    () => getManagedBuildingIdsForCampus(profile?.campus),
+    [profile?.campus]
   );
-  const assignedRoomKey = assignedRoomIds.join('|');
-  const assignedRooms = useMemo(
-    () => getAssignedRoomOptions(rooms, assignedRoomIds),
-    [assignedRoomIds, rooms]
-  );
-  const selectedRoom = assignedRooms.find((room) => room.id === selectedRoomId) ?? null;
+  const roomScopeKey = authorizedBuildingIds.join('|');
+  const scheduleRooms = useMemo(() => rooms, [rooms]);
+  const selectedRoom = scheduleRooms.find((room) => room.id === selectedRoomId) ?? null;
   const selectedRoomSchedules = useMemo(
     () => schedules.filter((schedule) => schedule.roomId === selectedRoomId),
     [schedules, selectedRoomId]
   );
 
   useEffect(() => {
-    if (!firebaseUser?.uid || assignedRoomKey.length === 0) {
+    if (!firebaseUser?.uid || roomScopeKey.length === 0) {
       setRooms([]);
       setRoomsError(null);
       setRoomsLoading(false);
@@ -93,44 +86,31 @@ export default function AssignedRoomScheduleSection({
     setRoomsLoading(true);
     setRoomsError(null);
 
-    void import('@/lib/rooms/rooms')
-      .then(({ getRoomsByIds }) => getRoomsByIds(assignedRoomIds))
-      .then((nextRooms) => {
-        if (cancelled) {
-          return;
-        }
+    const unsubscribe = onRoomsByBuildingIds(authorizedBuildingIds, (nextRooms) => {
+      if (cancelled) {
+        return;
+      }
 
-        setRooms(nextRooms);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) {
-          return;
-        }
-
-        setRooms([]);
-        setRoomsError(getErrorMessage(error, 'Unable to load your assigned rooms.'));
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setRoomsLoading(false);
-        }
-      });
+      setRooms(nextRooms);
+      setRoomsLoading(false);
+    });
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
-  }, [assignedRoomIds, assignedRoomKey, firebaseUser?.uid]);
+  }, [authorizedBuildingIds, firebaseUser?.uid, roomScopeKey]);
 
   useEffect(() => {
-    if (assignedRooms.length === 0) {
+    if (scheduleRooms.length === 0) {
       setSelectedRoomId('');
       return;
     }
 
-    if (!assignedRooms.some((room) => room.id === selectedRoomId)) {
-      setSelectedRoomId(assignedRooms[0].id);
+    if (!scheduleRooms.some((room) => room.id === selectedRoomId)) {
+      setSelectedRoomId(scheduleRooms[0].id);
     }
-  }, [assignedRooms, selectedRoomId]);
+  }, [scheduleRooms, selectedRoomId]);
 
   useEffect(() => {
     if (!selectedRoom?.buildingId) {
@@ -224,7 +204,7 @@ export default function AssignedRoomScheduleSection({
   };
 
   const handleSaveSchedule = async (overrideScheduleIds: string[] = []) => {
-    const room = assignedRooms.find((nextRoom) => nextRoom.id === schedRoomId);
+    const room = scheduleRooms.find((nextRoom) => nextRoom.id === schedRoomId);
     if (
       !firebaseUser?.uid ||
       !room ||
@@ -320,11 +300,13 @@ export default function AssignedRoomScheduleSection({
     );
   }
 
-  if (!roomsLoading && assignedRoomIds.length === 0) {
+  if (!roomsLoading && roomScopeKey.length === 0) {
     return (
       <section className={`dashboard-empty-state rounded-2xl p-8 text-center ${className}`}>
         <h3 className="text-lg font-bold text-gray-900">Class Schedules</h3>
-        <p className="mt-2 text-sm text-gray-500">{ASSIGNED_ROOM_EMPTY_STATE}</p>
+        <p className="mt-2 text-sm text-gray-500">
+          No campus has been assigned to your account yet.
+        </p>
       </section>
     );
   }
@@ -337,9 +319,11 @@ export default function AssignedRoomScheduleSection({
             <p className="text-xs font-bold uppercase tracking-wide text-primary">
               {roleLabel} schedule management
             </p>
-            <h3 className="mt-1 text-xl font-bold text-gray-900">Assigned Rooms</h3>
+            <h3 className="mt-1 text-xl font-bold text-gray-900">
+              Authorized Rooms
+            </h3>
             <p className="mt-1 text-sm text-gray-500">
-              Manage class schedules only for rooms assigned to your account.
+              Manage class schedules for rooms in your authorized campus buildings.
             </p>
           </div>
           <div className="w-full sm:max-w-sm">
@@ -354,10 +338,10 @@ export default function AssignedRoomScheduleSection({
               aria-label="Assigned schedule room"
               value={selectedRoomId}
               onChange={(event) => handleAssignedRoomChange(event.target.value)}
-              disabled={roomsLoading || assignedRooms.length === 0}
+              disabled={roomsLoading || scheduleRooms.length === 0}
               className="glass-input w-full px-4 py-2.5 text-sm"
             >
-              {assignedRooms.map((room) => (
+              {scheduleRooms.map((room) => (
                 <option key={room.id} value={room.id}>
                   {getAssignedRoomDisplayLabel(room)}
                 </option>
@@ -382,11 +366,11 @@ export default function AssignedRoomScheduleSection({
         ) : null}
       </div>
 
-      {assignedRooms.length > 0 ? (
+      {scheduleRooms.length > 0 ? (
         <AdminClassSchedulesSection
           schedules={selectedRoomSchedules}
           allSchedules={selectedRoomSchedules}
-          rooms={assignedRooms}
+          rooms={scheduleRooms}
           showScheduleForm={showScheduleForm}
           schedRoomId={schedRoomId}
           schedCourseName={schedCourseName}

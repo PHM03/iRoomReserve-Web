@@ -1,7 +1,7 @@
 import type { RequestAuthContext } from "@/lib/server/request-auth";
 import { USER_ROLES, type UserRole } from "../auth/roles";
 import { ApiError } from "./api-error";
-import { isCampusManagedBuilding } from "@/lib/buildings/campusAssignments";
+import { isCampusManagedBuilding } from "../buildings/campusAssignments";
 
 export function assertAuthenticated(context: RequestAuthContext) {
   if (!context.uid) {

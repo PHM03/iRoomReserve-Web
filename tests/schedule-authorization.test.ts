@@ -6,34 +6,42 @@ import { USER_ROLES } from "../lib/auth/roles";
 import {
   assertScheduleOperation,
   assertScheduleRoomAssignment,
+  assertUtilityScheduleBuildingAccess,
+  type ScheduleOperation,
 } from "../lib/server/schedule-authorization-policy";
+import type { RequestAuthContext } from "../lib/server/request-auth";
 
 function assertAssignedScheduleRoom(
-  context: Parameters<typeof assertScheduleRoomAssignment>[0],
+  context: RequestAuthContext,
   roomId: string,
   room: Parameters<typeof assertScheduleRoomAssignment>[2],
   requestedBuildingId?: string,
-  options: { allowStudentRead?: boolean } = {}
+  options: { operation?: ScheduleOperation } = {}
 ) {
-  assertScheduleOperation(context, options.allowStudentRead ? "read" : "write");
-  return assertScheduleRoomAssignment(
+  assertScheduleOperation(context, options.operation ?? "write");
+  const result = assertScheduleRoomAssignment(
     context,
     roomId,
     room,
     requestedBuildingId
   );
+  assertUtilityScheduleBuildingAccess(context, room.buildingId ?? "");
+  return result;
 }
 
 function context(
   role: (typeof USER_ROLES)[keyof typeof USER_ROLES],
-  assignedRoomIds: string[] = [],
-  status = "approved"
-) {
+  status = "approved",
+  campus: "main" | "digi" | null = null
+): RequestAuthContext {
   return {
     uid: "verified-user",
     role,
     status,
-    assignedRoomIds,
+    email: "verified-user@sdca.edu.ph",
+    campus,
+    assignedBuildingId: null,
+    assignedBuildingIds: [],
     verified: true,
   };
 }
@@ -42,7 +50,7 @@ function expectForbidden(action: () => void, code: string) {
   expect(action).toThrowError(expect.objectContaining({ status: 403, code }));
 }
 
-describe("Phase C1 schedule authorization", () => {
+describe("schedule authorization", () => {
   it("routes every schedule operation through the centralized access helper", () => {
     const collectionRoute = readFileSync(
       resolve(process.cwd(), "app", "api", "schedules", "route.ts"),
@@ -61,42 +69,49 @@ describe("Phase C1 schedule authorization", () => {
     expect(scheduleRoute).not.toContain("assertScheduleRole");
   });
 
-  it.each([USER_ROLES.FACULTY, USER_ROLES.UTILITY] as const)(
-    "allows %s to access an assigned room",
-    (role) => {
-      expect(() =>
-        assertAssignedScheduleRoom(
-          context(role, ["room-A"]),
-          "room-A",
-          { buildingId: "main-campus" },
-          "main-campus"
-        )
-      ).not.toThrow();
-    }
-  );
+  it("allows approved Faculty to read a selected room without room assignments", () => {
+    expect(() =>
+      assertAssignedScheduleRoom(
+        context(USER_ROLES.FACULTY),
+        "room-A",
+        { buildingId: "main-campus" },
+        "main-campus",
+        { operation: "read" }
+      )
+    ).not.toThrow();
+  });
+
+  it("allows Utility Staff to access a room in the assigned campus", () => {
+    expect(() =>
+      assertAssignedScheduleRoom(
+        context(USER_ROLES.UTILITY, "approved", "main"),
+        "room-A",
+        { buildingId: "gd2" },
+        "gd2"
+      )
+    ).not.toThrow();
+  });
 
   it("protects GET room access while preserving Student schedule reads", () => {
-    const faculty = context(USER_ROLES.FACULTY, ["room-A"]);
+    const faculty = context(USER_ROLES.FACULTY);
     expect(() =>
       assertAssignedScheduleRoom(
         faculty,
         "room-A",
         { buildingId: "building-A" },
         "building-A",
-        { allowStudentRead: true }
+        { operation: "read" }
       )
     ).not.toThrow();
-    expectForbidden(
-      () =>
-        assertAssignedScheduleRoom(
-          faculty,
-          "room-B",
-          { buildingId: "building-A" },
-          "building-A",
-          { allowStudentRead: true }
-        ),
-      "room_not_assigned"
-    );
+    expect(() =>
+      assertAssignedScheduleRoom(
+        faculty,
+        "room-B",
+        { buildingId: "building-A" },
+        "building-A",
+        { operation: "read" }
+      )
+    ).not.toThrow();
 
     expect(() =>
       assertAssignedScheduleRoom(
@@ -104,73 +119,71 @@ describe("Phase C1 schedule authorization", () => {
         "room-B",
         { buildingId: "building-A" },
         "building-A",
-        { allowStudentRead: true }
+        { operation: "read" }
       )
     ).not.toThrow();
   });
 
-  it.each([USER_ROLES.FACULTY, USER_ROLES.UTILITY] as const)(
-    "denies %s access to an unassigned room despite spoofed request claims",
-    (role) => {
-      expectForbidden(
-        () =>
-          assertAssignedScheduleRoom(
-            Object.assign(context(role, ["room-A"]), {
-              userId: "another-user",
-              userRole: role,
-              buildingId: "main-campus",
-            }),
-            "room-B",
-            { buildingId: "main-campus" },
-            "main-campus"
-          ),
-        "room_not_assigned"
-      );
-    }
-  );
+  it("does not grant Faculty unrestricted schedule writes", () => {
+    expectForbidden(
+      () => assertScheduleOperation(context(USER_ROLES.FACULTY), "write"),
+      "forbidden"
+    );
+  });
 
-  it("supports assigned Faculty rooms across Main and Digi campuses", () => {
-    const faculty = context(USER_ROLES.FACULTY, ["main-campus-room", "digi-campus-room"]);
+  it("does not use instructorName as a Faculty schedule ownership key", () => {
+    const policySource = readFileSync(
+      resolve(process.cwd(), "lib", "server", "schedule-authorization-policy.ts"),
+      "utf8"
+    );
+    const authorizationSource = readFileSync(
+      resolve(process.cwd(), "lib", "server", "schedule-authorization.ts"),
+      "utf8"
+    );
 
-    expect(() =>
-      assertAssignedScheduleRoom(faculty, "main-campus-room", { buildingId: "gd3" }, "gd3")
-    ).not.toThrow();
+    expect(policySource).not.toContain("instructorName");
+    expect(authorizationSource).not.toContain("instructorName");
+  });
+
+  it("allows approved Faculty to read schedules without an instructor identity field", () => {
     expect(() =>
       assertAssignedScheduleRoom(
-        faculty,
-        "digi-campus-room",
-        { buildingId: "sdca-digital-campus" },
-        "sdca-digital-campus"
+        context(USER_ROLES.FACULTY),
+        "room-A",
+        { buildingId: "building-A" },
+        "building-A",
+        { operation: "read" }
       )
+    ).not.toThrow();
+  });
+
+  it("supports Utility Staff across all Main Campus buildings without room assignments", () => {
+    const utility = context(USER_ROLES.UTILITY, "approved", "main");
+
+    expect(() =>
+      assertAssignedScheduleRoom(utility, "main-campus-room", { buildingId: "gd1" }, "gd1")
+    ).not.toThrow();
+    expect(() =>
+      assertAssignedScheduleRoom(utility, "main-campus-room-2", { buildingId: "gd2" }, "gd2")
+    ).not.toThrow();
+    expect(() =>
+      assertAssignedScheduleRoom(utility, "main-campus-room-3", { buildingId: "gd3" }, "gd3")
     ).not.toThrow();
     expectForbidden(
       () =>
         assertAssignedScheduleRoom(
-          faculty,
-          "unassigned-main-campus-room",
-          { buildingId: "gd3" },
-          "gd3"
-        ),
-      "room_not_assigned"
-    );
-    expectForbidden(
-      () =>
-        assertAssignedScheduleRoom(
-          faculty,
-          "unassigned-digi-campus-room",
+          utility,
+          "digi-campus-room",
           { buildingId: "sdca-digital-campus" },
           "sdca-digital-campus"
         ),
-      "room_not_assigned"
+      "forbidden"
     );
   });
 
-  it("supports assigned Utility Staff rooms across Main and Digi campuses", () => {
-    const utility = context(USER_ROLES.UTILITY, ["main-campus-room", "digi-campus-room"]);
+  it("allows Digi Campus Utility Staff only in the Digi Campus building", () => {
+    const utility = context(USER_ROLES.UTILITY, "approved", "digi");
 
-    expect(() =>
-      assertAssignedScheduleRoom(utility, "main-campus-room", { buildingId: "gd3" }, "gd3")
-    ).not.toThrow();
     expect(() =>
       assertAssignedScheduleRoom(
         utility,
@@ -180,27 +193,22 @@ describe("Phase C1 schedule authorization", () => {
       )
     ).not.toThrow();
     expectForbidden(
-      () =>
-        assertAssignedScheduleRoom(
-          utility,
-          "unassigned-digi-campus-room",
-          { buildingId: "sdca-digital-campus" },
-          "sdca-digital-campus"
-        ),
-      "room_not_assigned"
+      () => assertAssignedScheduleRoom(utility, "main-campus-room", { buildingId: "gd3" }, "gd3"),
+      "forbidden"
     );
   });
 
   it.each([USER_ROLES.FACULTY, USER_ROLES.UTILITY] as const)(
-    "denies an unapproved %s account",
+    "denies an unapproved %s account from schedule reads",
     (role) => {
       expectForbidden(
         () =>
           assertAssignedScheduleRoom(
-            context(role, ["room-A"], "pending"),
+            context(role, "pending", role === USER_ROLES.UTILITY ? "main" : null),
             "room-A",
-            { buildingId: "main-campus" },
-            "main-campus"
+            { buildingId: role === USER_ROLES.UTILITY ? "gd2" : "main-campus" },
+            role === USER_ROLES.UTILITY ? "gd2" : "main-campus",
+            { operation: "read" }
           ),
         "account_not_approved"
       );
@@ -235,7 +243,6 @@ describe("Phase C1 schedule authorization", () => {
       assertScheduleOperation({
         uid: "claimed-user",
         role: USER_ROLES.FACULTY,
-        assignedRoomIds: ["room-A"],
         status: "approved",
         verified: false,
       }, "write")
@@ -243,42 +250,42 @@ describe("Phase C1 schedule authorization", () => {
   });
 
   it("applies the same room check to create, update, delete, and clear-room targets", () => {
-    const faculty = context(USER_ROLES.FACULTY, ["room-A"]);
+    const superAdmin = context(USER_ROLES.SUPER_ADMIN);
     const existingSchedule = { roomId: "room-A", buildingId: "building-A" };
 
     // CREATE target.
     expect(() =>
-      assertAssignedScheduleRoom(faculty, existingSchedule.roomId, existingSchedule, "building-A")
+      assertAssignedScheduleRoom(superAdmin, existingSchedule.roomId, existingSchedule, "building-A")
     ).not.toThrow();
 
     // UPDATE checks the stored room before considering a submitted room change.
     expect(() =>
-      assertAssignedScheduleRoom(faculty, existingSchedule.roomId, existingSchedule, "building-A")
+      assertAssignedScheduleRoom(superAdmin, existingSchedule.roomId, existingSchedule, "building-A")
     ).not.toThrow();
     expectForbidden(
       () =>
         assertAssignedScheduleRoom(
-          faculty,
+          superAdmin,
           "room-B",
           { buildingId: "building-A" },
-          "building-A"
+          "building-B"
         ),
-      "room_not_assigned"
+      "room_building_mismatch"
     );
 
     // DELETE by ID uses the stored room, and CLEAR ROOM uses its requested room.
     expect(() =>
-      assertAssignedScheduleRoom(faculty, existingSchedule.roomId, existingSchedule, "building-A")
+      assertAssignedScheduleRoom(superAdmin, existingSchedule.roomId, existingSchedule, "building-A")
     ).not.toThrow();
     expectForbidden(
       () =>
         assertAssignedScheduleRoom(
-          faculty,
+          superAdmin,
           "room-B",
           { buildingId: "building-A" },
-          "building-A"
+          "building-B"
         ),
-      "room_not_assigned"
+      "room_building_mismatch"
     );
   });
 });

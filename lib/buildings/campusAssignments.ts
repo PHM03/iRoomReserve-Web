@@ -1,9 +1,9 @@
-import { normalizeAssignedBuildings, type AssignedBuildingReference } from "@/lib/admin/assignedBuildings";
+import { normalizeAssignedBuildings, type AssignedBuildingReference } from "../admin/assignedBuildings";
 import {
   inferCampusFromBuilding,
   normalizeCampus,
   type ReservationCampus,
-} from "@/lib/buildings/campuses";
+} from "./campuses";
 
 export type CampusName = "SDCA Main Campus" | "SDCA Digi Campus";
 

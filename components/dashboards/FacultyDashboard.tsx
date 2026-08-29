@@ -13,7 +13,6 @@ export default function FacultyDashboard({
   return (
     <MemberDashboard
       firstName={firstName}
-      showScheduleManagement
       welcomeEmoji="📚"
     />
   );

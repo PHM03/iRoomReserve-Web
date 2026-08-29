@@ -15,8 +15,8 @@ import { apiRequest } from "@/lib/api/client";
 import { auth, db } from "@/lib/firebase/firebase";
 import { formatTime } from "@/lib/utils/dateTime";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
-import { normalizeAssignedRoomIds } from "@/lib/auth/profile-types";
 import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
+import { getManagedBuildingIdsForCampus, resolveCampusAssignment } from "@/lib/buildings/campusAssignments";
 import {
   doesScheduleMatchContext,
   type ScheduleAcademicYear,
@@ -46,35 +46,72 @@ export interface Schedule {
 
 export type ScheduleInput = Omit<Schedule, "id" | "createdAt" | "updatedAt">;
 
-async function getRestrictedScheduleRoomIds(): Promise<string[] | null> {
+type ScheduleRoomAccessScope =
+  | { kind: "all" }
+  | { kind: "buildings"; buildingIds: string[] }
+  | { kind: "rooms"; roomIds: string[] };
+
+async function getScheduleRoomAccessScope(): Promise<ScheduleRoomAccessScope> {
   const uid = auth.currentUser?.uid;
   if (!uid) {
-    return [];
+    return { kind: "rooms", roomIds: [] };
   }
 
   const profileSnapshot = await getDoc(doc(db, "users", uid));
   if (!profileSnapshot.exists()) {
-    return [];
+    return { kind: "rooms", roomIds: [] };
   }
 
   const profile = profileSnapshot.data() as {
     role?: string;
     status?: string;
-    assignedRoomIds?: unknown;
+    assignedBuilding?: unknown;
+    assignedBuildingId?: unknown;
+    assignedBuildingIds?: unknown;
+    assignedBuildings?: unknown;
   };
   const role = normalizeRole(profile.role);
-  if (role !== USER_ROLES.FACULTY && role !== USER_ROLES.UTILITY) {
-    return null;
+  if (role === USER_ROLES.UTILITY) {
+    if (
+      typeof profile.status !== "string" ||
+      profile.status.trim().toLowerCase() !== "approved"
+    ) {
+      return { kind: "buildings", buildingIds: [] };
+    }
+
+    const { campus } = resolveCampusAssignment(profile);
+    return {
+      kind: "buildings",
+      buildingIds: getManagedBuildingIdsForCampus(campus),
+    };
   }
 
-  if (
-    typeof profile.status !== "string" ||
-    profile.status.trim().toLowerCase() !== "approved"
-  ) {
-    return [];
+  return { kind: "all" };
+}
+
+function buildBuildingQueriesForScope(
+  scope: ScheduleRoomAccessScope,
+  requestedBuildingIds: string[]
+) {
+  const uniqueRequestedBuildingIds = [...new Set(requestedBuildingIds.filter(Boolean))];
+
+  if (scope.kind === "all") {
+    return chunkValues(uniqueRequestedBuildingIds, 10).map((buildingChunk) =>
+      query(collection(db, "schedules"), where("buildingId", "in", buildingChunk))
+    );
   }
 
-  return normalizeAssignedRoomIds(profile.assignedRoomIds) ?? [];
+  if (scope.kind === "buildings") {
+    const authorizedBuildingIds = uniqueRequestedBuildingIds.filter((buildingId) =>
+      scope.buildingIds.includes(buildingId)
+    );
+
+    return chunkValues(authorizedBuildingIds, 10).map((buildingChunk) =>
+      query(collection(db, "schedules"), where("buildingId", "in", buildingChunk))
+    );
+  }
+
+  return buildBuildingRoomQueries(uniqueRequestedBuildingIds, scope.roomIds);
 }
 
 function mapScheduleDocument(scheduleDoc: { id: string; data: () => DocumentData }): Schedule {
@@ -262,21 +299,20 @@ export function onSchedulesByBuilding(
   let cancelled = false;
   let unsubscribe: Unsubscribe = () => {};
 
-  void getRestrictedScheduleRoomIds()
-    .then((assignedRoomIds) => {
+  void getScheduleRoomAccessScope()
+    .then((scope) => {
       if (cancelled) {
         return;
       }
 
       const queries =
-        assignedRoomIds === null
-          ? [
-              query(
-                collection(db, "schedules"),
-                where("buildingId", "==", buildingId)
-              ),
-            ]
-          : buildBuildingRoomQueries([buildingId], assignedRoomIds);
+        scope.kind === "all"
+          ? [query(collection(db, "schedules"), where("buildingId", "==", buildingId))]
+          : scope.kind === "buildings"
+            ? scope.buildingIds.includes(buildingId)
+              ? [query(collection(db, "schedules"), where("buildingId", "==", buildingId))]
+              : []
+            : buildBuildingRoomQueries([buildingId], scope.roomIds);
 
       unsubscribe = subscribeToScheduleQueries(queries, activeContext, (schedules) => {
         listener.emit(schedules);
@@ -335,18 +371,13 @@ export function onSchedulesByBuildingIds(
   let cancelled = false;
   let unsubscribe: Unsubscribe = () => {};
 
-  void getRestrictedScheduleRoomIds()
-    .then((assignedRoomIds) => {
+  void getScheduleRoomAccessScope()
+    .then((scope) => {
       if (cancelled) {
         return;
       }
 
-      const queries =
-        assignedRoomIds === null
-          ? chunkValues(uniqueBuildingIds, 10).map((buildingChunk) =>
-              query(collection(db, "schedules"), where("buildingId", "in", buildingChunk))
-            )
-          : buildBuildingRoomQueries(uniqueBuildingIds, assignedRoomIds);
+      const queries = buildBuildingQueriesForScope(scope, uniqueBuildingIds);
 
       unsubscribe = subscribeToScheduleQueries(queries, null, (schedules) => {
         listener.emit(schedules);
@@ -395,16 +426,20 @@ export function onSchedulesByBuildingRoomIds(
   let cancelled = false;
   let unsubscribe: Unsubscribe = () => {};
 
-  void getRestrictedScheduleRoomIds()
-    .then((assignedRoomIds) => {
+  void getScheduleRoomAccessScope()
+    .then((scope) => {
       if (cancelled) {
         return;
       }
 
       const queryRoomIds =
-        assignedRoomIds === null
+        scope.kind === "all"
           ? uniqueRoomIds
-          : uniqueRoomIds.filter((roomId) => assignedRoomIds.includes(roomId));
+          : scope.kind === "buildings"
+            ? scope.buildingIds.includes(buildingId)
+              ? uniqueRoomIds
+              : []
+            : uniqueRoomIds.filter((roomId) => scope.roomIds.includes(roomId));
       unsubscribe = subscribeToScheduleQueries(
         buildBuildingRoomQueries([buildingId], queryRoomIds),
         activeContext,
@@ -452,18 +487,20 @@ export function onAllSchedules(
   let cancelled = false;
   let unsubscribe: Unsubscribe = () => {};
 
-  void getRestrictedScheduleRoomIds()
-    .then((assignedRoomIds) => {
+  void getScheduleRoomAccessScope()
+    .then((scope) => {
       if (cancelled) {
         return;
       }
 
       const queries =
-        assignedRoomIds === null
+        scope.kind === "all"
           ? [query(collection(db, "schedules"))]
-          : assignedRoomIds.map((roomId) =>
-              query(collection(db, "schedules"), where("roomId", "==", roomId))
-            );
+          : scope.kind === "buildings"
+            ? buildBuildingQueriesForScope(scope, scope.buildingIds)
+            : scope.roomIds.map((roomId) =>
+                query(collection(db, "schedules"), where("roomId", "==", roomId))
+              );
       unsubscribe = subscribeToScheduleQueries(queries, null, (schedules) => {
         listener.emit(schedules);
       });

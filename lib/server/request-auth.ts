@@ -3,7 +3,6 @@ import "server-only";
 import type { NextRequest } from "next/server";
 
 import { normalizeAssignedBuildings } from "@/lib/admin/assignedBuildings";
-import { normalizeAssignedRoomIds } from "@/lib/auth/profile-types";
 import { type ReservationCampus } from "@/lib/buildings/campuses";
 import { auth as adminAuth, db } from "@/lib/firebase/firebase-admin";
 import { normalizeRole, type UserRole } from "@/lib/auth/roles";
@@ -17,7 +16,6 @@ export interface RequestAuthContext {
   campus: ReservationCampus | null;
   assignedBuildingId: string | null;
   assignedBuildingIds: string[];
-  assignedRoomIds?: string[];
   verified: boolean;
 }
 
@@ -30,7 +28,6 @@ interface UserProfileData {
   assignedBuildingId?: string | null;
   assignedBuilding?: string | null;
   assignedBuildingIds?: string[];
-  assignedRoomIds?: unknown;
   assignedBuildings?: unknown;
 }
 
@@ -47,7 +44,6 @@ function getEmptyProfileContext() {
     campus: null,
     assignedBuildingId: null,
     assignedBuildingIds: [] as string[],
-    assignedRoomIds: [] as string[],
   };
 }
 
@@ -76,7 +72,6 @@ async function getProfileContext(uid: string) {
     assignedBuildingId:
       assignedBuildings[0]?.id ?? profileData.assignedBuildingId ?? null,
     assignedBuildingIds: assignedBuildings.map((building) => building.id),
-    assignedRoomIds: normalizeAssignedRoomIds(profileData.assignedRoomIds),
   };
 }
 
@@ -107,7 +102,6 @@ export async function getRequestAuthContext(
         campus: profileContext.campus,
         assignedBuildingId: profileContext.assignedBuildingId,
         assignedBuildingIds: profileContext.assignedBuildingIds,
-        assignedRoomIds: profileContext.assignedRoomIds,
         verified: true,
       };
     } catch (error) {
@@ -129,7 +123,6 @@ export async function getRequestAuthContext(
     campus: fallbackProfileContext.campus,
     assignedBuildingId: fallbackProfileContext.assignedBuildingId,
     assignedBuildingIds: fallbackProfileContext.assignedBuildingIds,
-    assignedRoomIds: fallbackProfileContext.assignedRoomIds,
     verified: false,
   };
 }
