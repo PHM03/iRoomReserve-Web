@@ -23,7 +23,10 @@ const managedApprovalSchema = z.discriminatedUnion("action", [
     campus: reservationCampusSchema,
     role: z.enum([USER_ROLES.ADMIN, USER_ROLES.UTILITY]),
   }),
-  z.object({ action: z.literal("reject") }),
+  z.object({
+    action: z.literal("reject"),
+    rejectionReason: z.string().trim().min(1).max(500),
+  }),
   z.object({ action: z.literal("disable") }),
   z.object({ action: z.literal("enable") }),
   z.object({
@@ -52,7 +55,7 @@ export async function PATCH(
         await approveManagedUserProfile(uid, payload.role, payload.campus);
         break;
       case "reject":
-        await rejectUserProfile(uid);
+        await rejectUserProfile(uid, payload.rejectionReason);
         break;
       case "disable":
         await disableUserProfile(uid);

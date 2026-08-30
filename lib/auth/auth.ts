@@ -111,7 +111,7 @@ export async function loginWithEmail(email: string, password: string) {
 
   if (requiresApproval && status === "rejected") {
     await signOut(auth);
-    throw { code: "auth/account-rejected" };
+    throw { code: "auth/account-rejected", rejectionReason: profile.rejectionReason };
   }
 
   return credential;
@@ -204,7 +204,7 @@ export async function loginWithGoogle() {
       }
       if (status === "rejected") {
         await signOut(auth);
-        throw { code: "auth/account-rejected" };
+        throw { code: "auth/account-rejected", rejectionReason: existingProfile.rejectionReason };
       }
       if (status === "disabled") {
         await signOut(auth);
@@ -334,6 +334,7 @@ export async function getUserProfile(uid: string) {
     accountConfigurationReminderDismissed?: boolean;
     assignedBuildings?: unknown;
     assignedBuildingIds?: string[];
+    rejectionReason?: string;
   };
   const privateProfile = privateProfileSnapshot.exists()
     ? (privateProfileSnapshot.data() as { gender?: unknown })
@@ -488,6 +489,7 @@ export interface ManagedUser {
   email: string;
   role: string;
   status: string;
+  rejectionReason?: string;
   campus?: ReservationCampus | null;
   campusName?: CampusName | null;
   updatedAt?: { seconds: number; nanoseconds: number };
@@ -504,6 +506,8 @@ function mapManagedUser(
     email: String(data.email || ""),
     role: normalizeRole(String(data.role || "")) ?? String(data.role || ""),
     status: String(data.status || ""),
+    rejectionReason:
+      typeof data.rejectionReason === "string" ? data.rejectionReason : undefined,
     ...resolveCampusAssignment({
       assignedBuilding:
         typeof data.assignedBuilding === "string"
@@ -607,9 +611,9 @@ export async function updateAdminCampus(
   });
 }
 
-export async function rejectUser(uid: string) {
+export async function rejectUser(uid: string, rejectionReason: string) {
   await apiRequest(`/api/admin/users/${uid}`, {
-    body: { action: "reject" },
+    body: { action: "reject", rejectionReason },
     method: "PATCH",
   });
 }
@@ -655,7 +659,7 @@ export function onAllUsers(
   return listener.wrap(unsubscribe);
 }
 
-export function getAuthErrorMessage(code: string): string {
+export function getAuthErrorMessage(code: string, rejectionReason?: string): string {
   console.warn("Auth error:", code);
 
   const safeMessages: Record<string, string> = {
@@ -667,7 +671,9 @@ export function getAuthErrorMessage(code: string): string {
     "auth/email-not-verified":
       "Please verify your email before logging in.",
     "auth/account-pending": "Your account is pending approval.",
-    "auth/account-rejected": "Your account has been rejected.",
+    "auth/account-rejected": rejectionReason?.trim()
+      ? `Your account has been rejected. Reason: ${rejectionReason.trim()} If you believe this is a mistake, please contact ICT.`
+      : "Your account has been rejected. If you believe this is a mistake, please contact ICT.",
     "auth/unauthorized-domain": "Please use your SDCA email address.",
     "auth/user-not-found":
       "This email is not registered. Please sign up first.",

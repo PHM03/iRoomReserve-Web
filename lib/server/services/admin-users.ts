@@ -56,6 +56,7 @@ export async function approveUserProfile(uid: string) {
   const batch = db.batch();
   batch.update(db.collection("users").doc(uid), {
     status: "approved",
+    rejectionReason: deleteField(),
     updatedAt: serverTimestamp(),
   });
   await batch.commit();
@@ -75,6 +76,7 @@ export async function approveManagedUserProfile(
   const batch = db.batch();
   batch.update(db.collection("users").doc(uid), {
     status: "approved",
+    rejectionReason: deleteField(),
     role,
     campus,
     campusName: getCampusName(campus),
@@ -143,11 +145,12 @@ export async function updateManagedUserCampus(
   await batch.commit();
 }
 
-export async function rejectUserProfile(uid: string) {
+export async function rejectUserProfile(uid: string, rejectionReason: string) {
   const managedCampus = await clearManagedCampusIfNeeded(uid);
   const batch = db.batch();
   batch.update(db.collection("users").doc(uid), {
     status: "rejected",
+    rejectionReason: rejectionReason.trim(),
     campus: deleteField(),
     campusName: deleteField(),
     assignedBuilding: deleteField(),
@@ -178,6 +181,7 @@ export async function enableUserProfile(uid: string) {
   const batch = db.batch();
   batch.update(db.collection("users").doc(uid), {
     status: "approved",
+    rejectionReason: deleteField(),
     updatedAt: serverTimestamp(),
   });
   await batch.commit();

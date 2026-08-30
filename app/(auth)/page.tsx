@@ -58,9 +58,9 @@ function LoginForm() {
         }
       }, 1500);
     } catch (error: unknown) {
-      const firebaseError = error as { code?: string };
+      const firebaseError = error as { code?: string; rejectionReason?: string };
       const code = firebaseError.code || '';
-      setErrorMessage(getAuthErrorMessage(code));
+      setErrorMessage(getAuthErrorMessage(code, firebaseError.rejectionReason));
       setShowResendButton(code === 'auth/email-not-verified');
     } finally {
       setLoading(false);
@@ -86,7 +86,7 @@ function LoginForm() {
 
       if (userProfile.status === 'rejected') {
         await logout();
-        setErrorMessage(getAuthErrorMessage('auth/account-rejected'));
+        setErrorMessage(getAuthErrorMessage('auth/account-rejected', userProfile.rejectionReason));
         return;
       }
 
@@ -96,13 +96,13 @@ function LoginForm() {
           router.push('/dashboard');
         }, 1500);
     } catch (error: unknown) {
-      const firebaseError = error as { code?: string };
+      const firebaseError = error as { code?: string; rejectionReason?: string };
       const code = firebaseError.code || '';
       if (code === 'auth/account-pending') {
         router.push('/?pending=true');
         return;
       }
-      setErrorMessage(getAuthErrorMessage(code));
+      setErrorMessage(getAuthErrorMessage(code, firebaseError.rejectionReason));
     }
   };
 

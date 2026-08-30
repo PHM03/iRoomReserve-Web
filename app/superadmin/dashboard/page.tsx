@@ -41,6 +41,7 @@ export default function SuperAdminDashboard() {
   // ─── Account Action Confirmation State ─────────────────────────
   const [confirmingAction, setConfirmingAction] = useState<'reject' | 'disable' | 'revoke' | null>(null);
   const [confirmingUser, setConfirmingUser] = useState<ManagedUser | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   // Redirect if not super admin
   useEffect(() => {
@@ -122,11 +123,13 @@ export default function SuperAdminDashboard() {
   ) => {
     setConfirmingAction(action);
     setConfirmingUser(user);
+    setRejectionReason('');
   };
 
   const closeAccountActionConfirmation = () => {
     setConfirmingAction(null);
     setConfirmingUser(null);
+    setRejectionReason('');
   };
 
   const handleAccountActionConfirm = async () => {
@@ -138,7 +141,7 @@ export default function SuperAdminDashboard() {
       if (confirmingAction === 'disable') {
         await disableUserAccount(uid);
       } else {
-        await rejectUser(uid);
+        await rejectUser(uid, rejectionReason);
       }
     } catch (error) {
       console.warn(`Failed to ${confirmingAction}:`, error);
@@ -827,10 +830,27 @@ export default function SuperAdminDashboard() {
               )}
             </p>
 
+            {confirmingAction !== 'disable' && (
+              <div className="mb-6">
+                <label htmlFor="rejection-reason" className="block text-sm font-bold text-black mb-2">
+                  Reason for rejection
+                </label>
+                <textarea
+                  id="rejection-reason"
+                  value={rejectionReason}
+                  onChange={(event) => setRejectionReason(event.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  placeholder="Explain why this account is being rejected."
+                  className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2 text-sm text-black focus:border-primary focus:outline-none"
+                />
+              </div>
+            )}
+
             <div className="flex space-x-3">
               <button
                 onClick={closeAccountActionConfirmation}
-                disabled={actionLoading === confirmingUser.uid}
+                disabled={actionLoading === confirmingUser.uid || (confirmingAction !== 'disable' && !rejectionReason.trim())}
                 className="flex-1 py-3 px-4 rounded-xl text-sm font-bold border border-dark/15 text-black hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-50"
               >
                 Cancel
