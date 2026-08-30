@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -408,7 +409,14 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-3 py-4 xl:gap-5">
-          <div className="flex shrink-0 items-center">
+          <div className="flex shrink-0 items-center gap-2">
+            <Image
+              src="/images/eroomreserve-navbar-icon.png"
+              alt="e-RoomReserve"
+              width={36}
+              height={36}
+              className="h-8 w-8 rounded-lg object-contain sm:h-9 sm:w-9"
+            />
             <h1 className="whitespace-nowrap text-lg text-[#343434] sm:text-xl" style={navbarBoldStyle}>
               e-RoomReserve
             </h1>

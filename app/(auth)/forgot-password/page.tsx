@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { resetPassword, getAuthErrorMessage } from '@/lib/auth/auth';
 
@@ -48,8 +49,13 @@ export default function ForgotPasswordPage() {
       {/* Header */}
       <div className="glass-nav py-4 px-4 relative z-10">
         <div className="max-w-md mx-auto">
-          <h1 className="text-xl font-bold text-black">e-RoomReserve</h1>
-          <p className="text-sm text-black">St. Dominic College of Asia</p>
+          <div className="flex items-center gap-3">
+            <Image src="/images/eroomreserve-navbar-icon.png" alt="e-RoomReserve" width={40} height={40} className="h-10 w-10 rounded-xl object-contain" />
+            <div>
+              <h1 className="text-xl font-bold text-black">e-RoomReserve</h1>
+              <p className="text-sm text-black">St. Dominic College of Asia</p>
+            </div>
+          </div>
         </div>
       </div>
 

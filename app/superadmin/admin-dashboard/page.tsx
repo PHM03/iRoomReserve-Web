@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import AdminDashboard from '@/components/dashboards/AdminDashboard';
@@ -250,7 +251,14 @@ function SuperAdminCampusNavBar({
     <nav ref={navRef} className="glass-nav fixed top-0 left-0 right-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between py-5">
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
+            <Image
+              src="/images/eroomreserve-navbar-icon.png"
+              alt="e-RoomReserve"
+              width={36}
+              height={36}
+              className="h-9 w-9 rounded-lg object-contain"
+            />
             <h1 className="text-xl text-[#343434]" style={navbarBoldStyle}>
               e-RoomReserve
             </h1>
