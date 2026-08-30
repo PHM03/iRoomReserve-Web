@@ -597,6 +597,16 @@ export async function approveAdmin(
   });
 }
 
+export async function updateAdminCampus(
+  uid: string,
+  campus: ReservationCampus
+) {
+  await apiRequest(`/api/admin/users/${uid}`, {
+    body: { action: "update-campus", campus },
+    method: "PATCH",
+  });
+}
+
 export async function rejectUser(uid: string) {
   await apiRequest(`/api/admin/users/${uid}`, {
     body: { action: "reject" },

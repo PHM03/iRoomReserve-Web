@@ -12,6 +12,7 @@ import {
   disableUserAccount,
   enableUserAccount,
   ManagedUser,
+  updateAdminCampus,
 } from '@/lib/auth/auth';
 import { getCampusName } from '@/lib/buildings/campusAssignments';
 import { type ReservationCampus } from '@/lib/buildings/campuses';
@@ -36,6 +37,10 @@ export default function SuperAdminDashboard() {
   // ─── Delete Confirmation State ─────────────────────────────────
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingUser, setDeletingUser] = useState<ManagedUser | null>(null);
+
+  // ─── Account Action Confirmation State ─────────────────────────
+  const [confirmingAction, setConfirmingAction] = useState<'reject' | 'disable' | 'revoke' | null>(null);
+  const [confirmingUser, setConfirmingUser] = useState<ManagedUser | null>(null);
 
   // Redirect if not super admin
   useEffect(() => {
@@ -91,7 +96,11 @@ export default function SuperAdminDashboard() {
     if (!selectedUser || !selectedCampus) return;
     setModalLoading(true);
     try {
-      await approveAdmin(selectedUser.uid, selectedCampus, selectedUser.role);
+      if (selectedUser.status === 'approved') {
+        await updateAdminCampus(selectedUser.uid, selectedCampus);
+      } else {
+        await approveAdmin(selectedUser.uid, selectedCampus, selectedUser.role);
+      }
     } catch (error) {
       console.warn('Failed to approve admin:', error);
     }
@@ -107,16 +116,35 @@ export default function SuperAdminDashboard() {
     setActionLoading(null);
   };
 
-  const handleReject = async (uid: string) => {
-    setActionLoading(uid);
-    try { await rejectUser(uid); } catch (error) { console.warn('Failed to reject:', error); }
-    setActionLoading(null);
+  const openAccountActionConfirmation = (
+    action: 'reject' | 'disable' | 'revoke',
+    user: ManagedUser,
+  ) => {
+    setConfirmingAction(action);
+    setConfirmingUser(user);
   };
 
-  const handleDisable = async (uid: string) => {
+  const closeAccountActionConfirmation = () => {
+    setConfirmingAction(null);
+    setConfirmingUser(null);
+  };
+
+  const handleAccountActionConfirm = async () => {
+    if (!confirmingAction || !confirmingUser) return;
+
+    const { uid } = confirmingUser;
     setActionLoading(uid);
-    try { await disableUserAccount(uid); } catch (error) { console.warn('Failed to disable:', error); }
+    try {
+      if (confirmingAction === 'disable') {
+        await disableUserAccount(uid);
+      } else {
+        await rejectUser(uid);
+      }
+    } catch (error) {
+      console.warn(`Failed to ${confirmingAction}:`, error);
+    }
     setActionLoading(null);
+    closeAccountActionConfirmation();
   };
 
   const handleEnable = async (uid: string) => {
@@ -136,16 +164,6 @@ export default function SuperAdminDashboard() {
     setActionLoading(null);
     setShowDeleteModal(false);
     setDeletingUser(null);
-  };
-
-  const handleRevokeAdmin = async (user: ManagedUser) => {
-    setActionLoading(user.uid);
-    try {
-      await rejectUser(user.uid);
-    } catch (error) {
-      console.warn('Failed to revoke admin:', error);
-    }
-    setActionLoading(null);
   };
 
   const handleLogout = async () => {
@@ -459,7 +477,11 @@ export default function SuperAdminDashboard() {
             {currentUsers.map((user) => (
               <div
                 key={user.uid}
-                className={`glass-card p-4 sm:p-5 ${user.status === 'disabled' ? 'opacity-60' : ''}`}
+                className={`glass-card relative p-4 sm:p-5 ${
+                  user.status === 'disabled'
+                    ? 'before:pointer-events-none before:absolute before:inset-0 before:z-10 before:rounded-[inherit] before:bg-white/40'
+                    : ''
+                }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   {/* User Info */}
@@ -523,9 +545,10 @@ export default function SuperAdminDashboard() {
                           </button>
                         )}
                         <button
-                          onClick={() => handleReject(user.uid)}
+                          onClick={() => openAccountActionConfirmation('reject', user)}
                           disabled={actionLoading === user.uid}
                           className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-red disabled:opacity-50"
+                          title="Reject account — the user will no longer be able to sign in"
                         >
                           <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -539,7 +562,7 @@ export default function SuperAdminDashboard() {
                     {user.status === 'approved' && (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleDisable(user.uid)}
+                          onClick={() => openAccountActionConfirmation('disable', user)}
                           disabled={actionLoading === user.uid}
                           className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-yellow disabled:opacity-50"
                           title="Disable account"
@@ -550,13 +573,25 @@ export default function SuperAdminDashboard() {
                           Disable
                         </button>
                         {(user.role === USER_ROLES.ADMIN || user.role === USER_ROLES.UTILITY) && (
-                          <button
-                            onClick={() => handleRevokeAdmin(user)}
-                            disabled={actionLoading === user.uid}
-                            className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-ghost ui-button-ghost-danger disabled:opacity-50"
-                          >
-                            Revoke
-                          </button>
+                          <>
+                            {user.role === USER_ROLES.ADMIN && (
+                              <button
+                                onClick={() => openApprovalModal(user)}
+                                disabled={actionLoading === user.uid}
+                                className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-blue disabled:opacity-50"
+                              >
+                                Edit campus
+                              </button>
+                            )}
+                            <button
+                              onClick={() => openAccountActionConfirmation('revoke', user)}
+                              disabled={actionLoading === user.uid}
+                              className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-ghost ui-button-ghost-danger disabled:opacity-50"
+                              title="Revoke access — the account will be rejected and the user will no longer be able to sign in"
+                            >
+                              Revoke
+                            </button>
+                          </>
                         )}
                       </div>
                     )}
@@ -566,7 +601,7 @@ export default function SuperAdminDashboard() {
                       <button
                         onClick={() => handleEnable(user.uid)}
                         disabled={actionLoading === user.uid}
-                        className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-green disabled:opacity-50"
+                        className="relative z-20 inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-green shadow-lg shadow-green-700/25 ring-1 ring-green-400/70 disabled:opacity-50"
                       >
                         <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -614,8 +649,14 @@ export default function SuperAdminDashboard() {
             onClick={() => !modalLoading && setShowApprovalModal(false)}
           />
           <div className="glass-card !bg-white/95 p-6 sm:p-8 w-full max-w-md relative z-10 !rounded-2xl border-primary/20">
-            <h2 className="text-xl font-bold text-black mb-1">Approve & Assign Campus</h2>
-            <p className="text-sm text-black mb-6">Choose which campus this person will manage.</p>
+            <h2 className="text-xl font-bold text-black mb-1">
+              {selectedUser.status === 'approved' ? 'Edit campus assignment' : 'Approve & Assign Campus'}
+            </h2>
+            <p className="text-sm text-black mb-6">
+              {selectedUser.status === 'approved'
+                ? 'Choose the campus this administrator will manage.'
+                : 'Choose which campus this person will manage.'}
+            </p>
 
             <div className="flex items-center space-x-4 glass-card !bg-dark/5 p-4 !rounded-xl mb-6">
               <div className="w-11 h-11 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-sm shrink-0">
@@ -689,14 +730,14 @@ export default function SuperAdminDashboard() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    Assigning...
+                    {selectedUser.status === 'approved' ? 'Saving...' : 'Assigning...'}
                   </>
                 ) : (
                   <>
                     <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    Approve & Assign
+                    {selectedUser.status === 'approved' ? 'Save campus' : 'Approve & Assign'}
                   </>
                 )}
               </button>
@@ -752,6 +793,54 @@ export default function SuperAdminDashboard() {
                     Delete Permanently
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Reject, Disable, and Revoke Confirmation Modal ─────── */}
+      {confirmingAction && confirmingUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => !actionLoading && closeAccountActionConfirmation()}
+          />
+          <div className="glass-card !bg-white/95 p-6 sm:p-8 w-full max-w-md relative z-10 !rounded-2xl border-red-500/20">
+            <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-7 h-7 ui-text-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-black mb-2 text-center">
+              {confirmingAction === 'disable'
+                ? 'Disable Account?'
+                : confirmingAction === 'revoke'
+                  ? 'Revoke Access?'
+                  : 'Reject Account?'}
+            </h2>
+            <p className="text-sm text-black mb-6 text-center">
+              {confirmingAction === 'disable' ? (
+                <>Are you sure you want to disable <span className="font-bold">{confirmingUser.firstName} {confirmingUser.lastName}</span>&apos;s account? Their account will be disabled and they will no longer be able to sign in.</>
+              ) : (
+                <>Are you sure you want to {confirmingAction === 'revoke' ? 'revoke access for' : 'reject'} <span className="font-bold">{confirmingUser.firstName} {confirmingUser.lastName}</span>? Their account will be rejected and they will no longer be able to sign in.</>
+              )}
+            </p>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={closeAccountActionConfirmation}
+                disabled={actionLoading === confirmingUser.uid}
+                className="flex-1 py-3 px-4 rounded-xl text-sm font-bold border border-dark/15 text-black hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAccountActionConfirm}
+                disabled={actionLoading === confirmingUser.uid}
+                className="flex-1 py-3 px-4 rounded-xl text-sm font-bold ui-button-red disabled:opacity-50 flex items-center justify-center"
+              >
+                {actionLoading === confirmingUser.uid ? 'Processing...' : confirmingAction === 'disable' ? 'Yes, Disable' : confirmingAction === 'revoke' ? 'Yes, Revoke' : 'Yes, Reject'}
               </button>
             </div>
           </div>

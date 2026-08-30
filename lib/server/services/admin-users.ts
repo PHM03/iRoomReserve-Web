@@ -99,6 +99,50 @@ export async function approveManagedUserProfile(
   await batch.commit();
 }
 
+export async function updateManagedUserCampus(
+  uid: string,
+  campus: ReservationCampus
+) {
+  const userSnapshot = await db.collection("users").doc(uid).get();
+  if (!userSnapshot.exists) {
+    throw new Error("User profile not found.");
+  }
+
+  if (normalizeRole(userSnapshot.data()?.role) !== USER_ROLES.ADMIN) {
+    throw new Error("Only administrator campus assignments can be changed.");
+  }
+
+  const managedBuildingIds = getManagedBuildingIdsForCampus(campus);
+  if (managedBuildingIds.length === 0) {
+    throw new Error("A managed campus is required.");
+  }
+
+  const existingAssignment = await clearManagedCampusIfNeeded(uid);
+  const batch = db.batch();
+  batch.update(userSnapshot.ref, {
+    campus,
+    campusName: getCampusName(campus),
+    assignedBuilding: deleteField(),
+    assignedBuildingId: deleteField(),
+    assignedBuildings: deleteField(),
+    assignedBuildingIds: deleteField(),
+    updatedAt: serverTimestamp(),
+  });
+  existingAssignment?.buildingRefs.forEach((buildingRef) => {
+    batch.update(buildingRef, {
+      assignedAdminUid: null,
+      updatedAt: serverTimestamp(),
+    });
+  });
+  managedBuildingIds.forEach((buildingId) => {
+    batch.update(db.collection("buildings").doc(buildingId), {
+      assignedAdminUid: uid,
+      updatedAt: serverTimestamp(),
+    });
+  });
+  await batch.commit();
+}
+
 export async function rejectUserProfile(uid: string) {
   const managedCampus = await clearManagedCampusIfNeeded(uid);
   const batch = db.batch();

@@ -13,6 +13,7 @@ import {
   disableUserProfile,
   enableUserProfile,
   rejectUserProfile,
+  updateManagedUserCampus,
 } from "@/lib/server/services/admin-users";
 
 const managedApprovalSchema = z.discriminatedUnion("action", [
@@ -25,6 +26,10 @@ const managedApprovalSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reject") }),
   z.object({ action: z.literal("disable") }),
   z.object({ action: z.literal("enable") }),
+  z.object({
+    action: z.literal("update-campus"),
+    campus: reservationCampusSchema,
+  }),
 ]);
 
 export async function PATCH(
@@ -54,6 +59,9 @@ export async function PATCH(
         break;
       case "enable":
         await enableUserProfile(uid);
+        break;
+      case "update-campus":
+        await updateManagedUserCampus(uid, payload.campus);
         break;
       default:
         break;
