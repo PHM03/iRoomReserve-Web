@@ -3,7 +3,7 @@
 import React from 'react';
 
 interface RoomCardProps {
-  availability: 'Available' | 'Reserved' | 'Occupied';
+  availability: 'Available' | 'Partially booked' | 'Occupied';
   buildingName?: string;
   campusName: string;
   disabled?: boolean;
@@ -17,8 +17,8 @@ function getAccentClass(availability: RoomCardProps['availability']) {
   switch (availability) {
     case 'Available':
       return 'border-green-500/45';
-    case 'Reserved':
-      return 'border-blue-500/45';
+    case 'Partially booked':
+      return 'border-yellow-500/45';
     default:
       return 'border-orange-500/45';
   }
@@ -28,8 +28,8 @@ function getAvailabilityClass(availability: RoomCardProps['availability']) {
   switch (availability) {
     case 'Available':
       return 'ui-badge-green';
-    case 'Reserved':
-      return 'ui-badge-blue';
+    case 'Partially booked':
+      return 'ui-badge-yellow';
     default:
       return 'ui-badge-orange';
   }
@@ -72,7 +72,7 @@ export default function RoomCard({
             availability
           )}`}
         >
-          {availability}
+          {availability === 'Partially booked' ? 'Available' : availability}
         </span>
       </div>
 

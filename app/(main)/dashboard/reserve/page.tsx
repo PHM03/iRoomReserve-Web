@@ -263,8 +263,11 @@ function getRoomCampus(room: Room): ReservationCampus | null {
 
 function getRoomAvailability(
   room: Room,
-  reservations: Reservation[]
-): 'Available' | 'Reserved' | 'Occupied' {
+  reservations: Reservation[],
+  now: Date,
+): 'Available' | 'Partially booked' | 'Occupied' {
+  const currentDate = toLocalIsoDate(now);
+  const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const approvedReservations = reservations.filter(
     (reservation) => reservation.roomId === room.id && reservation.status === 'approved'
   );
@@ -276,8 +279,16 @@ function getRoomAvailability(
     return 'Occupied';
   }
 
-  if (approvedReservations.length > 0 || room.status === 'Reserved') {
-    return 'Reserved';
+  const hasCurrentDayBooking = approvedReservations.some((reservation) => {
+    const reservationDates = reservation.dates?.length
+      ? reservation.dates
+      : [reservation.date];
+
+    return reservationDates.includes(currentDate) && reservation.endTime > currentTime;
+  });
+
+  if (hasCurrentDayBooking) {
+    return 'Partially booked';
   }
 
   return 'Available';
@@ -647,7 +658,7 @@ export default function ReserveRoomPage() {
   const isStudentReservation = normalizedProfileRole === USER_ROLES.STUDENT;
   const isFacultyReservation = normalizedProfileRole === USER_ROLES.FACULTY;
   const selectedRoomAvailability = selectedRoom
-    ? getRoomAvailability(selectedRoom, assistantReservations)
+    ? getRoomAvailability(selectedRoom, assistantReservations, now)
     : null;
   const selectedRoomCampusName = selectedCampus
     ? getCampusName(selectedCampus)
@@ -754,7 +765,8 @@ export default function ReserveRoomPage() {
         .filter((f): f is Exclude<RoomFilterKey, 'available'> => f !== 'available')
         .some((f) => matchesRoomType(room, f));
     const matchesAvailability =
-      !activeRoomFilters.includes('available') || room.status === 'Available';
+      !activeRoomFilters.includes('available') ||
+      getRoomAvailability(room, assistantReservations, now) !== 'Occupied';
 
     return matchesType && matchesAvailability;
   });
@@ -1632,7 +1644,7 @@ export default function ReserveRoomPage() {
                             return (
                               <RoomCard
                                 key={room.id}
-                                availability={getRoomAvailability(room, assistantReservations)}
+                                availability={getRoomAvailability(room, assistantReservations, now)}
                                 buildingName={room.buildingName}
                                 campusName={
                                   roomCampus
@@ -1717,7 +1729,9 @@ export default function ReserveRoomPage() {
                       {selectedRoom.roomType || 'Room'}
                     </span>
                       <span className="glass-badge rounded-full px-3 py-1 text-xs font-bold text-black">
-                        {selectedRoomAvailability ?? 'Available'}
+                        {selectedRoomAvailability === 'Partially booked'
+                          ? 'Available'
+                          : selectedRoomAvailability ?? 'Available'}
                       </span>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">

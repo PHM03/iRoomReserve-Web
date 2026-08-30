@@ -53,6 +53,11 @@ export default function RoomAvailabilityPicker({
   className = '',
 }: Readonly<RoomAvailabilityPickerProps>) {
   const minSelectable = minDate ?? todayAtMidnight;
+  const navigationStartMonth = new Date(
+    todayAtMidnight.getFullYear(),
+    todayAtMidnight.getMonth(),
+    1,
+  );
 
   const partiallyBookedDateObjects = useMemo(
     () =>
@@ -112,6 +117,7 @@ export default function RoomAvailabilityPicker({
           showOutsideDays
           fixedWeeks
           weekStartsOn={1}
+          startMonth={navigationStartMonth}
         />
 
         {loading && (

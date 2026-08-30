@@ -11,10 +11,14 @@ import {
   onReservationsByUser,
   Reservation,
 } from '@/lib/reservations/reservations';
-import { canReservationCheckIn, getReservationRoomStatus } from '@/lib/rooms/roomStatus';
+import {
+  canReservationCheckIn,
+  getCurrentDateTimeStringInTimeZone,
+  getReservationRoomStatus,
+} from '@/lib/rooms/roomStatus';
 import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
 
-type FilterTab = 'pending' | 'approved' | 'rejected' | 'completed' | 'all';
+type FilterTab = 'pending' | 'approved' | 'rejected' | 'expired' | 'completed' | 'all';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -24,6 +28,33 @@ const MONTHS = [
 function formatReservationDates(dates?: string[], fallbackDate?: string) {
   const dateList = dates?.length ? dates : fallbackDate ? [fallbackDate] : [];
   return dateList.map((date) => formatDate(date)).join(', ');
+}
+
+type DisplayReservationStatus = Reservation['status'] | 'expired';
+
+function getDisplayReservationStatus(
+  reservation: Reservation,
+  currentDateTime = getCurrentDateTimeStringInTimeZone(),
+): DisplayReservationStatus {
+  if (reservation.status !== 'approved' || reservation.checkedInAt) {
+    return reservation.status;
+  }
+
+  const reservationDates = reservation.dates?.length
+    ? reservation.dates
+    : reservation.date
+      ? [reservation.date]
+      : [];
+
+  const lastReservationDate = [...reservationDates].sort().at(-1);
+  const hasEnded = Boolean(
+    lastReservationDate &&
+      (lastReservationDate < currentDateTime.date ||
+        (lastReservationDate === currentDateTime.date &&
+          reservation.endTime <= currentDateTime.time)),
+  );
+
+  return hasEnded ? 'expired' : reservation.status;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,16 +84,29 @@ export default function MyReservationsPage() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('pending');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setCurrentTime(new Date()), 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const currentDateTime = useMemo(
+    () => getCurrentDateTimeStringInTimeZone(currentTime),
+    [currentTime],
+  );
 
   // localStorage keys for "last seen" counts per tab.
   const lsKeyPending   = uid ? makeLsKey(uid, 'Pending')   : '';
   const lsKeyApproved  = uid ? makeLsKey(uid, 'Approved')  : '';
   const lsKeyRejected  = uid ? makeLsKey(uid, 'Rejected')  : '';
+  const lsKeyExpired   = uid ? makeLsKey(uid, 'Expired')   : '';
   const lsKeyCompleted = uid ? makeLsKey(uid, 'Completed') : '';
 
   const [lastSeenPendingCount,   setLastSeenPendingCount]   = useState(() => readLsNumber(lsKeyPending));
   const [lastSeenApprovedCount,  setLastSeenApprovedCount]  = useState(() => readLsNumber(lsKeyApproved));
   const [lastSeenRejectedCount,  setLastSeenRejectedCount]  = useState(() => readLsNumber(lsKeyRejected));
+  const [lastSeenExpiredCount,   setLastSeenExpiredCount]   = useState(() => readLsNumber(lsKeyExpired));
   const [lastSeenCompletedCount, setLastSeenCompletedCount] = useState(() => readLsNumber(lsKeyCompleted));
 
   // Re-read localStorage when the user changes (login/logout).
@@ -71,11 +115,12 @@ export default function MyReservationsPage() {
       setLastSeenPendingCount(readLsNumber(lsKeyPending));
       setLastSeenApprovedCount(readLsNumber(lsKeyApproved));
       setLastSeenRejectedCount(readLsNumber(lsKeyRejected));
+      setLastSeenExpiredCount(readLsNumber(lsKeyExpired));
       setLastSeenCompletedCount(readLsNumber(lsKeyCompleted));
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [lsKeyPending, lsKeyApproved, lsKeyRejected, lsKeyCompleted]);
+  }, [lsKeyPending, lsKeyApproved, lsKeyRejected, lsKeyExpired, lsKeyCompleted]);
 
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
@@ -157,8 +202,10 @@ export default function MyReservationsPage() {
       );
     }
     if (activeFilter === 'all') return result;
-    return result.filter((r) => r.status === activeFilter);
-  }, [reservations, searchQuery, selectedYear, selectedMonth, activeFilter]);
+    return result.filter(
+      (r) => getDisplayReservationStatus(r, currentDateTime) === activeFilter,
+    );
+  }, [reservations, searchQuery, selectedYear, selectedMonth, activeFilter, currentDateTime]);
 
   const getCount = (key: FilterTab) => {
     if (key === 'rejected')
@@ -166,18 +213,22 @@ export default function MyReservationsPage() {
         (r) => r.status === 'rejected' || r.status === 'cancelled'
       ).length;
     if (key === 'all') return reservations.length;
-    return reservations.filter((r) => r.status === key).length;
+    return reservations.filter(
+      (r) => getDisplayReservationStatus(r, currentDateTime) === key,
+    ).length;
   };
 
   // Badge counts: show only NEW items since user last clicked that tab.
   const pendingCount   = getCount('pending');
   const approvedCount  = getCount('approved');
   const rejectedCount  = getCount('rejected');
+  const expiredCount   = getCount('expired');
   const completedCount = getCount('completed');
 
   const pendingBadge   = Math.max(0, pendingCount   - lastSeenPendingCount);
   const approvedBadge  = Math.max(0, approvedCount  - lastSeenApprovedCount);
   const rejectedBadge  = Math.max(0, rejectedCount  - lastSeenRejectedCount);
+  const expiredBadge   = Math.max(0, expiredCount   - lastSeenExpiredCount);
   const completedBadge = Math.max(0, completedCount - lastSeenCompletedCount);
 
   const filters: { key: FilterTab; label: string; badge?: number }[] = [
@@ -193,8 +244,13 @@ export default function MyReservationsPage() {
     },
     {
       key: 'rejected',
-      label: 'Rejected',
+      label: 'Rejected/Cancelled',
       badge: rejectedBadge || undefined
+    },
+    {
+      key: 'expired',
+      label: 'Expired',
+      badge: expiredBadge || undefined
     },
     {
       key: 'completed',
@@ -222,12 +278,13 @@ export default function MyReservationsPage() {
         case 'pending':   persist(lsKeyPending,   pendingCount,   setLastSeenPendingCount);   break;
         case 'approved':  persist(lsKeyApproved,  approvedCount,  setLastSeenApprovedCount);  break;
         case 'rejected':  persist(lsKeyRejected,  rejectedCount,  setLastSeenRejectedCount);  break;
+        case 'expired':   persist(lsKeyExpired,   expiredCount,   setLastSeenExpiredCount);   break;
         case 'completed': persist(lsKeyCompleted, completedCount, setLastSeenCompletedCount); break;
       }
     },
     [
-      lsKeyPending, lsKeyApproved, lsKeyRejected, lsKeyCompleted,
-      pendingCount, approvedCount, rejectedCount, completedCount,
+      lsKeyPending, lsKeyApproved, lsKeyRejected, lsKeyExpired, lsKeyCompleted,
+      pendingCount, approvedCount, rejectedCount, expiredCount, completedCount,
     ]
   );
 
@@ -396,8 +453,13 @@ export default function MyReservationsPage() {
         ) : (
           filteredReservations.map((reservation) => {
             const room = roomLookup[reservation.roomId];
-            const roomStatus = getReservationRoomStatus(reservation, room);
+            const displayStatus = getDisplayReservationStatus(reservation, currentDateTime);
+            const isExpired = displayStatus === 'expired';
+            const roomStatus = isExpired
+              ? 'Available'
+              : getReservationRoomStatus(reservation, room);
             const showMobileAppStartLabel =
+              !isExpired &&
               canReservationCheckIn(reservation) && roomStatus !== 'Unavailable';
 
             return (
@@ -417,7 +479,7 @@ export default function MyReservationsPage() {
                             Event
                           </span>
                         )}
-                        <StatusBadge status={reservation.status} />
+                        <StatusBadge status={displayStatus} />
                         <StatusBadge status={roomStatus} />
                       </div>
                       <p className="text-sm text-black">{reservation.buildingName}</p>
@@ -443,8 +505,9 @@ export default function MyReservationsPage() {
                     </div>
 
                     <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:min-w-[140px]">
-                      {(reservation.status === 'pending' ||
-                        reservation.status === 'approved') && (
+                      {!isExpired &&
+                        (reservation.status === 'pending' ||
+                          reservation.status === 'approved') && (
                         <button
                           onClick={() => handleCancel(reservation.id)}
                           disabled={actionLoading === reservation.id}
@@ -453,7 +516,7 @@ export default function MyReservationsPage() {
                           {actionLoading === reservation.id ? 'Processing...' : 'Cancel'}
                         </button>
                       )}
-                      {reservation.status === 'approved' && (
+                      {!isExpired && reservation.status === 'approved' && (
                         <button
                           onClick={() => handleComplete(reservation.id)}
                           disabled={actionLoading === reservation.id}
