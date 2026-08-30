@@ -1,6 +1,6 @@
 'use client';
 
-import { type SubmitEvent, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { type SubmitEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
 import { Feedback, createFeedback, getAverageSentiment, getFeedbackByUser } from '@/lib/feedback/feedback';
@@ -110,6 +110,7 @@ export default function FeedbackPage() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [roomAverageSentiment, setRoomAverageSentiment] = useState<number | null>(null);
   const [loadingRoomAverage, setLoadingRoomAverage] = useState(false);
+  const feedbackFormRef = useRef<HTMLDivElement>(null);
 
   const deferredComment = useDeferredValue(comment);
   const trimmedComment = comment.trim();
@@ -193,6 +194,9 @@ export default function FeedbackPage() {
   const pendingFeedback = completedReservations.filter(
     (reservation) => !feedbackReservationIds.has(reservation.id)
   );
+  const visiblePendingFeedback = pendingFeedback.filter(
+    (reservation) => !showForm || reservation.id !== selectedReservation?.id
+  );
   const usedRooms = useMemo(() => {
     const roomsById = new Map<string, UsedRoom>();
 
@@ -226,6 +230,18 @@ export default function FeedbackPage() {
   const selectedFeedbackRoom = usedRooms.find(
     (room) => room.roomId === selectedFeedbackRoomId
   );
+
+  useEffect(() => {
+    if (!showForm || !selectedReservation) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      feedbackFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [showForm, selectedReservation]);
 
   const handleCloseFeedback = () => {
     setShowForm(false);
@@ -355,7 +371,10 @@ export default function FeedbackPage() {
 
       {/* ── Feedback form overlay ────────────────────────────── */}
       {showForm && selectedReservation && (
-        <div className="rounded-2xl border border-white/50 bg-white/90 p-6 shadow-sm backdrop-blur mb-8">
+        <div
+          ref={feedbackFormRef}
+          className="rounded-2xl border border-white/50 bg-white/90 p-6 shadow-sm backdrop-blur mb-8"
+        >
           {submitSuccess ? (
             <div className="text-center py-8">
               <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
@@ -584,18 +603,18 @@ export default function FeedbackPage() {
         {/* ── Left column: Rate Your Experience ──────────────── */}
         <div className="rounded-2xl border border-white/50 bg-white/90 p-5 shadow-sm backdrop-blur">
           <div className="flex items-center gap-2 mb-4">
-            {pendingFeedback.length > 0 && (
+            {visiblePendingFeedback.length > 0 && (
               <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
             )}
             <h2 className="text-base font-bold text-gray-800">Rate Your Experience</h2>
-            {pendingFeedback.length > 0 && (
+            {visiblePendingFeedback.length > 0 && (
               <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
-                {pendingFeedback.length}
+                {visiblePendingFeedback.length}
               </span>
             )}
           </div>
 
-          {pendingFeedback.length === 0 ? (
+          {visiblePendingFeedback.length === 0 && showForm ? null : visiblePendingFeedback.length === 0 ? (
             <div className="dashboard-empty-state rounded-2xl p-8 text-center">
               <svg className="w-10 h-10 text-black/25 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -605,7 +624,7 @@ export default function FeedbackPage() {
             </div>
           ) : (
             <div className="space-y-2.5">
-              {pendingFeedback.map((reservation) => (
+              {visiblePendingFeedback.map((reservation) => (
                 <div
                   key={reservation.id}
                   className="flex items-center justify-between gap-3 rounded-xl border border-dark/8 bg-white p-4 transition-shadow hover:shadow-sm"
