@@ -23,7 +23,7 @@ import {
 import ComposeModal from './ComposeModal';
 
 type InboxTab = 'unread' | 'read' | 'sent' | 'closed' | 'reservationUpdates';
-type ReservationUpdateStatus = 'approved' | 'rejected' | 'cancelled' | 'pending';
+type ReservationUpdateStatus = 'approved' | 'rejected' | 'cancelled' | 'expired' | 'pending';
 type DatePreset = 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'all';
 type CustomDateRange = {
   fromDate: string;
@@ -167,8 +167,20 @@ function getMessagePreview(message: Message): string {
 }
 
 function getReservationUpdateStatus(
-  notification: AppNotification
+  notification: AppNotification,
+  reservation?: Reservation,
 ): ReservationUpdateStatus {
+  const today = new Date();
+  const todayDateKey = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+
+  if (reservation?.date && reservation.date < todayDateKey) {
+    return 'expired';
+  }
+
   switch (notification.type) {
     case 'reservation_approved':
       return 'approved';
@@ -236,6 +248,8 @@ function StatusBadge({ status }: Readonly<StatusBadgeProps>) {
       case 'rejected':
         return 'ui-badge-red';
       case 'cancelled':
+        return 'ui-badge-gray';
+      case 'expired':
         return 'ui-badge-gray';
       case 'pending':
         return 'ui-badge-yellow';
@@ -1098,7 +1112,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
           const isOpen = openReservationUpdateId === notification.id;
           const isRead =
             effectiveReadNotificationIds.has(notification.id);
-          const status = getReservationUpdateStatus(notification);
+          const status = getReservationUpdateStatus(notification, reservation);
           const note = getReservationUpdateNote(notification, reservation);
           const roomName = reservation?.roomName || 'Reservation update';
           const dateLabel = reservation ? formatDate(reservation.date) : 'Unavailable';

@@ -1,6 +1,6 @@
 'use client';
 
-import { type SubmitEvent, useDeferredValue, useEffect, useState } from 'react';
+import { type SubmitEvent, useDeferredValue, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
 import { Feedback, createFeedback, getAverageSentiment, getFeedbackByUser } from '@/lib/feedback/feedback';
@@ -56,6 +56,13 @@ const EMPTY_CATEGORY_RATINGS: Record<FeedbackCategoryRatingKey, number> = {
   internet_connectivity: 0,
 };
 
+interface UsedRoom {
+  buildingName: string;
+  feedbackCount: number;
+  roomId: string;
+  roomName: string;
+}
+
 function getRatingText(rating: number) {
   if (rating === 1) return 'Poor';
   if (rating === 2) return 'Fair';
@@ -89,6 +96,7 @@ export default function FeedbackPage() {
 
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [selectedFeedbackRoomId, setSelectedFeedbackRoomId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [rating, setRating] = useState(0);
@@ -184,6 +192,39 @@ export default function FeedbackPage() {
   const feedbackReservationIds = new Set(feedbackList.map((feedback) => feedback.reservationId));
   const pendingFeedback = completedReservations.filter(
     (reservation) => !feedbackReservationIds.has(reservation.id)
+  );
+  const usedRooms = useMemo(() => {
+    const roomsById = new Map<string, UsedRoom>();
+
+    completedReservations.forEach((reservation) => {
+      roomsById.set(reservation.roomId, {
+        buildingName: reservation.buildingName,
+        feedbackCount: 0,
+        roomId: reservation.roomId,
+        roomName: reservation.roomName,
+      });
+    });
+
+    feedbackList.forEach((feedback) => {
+      const room = roomsById.get(feedback.roomId) ?? {
+        buildingName: feedback.buildingName,
+        feedbackCount: 0,
+        roomId: feedback.roomId,
+        roomName: feedback.roomName,
+      };
+      room.feedbackCount += 1;
+      roomsById.set(feedback.roomId, room);
+    });
+
+    return [...roomsById.values()].sort((left, right) =>
+      left.roomName.localeCompare(right.roomName)
+    );
+  }, [completedReservations, feedbackList]);
+  const selectedRoomFeedback = selectedFeedbackRoomId
+    ? feedbackList.filter((feedback) => feedback.roomId === selectedFeedbackRoomId)
+    : [];
+  const selectedFeedbackRoom = usedRooms.find(
+    (room) => room.roomId === selectedFeedbackRoomId
   );
 
   const handleCloseFeedback = () => {
@@ -589,26 +630,73 @@ export default function FeedbackPage() {
 
         {/* ── Right column: Your Feedback ────────────────────── */}
         <div className="rounded-2xl border border-white/50 bg-white/90 p-5 shadow-sm backdrop-blur">
-          <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-base font-bold text-gray-800">Your Feedback</h2>
-            {feedbackList.length > 0 && (
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-gray-800">
+                {selectedFeedbackRoomId ? selectedFeedbackRoom?.roomName || 'Room Feedback' : 'Your Previous Reviews'}
+              </h2>
+              {selectedFeedbackRoomId === null && usedRooms.length > 0 && (
+                <span className="inline-flex items-center rounded-full border border-dark/10 bg-dark/5 px-2 py-0.5 text-[10px] font-bold text-black/55">
+                  {usedRooms.length}
+                </span>
+              )}
+              {selectedFeedbackRoomId !== null && selectedRoomFeedback.length > 0 && (
               <span className="inline-flex items-center rounded-full border border-dark/10 bg-dark/5 px-2 py-0.5 text-[10px] font-bold text-black/55">
-                {feedbackList.length}
+                  {selectedRoomFeedback.length}
               </span>
+              )}
+            </div>
+            {selectedFeedbackRoomId !== null && (
+              <button
+                type="button"
+                onClick={() => setSelectedFeedbackRoomId(null)}
+                className="text-xs font-bold text-primary hover:text-primary-hover"
+              >
+                ← All rooms
+              </button>
             )}
           </div>
 
-          {feedbackList.length === 0 ? (
+          {selectedFeedbackRoomId === null ? (
+            usedRooms.length === 0 ? (
+              <div className="dashboard-empty-state rounded-2xl p-8 text-center">
+                <svg className="w-10 h-10 text-black/25 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0018 0z" />
+                </svg>
+                <p className="text-sm font-bold text-black/50">No rooms used yet</p>
+                <p className="text-xs text-black/40 mt-0.5">Rooms you have completed reservations for will appear here.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {usedRooms.map((room) => (
+                  <button
+                    key={room.roomId}
+                    type="button"
+                    onClick={() => setSelectedFeedbackRoomId(room.roomId)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-dark/8 bg-white p-4 text-left transition-shadow hover:shadow-sm"
+                  >
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-bold text-black truncate">{room.roomName}</h4>
+                      <p className="text-xs text-black/55 mt-0.5">{room.buildingName}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-dark/10 bg-dark/3 px-2.5 py-1 text-[10px] font-bold text-black/60">
+                      {room.feedbackCount} review{room.feedbackCount === 1 ? '' : 's'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )
+          ) : selectedRoomFeedback.length === 0 ? (
             <div className="dashboard-empty-state rounded-2xl p-8 text-center">
               <svg className="w-10 h-10 text-black/25 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
               </svg>
-              <p className="text-sm font-bold text-black/50">No feedback yet</p>
-              <p className="text-xs text-black/40 mt-0.5">Your submitted feedback will appear here.</p>
+              <p className="text-sm font-bold text-black/50">No feedback for this room yet</p>
+              <p className="text-xs text-black/40 mt-0.5">Feedback you submit for this room will appear here.</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {feedbackList.map((feedback) => {
+              {selectedRoomFeedback.map((feedback) => {
                 const storedSentimentLabel =
                   feedback.sentimentLabel ??
                   (typeof feedback.compoundScore === 'number'
