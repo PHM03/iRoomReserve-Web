@@ -30,7 +30,9 @@ import {
   FEEDBACK_CATEGORY_KEYS,
   FEEDBACK_CATEGORY_LABELS,
   buildFeedbackDemographicAnalytics,
+  buildFeedbackLocationAnalytics,
   compareCategoryPerformance,
+  filterFeedbackLocationAnalytics,
   summarizeFeedbackAnalytics,
   SENTIMENT_DISTRIBUTION_ORDER,
   type FeedbackAspectKey,
@@ -53,17 +55,22 @@ import {
   getSentimentBadgeClasses,
   StarRating,
 } from './shared';
+import SentimentTrendSection from './SentimentTrendSection';
 import {
   ActionableInsightsSection,
   DemographicPerformanceSection,
   FacilityPerformanceSection,
   FeedbackOverviewSection,
+  LocationPerformanceSection,
 } from './FeedbackAnalyticsSections';
 
 interface BuildingOption {
   id: string;
   name: string;
 }
+
+type FeedbackDashboardView = 'analysis' | 'overview' | 'reviews';
+type FeedbackReviewView = 'reviews' | 'room-analytics';
 
 interface AdminFeedbackTabProps {
   activeBuildingLabel: string;
@@ -153,6 +160,8 @@ export default function AdminFeedbackTab({
 }: Readonly<AdminFeedbackTabProps>) {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
+  const [dashboardView, setDashboardView] = useState<FeedbackDashboardView>('analysis');
+  const [reviewView, setReviewView] = useState<FeedbackReviewView>('reviews');
 
   const [feedbackScope, setFeedbackScope] = useState<FeedbackAnalyticsScope>('building');
   const [feedbackFloor, setFeedbackFloor] = useState('');
@@ -277,6 +286,21 @@ export default function AdminFeedbackTab({
   const categoryPerformance = useMemo(
     () => compareCategoryPerformance(filteredFeedback, insightPeriodFeedback.previousItems, insightPeriodFeedback.comparable),
     [filteredFeedback, insightPeriodFeedback.comparable, insightPeriodFeedback.previousItems],
+  );
+  const locationAnalytics = useMemo(
+    () => filterFeedbackLocationAnalytics(
+      buildFeedbackLocationAnalytics(
+        filteredFeedback,
+        insightPeriodFeedback.previousItems,
+        buildingRooms,
+        insightPeriodFeedback.comparable,
+      ),
+      feedbackScope,
+      buildingId,
+      selectedFeedbackFloor,
+      selectedFeedbackRoomId,
+    ),
+    [buildingId, buildingRooms, feedbackScope, filteredFeedback, insightPeriodFeedback.comparable, insightPeriodFeedback.previousItems, selectedFeedbackFloor, selectedFeedbackRoomId],
   );
   const demographicAnalytics = useMemo(
     () => buildFeedbackDemographicAnalytics(filteredFeedback),
@@ -425,6 +449,164 @@ export default function AdminFeedbackTab({
             </div>
           </div>
 
+          <div className="glass-card flex flex-wrap gap-2 p-2" role="tablist" aria-label="Feedback dashboard sections">
+            {([
+              ['analysis', 'Data Analysis'],
+              ['overview', 'Data Overview'],
+              ['reviews', 'Feedback'],
+            ] as const).map(([view, label]) => (
+              <button
+                key={view}
+                type="button"
+                role="tab"
+                aria-selected={dashboardView === view}
+                onClick={() => setDashboardView(view)}
+                className={`flex-1 rounded-xl px-4 py-2.5 text-xs font-extrabold transition-colors sm:text-sm ${
+                  dashboardView === view
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-black/60 hover:bg-white/70 hover:text-black'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Global filters ── */}
+          <div className="glass-card space-y-3 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-extrabold text-black/60">Show feedback by:</span>
+              <select
+                aria-label="Feedback list scope"
+                value={feedbackScope}
+                onChange={(event) => setFeedbackScope(event.target.value as FeedbackAnalyticsScope)}
+                className="glass-input h-8 px-3 text-xs font-bold text-black"
+              >
+                {FEEDBACK_ANALYTICS_SCOPES.map((scope) => (
+                  <option key={scope} value={scope}>
+                    {scope[0].toUpperCase() + scope.slice(1)}
+                  </option>
+                ))}
+              </select>
+              {feedbackScope === 'floor' ? (
+                <select
+                  aria-label="Feedback list floor"
+                  value={selectedFeedbackFloor}
+                  onChange={(event) => setFeedbackFloor(event.target.value)}
+                  className="glass-input h-8 px-3 text-xs font-bold text-black"
+                >
+                  {floorOptions.length === 0 ? <option value="">No floors</option> : null}
+                  {floorOptions.map((floor) => <option key={floor} value={floor}>{floor}</option>)}
+                </select>
+              ) : null}
+              {feedbackScope === 'room' ? (
+                <select
+                  aria-label="Feedback list room"
+                  value={selectedFeedbackRoomId}
+                  onChange={(event) => setFeedbackRoomId(event.target.value)}
+                  className="glass-input h-8 min-w-[180px] px-3 text-xs font-bold text-black"
+                >
+                  {roomOptions.length === 0 ? <option value="">No rooms</option> : null}
+                  {roomOptions.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+                </select>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">
+                Stars
+              </span>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setStarFilter(starFilter === star ? null : star)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                    starFilter === star
+                      ? 'bg-yellow-400 text-yellow-900 border-yellow-500'
+                      : 'border-white/45 bg-white/85 text-black/65 shadow-sm hover:bg-white hover:text-black'
+                  }`}
+                >
+                  {'★'.repeat(star)}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">
+                Date
+              </span>
+              <label className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-black/50">From</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  max={dateTo || undefined}
+                  className="glass-input h-8 px-2 text-xs font-bold text-black"
+                />
+              </label>
+              <label className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-black/50">To</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  min={dateFrom || undefined}
+                  className="glass-input h-8 px-2 text-xs font-bold text-black"
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">Group</span>
+              <select
+                aria-label="Feedback role filter"
+                value={roleFilter}
+                onChange={(event) => setRoleFilter(event.target.value)}
+                className="glass-input h-8 px-3 text-xs font-bold text-black"
+              >
+                <option value="">All roles</option>
+                {ALL_USER_ROLES.filter((role) => role === 'Student' || role === 'Faculty Professor' || role === 'Utility Staff').map((role) => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Feedback gender filter"
+                value={genderFilter}
+                onChange={(event) => setGenderFilter(event.target.value)}
+                className="glass-input h-8 px-3 text-xs font-bold text-black"
+              >
+                <option value="">All genders</option>
+                {USER_GENDER_VALUES.map((gender) => (
+                  <option key={gender} value={gender}>{USER_GENDER_LABELS[gender]}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 border-t border-dark/10">
+              <p className="text-xs font-bold text-black/50">
+                Showing{' '}
+                <span className={hasActiveFilters ? 'text-primary' : 'text-black'}>
+                  {filteredFeedback.length}
+                </span>{' '}
+                of {buildingFeedbackList.length} reviews
+              </p>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 transition-all"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Clear All
+                </button>
+              )}
+            </div>
+          </div>
+
           {!selectedPeriodFeedback.configured ? (
             <div className="glass-card p-6">
               <p className="dashboard-empty-state rounded-xl px-3 py-5 text-center text-xs font-bold text-black/50">
@@ -437,20 +619,28 @@ export default function AdminFeedbackTab({
                 No feedback available for this period.
               </p>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <FeedbackOverviewSection
-                metrics={selectedMetrics}
-                trendLabel={{
-                  improving: 'Improving',
-                  declining: 'Declining',
-                  stable: 'Stable',
-                  not_enough_data: 'Insufficient data',
-                }[feedbackInsights.sentimentDirection]}
-              />
+           ) : (
+             <div className="space-y-4">
+               {dashboardView === 'overview' ? (
+                 <>
+                   <FeedbackOverviewSection
+                     metrics={selectedMetrics}
+                     trendLabel={{
+                       improving: 'Improving',
+                       declining: 'Declining',
+                       stable: 'Stable',
+                       not_enough_data: 'Insufficient data',
+                     }[feedbackInsights.sentimentDirection]}
+                   />
+                   <FacilityPerformanceSection categories={categoryPerformance} />
+                   <DemographicPerformanceSection groups={demographicAnalytics} />
+                 </>
+               ) : null}
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                {sentimentDistribution.map((item) => (
+               {dashboardView === 'analysis' ? (
+                 <>
+                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                 {sentimentDistribution.map((item) => (
                   <div key={item.label} className="glass-card p-4">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-black/55">
@@ -475,9 +665,9 @@ export default function AdminFeedbackTab({
                     </div>
                   </div>
                 ))}
-              </div>
+                   </div>
 
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                   <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)]">
                 <div className="glass-card p-4">
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/55">
                     Average VADER
@@ -560,9 +750,9 @@ export default function AdminFeedbackTab({
                     </div>
                   )}
                 </div>
-              </div>
+                   </div>
 
-              {(selectedFeedbackSummary.genderBreakdown?.length ?? 0) > 0 && (
+                   {(selectedFeedbackSummary.genderBreakdown?.length ?? 0) > 0 && (
                 <div className="glass-card p-4">
                   <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -651,153 +841,55 @@ export default function AdminFeedbackTab({
                     ))}
                   </div>
                 </div>
-              )}
-              <FacilityPerformanceSection categories={categoryPerformance} />
-              <DemographicPerformanceSection groups={demographicAnalytics} />
-              <ActionableInsightsSection insights={feedbackInsights.actionableInsights} />
-            </div>
-          )}
+                   )}
+                   <ActionableInsightsSection insights={feedbackInsights.actionableInsights} />
+                 </>
+               ) : null}
+             </div>
+           )}
 
-          {/* ── Feedback list scope and secondary filters ── */}
-          <div className="glass-card space-y-3 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-extrabold text-black/60">Show feedback by:</span>
-              <select
-                aria-label="Feedback list scope"
-                value={feedbackScope}
-                onChange={(event) => setFeedbackScope(event.target.value as FeedbackAnalyticsScope)}
-                className="glass-input h-8 px-3 text-xs font-bold text-black"
-              >
-                {FEEDBACK_ANALYTICS_SCOPES.map((scope) => (
-                  <option key={scope} value={scope}>
-                    {scope[0].toUpperCase() + scope.slice(1)}
-                  </option>
+          {dashboardView === 'reviews' ? (
+            <>
+              <div className="glass-card flex flex-wrap gap-2 p-2" role="tablist" aria-label="Feedback review views">
+                {([
+                  ['reviews', 'Reviews'],
+                  ['room-analytics', 'Room Analytics'],
+                ] as const).map(([view, label]) => (
+                  <button
+                    key={view}
+                    type="button"
+                    role="tab"
+                    aria-selected={reviewView === view}
+                    onClick={() => setReviewView(view)}
+                    className={`flex-1 rounded-xl px-4 py-2 text-xs font-extrabold transition-colors sm:text-sm ${
+                      reviewView === view
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'text-black/60 hover:bg-white/70 hover:text-black'
+                    }`}
+                  >
+                    {label}
+                  </button>
                 ))}
-              </select>
-              {feedbackScope === 'floor' ? (
-                <select
-                  aria-label="Feedback list floor"
-                  value={selectedFeedbackFloor}
-                  onChange={(event) => setFeedbackFloor(event.target.value)}
-                  className="glass-input h-8 px-3 text-xs font-bold text-black"
-                >
-                  {floorOptions.length === 0 ? <option value="">No floors</option> : null}
-                  {floorOptions.map((floor) => <option key={floor} value={floor}>{floor}</option>)}
-                </select>
+              </div>
+
+              {reviewView === 'room-analytics' ? (
+                <>
+                  <SentimentTrendSection
+                    feedbackList={filteredFeedback}
+                    period={analyticsPeriod}
+                    scheduleContext={analyticsScheduleContext}
+                    hideControls
+                  />
+                  <LocationPerformanceSection analytics={locationAnalytics} />
+                </>
               ) : null}
-              {feedbackScope === 'room' ? (
-                <select
-                  aria-label="Feedback list room"
-                  value={selectedFeedbackRoomId}
-                  onChange={(event) => setFeedbackRoomId(event.target.value)}
-                  className="glass-input h-8 min-w-[180px] px-3 text-xs font-bold text-black"
-                >
-                  {roomOptions.length === 0 ? <option value="">No rooms</option> : null}
-                  {roomOptions.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
-                </select>
-              ) : null}
-            </div>
+            </>
+          ) : null}
 
-            {/* Star rating pills */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">
-                Stars
-              </span>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  onClick={() => setStarFilter(starFilter === star ? null : star)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
-                    starFilter === star
-                      ? 'bg-yellow-400 text-yellow-900 border-yellow-500'
-                      : 'border-white/45 bg-white/85 text-black/65 shadow-sm hover:bg-white hover:text-black'
-                  }`}
-                >
-                  {'★'.repeat(star)}
-                </button>
-              ))}
-            </div>
-
-            {/* Date range */}
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">
-                Date
-              </span>
-              <label className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-black/50">From</span>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  max={dateTo || undefined}
-                  className="glass-input h-8 px-2 text-xs font-bold text-black"
-                />
-              </label>
-              <label className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-black/50">To</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  min={dateFrom || undefined}
-                  className="glass-input h-8 px-2 text-xs font-bold text-black"
-                />
-              </label>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">Group</span>
-              <select
-                aria-label="Feedback role filter"
-                value={roleFilter}
-                onChange={(event) => setRoleFilter(event.target.value)}
-                className="glass-input h-8 px-3 text-xs font-bold text-black"
-              >
-                <option value="">All roles</option>
-                {ALL_USER_ROLES.filter((role) => role === 'Student' || role === 'Faculty Professor' || role === 'Utility Staff').map((role) => (
-                  <option key={role} value={role}>{role}</option>
-                ))}
-              </select>
-              <select
-                aria-label="Feedback gender filter"
-                value={genderFilter}
-                onChange={(event) => setGenderFilter(event.target.value)}
-                className="glass-input h-8 px-3 text-xs font-bold text-black"
-              >
-                <option value="">All genders</option>
-                {USER_GENDER_VALUES.map((gender) => (
-                  <option key={gender} value={gender}>{USER_GENDER_LABELS[gender]}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Active filter summary + Clear All */}
-            <div className="flex items-center justify-between pt-1 border-t border-dark/10">
-              <p className="text-xs font-bold text-black/50">
-                Showing{' '}
-                <span className={hasActiveFilters ? 'text-primary' : 'text-black'}>
-                  {filteredFeedback.length}
-                </span>{' '}
-                of {buildingFeedbackList.length} reviews
-              </p>
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 transition-all"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  Clear All
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* ── Feedback cards — design unchanged, now uses filteredFeedback ── */}
-          {filteredFeedback.length === 0 ? (
+          {dashboardView === 'reviews' && reviewView === 'reviews' ? (
+            <>
+              {/* ── Feedback cards — design unchanged, now uses filteredFeedback ── */}
+              {filteredFeedback.length === 0 ? (
             <div className="glass-card p-10 text-center">
               <p className="text-sm font-bold text-black/60">No reviews match your filters.</p>
             </div>
@@ -1003,7 +1095,9 @@ export default function AdminFeedbackTab({
               </div>
               );
             })
-          )}
+              )}
+            </>
+          ) : null}
         </div>
       )}
     </div>

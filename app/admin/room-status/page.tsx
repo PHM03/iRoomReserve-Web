@@ -1,13 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AdminNoBuildingAssigned from '@/components/admin/AdminNoBuildingAssigned';
 import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import AdminRoomStatusSection from '@/components/admin/AdminRoomStatusSection';
 import { useAdminStatusPages } from '@/hooks/useAdminStatusPages';
-import { onFeedbackByBuilding, type Feedback } from '@/lib/feedback/feedback';
-import { onRoomHistoryByBuilding, type RoomHistoryEntry } from '@/lib/rooms/roomHistory';
 
 type CampusOverride = 'main' | 'digi';
 
@@ -31,33 +28,6 @@ export default function AdminRoomStatusPage() {
     pendingFinishReservationsByRoomId,
     handleConfirmFinishedReservation,
   } = useAdminStatusPages({ campusOverride });
-
-  const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
-  const [roomHistory, setRoomHistory] = useState<RoomHistoryEntry[]>([]);
-
-  useEffect(() => {
-    if (!buildingId) {
-      setFeedbackList([]);
-      setRoomHistory([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const unsubFeedback = onFeedbackByBuilding(buildingId, (next) => {
-      if (!cancelled) setFeedbackList(next);
-    });
-
-    const unsubHistory = onRoomHistoryByBuilding(buildingId, (next) => {
-      if (!cancelled) setRoomHistory(next);
-    });
-
-    return () => {
-      cancelled = true;
-      unsubFeedback();
-      unsubHistory();
-    };
-  }, [buildingId]);
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10">
@@ -83,15 +53,12 @@ export default function AdminRoomStatusPage() {
 
           <AdminRoomStatusSection
             buildingId={buildingId}
-            buildingName={buildingName}
             rooms={rooms}
             statusMonitorFloorGroups={statusMonitorFloorGroups}
             computeEffectiveStatus={computeEffectiveStatus}
             onStatusChange={handleStatusChange}
             pendingFinishReservationsByRoomId={pendingFinishReservationsByRoomId}
             onConfirmFinishedReservation={handleConfirmFinishedReservation}
-            feedbackList={feedbackList}
-            roomHistory={roomHistory}
           />
         </div>
       )}
