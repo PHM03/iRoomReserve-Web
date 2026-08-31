@@ -1,4 +1,5 @@
 import type { Feedback } from '@/lib/feedback/feedback';
+import { resolveFeedbackSentimentLabel } from './feedback-sentiment';
 import {
   FEEDBACK_ANALYTICS_PERIODS,
   type FeedbackAnalyticsPeriod,
@@ -20,6 +21,15 @@ export interface SentimentTrendBucket {
   end: Date;
   averageCompoundScore: number | null;
   feedbackCount: number;
+  totalReviews: number;
+  positiveCount: number;
+  neutralCount: number;
+  negativeCount: number;
+  positiveRate: number;
+  neutralRate: number;
+  negativeRate: number;
+  averageRating: number | null;
+  averageCompound: number | null;
 }
 
 export interface SentimentTrendResult {
@@ -91,6 +101,35 @@ function getFeedbackDate(feedback: Feedback) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function toPercentage(count: number, total: number) {
+  return total > 0 ? Number(((count / total) * 100).toFixed(1)) : 0;
+}
+
+function createEmptyBucket(
+  key: string,
+  label: string,
+  start: Date,
+  end: Date,
+): SentimentTrendBucket {
+  return {
+    key,
+    label,
+    start,
+    end,
+    averageCompoundScore: null,
+    averageCompound: null,
+    averageRating: null,
+    feedbackCount: 0,
+    totalReviews: 0,
+    positiveCount: 0,
+    neutralCount: 0,
+    negativeCount: 0,
+    positiveRate: 0,
+    neutralRate: 0,
+    negativeRate: 0,
+  };
+}
+
 function getStoredCompoundScore(feedback: Feedback) {
   const score = feedback.vaderCompoundScore ?? feedback.compoundScore;
   return typeof score === 'number' && Number.isFinite(score) ? score : null;
@@ -101,14 +140,7 @@ function createDailyBuckets(range: DateRange) {
 
   for (let start = new Date(range.start); start < range.end; start = addDays(start, 1)) {
     const end = addDays(start, 1);
-    buckets.push({
-      key: start.toISOString(),
-      label: formatDayLabel(start),
-      start,
-      end,
-      averageCompoundScore: null,
-      feedbackCount: 0,
-    });
+    buckets.push(createEmptyBucket(start.toISOString(), formatDayLabel(start), start, end));
   }
 
   return buckets;
@@ -119,14 +151,12 @@ function createMonthlyBuckets(range: DateRange) {
 
   for (let start = new Date(range.start); start < range.end; start = addMonths(start, 1)) {
     const end = new Date(Math.min(addMonths(start, 1).getTime(), range.end.getTime()));
-    buckets.push({
-      key: start.toISOString(),
-      label: start.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
+    buckets.push(createEmptyBucket(
+      start.toISOString(),
+      start.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
       start,
       end,
-      averageCompoundScore: null,
-      feedbackCount: 0,
-    });
+    ));
   }
 
   return buckets;
@@ -138,14 +168,7 @@ function createMonthlyWeekBuckets(range: DateRange) {
 
   while (start < range.end) {
     const end = new Date(Math.min(addDays(start, 7).getTime(), range.end.getTime()));
-    buckets.push({
-      key: start.toISOString(),
-      label: formatDateRangeLabel(start, end),
-      start,
-      end,
-      averageCompoundScore: null,
-      feedbackCount: 0,
-    });
+    buckets.push(createEmptyBucket(start.toISOString(), formatDateRangeLabel(start, end), start, end));
     start = end;
   }
 
@@ -188,7 +211,7 @@ function createBuckets(
     );
 
     return {
-      buckets: createMonthlyBuckets(range),
+      buckets: createMonthlyWeekBuckets(range),
       configured: true,
     };
   }
@@ -220,12 +243,20 @@ export function buildSentimentTrend(
     return result;
   }
 
-  const totals = result.buckets.map(() => ({ sum: 0, count: 0 }));
+  const totals = result.buckets.map(() => ({
+    compoundSum: 0,
+    compoundCount: 0,
+    ratingSum: 0,
+    ratingCount: 0,
+    totalReviews: 0,
+    positiveCount: 0,
+    neutralCount: 0,
+    negativeCount: 0,
+  }));
 
   feedbackItems.forEach((feedback) => {
     const date = getFeedbackDate(feedback);
-    const score = getStoredCompoundScore(feedback);
-    if (!date || score === null) {
+    if (!date) {
       return;
     }
 
@@ -236,18 +267,45 @@ export function buildSentimentTrend(
       return;
     }
 
-    totals[bucketIndex].sum += score;
-    totals[bucketIndex].count += 1;
+    const bucket = totals[bucketIndex];
+    bucket.totalReviews += 1;
+    const sentimentLabel = resolveFeedbackSentimentLabel(feedback);
+    if (sentimentLabel === 'positive' || sentimentLabel === 'very_positive') bucket.positiveCount += 1;
+    else if (sentimentLabel === 'negative' || sentimentLabel === 'very_negative') bucket.negativeCount += 1;
+    else bucket.neutralCount += 1;
+
+    const score = getStoredCompoundScore(feedback);
+    if (score !== null) {
+      bucket.compoundSum += score;
+      bucket.compoundCount += 1;
+    }
+    const rating = feedback.overallRating ?? feedback.rating;
+    if (typeof rating === 'number' && Number.isFinite(rating) && rating >= 1 && rating <= 5) {
+      bucket.ratingSum += rating;
+      bucket.ratingCount += 1;
+    }
   });
 
   return {
     ...result,
     buckets: result.buckets.map((bucket, index) => {
       const total = totals[index];
+      const averageCompoundScore = total.compoundCount > 0
+        ? total.compoundSum / total.compoundCount
+        : null;
       return {
         ...bucket,
-        averageCompoundScore: total.count > 0 ? total.sum / total.count : null,
-        feedbackCount: total.count,
+        averageCompoundScore,
+        averageCompound: averageCompoundScore,
+        averageRating: total.ratingCount > 0 ? Number((total.ratingSum / total.ratingCount).toFixed(2)) : null,
+        feedbackCount: total.compoundCount,
+        totalReviews: total.totalReviews,
+        positiveCount: total.positiveCount,
+        neutralCount: total.neutralCount,
+        negativeCount: total.negativeCount,
+        positiveRate: toPercentage(total.positiveCount, total.totalReviews),
+        neutralRate: toPercentage(total.neutralCount, total.totalReviews),
+        negativeRate: toPercentage(total.negativeCount, total.totalReviews),
       };
     }),
   };

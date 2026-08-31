@@ -80,7 +80,7 @@ function getPeriodRange(
   };
 }
 
-function getTimestampDate(value: unknown) {
+export function getFeedbackCreatedAt(value: unknown) {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value;
   }
@@ -138,7 +138,7 @@ export function filterFeedbackByPeriod<T extends { createdAt?: unknown }>(
 
     return {
       items: items.filter((item) => {
-        const date = getTimestampDate(item.createdAt);
+        const date = getFeedbackCreatedAt(item.createdAt);
         return date !== null && date >= range.start && date < range.end;
       }),
       configured: true,
@@ -152,7 +152,7 @@ export function filterFeedbackByPeriod<T extends { createdAt?: unknown }>(
 
   return {
     items: items.filter((item) => {
-      const date = getTimestampDate(item.createdAt);
+      const date = getFeedbackCreatedAt(item.createdAt);
       return date !== null && date >= range.start && date < range.end;
     }),
     configured: true,
@@ -187,7 +187,7 @@ export function compareFeedbackPeriods<T extends { createdAt?: unknown }>(
 
     const previousRange = getPeriodRange(period, now, -1, scheduleContext);
     const filterByRange = (range: DateRange) => items.filter((item) => {
-      const date = getTimestampDate(item.createdAt);
+      const date = getFeedbackCreatedAt(item.createdAt);
       return date !== null && date >= range.start && date < range.end;
     });
 
@@ -221,7 +221,7 @@ export function compareFeedbackPeriods<T extends { createdAt?: unknown }>(
   }
 
   const filterByRange = (range: DateRange) => items.filter((item) => {
-    const date = getTimestampDate(item.createdAt);
+    const date = getFeedbackCreatedAt(item.createdAt);
     return date !== null && date >= range.start && date < range.end;
   });
 

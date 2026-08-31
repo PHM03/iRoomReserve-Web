@@ -16,6 +16,9 @@ function feedback(input: {
   createdAt?: string;
   compoundScore?: number;
   detectedAspects?: Record<string, 'positive' | 'negative' | 'neutral'>;
+  categoryRatings?: Record<string, number>;
+  role?: string;
+  gender?: string;
 }) {
   return {
     id: `${input.roomId ?? 'room-1'}-${input.compoundScore ?? 'none'}`,
@@ -30,7 +33,9 @@ function feedback(input: {
     message: '',
     rating: 0,
     overallRating: 0,
-    categoryRatings: {},
+    categoryRatings: input.categoryRatings ?? {},
+    role: input.role,
+    gender: input.gender,
     feedbackText: '',
     detectedAspects: input.detectedAspects ?? {},
     extractedKeywords: [],
@@ -60,56 +65,40 @@ function buildBuildingWideInsights(
 
 function buildingWidePeriodFeedback(currentDates: string[], previousDates: string[]) {
   return [
-    feedback({
+    ...Array.from({ length: 5 }, (_, index) => feedback({
       roomId: 'room-best',
       roomName: 'Room Best',
-      createdAt: currentDates[0],
-      compoundScore: 0.8,
+      createdAt: currentDates[index % currentDates.length],
+      compoundScore: index % 2 === 0 ? 0.8 : 0.7,
       detectedAspects: { comfort: 'positive' },
-    }),
-    feedback({
+    })),
+    ...Array.from({ length: 5 }, (_, index) => feedback({
+      roomId: 'room-worst',
+      roomName: 'Room Worst',
+      createdAt: currentDates[index % currentDates.length],
+      compoundScore: index % 2 === 0 ? -0.8 : -0.7,
+      detectedAspects: { cleanliness: 'negative' },
+    })),
+    ...Array.from({ length: 5 }, (_, index) => feedback({
       roomId: 'room-best',
       roomName: 'Room Best',
-      createdAt: currentDates[1],
-      compoundScore: 0.7,
-      detectedAspects: { comfort: 'positive' },
-    }),
-    feedback({
-      roomId: 'room-worst',
-      roomName: 'Room Worst',
-      createdAt: currentDates[0],
-      compoundScore: -0.8,
-      detectedAspects: { cleanliness: 'negative' },
-    }),
-    feedback({
-      roomId: 'room-worst',
-      roomName: 'Room Worst',
-      createdAt: currentDates[1],
-      compoundScore: -0.7,
-      detectedAspects: { cleanliness: 'negative' },
-    }),
-    feedback({
-      roomId: 'room-best',
-      roomName: 'Room Best',
-      createdAt: previousDates[0],
+      createdAt: previousDates[index % previousDates.length],
       compoundScore: -0.2,
-    }),
-    feedback({
+    })),
+    ...Array.from({ length: 5 }, (_, index) => feedback({
       roomId: 'room-worst',
       roomName: 'Room Worst',
-      createdAt: previousDates[1],
+      createdAt: previousDates[index % previousDates.length],
       compoundScore: -0.2,
-    }),
+    })),
   ];
 }
 
 const twoPositiveReviews = [
-  feedback({ compoundScore: 0.8 }),
-  feedback({ compoundScore: 0.7 }),
+  ...Array.from({ length: 5 }, (_, index) => feedback({ compoundScore: index % 2 === 0 ? 0.8 : 0.7 })),
 ];
 const twoNegativeReviews = [
-  feedback({ compoundScore: -0.8 }),
-  feedback({ compoundScore: -0.7 }),
+  ...Array.from({ length: 5 }, (_, index) => feedback({ compoundScore: index % 2 === 0 ? -0.8 : -0.7 })),
 ];
 
 describe('buildFeedbackInsights', () => {
@@ -132,12 +121,39 @@ describe('buildFeedbackInsights', () => {
     expect(result.sentimentDirection).toBe('not_enough_data');
   });
 
+  it('reports review-volume percentage changes only with reliable comparable periods', () => {
+    const result = buildFeedbackInsights(
+      Array.from({ length: 11 }, () => feedback({ compoundScore: 0.2 })),
+      Array.from({ length: 10 }, () => feedback({ compoundScore: 0.2 })),
+      true,
+    );
+
+    expect(result.actionableInsights).toContain(
+      'Review volume increased by 10.0% compared with the previous period.',
+    );
+  });
+
+  it('omits review-volume percentages for a zero baseline without non-finite output', () => {
+    const result = buildFeedbackInsights(
+      Array.from({ length: 5 }, () => feedback({ compoundScore: 0.2 })),
+      [],
+      true,
+    );
+    const insights = result.actionableInsights.join(' ');
+
+    expect(insights).not.toContain('Review volume');
+    expect(insights).not.toContain('NaN');
+    expect(insights).not.toContain('Infinity');
+  });
+
   it('identifies best and attention rooms without considering no-feedback rooms', () => {
     const result = buildFeedbackInsights([
-      feedback({ roomId: 'room-best', roomName: 'Room Best', compoundScore: 0.8 }),
-      feedback({ roomId: 'room-best', roomName: 'Room Best', compoundScore: 0.7 }),
-      feedback({ roomId: 'room-worst', roomName: 'Room Worst', compoundScore: -0.8 }),
-      feedback({ roomId: 'room-worst', roomName: 'Room Worst', compoundScore: -0.7 }),
+      ...Array.from({ length: 5 }, (_, index) => feedback({
+        roomId: 'room-best', roomName: 'Room Best', compoundScore: index % 2 === 0 ? 0.8 : 0.7,
+      })),
+      ...Array.from({ length: 5 }, (_, index) => feedback({
+        roomId: 'room-worst', roomName: 'Room Worst', compoundScore: index % 2 === 0 ? -0.8 : -0.7,
+      })),
     ], [], false);
 
     expect(result.bestRoom?.roomName).toBe('Room Best');
@@ -166,6 +182,103 @@ describe('buildFeedbackInsights', () => {
     expect(result.roomNeedingAttention).toBeNull();
     expect(result.topConcern).toBeNull();
     expect(result.mostPraised).toBeNull();
+  });
+
+  it('does not rank rooms with fewer than five reviews', () => {
+    const result = buildFeedbackInsights([
+      ...Array.from({ length: 4 }, () => feedback({
+        roomId: 'room-small', roomName: 'Room Small', compoundScore: -0.9,
+      })),
+      ...Array.from({ length: 5 }, () => feedback({
+        roomId: 'room-large', roomName: 'Room Large', compoundScore: 0.9,
+      })),
+    ], [], false);
+
+    expect(result.bestRoom).toBeNull();
+    expect(result.roomNeedingAttention).toBeNull();
+  });
+
+  it('adds a reliable floor action only when the floor has at least five reviews', () => {
+    const rooms = [
+      { id: 'room-floor-1', name: 'Room Floor 1', buildingId: 'building-1', floor: '1' },
+      { id: 'room-floor-2', name: 'Room Floor 2', buildingId: 'building-1', floor: '2' },
+    ];
+    const result = buildFeedbackInsights([
+      ...Array.from({ length: 5 }, () => feedback({ roomId: 'room-floor-1', compoundScore: 0.8 })),
+      ...Array.from({ length: 5 }, () => feedback({ roomId: 'room-floor-2', compoundScore: -0.8 })),
+    ], [], false, rooms);
+
+    expect(result.actionableInsights).toContain('2 has the highest negative-review rate at 100.0%.');
+
+    const comparableResult = buildFeedbackInsights(
+      Array.from({ length: 5 }, () => feedback({ roomId: 'room-floor-2', compoundScore: -0.8 })),
+      Array.from({ length: 5 }, () => feedback({ roomId: 'room-floor-2', compoundScore: 0.8 })),
+      true,
+      rooms,
+    );
+    expect(comparableResult.actionableInsights).toContain(
+      'Negative-review rate on 2 increased by 100.0 percentage points compared with the previous period.',
+    );
+
+    const insufficientFloor = buildFeedbackInsights([
+      ...Array.from({ length: 5 }, () => feedback({ roomId: 'room-floor-1', compoundScore: 0.8 })),
+      ...Array.from({ length: 4 }, () => feedback({ roomId: 'room-floor-2', compoundScore: -0.8 })),
+    ], [], false, rooms);
+    expect(insufficientFloor.actionableInsights).not.toContain('2 has the highest negative-review rate at 100.0%.');
+  });
+
+  it('reports improving categories in percentage-point terms only with comparable data', () => {
+    const current = Array.from({ length: 5 }, () => feedback({
+      categoryRatings: { cleanliness: 4 },
+      compoundScore: 0.8,
+    }));
+    const previous = Array.from({ length: 5 }, () => feedback({
+      categoryRatings: { cleanliness: 2 },
+      compoundScore: 0.2,
+    }));
+    const result = buildFeedbackInsights(current, previous, true);
+
+    expect(result.actionableInsights).toContain(
+      'Cleanliness low-rating rate decreased by 100.0 percentage points compared with the previous period.',
+    );
+    expect(result.actionableInsights.join(' ')).not.toContain('NaN');
+    expect(result.actionableInsights.join(' ')).not.toContain('Infinity');
+  });
+
+  it('describes worsening and improving categories using the low-rating rate when that is the changed measure', () => {
+    const worsening = buildFeedbackInsights(
+      [2, 4, 4, 4, 4].map((rating) => feedback({ categoryRatings: { cleanliness: rating } })),
+      [3, 3, 3, 4, 5].map((rating) => feedback({ categoryRatings: { cleanliness: rating } })),
+      true,
+    );
+    const improving = buildFeedbackInsights(
+      [3, 3, 3, 4, 5].map((rating) => feedback({ categoryRatings: { cleanliness: rating } })),
+      [2, 4, 4, 4, 4].map((rating) => feedback({ categoryRatings: { cleanliness: rating } })),
+      true,
+    );
+
+    expect(worsening.actionableInsights).toContain(
+      'Cleanliness low-rating rate increased by 20.0 percentage points compared with the previous period.',
+    );
+    expect(improving.actionableInsights).toContain(
+      'Cleanliness low-rating rate decreased by 20.0 percentage points compared with the previous period.',
+    );
+  });
+
+  it('reports the strongest reliable role or gender comparison and suppresses small groups', () => {
+    const result = buildFeedbackInsights([
+      ...Array.from({ length: 5 }, () => feedback({ role: 'Student', gender: 'female', compoundScore: 0.8 })),
+      ...Array.from({ length: 5 }, () => feedback({ role: 'Faculty Professor', gender: 'male', compoundScore: -0.8 })),
+    ], [], false);
+    expect(result.actionableInsights).toContain(
+      'Students had a 100.0 percentage-point higher positive sentiment rate than faculty users.',
+    );
+
+    const insufficient = buildFeedbackInsights([
+      ...Array.from({ length: 5 }, () => feedback({ role: 'Student', compoundScore: 0.8 })),
+      ...Array.from({ length: 4 }, () => feedback({ role: 'Faculty Professor', compoundScore: -0.8 })),
+    ], [], false);
+    expect(insufficient.actionableInsights.some((insight) => insight.includes('Faculty'))).toBe(false);
   });
 
   it.each([
@@ -198,8 +311,8 @@ describe('buildFeedbackInsights', () => {
     expect(result.sentimentDirection).toBe('improving');
     expect(result.roomNeedingAttention?.roomName).toBe('Room Worst');
     expect(result.bestRoom?.roomName).toBe('Room Best');
-    expect(result.topConcern).toEqual({ label: 'Cleanliness', count: 2 });
-    expect(result.mostPraised).toEqual({ label: 'Comfort', count: 2 });
+    expect(result.topConcern).toEqual({ label: 'Cleanliness', count: 5 });
+    expect(result.mostPraised).toEqual({ label: 'Comfort', count: 5 });
   });
 
   it('does not depend on the graph floor or room selection', () => {
@@ -225,8 +338,8 @@ describe('buildFeedbackInsights', () => {
       scope: 'room',
     });
 
-    expect(floorGraphFeedback).toHaveLength(3);
-    expect(graphFeedback).toHaveLength(3);
+    expect(floorGraphFeedback).toHaveLength(10);
+    expect(graphFeedback).toHaveLength(10);
 
     const result = buildBuildingWideInsights(
       items,
@@ -286,8 +399,8 @@ describe('buildFeedbackInsights', () => {
 
     expect(comparison.configured).toBe(true);
     expect(comparison.comparable).toBe(true);
-    expect(comparison.currentItems).toHaveLength(4);
-    expect(comparison.previousItems).toHaveLength(2);
+    expect(comparison.currentItems).toHaveLength(10);
+    expect(comparison.previousItems).toHaveLength(10);
 
     const result = buildFeedbackInsights(
       comparison.currentItems,

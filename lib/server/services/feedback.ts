@@ -73,6 +73,7 @@ export interface FeedbackRecord extends FeedbackSentimentFields {
   respondedAt?: unknown;
   roomId: string;
   roomName: string;
+  role?: unknown;
   sentimentLabel: ReturnType<typeof resolveFeedbackSentimentLabel>;
   sentimentClassification: ReturnType<typeof resolveFeedbackSentimentLabel>;
   sentiment_classification: ReturnType<typeof resolveFeedbackSentimentLabel>;
@@ -327,7 +328,7 @@ export async function getFeedbackRecordsByBuilding(
     .get();
   const feedback = snapshot.docs.map(mapFeedbackDocument).sort(sortFeedbackRecords);
   const userIds = [...new Set(feedback.map((item) => item.userId).filter(Boolean))];
-  const genderByUserId = new Map<string, unknown>();
+  const profileByUserId = new Map<string, { gender?: unknown; role?: unknown }>();
 
   await Promise.all(
     userIds.map(async (userId) => {
@@ -339,27 +340,32 @@ export async function getFeedbackRecordsByBuilding(
         .get();
 
       if (profileSnapshot.exists) {
-        genderByUserId.set(userId, profileSnapshot.data()?.gender);
+        const profileData = profileSnapshot.data() ?? {};
+        profileByUserId.set(userId, {
+          gender: profileData.gender,
+          role: profileData.role,
+        });
       }
     })
   );
 
-  const withGender = (items: FeedbackRecord[]) => items.map((item) => ({
+  const withProfile = (items: FeedbackRecord[]) => items.map((item) => ({
       ...item,
-      gender: genderByUserId.get(item.userId),
+      gender: profileByUserId.get(item.userId)?.gender,
+      role: profileByUserId.get(item.userId)?.role,
     }));
-  const genderBreakdown = summarizeFeedbackSentimentByGender(withGender(feedback));
+  const genderBreakdown = summarizeFeedbackSentimentByGender(withProfile(feedback));
   const genderBreakdownByPeriod = Object.fromEntries(
     FEEDBACK_ANALYTICS_PERIODS.map((period) => [
       period,
       summarizeFeedbackSentimentByGender(
-        withGender(filterFeedbackByPeriod(feedback, period).items)
+        withProfile(filterFeedbackByPeriod(feedback, period).items)
       ),
     ])
   ) as Partial<Record<FeedbackAnalyticsPeriod, FeedbackGenderSentimentSummary[]>>;
 
   return {
-    feedback: withGender(feedback),
+    feedback: withProfile(feedback),
     summary: {
       ...summarizeFeedbackSentiment(feedback),
       genderBreakdown,

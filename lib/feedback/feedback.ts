@@ -47,6 +47,8 @@ export interface Feedback {
   userId: string;
   userName: string;
   gender?: unknown;
+    role?: unknown;
+    userRole?: unknown;
   text: string;
   message: string;
   rating: number;
@@ -209,6 +211,7 @@ function mapFeedbackData(id: string, data: FeedbackSnapshot): Feedback {
     userId: data.userId ?? "",
     userName: data.userName ?? "",
     gender: data.gender,
+    role: data.role ?? data.userRole,
     text,
     message: data.message ?? text,
     rating: overallRating,
