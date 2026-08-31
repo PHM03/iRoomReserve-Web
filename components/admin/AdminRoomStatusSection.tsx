@@ -22,12 +22,14 @@ import {
   scopeFeedback,
   type FeedbackAnalyticsScope,
 } from '@/lib/feedback/feedback-scope';
+import { buildFeedbackLocationAnalytics } from '@/lib/feedback/feedback-analytics';
 import SentimentTrendSection from '@/components/admin/dashboard/SentimentTrendSection';
 import {
   formatSentimentLabel,
   getSentimentBadgeClasses,
   StarRating,
 } from '@/components/admin/dashboard/shared';
+import { LocationPerformanceSection } from '@/components/admin/dashboard/FeedbackAnalyticsSections';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -761,6 +763,11 @@ export default function AdminRoomStatusSection({
     [scopedSentimentFeedback, scopedSentimentRooms]
   );
 
+  const locationAnalytics = useMemo(
+    () => buildFeedbackLocationAnalytics(buildingFeedbackList, [], buildingRooms),
+    [buildingFeedbackList, buildingRooms]
+  );
+
   const sortedRoomSentimentSummaries = useMemo(
     () => sortRoomSentimentSummaries(roomSentimentSummaries, roomSentimentSort),
     [roomSentimentSort, roomSentimentSummaries]
@@ -901,6 +908,8 @@ export default function AdminRoomStatusSection({
       </div>
 
       <SentimentTrendSection feedbackList={scopedSentimentFeedback} />
+
+      <LocationPerformanceSection analytics={locationAnalytics} />
 
       {/* ── Legend ── */}
       <div className="bg-white rounded-xl px-4 py-2.5 mb-3 shadow-sm ring-1 ring-black/5 flex items-center gap-4">

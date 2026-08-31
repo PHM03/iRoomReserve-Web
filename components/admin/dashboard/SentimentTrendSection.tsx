@@ -16,14 +16,20 @@ import {
   type ScheduleSemester,
 } from '@/lib/schedules/scheduleContext';
 
-function getTrendPath(buckets: SentimentTrendBucket[], width: number, height: number) {
+function getTrendPath(
+  buckets: SentimentTrendBucket[],
+  width: number,
+  height: number,
+  value: (bucket: SentimentTrendBucket) => number | null,
+) {
   const points = buckets.map((bucket, index) => {
-    if (bucket.averageCompoundScore === null) {
+    const metric = value(bucket);
+    if (metric === null || bucket.totalReviews === 0) {
       return null;
     }
 
     const x = buckets.length === 1 ? width / 2 : (index / (buckets.length - 1)) * width;
-    const y = height - ((bucket.averageCompoundScore + 1) / 2) * height;
+    const y = height - (metric / 100) * height;
     return `${x.toFixed(2)},${Math.max(0, Math.min(height, y)).toFixed(2)}`;
   });
 
@@ -55,8 +61,9 @@ function SentimentTrendChart({ buckets }: { buckets: SentimentTrendBucket[] }) {
   const chartBottom = 44;
   const plotWidth = chartWidth - chartLeft - 12;
   const plotHeight = chartHeight - chartTop - chartBottom;
-  const trendPath = getTrendPath(buckets, plotWidth, plotHeight);
-  const yTicks = [-1, -0.5, 0, 0.5, 1];
+  const positivePath = getTrendPath(buckets, plotWidth, plotHeight, (bucket) => bucket.positiveRate);
+  const negativePath = getTrendPath(buckets, plotWidth, plotHeight, (bucket) => bucket.negativeRate);
+  const yTicks = [0, 25, 50, 75, 100];
 
   return (
     <div className="space-y-2">
@@ -68,7 +75,7 @@ function SentimentTrendChart({ buckets }: { buckets: SentimentTrendBucket[] }) {
           className="h-auto min-w-[620px] w-full"
         >
           {yTicks.map((tick) => {
-            const y = chartTop + plotHeight - ((tick + 1) / 2) * plotHeight;
+            const y = chartTop + plotHeight - (tick / 100) * plotHeight;
             return (
               <g key={tick}>
                 <line
@@ -85,7 +92,7 @@ function SentimentTrendChart({ buckets }: { buckets: SentimentTrendBucket[] }) {
                   textAnchor="end"
                   className="fill-black/50 text-[10px] font-bold"
                 >
-                  {tick.toFixed(1)}
+                  {tick}%
                 </text>
               </g>
             );
@@ -101,11 +108,21 @@ function SentimentTrendChart({ buckets }: { buckets: SentimentTrendBucket[] }) {
           />
 
           <g transform={`translate(${chartLeft}, ${chartTop})`}>
-            {trendPath ? (
+            {positivePath ? (
               <path
-                d={trendPath}
+                d={positivePath}
                 fill="none"
-                className="stroke-primary"
+                className="stroke-emerald-600"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ) : null}
+            {negativePath ? (
+              <path
+                d={negativePath}
+                fill="none"
+                className="stroke-red-600"
                 strokeWidth="3"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -113,23 +130,20 @@ function SentimentTrendChart({ buckets }: { buckets: SentimentTrendBucket[] }) {
             ) : null}
             {buckets.map((bucket, index) => {
               const x = buckets.length === 1 ? plotWidth / 2 : (index / (buckets.length - 1)) * plotWidth;
-              const y = bucket.averageCompoundScore === null
-                ? plotHeight
-                : plotHeight - ((bucket.averageCompoundScore + 1) / 2) * plotHeight;
 
               return (
                 <g key={bucket.key}>
-                  {bucket.averageCompoundScore !== null ? (
+                  {bucket.totalReviews > 0 ? (
                     <circle
                       cx={x}
-                      cy={y}
+                      cy={plotHeight - (bucket.positiveRate / 100) * plotHeight}
                       r="4.5"
-                      className="fill-primary stroke-white"
+                      className="fill-emerald-600 stroke-white"
                       strokeWidth="2"
                       tabIndex={0}
                     >
                       <title>
-                        {`${bucket.label}: ${bucket.averageCompoundScore.toFixed(3)} average VADER compound score`}
+                        {`${bucket.label}: ${bucket.positiveRate.toFixed(1)}% positive, ${bucket.negativeRate.toFixed(1)}% negative (${bucket.totalReviews} reviews)`}
                       </title>
                     </circle>
                   ) : null}
@@ -148,17 +162,27 @@ function SentimentTrendChart({ buckets }: { buckets: SentimentTrendBucket[] }) {
           </g>
         </svg>
       </div>
-      <p className="text-[10px] font-bold text-black/40">
-        Scores range from −1 to +1. Buckets without scored feedback remain empty.
-      </p>
+      <div className="flex flex-wrap gap-4 text-[10px] font-bold text-black/55">
+        <span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-600" />Positive %</span>
+        <span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-red-600" />Negative %</span>
+        <span className="text-black/40">Average VADER remains available in the bucket data.</span>
+      </div>
     </div>
   );
 }
 
 export default function SentimentTrendSection({
   feedbackList,
-}: Readonly<{ feedbackList: Feedback[] }>) {
-  const [period, setPeriod] = useState<SentimentTrendPeriod>('weekly');
+  period: controlledPeriod,
+  scheduleContext,
+  hideControls = false,
+}: Readonly<{
+  feedbackList: Feedback[];
+  period?: SentimentTrendPeriod;
+  scheduleContext?: { academicYear: ScheduleAcademicYear; semester: ScheduleSemester };
+  hideControls?: boolean;
+}>) {
+  const [periodState, setPeriod] = useState<SentimentTrendPeriod>('weekly');
   const [academicYear, setAcademicYear] = useState<ScheduleAcademicYear>(
     DEFAULT_SCHEDULE_CONTEXT.academicYear,
   );
@@ -166,21 +190,27 @@ export default function SentimentTrendSection({
     DEFAULT_SCHEDULE_CONTEXT.semester,
   );
   const [analyticsNow] = useState(() => new Date());
+  const period = controlledPeriod ?? periodState;
   const trend = useMemo(
-    () => buildSentimentTrend(feedbackList, period, analyticsNow, { academicYear, semester }),
-    [academicYear, analyticsNow, feedbackList, period, semester],
+    () => buildSentimentTrend(
+      feedbackList,
+      period,
+      analyticsNow,
+      scheduleContext ?? { academicYear, semester },
+    ),
+    [academicYear, analyticsNow, feedbackList, period, scheduleContext, semester],
   );
 
   return (
     <div className="glass-card mb-4 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-base font-extrabold text-black">Room Analytics</p>
           <p className="mt-1 max-w-2xl text-xs text-black/55">
-            Average stored VADER compound sentiment over time for the selected building.
+            Positive and negative review rates over feedback submission time. Average VADER remains available as supporting data.
           </p>
         </div>
-        <label className="flex items-center gap-2 text-xs font-bold text-black/60">
+        {!hideControls && !controlledPeriod ? <label className="flex items-center gap-2 text-xs font-bold text-black/60">
           <span className="whitespace-nowrap">Period:</span>
           <select
             aria-label="Room analytics period"
@@ -196,8 +226,8 @@ export default function SentimentTrendSection({
               </option>
             ))}
           </select>
-        </label>
-        {period === 'semester' ? (
+        </label> : null}
+        {!hideControls && !controlledPeriod && period === 'semester' ? (
           <>
             <label className="flex items-center gap-2 text-xs font-bold text-black/60">
               <span className="whitespace-nowrap">Academic Year:</span>
@@ -232,18 +262,18 @@ export default function SentimentTrendSection({
       <div className="mt-4 rounded-2xl border border-dark/10 bg-white/55 p-3 sm:p-4">
         <p className="text-sm font-extrabold text-black">Sentiment Trend</p>
         <p className="mt-1 text-xs text-black/55">
-          Average VADER compound score for each {period === 'weekly' ? 'day' : period === 'monthly' ? 'week' : 'month'} in the selected period.
+           Positive and negative review rates for each {period === 'weekly' ? 'day' : period === 'monthly' || period === 'semester' ? 'week' : 'month'} in the selected period.
         </p>
         <div className="mt-3">
           {!trend.configured ? (
             <p className="dashboard-empty-state rounded-xl px-3 py-8 text-center text-xs text-black/55">
               {trend.message}
             </p>
-          ) : trend.buckets.length === 0 || trend.buckets.every((bucket) => bucket.averageCompoundScore === null) ? (
+           ) : trend.buckets.length === 0 || trend.buckets.every((bucket) => bucket.totalReviews === 0) ? (
             <>
               {trend.buckets.length > 0 ? <SentimentTrendChart buckets={trend.buckets} /> : null}
               <p className="dashboard-empty-state mt-2 rounded-xl px-3 py-3 text-center text-xs text-black/55">
-                No scored feedback in this period.
+                 No feedback available for the selected filters.
               </p>
             </>
           ) : (

@@ -83,6 +83,8 @@ export default function AdminDashboard({
     useState<FeedbackSentimentSummary | null>(null);
   const [genderBreakdownByPeriod, setGenderBreakdownByPeriod] =
     useState<BuildingFeedbackResult['genderBreakdownByPeriod']>({});
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [roomHistory, setRoomHistory] = useState<RoomHistoryEntry[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [buildingFloors, setBuildingFloors] = useState(0);
@@ -98,6 +100,11 @@ export default function AdminDashboard({
     }
 
     const isFeedbackTab = activeTab === 'feedback';
+
+    if (isFeedbackTab) {
+      setFeedbackLoading(true);
+      setFeedbackError(null);
+    }
 
     try {
       if (isFeedbackTab) {
@@ -154,6 +161,11 @@ export default function AdminDashboard({
         setFeedbackList([]);
         setFeedbackSummary(null);
         setGenderBreakdownByPeriod({});
+        setFeedbackError('Unable to load feedback analytics. Please try again.');
+      }
+    } finally {
+      if (isFeedbackTab) {
+        setFeedbackLoading(false);
       }
     }
   }, [activeTab, buildingId, firebaseUser?.uid]);
@@ -380,6 +392,8 @@ export default function AdminDashboard({
           activeBuildingLabel={activeBuildingLabel}
           buildingId={buildingId}
           feedbackList={feedbackList}
+          feedbackLoading={feedbackLoading}
+          feedbackError={feedbackError}
           feedbackSummary={feedbackSummary}
           genderBreakdownByPeriod={genderBreakdownByPeriod}
           managedBuildings={managedBuildings}

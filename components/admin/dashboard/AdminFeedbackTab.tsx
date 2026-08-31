@@ -12,6 +12,7 @@ import {
   FEEDBACK_ANALYTICS_PERIODS,
   compareFeedbackPeriods,
   filterFeedbackByPeriod,
+  getFeedbackCreatedAt,
   scopeFeedbackToBuilding,
   type FeedbackAnalyticsPeriod,
 } from '@/lib/feedback/feedback-period';
@@ -22,17 +23,21 @@ import {
 } from '@/lib/feedback/feedback-scope';
 import {
   buildFeedbackInsights,
-  type FeedbackInsights,
 } from '@/lib/feedback/feedback-insights';
 import type { BuildingFeedbackResult } from '@/lib/feedback/feedback';
 import {
   FEEDBACK_ASPECT_LABELS,
   FEEDBACK_CATEGORY_KEYS,
   FEEDBACK_CATEGORY_LABELS,
+  buildFeedbackDemographicAnalytics,
+  compareCategoryPerformance,
+  summarizeFeedbackAnalytics,
   SENTIMENT_DISTRIBUTION_ORDER,
   type FeedbackAspectKey,
 } from '@/lib/feedback/feedback-analytics';
 import { respondToFeedback, type Feedback } from '@/lib/feedback/feedback';
+import { ALL_USER_ROLES, normalizeRole } from '@/lib/auth/roles';
+import { USER_GENDER_LABELS, USER_GENDER_VALUES, normalizeUserGender } from '@/lib/auth/profile-types';
 import type { Room } from '@/lib/rooms/rooms';
 import {
   DEFAULT_SCHEDULE_CONTEXT,
@@ -48,6 +53,12 @@ import {
   getSentimentBadgeClasses,
   StarRating,
 } from './shared';
+import {
+  ActionableInsightsSection,
+  DemographicPerformanceSection,
+  FacilityPerformanceSection,
+  FeedbackOverviewSection,
+} from './FeedbackAnalyticsSections';
 
 interface BuildingOption {
   id: string;
@@ -63,6 +74,8 @@ interface AdminFeedbackTabProps {
   managedBuildings: BuildingOption[];
   onBuildingChange: (buildingId: string) => void;
   onReload: () => Promise<void>;
+  feedbackLoading?: boolean;
+  feedbackError?: string | null;
   rooms?: Room[];
 }
 
@@ -104,56 +117,25 @@ function getBroadSentimentPercentages(summary: FeedbackSentimentSummary) {
   };
 }
 
-function TrendInsightsSection({ insights }: { insights: FeedbackInsights }) {
-  const sentimentMessage = {
-    improving: 'Overall sentiment is improving compared with the previous period.',
-    declining: 'Overall sentiment is declining compared with the previous period.',
-    stable: 'Overall sentiment is stable compared with the previous period.',
-    not_enough_data: 'Not enough data to determine a trend.',
-  }[insights.sentimentDirection];
-
-  const roomAttentionMessage = insights.roomNeedingAttention
-    ? `${insights.roomNeedingAttention.roomName} has the lowest average sentiment among rooms with sufficient feedback.`
-    : 'Not enough data to identify a room trend.';
-  const bestRoomMessage = insights.bestRoom
-    ? `${insights.bestRoom.roomName} has the highest average sentiment among rooms with sufficient feedback.`
-    : 'Not enough data to identify a room trend.';
-  const concernMessage = insights.topConcern
-    ? `${insights.topConcern.label} was the most frequently mentioned concern.`
-    : 'Not enough data to identify a dominant concern.';
-  const praisedMessage = insights.mostPraised
-    ? `${insights.mostPraised.label} received the most positive mentions.`
-    : 'Not enough data to identify a dominant praised aspect.';
-
-  const cards = [
-    { title: 'Sentiment Trend', message: sentimentMessage, marker: '📈', tone: 'text-primary' },
-    { title: 'Room Needing Attention', message: roomAttentionMessage, marker: '⚠️', tone: 'text-amber-700' },
-    { title: 'Best-Performing Room', message: bestRoomMessage, marker: '🏆', tone: 'text-emerald-700' },
-    { title: 'Top Concern', message: concernMessage, marker: '🔴', tone: 'text-red-700' },
-    { title: 'Most Praised', message: praisedMessage, marker: '🟢', tone: 'text-emerald-700' },
-  ];
-
-  return (
-    <div className="glass-card p-4">
-      <div className="mb-3">
-        <h3 className="text-base font-bold text-black">Trend Insights</h3>
-        <p className="mt-1 text-xs text-black/55">
-          Plain-language highlights from the selected building and reporting period.
-        </p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {cards.map((card) => (
-          <div key={card.title} className="rounded-xl border border-dark/10 bg-white/65 p-3">
-            <p className={`text-xs font-bold ${card.tone}`}>
-              <span aria-hidden="true" className="mr-1">{card.marker}</span>
-              {card.title}
-            </p>
-            <p className="mt-2 text-xs leading-5 text-black/70">{card.message}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function applyFeedbackFilters(
+  items: Feedback[],
+  starFilter: number | null,
+  dateFrom: string,
+  dateTo: string,
+  roleFilter: string,
+  genderFilter: string,
+) {
+  const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+  const to = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
+  return items.filter((feedback) => {
+    if (starFilter !== null && Math.round(feedback.rating) !== starFilter) return false;
+    const date = getFeedbackCreatedAt(feedback.createdAt);
+    if (from && (!date || date < from)) return false;
+    if (to && (!date || date > to)) return false;
+    if (roleFilter && normalizeRole(String(feedback.role ?? '')) !== roleFilter) return false;
+    if (genderFilter && normalizeUserGender(feedback.gender) !== genderFilter) return false;
+    return true;
+  });
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -162,8 +144,8 @@ export default function AdminFeedbackTab({
   activeBuildingLabel,
   buildingId,
   feedbackList,
-  feedbackSummary,
-  genderBreakdownByPeriod = {},
+  feedbackLoading = false,
+  feedbackError = null,
   managedBuildings,
   onBuildingChange,
   onReload,
@@ -172,12 +154,14 @@ export default function AdminFeedbackTab({
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
 
-  const [feedbackScope, setFeedbackScope] = useState<FeedbackAnalyticsScope>('floor');
+  const [feedbackScope, setFeedbackScope] = useState<FeedbackAnalyticsScope>('building');
   const [feedbackFloor, setFeedbackFloor] = useState('');
   const [feedbackRoomId, setFeedbackRoomId] = useState('');
   const [starFilter, setStarFilter] = useState<number | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [genderFilter, setGenderFilter] = useState('');
   const [analyticsPeriod, setAnalyticsPeriod] = useState<FeedbackAnalyticsPeriod>('all_time');
   const [analyticsAcademicYear, setAnalyticsAcademicYear] = useState<ScheduleAcademicYear>(
     DEFAULT_SCHEDULE_CONTEXT.academicYear,
@@ -196,38 +180,6 @@ export default function AdminFeedbackTab({
     () => scopeFeedbackToBuilding(feedbackList, buildingId),
     [buildingId, feedbackList]
   );
-
-  const selectedPeriodFeedback = useMemo(
-    () => compareFeedbackPeriods(
-      buildingFeedbackList,
-      analyticsPeriod,
-      analyticsNow,
-      analyticsScheduleContext,
-    ),
-    [analyticsNow, analyticsPeriod, analyticsScheduleContext, buildingFeedbackList]
-  );
-
-  const selectedFeedbackSummary = useMemo(() => {
-    if (!selectedPeriodFeedback.configured || selectedPeriodFeedback.currentItems.length === 0) {
-      return null;
-    }
-
-    if (analyticsPeriod === 'all_time' && feedbackSummary) {
-      return feedbackSummary;
-    }
-
-    return {
-      ...summarizeFeedbackSentiment(selectedPeriodFeedback.currentItems),
-      genderBreakdown: analyticsPeriod === 'semester'
-        ? summarizeFeedbackSentimentByGender(selectedPeriodFeedback.currentItems)
-        : genderBreakdownByPeriod[analyticsPeriod] ?? [],
-    };
-  }, [
-    analyticsPeriod,
-    feedbackSummary,
-    genderBreakdownByPeriod,
-    selectedPeriodFeedback,
-  ]);
 
   const handleRespondFeedback = async (feedbackId: string) => {
     if (!responseText.trim()) return;
@@ -280,51 +232,66 @@ export default function AdminFeedbackTab({
       analyticsScheduleContext,
     );
 
-    return periodFeedback.items.filter((f) => {
-      if (starFilter !== null && Math.round(f.rating) !== starFilter) return false;
-      if (dateFrom && f.createdAt) {
-        const feedbackDate = f.createdAt.toDate();
-        const from = new Date(`${dateFrom}T00:00:00`);
-        if (feedbackDate < from) return false;
-      }
-      if (dateTo && f.createdAt) {
-        const feedbackDate = f.createdAt.toDate();
-        const to = new Date(`${dateTo}T23:59:59`);
-        if (feedbackDate > to) return false;
-      }
-      return true;
-    });
-  }, [analyticsNow, analyticsPeriod, analyticsScheduleContext, dateFrom, dateTo, scopedFeedback, starFilter]);
+    return applyFeedbackFilters(periodFeedback.items, starFilter, dateFrom, dateTo, roleFilter, genderFilter);
+  }, [analyticsNow, analyticsPeriod, analyticsScheduleContext, dateFrom, dateTo, genderFilter, roleFilter, scopedFeedback, starFilter]);
 
-  const hasActiveFilters =
-    feedbackScope !== 'floor' || starFilter !== null || !!dateFrom || !!dateTo;
-
-  const insightPeriodFeedback = useMemo(
-    () => compareFeedbackPeriods(
-      buildingFeedbackList,
+  const selectedPeriodFeedback = useMemo(() => {
+    const comparison = compareFeedbackPeriods(
+      scopedFeedback,
       analyticsPeriod,
       analyticsNow,
       analyticsScheduleContext,
-    ),
-    [analyticsNow, analyticsPeriod, analyticsScheduleContext, buildingFeedbackList]
-  );
+    );
+    return {
+      ...comparison,
+      currentItems: applyFeedbackFilters(comparison.currentItems, starFilter, dateFrom, dateTo, roleFilter, genderFilter),
+      previousItems: applyFeedbackFilters(comparison.previousItems, starFilter, dateFrom, dateTo, roleFilter, genderFilter),
+    };
+  }, [analyticsNow, analyticsPeriod, analyticsScheduleContext, dateFrom, dateTo, genderFilter, roleFilter, scopedFeedback, starFilter]);
+
+  const selectedFeedbackSummary = useMemo(() => {
+    if (!selectedPeriodFeedback.configured || filteredFeedback.length === 0) return null;
+    return {
+      ...summarizeFeedbackSentiment(filteredFeedback),
+      genderBreakdown: summarizeFeedbackSentimentByGender(filteredFeedback),
+    };
+  }, [filteredFeedback, selectedPeriodFeedback.configured]);
+
+  const hasActiveFilters =
+    feedbackScope !== 'building' || starFilter !== null || !!dateFrom || !!dateTo || !!roleFilter || !!genderFilter;
+  const anonymizeFilteredFeedback = Boolean(roleFilter || genderFilter);
+
+  const insightPeriodFeedback = selectedPeriodFeedback;
 
   const feedbackInsights = useMemo(
     () => buildFeedbackInsights(
       insightPeriodFeedback.currentItems,
       insightPeriodFeedback.previousItems,
       insightPeriodFeedback.comparable,
+      buildingRooms,
     ),
-    [insightPeriodFeedback]
+    [buildingRooms, insightPeriodFeedback]
+  );
+
+  const selectedMetrics = useMemo(() => summarizeFeedbackAnalytics(filteredFeedback), [filteredFeedback]);
+  const categoryPerformance = useMemo(
+    () => compareCategoryPerformance(filteredFeedback, insightPeriodFeedback.previousItems, insightPeriodFeedback.comparable),
+    [filteredFeedback, insightPeriodFeedback.comparable, insightPeriodFeedback.previousItems],
+  );
+  const demographicAnalytics = useMemo(
+    () => buildFeedbackDemographicAnalytics(filteredFeedback),
+    [filteredFeedback],
   );
 
   const clearFilters = () => {
-    setFeedbackScope('floor');
+    setFeedbackScope('building');
     setFeedbackFloor(floorOptions[0] ?? '');
     setFeedbackRoomId('');
     setStarFilter(null);
     setDateFrom('');
     setDateTo('');
+    setRoleFilter('');
+    setGenderFilter('');
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -370,7 +337,23 @@ export default function AdminFeedbackTab({
         )}
       </div>
 
-      {buildingFeedbackList.length === 0 ? (
+      {feedbackLoading ? (
+        <div className="glass-card p-6" aria-live="polite">
+          <div className="dashboard-empty-state rounded-2xl p-12 text-center">
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary/20 border-t-primary" aria-hidden="true" />
+            <p className="mt-3 text-sm font-bold text-black/60">Loading feedback analytics…</p>
+          </div>
+        </div>
+      ) : feedbackError ? (
+        <div className="glass-card p-6" role="alert">
+          <div className="dashboard-empty-state rounded-2xl p-10 text-center">
+            <p className="text-sm font-bold text-red-700">Unable to load feedback analytics. Please try again.</p>
+            <button type="button" onClick={() => void onReload()} className="btn-primary mt-4 px-4 py-2 text-sm">
+              Retry
+            </button>
+          </div>
+        </div>
+      ) : buildingFeedbackList.length === 0 ? (
         <div className="glass-card p-4">
           <div className="dashboard-empty-state rounded-2xl p-12 text-center">
           <div className="text-4xl mb-3">Feedback</div>
@@ -442,10 +425,6 @@ export default function AdminFeedbackTab({
             </div>
           </div>
 
-          {insightPeriodFeedback.configured ? (
-            <TrendInsightsSection insights={feedbackInsights} />
-          ) : null}
-
           {!selectedPeriodFeedback.configured ? (
             <div className="glass-card p-6">
               <p className="dashboard-empty-state rounded-xl px-3 py-5 text-center text-xs font-bold text-black/50">
@@ -460,6 +439,16 @@ export default function AdminFeedbackTab({
             </div>
           ) : (
             <div className="space-y-4">
+              <FeedbackOverviewSection
+                metrics={selectedMetrics}
+                trendLabel={{
+                  improving: 'Improving',
+                  declining: 'Declining',
+                  stable: 'Stable',
+                  not_enough_data: 'Insufficient data',
+                }[feedbackInsights.sentimentDirection]}
+              />
+
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 {sentimentDistribution.map((item) => (
                   <div key={item.label} className="glass-card p-4">
@@ -663,6 +652,9 @@ export default function AdminFeedbackTab({
                   </div>
                 </div>
               )}
+              <FacilityPerformanceSection categories={categoryPerformance} />
+              <DemographicPerformanceSection groups={demographicAnalytics} />
+              <ActionableInsightsSection insights={feedbackInsights.actionableInsights} />
             </div>
           )}
 
@@ -754,6 +746,32 @@ export default function AdminFeedbackTab({
               </label>
             </div>
 
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">Group</span>
+              <select
+                aria-label="Feedback role filter"
+                value={roleFilter}
+                onChange={(event) => setRoleFilter(event.target.value)}
+                className="glass-input h-8 px-3 text-xs font-bold text-black"
+              >
+                <option value="">All roles</option>
+                {ALL_USER_ROLES.filter((role) => role === 'Student' || role === 'Faculty Professor' || role === 'Utility Staff').map((role) => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Feedback gender filter"
+                value={genderFilter}
+                onChange={(event) => setGenderFilter(event.target.value)}
+                className="glass-input h-8 px-3 text-xs font-bold text-black"
+              >
+                <option value="">All genders</option>
+                {USER_GENDER_VALUES.map((gender) => (
+                  <option key={gender} value={gender}>{USER_GENDER_LABELS[gender]}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Active filter summary + Clear All */}
             <div className="flex items-center justify-between pt-1 border-t border-dark/10">
               <p className="text-xs font-bold text-black/50">
@@ -797,14 +815,14 @@ export default function AdminFeedbackTab({
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-dark/5 border border-dark/10 flex items-center justify-center text-black font-bold text-sm">
-                      {feedback.userName
+                      {anonymizeFilteredFeedback ? '?' : feedback.userName
                         .split(' ')
                         .map((name) => name[0])
                         .join('')
                         .toUpperCase()}
                     </div>
                     <div>
-                      <h4 className="font-bold text-black text-sm">{feedback.userName}</h4>
+                      <h4 className="font-bold text-black text-sm">{anonymizeFilteredFeedback ? 'Anonymous user' : feedback.userName}</h4>
                       <p className="text-xs text-black">
                         {feedback.roomName} | {feedback.buildingName}
                       </p>
