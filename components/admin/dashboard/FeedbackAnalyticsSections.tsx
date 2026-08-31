@@ -213,38 +213,34 @@ function getConcernAspectKey(category: FeedbackCategoryRatingKey | typeof ALL_LO
   return category === ALL_LOCATION_FILTER ? null : category;
 }
 
-export function LocationPerformanceSection({ analytics }: { analytics: FeedbackLocationAnalytics }) {
-  const [locationFilter, setLocationFilter] = useState(ALL_LOCATION_FILTER);
+export function LocationPerformanceSection({
+  analytics,
+  activeBuildingLabel,
+}: {
+  analytics: FeedbackLocationAnalytics;
+  activeBuildingLabel: string;
+}) {
   const [floorFilter, setFloorFilter] = useState(ALL_LOCATION_FILTER);
   const [roomFilter, setRoomFilter] = useState(ALL_LOCATION_FILTER);
   const [categoryFilter, setCategoryFilter] = useState<FeedbackCategoryRatingKey | typeof ALL_LOCATION_FILTER>(ALL_LOCATION_FILTER);
   const [showAllConcerns, setShowAllConcerns] = useState(false);
 
-  const locations = useMemo(() => analytics.buildings, [analytics.buildings]);
-  const selectedLocation = locations.some((location) => location.id === locationFilter)
-    ? locationFilter
-    : ALL_LOCATION_FILTER;
-  const floors = useMemo(
-    () => analytics.floors.filter((floor) => selectedLocation === ALL_LOCATION_FILTER || floor.buildingId === selectedLocation),
-    [analytics.floors, selectedLocation],
-  );
+  const floors = useMemo(() => analytics.floors, [analytics.floors]);
   const selectedFloor = floors.some((floor) => floor.id === floorFilter) ? floorFilter : ALL_LOCATION_FILTER;
   const selectedFloorValue = floors.find((floor) => floor.id === selectedFloor)?.floor ?? null;
   const rooms = useMemo(
     () => analytics.rooms.filter((room) =>
-      (selectedLocation === ALL_LOCATION_FILTER || room.buildingId === selectedLocation) &&
       (selectedFloorValue === null || room.floor === selectedFloorValue)
     ),
-    [analytics.rooms, selectedFloorValue, selectedLocation],
+    [analytics.rooms, selectedFloorValue],
   );
   const selectedRoom = rooms.some((room) => room.id === roomFilter) ? roomFilter : ALL_LOCATION_FILTER;
 
   const selectedItems = useMemo(() => {
     if (selectedRoom !== ALL_LOCATION_FILTER) return rooms.filter((room) => room.id === selectedRoom);
     if (selectedFloor !== ALL_LOCATION_FILTER) return floors.filter((floor) => floor.id === selectedFloor);
-    if (selectedLocation !== ALL_LOCATION_FILTER) return locations.filter((location) => location.id === selectedLocation);
-    return locations;
-  }, [floors, locations, rooms, selectedFloor, selectedLocation, selectedRoom]);
+    return analytics.buildings;
+  }, [analytics.buildings, floors, rooms, selectedFloor, selectedRoom]);
   const selectedPerformance = useMemo(() => aggregateLocationPerformance(selectedItems), [selectedItems]);
 
   const visibleCategories = useMemo(() => {
@@ -273,7 +269,7 @@ export function LocationPerformanceSection({ analytics }: { analytics: FeedbackL
       .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
   }, [categoryFilter, selectedItems]);
 
-  const visibleBuildings = analytics.buildings.filter((building) => selectedLocation === ALL_LOCATION_FILTER || building.id === selectedLocation);
+  const visibleBuildings = analytics.buildings;
   const visibleFloors = floors.filter((floor) => selectedFloor === ALL_LOCATION_FILTER || floor.id === selectedFloor);
   const visibleRooms = rooms.filter((room) => selectedRoom === ALL_LOCATION_FILTER || room.id === selectedRoom);
   const displayedConcerns = showAllConcerns ? concernEntries : concernEntries.slice(0, 3);
@@ -282,26 +278,11 @@ export function LocationPerformanceSection({ analytics }: { analytics: FeedbackL
     <section className="glass-card p-4" aria-labelledby="location-performance-heading">
       <div className="mb-4">
         <h3 id="location-performance-heading" className="text-base font-bold text-black">Location Performance</h3>
+        <p className="mt-1 text-xs font-bold text-black/65">Building: {activeBuildingLabel}</p>
         <p className="mt-1 text-xs text-black/55">Refines the globally filtered feedback set. Comparative labels require at least five reviews. VADER sentiment scores range from -1 (very negative) to +1 (very positive).</p>
       </div>
 
-      <div className="mb-4 grid gap-2 rounded-xl border border-dark/10 bg-white/55 p-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="flex min-w-0 flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-black/50">
-          Location
-          <select
-            aria-label="Location performance location"
-            value={selectedLocation}
-            onChange={(event) => {
-              setLocationFilter(event.target.value);
-              setFloorFilter(ALL_LOCATION_FILTER);
-              setRoomFilter(ALL_LOCATION_FILTER);
-            }}
-            className="glass-input h-8 px-2 text-xs font-bold normal-case tracking-normal text-black"
-          >
-            <option value={ALL_LOCATION_FILTER}>All</option>
-            {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
-          </select>
-        </label>
+      <div className="mb-4 grid gap-2 rounded-xl border border-dark/10 bg-white/55 p-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="flex min-w-0 flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-black/50">
           Floor
           <select

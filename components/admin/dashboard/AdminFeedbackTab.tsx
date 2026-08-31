@@ -880,7 +880,10 @@ export default function AdminFeedbackTab({
                     scheduleContext={analyticsScheduleContext}
                     hideControls
                   />
-                  <LocationPerformanceSection analytics={locationAnalytics} />
+                  <LocationPerformanceSection
+                    analytics={locationAnalytics}
+                    activeBuildingLabel={activeBuildingLabel}
+                  />
                 </>
               ) : null}
             </>
