@@ -126,6 +126,8 @@ export default function AdminClassSchedulesPage() {
     setSchedSection,
     schedInstructor,
     setSchedInstructor,
+    schedProfessorEmail,
+    setSchedProfessorEmail,
     schedDay,
     setSchedDay,
     schedStart,
@@ -510,6 +512,7 @@ export default function AdminClassSchedulesPage() {
             schedCourseName={schedCourseName}
             schedSection={schedSection}
             schedInstructor={schedInstructor}
+            schedProfessorEmail={schedProfessorEmail}
             schedDay={schedDay}
             schedStart={schedStart}
             schedEnd={schedEnd}
@@ -520,6 +523,7 @@ export default function AdminClassSchedulesPage() {
             onSchedCourseNameChange={setSchedCourseName}
             onSchedSectionChange={setSchedSection}
             onSchedInstructorChange={setSchedInstructor}
+            onSchedProfessorEmailChange={setSchedProfessorEmail}
             onSchedDayChange={setSchedDay}
             onSchedStartChange={setSchedStart}
             onSchedEndChange={setSchedEnd}

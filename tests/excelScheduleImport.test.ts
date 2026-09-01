@@ -99,6 +99,7 @@ describe('Excel schedule import parser', () => {
       [
         'Room',
         'Professor',
+        'Professor Email',
         'Course Name',
         'Time',
         'Day',
@@ -107,6 +108,7 @@ describe('Excel schedule import parser', () => {
       [
         'GD3 312',
         'Prof. Reyes',
+        'reyes@sdca.edu.ph',
         'Software Engineering',
         '7:00 A.M. - 12:00 A.M.',
         'Monday',
@@ -115,6 +117,7 @@ describe('Excel schedule import parser', () => {
       [
         'GD3 312',
         'Prof. Cruz',
+        'cruz@sdca.edu.ph',
         'Database Systems',
         '1:00 P.M. - 5:00 P.M.',
         'Friday',
@@ -130,6 +133,7 @@ describe('Excel schedule import parser', () => {
       roomId: 'room-312',
       courseCode: 'Software Engineering',
       instructorName: 'Prof. Reyes',
+      professorEmail: 'reyes@sdca.edu.ph',
       dayOfWeek: 1,
       startTime: '07:00',
       endTime: '12:00',
@@ -145,8 +149,8 @@ describe('Excel schedule import parser', () => {
 
   it('accepts Instructor as an alternative to the Professor column label', () => {
     const workbook = createWorkbook([
-      ['Room', 'Instructor', 'Course Name', 'Time', 'Day', 'Program and Section'],
-      ['312', 'Prof. Santos', 'Web Development', '8:00 AM - 9:00 AM', 'Monday', 'BSIT 2A'],
+      ['Room', 'Instructor', 'Professor Email', 'Course Name', 'Time', 'Day', 'Program and Section'],
+      ['312', 'Prof. Santos', 'santos@sdca.edu.ph', 'Web Development', '8:00 AM - 9:00 AM', 'Monday', 'BSIT 2A'],
     ]);
 
     const result = parseScheduleWorkbook(workbook, rooms);
@@ -155,18 +159,19 @@ describe('Excel schedule import parser', () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({
       instructorName: 'Prof. Santos',
+      professorEmail: 'santos@sdca.edu.ph',
       subject: 'Web Development',
     });
   });
 
   it('parses letter weekday values in a Day column', () => {
     const workbook = createWorkbook([
-      ['Room', 'Course Name', 'Time', 'Day', 'Program and Section'],
-      ['312', 'Monday Class', '8:00 AM - 9:00 AM', 'M', 'BSIT 1A'],
-      ['312', 'Tuesday Class', '9:00 AM - 10:00 AM', 'T', 'BSIT 1A'],
-      ['312', 'Wednesday Class', '10:00 AM - 11:00 AM', 'W', 'BSIT 1A'],
-      ['312', 'Thursday Class', '11:00 AM - 12:00 PM', 'H', 'BSIT 1A'],
-      ['312', 'Friday Class', '1:00 PM - 2:00 PM', 'F', 'BSIT 1A'],
+      ['Room', 'Professor Email', 'Course Name', 'Time', 'Day', 'Program and Section'],
+      ['312', 'monday@sdca.edu.ph', 'Monday Class', '8:00 AM - 9:00 AM', 'M', 'BSIT 1A'],
+      ['312', 'tuesday@sdca.edu.ph', 'Tuesday Class', '9:00 AM - 10:00 AM', 'T', 'BSIT 1A'],
+      ['312', 'wednesday@sdca.edu.ph', 'Wednesday Class', '10:00 AM - 11:00 AM', 'W', 'BSIT 1A'],
+      ['312', 'thursday@sdca.edu.ph', 'Thursday Class', '11:00 AM - 12:00 PM', 'H', 'BSIT 1A'],
+      ['312', 'friday@sdca.edu.ph', 'Friday Class', '1:00 PM - 2:00 PM', 'F', 'BSIT 1A'],
     ]);
 
     const result = parseScheduleWorkbook(workbook, rooms);

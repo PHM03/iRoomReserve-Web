@@ -145,6 +145,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
   const [schedCourseName, setSchedCourseName] = useState('');
   const [schedSection, setSchedSection] = useState('');
   const [schedInstructor, setSchedInstructor] = useState('');
+  const [schedProfessorEmail, setSchedProfessorEmail] = useState('');
   const [schedDay, setSchedDay] = useState<number>(1);
   const [schedStart, setSchedStart] = useState('');
   const [schedEnd, setSchedEnd] = useState('');
@@ -347,6 +348,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     setSchedCourseName('');
     setSchedSection('');
     setSchedInstructor('');
+    setSchedProfessorEmail('');
     setSchedDay(1);
     setSchedStart('');
     setSchedEnd('');
@@ -411,6 +413,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       !schedCourseName.trim() ||
       !schedSection.trim() ||
       !schedInstructor.trim() ||
+      !/^[^\s@]+@sdca\.edu\.ph$/i.test(schedProfessorEmail.trim()) ||
       !schedStart ||
       !schedEnd
     ) {
@@ -471,6 +474,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
           courseCode,
           section: schedSection.trim(),
           instructorName: schedInstructor.trim(),
+          professorEmail: schedProfessorEmail.trim().toLowerCase(),
           dayOfWeek: schedDay,
           startTime: schedStart,
           endTime: schedEnd,
@@ -489,6 +493,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
           courseCode,
           section: schedSection.trim(),
           instructorName: schedInstructor.trim(),
+          professorEmail: schedProfessorEmail.trim().toLowerCase(),
           dayOfWeek: schedDay,
           startTime: schedStart,
           endTime: schedEnd,
@@ -520,6 +525,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     setSchedCourseName(schedule.courseName ?? schedule.subjectName);
     setSchedSection(schedule.section ?? '');
     setSchedInstructor(schedule.instructorName);
+    setSchedProfessorEmail(schedule.professorEmail ?? '');
     setSchedDay(schedule.dayOfWeek);
     setSchedStart(schedule.startTime);
     setSchedEnd(schedule.endTime);
@@ -732,6 +738,8 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     setSchedSection,
     schedInstructor,
     setSchedInstructor,
+    schedProfessorEmail,
+    setSchedProfessorEmail,
     schedDay,
     setSchedDay,
     schedStart,

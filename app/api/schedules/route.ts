@@ -30,6 +30,7 @@ interface ScheduleRecord {
   courseCode: string;
   section: string;
   instructorName: string;
+  professorEmail: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
@@ -89,6 +90,7 @@ export async function GET(request: NextRequest) {
           courseCode?: string;
           section?: string;
           instructorName?: string;
+          professorEmail?: string;
           dayOfWeek?: number;
           startTime?: string;
           endTime?: string;
@@ -107,6 +109,7 @@ export async function GET(request: NextRequest) {
           courseCode: data.courseCode ?? "",
           section: data.section ?? "",
           instructorName: data.instructorName ?? "",
+          professorEmail: data.professorEmail ?? "",
           dayOfWeek: data.dayOfWeek ?? 0,
           startTime: data.startTime ?? "",
           endTime: data.endTime ?? "",

@@ -34,6 +34,8 @@ export interface Schedule {
   courseCode?: string;
   section?: string;
   instructorName: string;
+  /** Kept for future faculty schedule matching; intentionally not displayed. */
+  professorEmail?: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
@@ -236,6 +238,17 @@ export async function addSchedule(
   });
 
   return payload.id;
+}
+
+export async function getRegisteredProfessorEmails(emails: string[]): Promise<Set<string>> {
+  const normalizedEmails = [...new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
+  if (normalizedEmails.length === 0) return new Set();
+
+  const payload = await apiRequest<{ registeredEmails: string[] }>(
+    "/api/schedules/professor-registration",
+    { body: { emails: normalizedEmails }, method: "POST" }
+  );
+  return new Set(payload.registeredEmails.map((email) => email.toLowerCase()));
 }
 
 export async function updateSchedule(

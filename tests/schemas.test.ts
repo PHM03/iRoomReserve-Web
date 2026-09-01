@@ -272,6 +272,7 @@ describe('server schemas', () => {
         courseCode: 'IT 101',
         section: 'BSIT 1A',
         instructorName: 'Prof. Reyes',
+        professorEmail: 'reyes@sdca.edu.ph',
         dayOfWeek: 1,
         startTime: '08:00',
         endTime: '10:00',
@@ -281,6 +282,17 @@ describe('server schemas', () => {
         overrideScheduleIds: ['schedule-previous'],
       }).success
     ).toBe(true);
+
+    expect(
+      scheduleInputSchema.safeParse({
+        roomId: 'room-1', roomName: 'Room 101', buildingId: 'building-1',
+        subjectName: 'IT 101', courseName: 'Introduction to Programming',
+        courseCode: 'IT 101', section: 'BSIT 1A', instructorName: 'Prof. Reyes',
+        professorEmail: 'reyes@example.com', dayOfWeek: 1, startTime: '08:00',
+        endTime: '10:00', semester: '1st Semester', academicYear: 'A.Y. 2025-2026',
+        createdBy: 'admin-1',
+      }).success
+    ).toBe(false);
   });
 
   it('rejects schedules whose end time is not later than the start time', () => {

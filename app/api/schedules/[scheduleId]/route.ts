@@ -26,6 +26,7 @@ interface StoredScheduleRecord {
   dayOfWeek?: number;
   endTime?: string;
   instructorName?: string;
+  professorEmail?: string;
   roomId?: string;
   roomName?: string;
   section?: string;

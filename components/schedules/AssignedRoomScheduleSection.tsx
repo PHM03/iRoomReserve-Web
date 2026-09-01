@@ -62,6 +62,7 @@ export default function AssignedRoomScheduleSection({
   const [schedCourseName, setSchedCourseName] = useState('');
   const [schedSection, setSchedSection] = useState('');
   const [schedInstructor, setSchedInstructor] = useState('');
+  const [schedProfessorEmail, setSchedProfessorEmail] = useState('');
   const [schedDay, setSchedDay] = useState(1);
   const [schedStart, setSchedStart] = useState('');
   const [schedEnd, setSchedEnd] = useState('');
@@ -270,6 +271,7 @@ export default function AssignedRoomScheduleSection({
     setSchedCourseName('');
     setSchedSection('');
     setSchedInstructor('');
+    setSchedProfessorEmail('');
     setSchedDay(1);
     setSchedStart('');
     setSchedEnd('');
@@ -320,6 +322,7 @@ export default function AssignedRoomScheduleSection({
       !schedCourseName.trim() ||
       !schedSection.trim() ||
       !schedInstructor.trim() ||
+      !/^[^\s@]+@sdca\.edu\.ph$/i.test(schedProfessorEmail.trim()) ||
       !schedStart ||
       !schedEnd
     ) {
@@ -339,6 +342,7 @@ export default function AssignedRoomScheduleSection({
         dayOfWeek: schedDay,
         endTime: schedEnd,
         instructorName: schedInstructor.trim(),
+        professorEmail: schedProfessorEmail.trim().toLowerCase(),
         roomId: room.id,
         roomName: room.name,
         section,
@@ -378,6 +382,7 @@ export default function AssignedRoomScheduleSection({
     setSchedCourseName(schedule.courseName ?? schedule.subjectName);
     setSchedSection(schedule.section ?? '');
     setSchedInstructor(schedule.instructorName);
+    setSchedProfessorEmail(schedule.professorEmail ?? '');
     setSchedDay(schedule.dayOfWeek);
     setSchedStart(schedule.startTime);
     setSchedEnd(schedule.endTime);
@@ -543,6 +548,7 @@ export default function AssignedRoomScheduleSection({
           schedCourseName={schedCourseName}
           schedSection={schedSection}
           schedInstructor={schedInstructor}
+          schedProfessorEmail={schedProfessorEmail}
           schedDay={schedDay}
           schedStart={schedStart}
           schedEnd={schedEnd}
@@ -553,6 +559,7 @@ export default function AssignedRoomScheduleSection({
           onSchedCourseNameChange={setSchedCourseName}
           onSchedSectionChange={setSchedSection}
           onSchedInstructorChange={setSchedInstructor}
+          onSchedProfessorEmailChange={setSchedProfessorEmail}
           onSchedDayChange={setSchedDay}
           onSchedStartChange={setSchedStart}
           onSchedEndChange={setSchedEnd}

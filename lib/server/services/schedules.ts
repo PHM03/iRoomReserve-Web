@@ -17,6 +17,7 @@ export interface ScheduleCreateInput {
   courseCode: string;
   section: string;
   instructorName: string;
+  professorEmail: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
@@ -35,6 +36,7 @@ interface StoredScheduleRecord extends ScheduleConflictComparable {
   dayOfWeek: number;
   endTime: string;
   instructorName: string;
+  professorEmail: string;
   roomId: string;
   roomName: string;
   section: string;

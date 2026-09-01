@@ -17,6 +17,7 @@ interface TimeSlot {
 interface ParsedBlockContent {
   courseCode: string;
   instructorName: string;
+  professorEmail: string;
   section: string;
   subject: string;
 }
@@ -25,6 +26,7 @@ interface ListColumnMap {
   courseCode: number | null;
   day: number;
   instructorName: number | null;
+  professorEmail: number | null;
   room: number;
   section: number | null;
   subject: number;
@@ -47,6 +49,7 @@ export interface ExcelScheduleImportCandidate {
   section: string;
   courseCode: string;
   instructorName: string;
+  professorEmail: string;
   errors: string[];
 }
 
@@ -109,6 +112,7 @@ const SECTION_PATTERNS = [
 
 const TIME_TOKEN_PATTERN =
   /\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?|am|pm)?\b/gi;
+const PROFESSOR_EMAIL_PATTERN = /^[^\s@]+@sdca\.edu\.ph$/i;
 
 function cleanCellText(value: unknown): string {
   if (value === null || value === undefined) {
@@ -215,6 +219,9 @@ function detectListColumn(value: string): keyof ListColumnMap | null {
   if (/^(professor|prof|instructor|teacher|faculty)$/.test(normalized)) {
     return "instructorName";
   }
+  if (/^(professor email|prof email|instructor email|faculty email|teacher email|email)$/.test(normalized)) {
+    return "professorEmail";
+  }
   if (/^(course name|subject|subject name|course|class name)$/.test(normalized)) {
     return "subject";
   }
@@ -255,6 +262,7 @@ function findListColumns(
           courseCode: columns.courseCode ?? null,
           day: columns.day,
           instructorName: columns.instructorName ?? null,
+          professorEmail: columns.professorEmail ?? null,
           room: columns.room,
           section: columns.section ?? null,
           subject: columns.subject,
@@ -595,11 +603,16 @@ function looksLikeCourseCode(value: string): boolean {
 }
 
 function parseBlockContent(text: string): ParsedBlockContent {
-  const meaningfulLines = splitCellLines(text).filter(
+  const allMeaningfulLines = splitCellLines(text).filter(
     (line) =>
       !parseTimeRange(line) &&
       !extractRoomNameFromText(line) &&
       !isIgnoredBlockText(line)
+  );
+  const professorEmail =
+    allMeaningfulLines.find((line) => PROFESSOR_EMAIL_PATTERN.test(line.trim())) ?? "";
+  const meaningfulLines = allMeaningfulLines.filter(
+    (line) => !PROFESSOR_EMAIL_PATTERN.test(line.trim())
   );
   const sectionIndex = meaningfulLines.findIndex((line) => Boolean(findSection(line)));
   let courseCode = "";
@@ -641,6 +654,7 @@ function parseBlockContent(text: string): ParsedBlockContent {
   return {
     courseCode: (courseCode || normalizedSubject).trim(),
     instructorName: instructorName.trim() || "Imported Schedule",
+    professorEmail: professorEmail.trim().toLowerCase(),
     section: normalizedSection,
     subject: normalizedSubject,
   };
@@ -716,6 +730,15 @@ function parseListSheet(
             row,
             header.columns.instructorName
           ) || "Imported Schedule";
+    const professorEmail =
+      header.columns.professorEmail === null
+        ? ""
+        : getEffectiveCellText(
+            workbookSheet,
+            merges,
+            row,
+            header.columns.professorEmail
+          );
     const errors: string[] = [];
 
     if (!roomText) {
@@ -740,6 +763,10 @@ function parseListSheet(
       errors.push("Section is required.");
     }
 
+    if (!professorEmail) {
+      errors.push("Professor email is required.");
+    }
+
     rows.push({
       buildingId: room?.buildingId ?? "",
       courseCode,
@@ -752,6 +779,7 @@ function parseListSheet(
       errors,
       id: `${sheetName}-${row}-${rows.length}`,
       instructorName,
+      professorEmail,
       roomId: room?.id ?? "",
       roomName: room?.name ?? roomText,
       section,
@@ -902,6 +930,7 @@ function parseSheet(
         errors,
         id: `${sheetName}-${sourceCell}-${rows.length}`,
         instructorName: content.instructorName,
+        professorEmail: content.professorEmail,
         roomId: room?.id ?? "",
         roomName: room?.name ?? detectedRoomName,
         section: content.section,

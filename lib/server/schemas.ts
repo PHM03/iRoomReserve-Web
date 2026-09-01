@@ -14,6 +14,10 @@ const dateString = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD date.");
 const emailString = z.string().trim().toLowerCase().email();
+const professorEmailString = emailString.refine(
+  (email) => email.endsWith("@sdca.edu.ph"),
+  "Professor email must use the @sdca.edu.ph domain."
+);
 const positiveInteger = z.number().int().positive();
 const nullableBeaconIdSchema = z.preprocess(
   (value) => {
@@ -330,6 +334,7 @@ const scheduleBaseSchema = z.object({
   courseCode: nonEmptyString,
   section: nonEmptyString,
   instructorName: nonEmptyString,
+  professorEmail: professorEmailString,
   dayOfWeek: z.number().int().min(0).max(6),
   startTime: timeString,
   endTime: timeString,

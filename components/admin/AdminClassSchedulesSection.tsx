@@ -19,6 +19,7 @@ import {
   DAY_NAMES,
   addSchedule,
   formatTime12h,
+  getRegisteredProfessorEmails,
   getScheduleDisplayTitle,
   type ScheduleInput,
 } from '@/lib/schedules/schedules';
@@ -97,6 +98,7 @@ interface AdminClassSchedulesSectionProps {
   schedCourseName: string;
   schedSection: string;
   schedInstructor: string;
+  schedProfessorEmail: string;
   schedDay: number;
   schedStart: string;
   schedEnd: string;
@@ -107,6 +109,7 @@ interface AdminClassSchedulesSectionProps {
   onSchedCourseNameChange: (value: string) => void;
   onSchedSectionChange: (value: string) => void;
   onSchedInstructorChange: (value: string) => void;
+  onSchedProfessorEmailChange: (value: string) => void;
   onSchedDayChange: (value: number) => void;
   onSchedStartChange: (value: string) => void;
   onSchedEndChange: (value: string) => void;
@@ -177,6 +180,7 @@ export default function AdminClassSchedulesSection({
   schedCourseName,
   schedSection,
   schedInstructor,
+  schedProfessorEmail,
   schedDay,
   schedStart,
   schedEnd,
@@ -187,6 +191,7 @@ export default function AdminClassSchedulesSection({
   onSchedCourseNameChange,
   onSchedSectionChange,
   onSchedInstructorChange,
+  onSchedProfessorEmailChange,
   onSchedDayChange,
   onSchedStartChange,
   onSchedEndChange,
@@ -226,6 +231,10 @@ export default function AdminClassSchedulesSection({
   const [successfulImportRowIds, setSuccessfulImportRowIds] = useState<Set<string>>(
     new Set()
   );
+  const [registeredProfessorEmails, setRegisteredProfessorEmails] = useState<Set<string>>(
+    new Set()
+  );
+  const [checkingProfessorRegistration, setCheckingProfessorRegistration] = useState(false);
 
   // Clear the time error whenever the form is hidden (cancelled / saved)
   useEffect(() => {
@@ -278,6 +287,32 @@ export default function AdminClassSchedulesSection({
       ? SCHEDULE_CONFLICT_MESSAGE
       : null;
   const visibleError = formError ?? scheduleSaveError ?? liveConflictMessage;
+  const normalizedProfessorEmail = schedProfessorEmail.trim().toLowerCase();
+  const hasValidProfessorEmail = /^[^\s@]+@sdca\.edu\.ph$/i.test(normalizedProfessorEmail);
+  const professorIsRegistered = registeredProfessorEmails.has(normalizedProfessorEmail);
+  useEffect(() => {
+    if (!showScheduleForm || !hasValidProfessorEmail) return;
+
+    let cancelled = false;
+    setCheckingProfessorRegistration(true);
+    const timeoutId = window.setTimeout(() => {
+      void getRegisteredProfessorEmails([normalizedProfessorEmail])
+        .then((emails) => {
+          if (!cancelled) setRegisteredProfessorEmails(emails);
+        })
+        .catch(() => {
+          if (!cancelled) setRegisteredProfessorEmails(new Set());
+        })
+        .finally(() => {
+          if (!cancelled) setCheckingProfessorRegistration(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [hasValidProfessorEmail, normalizedProfessorEmail, showScheduleForm]);
   const dayScheduleSlots = useMemo(() => {
     if (!schedRoomId || maxHour <= minHour) {
       return [];
@@ -364,6 +399,10 @@ export default function AdminClassSchedulesSection({
 
         if (!row.section.trim()) {
           validationErrors.push('Section is required.');
+        }
+
+        if (!/^[^\s@]+@sdca\.edu\.ph$/i.test(row.professorEmail.trim())) {
+          validationErrors.push('Email must use @sdca.edu.ph domain.');
         }
 
         const timeError =
@@ -500,6 +539,11 @@ export default function AdminClassSchedulesSection({
   }
 
   function handleSaveClick() {
+    if (!hasValidProfessorEmail) {
+      clearErrors();
+      setFormError('Professor email must use the @sdca.edu.ph domain.');
+      return;
+    }
     const error = validateScheduleTimes(schedStart, schedEnd, campus);
     if (error) {
       clearErrors();
@@ -570,6 +614,17 @@ export default function AdminClassSchedulesSection({
     try {
       const result = await parseScheduleExcelFile(file, rooms);
       setParsedImportRows(result.rows);
+      setRegisteredProfessorEmails(new Set());
+      setCheckingProfessorRegistration(true);
+      try {
+        setRegisteredProfessorEmails(
+          await getRegisteredProfessorEmails(result.rows.map((row) => row.professorEmail))
+        );
+      } catch (error) {
+        console.warn('Unable to check imported professor registrations:', error);
+      } finally {
+        setCheckingProfessorRegistration(false);
+      }
       setImportError(result.errors.length > 0 ? result.errors.join(' ') : null);
 
       if (result.rows.length === 0 && result.errors.length === 0) {
@@ -618,6 +673,7 @@ export default function AdminClassSchedulesSection({
           dayOfWeek: row.dayOfWeek,
           endTime: row.endTime,
           instructorName: row.instructorName.trim() || 'Imported Schedule',
+          professorEmail: row.professorEmail.trim().toLowerCase(),
           roomId: row.roomId,
           roomName: row.roomName,
           section: row.section.trim(),
@@ -781,7 +837,7 @@ export default function AdminClassSchedulesSection({
                 className="glass-input w-full px-4 py-2.5 text-sm"
               />
             </div>
-            <div className="sm:col-span-2">
+            <div>
               <label className="mb-1 block text-xs font-bold text-black">
                 Instructor
               </label>
@@ -794,6 +850,30 @@ export default function AdminClassSchedulesSection({
                 placeholder="e.g. Prof. Santos"
                 className="glass-input w-full px-4 py-2.5 text-sm"
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-black">Professor's Email</label>
+              <div className="flex items-center gap-2">
+                {hasValidProfessorEmail && !checkingProfessorRegistration && !professorIsRegistered ? (
+                  <span
+                    aria-label="Professor is not registered for e-RoomReserve yet"
+                    className="cursor-help text-lg leading-none text-amber-500"
+                    title="Professor is not registered for e-RoomReserve yet"
+                  >
+                    ⚠
+                  </span>
+                ) : null}
+                <input
+                  type="email"
+                  value={schedProfessorEmail}
+                  onChange={(event) => {
+                    clearErrors();
+                    onSchedProfessorEmailChange(event.target.value);
+                  }}
+                  placeholder="e.g. professor@sdca.edu.ph"
+                  className="glass-input w-full px-4 py-2.5 text-sm"
+                />
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-black">
@@ -1060,6 +1140,7 @@ export default function AdminClassSchedulesSection({
                       <th className="px-3 py-2 font-bold">Time</th>
                       <th className="px-3 py-2 font-bold">Subject</th>
                       <th className="px-3 py-2 font-bold">Section</th>
+                      <th className="px-3 py-2 font-bold">Professor</th>
                       <th className="px-3 py-2 font-bold">Status</th>
                     </tr>
                   </thead>
@@ -1102,6 +1183,22 @@ export default function AdminClassSchedulesSection({
                           </td>
                           <td className="px-3 py-2 text-gray-700">
                             {row.section || '-'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            <span className="flex items-center gap-2">
+                            {/^[^\s@]+@sdca\.edu\.ph$/i.test(row.professorEmail.trim()) &&
+                            !checkingProfessorRegistration &&
+                            !registeredProfessorEmails.has(row.professorEmail.trim().toLowerCase()) ? (
+                              <span
+                                aria-label="Professor is not registered for e-RoomReserve yet"
+                                className="ml-2 cursor-help text-amber-500"
+                                title="Professor is not registered for e-RoomReserve yet"
+                              >
+                                ⚠
+                              </span>
+                            ) : null}
+                              <span>{row.instructorName || '-'}</span>
+                            </span>
                           </td>
                           <td className="px-3 py-2">
                             <p
