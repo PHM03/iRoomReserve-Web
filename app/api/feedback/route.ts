@@ -6,6 +6,7 @@ import {
   assertAuthenticated,
   assertCanViewBuildingFeedback,
   assertOwnsResource,
+  assertVerifiedAuthentication,
 } from "@/lib/server/route-guards";
 import { feedbackCreateSchema } from "@/lib/server/schemas";
 import {
@@ -51,13 +52,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authContext = await getRequestAuthContext(request);
-    assertAuthenticated(authContext);
+    const authContext = await getRequestAuthContext(request, {
+      allowCompatibilityHeaders: false,
+    });
+    assertVerifiedAuthentication(authContext);
 
     const payload = feedbackCreateSchema.parse(await request.json());
     assertOwnsResource(authContext, payload.userId);
 
-    const id = await createFeedbackRecord(payload);
+    const id = await createFeedbackRecord(payload, authContext.role);
     return NextResponse.json({ id });
   } catch (error) {
     return handleApiError(error);

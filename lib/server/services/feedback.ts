@@ -26,6 +26,7 @@ import {
   type FeedbackAnalyticsPeriod,
 } from "@/lib/feedback/feedback-period";
 import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
+import { assertFeedbackSubmissionEligibility } from "@/lib/server/feedback-eligibility";
 import {
   queueNotificationWrite,
   sendQueuedPushNotifications,
@@ -229,8 +230,10 @@ function mapFeedbackDocument(
   };
 }
 
-export async function createFeedbackRecord(data: FeedbackCreateInput) {
-  const adminIds = await getAssignedManagerIds(data.buildingId);
+export async function createFeedbackRecord(
+  data: FeedbackCreateInput,
+  submitterRole: string | null,
+) {
   const feedbackText = data.message.trim();
   const analytics = analyzeFeedbackText(feedbackText);
   const sentiment = analytics.sentiment;
@@ -238,10 +241,7 @@ export async function createFeedbackRecord(data: FeedbackCreateInput) {
   const createdAt = serverTimestamp();
 
   const feedbackRef = db.collection("feedback").doc();
-  const batch = db.batch();
-  const queuedNotifications: AppNotificationInput[] = [];
-
-  batch.set(feedbackRef, {
+  const feedbackData = {
     ...data,
     categoryRatings: data.categoryRatings,
     category_ratings: data.categoryRatings,
@@ -268,7 +268,34 @@ export async function createFeedbackRecord(data: FeedbackCreateInput) {
     respondedAt: null,
     createdAt,
     created_at: createdAt,
+  };
+
+  const reservationRef = db.collection("reservations").doc(data.reservationId);
+  const duplicateFeedbackQuery = db
+    .collection("feedback")
+    .where("reservationId", "==", data.reservationId)
+    .limit(1);
+
+  await db.runTransaction(async (transaction) => {
+    const reservationSnapshot = await transaction.get(reservationRef);
+    const duplicateFeedbackSnapshot = await transaction.get(duplicateFeedbackQuery);
+    const reservation = reservationSnapshot.exists
+      ? reservationSnapshot.data() ?? null
+      : null;
+
+    assertFeedbackSubmissionEligibility(
+      data,
+      submitterRole,
+      reservation,
+      !duplicateFeedbackSnapshot.empty,
+    );
+
+    transaction.create(feedbackRef, feedbackData);
   });
+
+  const adminIds = await getAssignedManagerIds(data.buildingId);
+  const batch = db.batch();
+  const queuedNotifications: AppNotificationInput[] = [];
 
   adminIds.forEach((adminUid) => {
     queueNotificationWrite(batch, queuedNotifications, {

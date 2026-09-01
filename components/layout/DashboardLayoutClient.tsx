@@ -144,6 +144,7 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
     home: <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />,
     reserve: <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />,
     history: <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />,
+    feedback: <path fillRule="evenodd" d="M2 4a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H8.414l-3.707 3.707A1 1 0 013 17V14.732A2 2 0 012 12V4zm4 3a1 1 0 100 2h8a1 1 0 100-2H6zm0 3a1 1 0 100 2h5a1 1 0 100-2H6z" clipRule="evenodd" />,
     status: <path fillRule="evenodd" d="M4 5a2 2 0 012-2h8a2 2 0 012 2v2h2a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 2a1 1 0 000 2h6a1 1 0 100-2H7zm0 4a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 100 2h10a1 1 0 100-2H7z" clipRule="evenodd" />,
     inbox: <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />,
   };
@@ -176,7 +177,7 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
     },
   ];
 
-  // Faculty mobile bottom nav items (same as student, no feedback)
+  // Faculty mobile bottom nav items
   const facultyMobileNav = [
     {
       label: 'Home',
@@ -195,6 +196,12 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
       href: '/dashboard/reservations',
       active: pathname === '/dashboard/reservations',
       icon: navIcons.history
+    },
+    {
+      label: 'Feedback',
+      href: '/dashboard/feedback',
+      active: pathname === '/dashboard/feedback',
+      icon: navIcons.feedback
     },
     {
       label: 'Schedules',
@@ -296,7 +303,7 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
       {/* Mobile Bottom Nav (Faculty only) */}
       {isFaculty && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 glass-nav border-t border-dark/10 z-40">
-          <div className="grid grid-cols-5 h-16">
+          <div className="grid grid-cols-6 h-16">
             {facultyMobileNav.map((item) => (
               <Link
                 key={item.label}

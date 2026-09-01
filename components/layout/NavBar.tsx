@@ -288,10 +288,10 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
         label: 'Inbox',
         href: '/dashboard/inbox'
       },
-      ...(!isFacultyRole ? [{
+      {
         label: 'Feedback',
         href: '/dashboard/feedback'
-      }] : []),
+      },
       ];
 
   const getNavItemClasses = (isActive: boolean) =>
