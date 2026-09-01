@@ -19,7 +19,7 @@ import {
   DAY_NAMES,
   addSchedule,
   formatTime12h,
-  getRegisteredProfessorEmails,
+  getProfessorEmailEligibility,
   getScheduleDisplayTitle,
   type ScheduleInput,
 } from '@/lib/schedules/schedules';
@@ -234,6 +234,9 @@ export default function AdminClassSchedulesSection({
   const [registeredProfessorEmails, setRegisteredProfessorEmails] = useState<Set<string>>(
     new Set()
   );
+  const [nonFacultyProfessorEmails, setNonFacultyProfessorEmails] = useState<Set<string>>(
+    new Set()
+  );
   const [checkingProfessorRegistration, setCheckingProfessorRegistration] = useState(false);
 
   // Clear the time error whenever the form is hidden (cancelled / saved)
@@ -290,18 +293,25 @@ export default function AdminClassSchedulesSection({
   const normalizedProfessorEmail = schedProfessorEmail.trim().toLowerCase();
   const hasValidProfessorEmail = /^[^\s@]+@sdca\.edu\.ph$/i.test(normalizedProfessorEmail);
   const professorIsRegistered = registeredProfessorEmails.has(normalizedProfessorEmail);
+  const professorHasNonFacultyRole = nonFacultyProfessorEmails.has(normalizedProfessorEmail);
   useEffect(() => {
     if (!showScheduleForm || !hasValidProfessorEmail) return;
 
     let cancelled = false;
     setCheckingProfessorRegistration(true);
     const timeoutId = window.setTimeout(() => {
-      void getRegisteredProfessorEmails([normalizedProfessorEmail])
-        .then((emails) => {
-          if (!cancelled) setRegisteredProfessorEmails(emails);
+      void getProfessorEmailEligibility([normalizedProfessorEmail])
+        .then((eligibility) => {
+          if (!cancelled) {
+            setRegisteredProfessorEmails(new Set(eligibility.registeredEmails));
+            setNonFacultyProfessorEmails(new Set(eligibility.nonFacultyEmails));
+          }
         })
         .catch(() => {
-          if (!cancelled) setRegisteredProfessorEmails(new Set());
+          if (!cancelled) {
+            setRegisteredProfessorEmails(new Set());
+            setNonFacultyProfessorEmails(new Set());
+          }
         })
         .finally(() => {
           if (!cancelled) setCheckingProfessorRegistration(false);
@@ -403,6 +413,9 @@ export default function AdminClassSchedulesSection({
 
         if (!/^[^\s@]+@sdca\.edu\.ph$/i.test(row.professorEmail.trim())) {
           validationErrors.push('Email must use @sdca.edu.ph domain.');
+        }
+        if (nonFacultyProfessorEmails.has(row.professorEmail.trim().toLowerCase())) {
+          validationErrors.push('Professor email is registered to a non-Faculty account.');
         }
 
         const timeError =
@@ -544,6 +557,11 @@ export default function AdminClassSchedulesSection({
       setFormError('Professor email must use the @sdca.edu.ph domain.');
       return;
     }
+    if (professorHasNonFacultyRole) {
+      clearErrors();
+      setFormError('Professor email is registered to a non-Faculty account.');
+      return;
+    }
     const error = validateScheduleTimes(schedStart, schedEnd, campus);
     if (error) {
       clearErrors();
@@ -615,11 +633,14 @@ export default function AdminClassSchedulesSection({
       const result = await parseScheduleExcelFile(file, rooms);
       setParsedImportRows(result.rows);
       setRegisteredProfessorEmails(new Set());
+      setNonFacultyProfessorEmails(new Set());
       setCheckingProfessorRegistration(true);
       try {
-        setRegisteredProfessorEmails(
-          await getRegisteredProfessorEmails(result.rows.map((row) => row.professorEmail))
+        const eligibility = await getProfessorEmailEligibility(
+          result.rows.map((row) => row.professorEmail)
         );
+        setRegisteredProfessorEmails(new Set(eligibility.registeredEmails));
+        setNonFacultyProfessorEmails(new Set(eligibility.nonFacultyEmails));
       } catch (error) {
         console.warn('Unable to check imported professor registrations:', error);
       } finally {
@@ -839,7 +860,7 @@ export default function AdminClassSchedulesSection({
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-black">
-                Instructor
+                Professor
               </label>
               <input
                 value={schedInstructor}
@@ -874,6 +895,11 @@ export default function AdminClassSchedulesSection({
                   className="glass-input w-full px-4 py-2.5 text-sm"
                 />
               </div>
+              {professorHasNonFacultyRole ? (
+                <p className="mt-1 text-xs font-medium text-red-700">
+                  This email belongs to an existing non-Faculty account.
+                </p>
+              ) : null}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-black">

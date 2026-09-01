@@ -240,15 +240,21 @@ export async function addSchedule(
   return payload.id;
 }
 
-export async function getRegisteredProfessorEmails(emails: string[]): Promise<Set<string>> {
-  const normalizedEmails = [...new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
-  if (normalizedEmails.length === 0) return new Set();
+export interface ProfessorEmailEligibility {
+  registeredEmails: string[];
+  nonFacultyEmails: string[];
+}
 
-  const payload = await apiRequest<{ registeredEmails: string[] }>(
+export async function getProfessorEmailEligibility(
+  emails: string[]
+): Promise<ProfessorEmailEligibility> {
+  const normalizedEmails = [...new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
+  if (normalizedEmails.length === 0) return { registeredEmails: [], nonFacultyEmails: [] };
+
+  return apiRequest<ProfessorEmailEligibility>(
     "/api/schedules/professor-registration",
     { body: { emails: normalizedEmails }, method: "POST" }
   );
-  return new Set(payload.registeredEmails.map((email) => email.toLowerCase()));
 }
 
 export async function updateSchedule(

@@ -6,6 +6,7 @@ import { getRequestAuthContext } from "@/lib/server/request-auth";
 import { scheduleUpdateSchema } from "@/lib/server/schemas";
 import {
   assertNoScheduleConflict,
+  assertProfessorEmailsAreEligible,
   deleteScheduleRecord,
   updateScheduleRecord,
 } from "@/lib/server/services/schedules";
@@ -81,6 +82,9 @@ export async function PATCH(
 
     const safePayload = { ...payload };
     delete safePayload.createdBy;
+    if (safePayload.professorEmail) {
+      await assertProfessorEmailsAreEligible([safePayload.professorEmail]);
+    }
 
     // Server-side campus time range validation (only when times are being updated)
     const campus = inferCampusFromBuilding({ id: buildingId });

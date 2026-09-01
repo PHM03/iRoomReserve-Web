@@ -6,6 +6,7 @@ import { getRequestAuthContext } from "@/lib/server/request-auth";
 import { scheduleInputSchema } from "@/lib/server/schemas";
 import {
   assertNoScheduleConflict,
+  assertProfessorEmailsAreEligible,
   createScheduleRecord,
 } from "@/lib/server/services/schedules";
 import { inferCampusFromBuilding } from "@/lib/buildings/campuses";
@@ -145,6 +146,7 @@ export async function POST(request: NextRequest) {
       roomId: payload.roomId,
       buildingId: payload.buildingId,
     });
+    await assertProfessorEmailsAreEligible([payload.professorEmail]);
 
     const safePayload = { ...payload, createdBy: authContext.uid! };
 

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ApiError } from "@/lib/server/api-error";
+import { isFacultyRole } from "@/lib/auth/roles";
 import { db, serverTimestamp } from "@/lib/firebase/firebase-admin";
 import {
   findScheduleConflicts,
@@ -69,6 +70,54 @@ export async function assertNoScheduleConflict(
         (conflictingSchedule) => conflictingSchedule.id
       ),
     });
+  }
+}
+
+export interface ProfessorEmailEligibility {
+  registeredEmails: string[];
+  nonFacultyEmails: string[];
+}
+
+export async function getProfessorEmailEligibility(
+  emails: string[]
+): Promise<ProfessorEmailEligibility> {
+  const uniqueEmails = [
+    ...new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean)),
+  ];
+  const registeredEmails = new Set<string>();
+  const nonFacultyEmails = new Set<string>();
+
+  for (let index = 0; index < uniqueEmails.length; index += 10) {
+    const snapshot = await db
+      .collection("users")
+      .where("email", "in", uniqueEmails.slice(index, index + 10))
+      .get();
+    snapshot.docs.forEach((user) => {
+      const data = user.data() as { email?: unknown; role?: unknown };
+      if (typeof data.email !== "string") return;
+
+      const email = data.email.trim().toLowerCase();
+      registeredEmails.add(email);
+      if (!isFacultyRole(typeof data.role === "string" ? data.role : null)) {
+        nonFacultyEmails.add(email);
+      }
+    });
+  }
+
+  return {
+    registeredEmails: [...registeredEmails],
+    nonFacultyEmails: [...nonFacultyEmails],
+  };
+}
+
+export async function assertProfessorEmailsAreEligible(emails: string[]) {
+  const { nonFacultyEmails } = await getProfessorEmailEligibility(emails);
+  if (nonFacultyEmails.length > 0) {
+    throw new ApiError(
+      400,
+      "invalid_professor_email_role",
+      "Professor email is registered to an account that does not have the Faculty Professor role."
+    );
   }
 }
 
