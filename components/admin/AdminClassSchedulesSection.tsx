@@ -222,6 +222,7 @@ export default function AdminClassSchedulesSection({
   const [clearingRoomSchedules, setClearingRoomSchedules] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const scheduleFormRef = useRef<HTMLDivElement | null>(null);
   const [importFileName, setImportFileName] = useState('');
   const [parsedImportRows, setParsedImportRows] = useState<ExcelScheduleImportCandidate[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
@@ -585,6 +586,19 @@ export default function AdminClassSchedulesSection({
     onSaveSchedule(conflictingSchedules.map((schedule) => schedule.id));
   }
 
+  function handleScheduleEdit(schedule: Schedule) {
+    onEditSchedule(schedule);
+
+    // The timetable sits below the editor. After selecting a class, return the
+    // user to the populated form instead of leaving it out of view.
+    window.requestAnimationFrame(() => {
+      scheduleFormRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }
+
   async function handleConfirmDelete() {
     if (!editingScheduleId) return;
     setDeletingSchedule(true);
@@ -792,7 +806,10 @@ export default function AdminClassSchedulesSection({
       ) : null}
 
       {showScheduleForm && !readOnly ? (
-        <div className="mb-6 space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div
+          ref={scheduleFormRef}
+          className="mb-6 space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+        >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-bold text-black">Room</label>
@@ -1395,7 +1412,7 @@ export default function AdminClassSchedulesSection({
                   <button
                     key={schedule.id}
                     type="button"
-                    onClick={readOnly ? undefined : () => onEditSchedule(schedule)}
+                    onClick={readOnly ? undefined : () => handleScheduleEdit(schedule)}
                     disabled={readOnly}
                     title={`${schedule.courseName ?? schedule.subjectName} | ${schedule.section ?? ''} | ${schedule.instructorName} | ${schedule.courseCode ?? ''} | ${formatTime12h(schedule.startTime)} - ${formatTime12h(schedule.endTime)}`}
                     className={`absolute left-2 right-2 overflow-hidden rounded-md border-l-[3px] px-2 py-1 text-center text-xs transition-all hover:shadow-[0_2px_6px_rgba(0,0,0,0.1)] ${
