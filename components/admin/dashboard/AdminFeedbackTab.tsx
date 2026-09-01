@@ -38,7 +38,7 @@ import {
   type FeedbackAspectKey,
 } from '@/lib/feedback/feedback-analytics';
 import { respondToFeedback, type Feedback } from '@/lib/feedback/feedback';
-import { ALL_USER_ROLES, normalizeRole } from '@/lib/auth/roles';
+import { FEEDBACK_ROLE_OPTIONS, matchesFeedbackRole } from '@/lib/feedback/feedback-role';
 import { USER_GENDER_LABELS, USER_GENDER_VALUES, normalizeUserGender } from '@/lib/auth/profile-types';
 import type { Room } from '@/lib/rooms/rooms';
 import {
@@ -139,7 +139,7 @@ function applyFeedbackFilters(
     const date = getFeedbackCreatedAt(feedback.createdAt);
     if (from && (!date || date < from)) return false;
     if (to && (!date || date > to)) return false;
-    if (roleFilter && normalizeRole(String(feedback.role ?? '')) !== roleFilter) return false;
+    if (!matchesFeedbackRole(feedback, roleFilter)) return false;
     if (genderFilter && normalizeUserGender(feedback.gender) !== genderFilter) return false;
     return true;
   });
@@ -268,7 +268,7 @@ export default function AdminFeedbackTab({
 
   const hasActiveFilters =
     feedbackScope !== 'building' || starFilter !== null || !!dateFrom || !!dateTo || !!roleFilter || !!genderFilter;
-  const anonymizeFilteredFeedback = Boolean(roleFilter || genderFilter);
+  const anonymizeFilteredFeedback = false;
 
   const insightPeriodFeedback = selectedPeriodFeedback;
 
@@ -567,7 +567,7 @@ export default function AdminFeedbackTab({
                 className="glass-input h-8 px-3 text-xs font-bold text-black"
               >
                 <option value="">All roles</option>
-                {ALL_USER_ROLES.filter((role) => role === 'Student' || role === 'Faculty Professor' || role === 'Utility Staff').map((role) => (
+                {FEEDBACK_ROLE_OPTIONS.map((role) => (
                   <option key={role} value={role}>{role}</option>
                 ))}
               </select>

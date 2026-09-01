@@ -27,6 +27,7 @@ import {
 } from "@/lib/feedback/feedback-period";
 import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
 import { assertFeedbackSubmissionEligibility } from "@/lib/server/feedback-eligibility";
+import { normalizeRole } from "@/lib/auth/roles";
 import {
   queueNotificationWrite,
   sendQueuedPushNotifications,
@@ -359,18 +360,22 @@ export async function getFeedbackRecordsByBuilding(
 
   await Promise.all(
     userIds.map(async (userId) => {
-      const profileSnapshot = await db
-        .collection("users")
-        .doc(userId)
-        .collection("private")
-        .doc("profile")
-        .get();
+      const [profileSnapshot, privateProfileSnapshot] = await Promise.all([
+        db.collection("users").doc(userId).get(),
+        db
+          .collection("users")
+          .doc(userId)
+          .collection("private")
+          .doc("profile")
+          .get(),
+      ]);
 
-      if (profileSnapshot.exists) {
+      if (profileSnapshot.exists || privateProfileSnapshot.exists) {
         const profileData = profileSnapshot.data() ?? {};
+        const privateProfileData = privateProfileSnapshot.data() ?? {};
         profileByUserId.set(userId, {
-          gender: profileData.gender,
-          role: profileData.role,
+          gender: privateProfileData.gender,
+          role: normalizeRole(profileData.role) ?? profileData.role,
         });
       }
     })
