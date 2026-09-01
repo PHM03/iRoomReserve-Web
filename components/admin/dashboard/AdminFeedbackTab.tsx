@@ -69,7 +69,7 @@ interface BuildingOption {
   name: string;
 }
 
-type FeedbackDashboardView = 'analysis' | 'overview' | 'reviews';
+type FeedbackDashboardView = 'overview' | 'analysis' | 'reviews';
 type FeedbackReviewView = 'reviews' | 'room-analytics';
 
 interface AdminFeedbackTabProps {
@@ -451,8 +451,8 @@ export default function AdminFeedbackTab({
 
           <div className="glass-card flex flex-wrap gap-2 p-2" role="tablist" aria-label="Feedback dashboard sections">
             {([
-              ['analysis', 'Data Analysis'],
               ['overview', 'Data Overview'],
+              ['analysis', 'Data Analysis'],
               ['reviews', 'Feedback'],
             ] as const).map(([view, label]) => (
               <button
@@ -621,9 +621,90 @@ export default function AdminFeedbackTab({
             </div>
            ) : (
              <div className="space-y-4">
+               {dashboardView === 'analysis' ? (
+                 <>
+                 <ActionableInsightsSection insights={feedbackInsights.actionableInsights} />
+                 <section className="glass-card p-4" aria-labelledby="aspect-analysis-heading">
+                  <div className="mb-4">
+                    <h3 id="aspect-analysis-heading" className="text-base font-bold text-black">
+                      Aspect Analysis
+                    </h3>
+                  </div>
+                  <div className="row-container flex gap-4">
+                  <div className="flex-1 rounded-xl border border-dark/10 bg-white/65 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-700">
+                        Most Mentioned Issues
+                      </p>
+                      <span className="text-[10px] font-bold text-black/45">Negative mentions</span>
+                    </div>
+                    {selectedFeedbackSummary.mostMentionedIssues.length === 0 ? (
+                      <p className="dashboard-empty-state rounded-xl px-3 py-4 text-center text-xs font-bold text-black/50">
+                        No negative aspect mentions yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {selectedFeedbackSummary.mostMentionedIssues.slice(0, 5).map((item, index) => (
+                          <div key={item.aspect}>
+                            <div className="mb-1 flex items-center justify-between text-xs">
+                              <span className="font-bold text-black">
+                                {index + 1}. {item.label}
+                              </span>
+                              <span className="font-bold text-red-700">{item.count}</span>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-red-500/10">
+                              <div
+                                className="h-full rounded-full bg-red-500"
+                                style={{ width: getRankingBarWidth(item.count, maxIssueCount) }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 rounded-xl border border-dark/10 bg-white/65 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-green-700">
+                        Most Praised Aspects
+                      </p>
+                      <span className="text-[10px] font-bold text-black/45">Positive mentions</span>
+                    </div>
+                    {selectedFeedbackSummary.mostPraisedAspects.length === 0 ? (
+                      <p className="dashboard-empty-state rounded-xl px-3 py-4 text-center text-xs font-bold text-black/50">
+                        No positive aspect mentions yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {selectedFeedbackSummary.mostPraisedAspects.slice(0, 5).map((item, index) => (
+                          <div key={item.aspect}>
+                            <div className="mb-1 flex items-center justify-between text-xs">
+                              <span className="font-bold text-black">
+                                {index + 1}. {item.label}
+                              </span>
+                              <span className="font-bold text-green-700">{item.count}</span>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-green-500/10">
+                              <div
+                                className="h-full rounded-full bg-green-500"
+                                style={{ width: getRankingBarWidth(item.count, maxPraiseCount) }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                 </div>
+                 </section>
+                 <DemographicPerformanceSection groups={demographicAnalytics} />
+                 </>
+               ) : null}
+
                {dashboardView === 'overview' ? (
                  <>
-                   <FeedbackOverviewSection
+                 <FeedbackOverviewSection
                      metrics={selectedMetrics}
                      trendLabel={{
                        improving: 'Improving',
@@ -632,16 +713,31 @@ export default function AdminFeedbackTab({
                        not_enough_data: 'Insufficient data',
                      }[feedbackInsights.sentimentDirection]}
                    />
-                   <FacilityPerformanceSection categories={categoryPerformance} />
-                   <DemographicPerformanceSection groups={demographicAnalytics} />
-                 </>
-               ) : null}
-
-               {dashboardView === 'analysis' ? (
-                 <>
-                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <section className="glass-card p-4" aria-labelledby="sentiment-overview-heading">
+                    <div className="mb-4">
+                      <h3 id="sentiment-overview-heading" className="text-base font-bold text-black">
+                        Sentiment Overview
+                      </h3>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                      <div className="rounded-xl border border-dark/10 bg-white/65 p-4">
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/55">
+                          Average VADER Score
+                        </p>
+                        <p className="mt-2 text-3xl font-bold text-black">
+                          {selectedFeedbackSummary.averageCompoundScore.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-black/55">
+                          {formatSentimentLabel(
+                            resolveFeedbackSentimentLabel({
+                              compoundScore: selectedFeedbackSummary.averageCompoundScore,
+                            })
+                          )}{' '}
+                          across {selectedFeedbackSummary.total} reviews
+                        </p>
+                      </div>
                  {sentimentDistribution.map((item) => (
-                  <div key={item.label} className="glass-card p-4">
+                  <div key={item.label} className="rounded-xl border border-dark/10 bg-white/65 p-4">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-black/55">
                         {formatSentimentLabel(item.label)}
@@ -666,99 +762,15 @@ export default function AdminFeedbackTab({
                   </div>
                 ))}
                    </div>
-
-                   <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="glass-card p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/55">
-                    Average VADER
-                  </p>
-                  <p className="mt-2 text-3xl font-bold text-black">
-                    {selectedFeedbackSummary.averageCompoundScore.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-black/55">
-                    {formatSentimentLabel(
-                      resolveFeedbackSentimentLabel({
-                        compoundScore: selectedFeedbackSummary.averageCompoundScore,
-                      })
-                    )}{' '}
-                    across {selectedFeedbackSummary.total} reviews
-                  </p>
-                </div>
-
-                <div className="glass-card p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-700">
-                      Most Mentioned Issues
-                    </p>
-                    <span className="text-[10px] font-bold text-black/45">Negative mentions</span>
-                  </div>
-                  {selectedFeedbackSummary.mostMentionedIssues.length === 0 ? (
-                    <p className="dashboard-empty-state rounded-xl px-3 py-4 text-center text-xs font-bold text-black/50">
-                      No negative aspect mentions yet.
-                    </p>
-                  ) : (
-                    <div className="space-y-2.5">
-                      {selectedFeedbackSummary.mostMentionedIssues.slice(0, 5).map((item, index) => (
-                        <div key={item.aspect}>
-                          <div className="mb-1 flex items-center justify-between text-xs">
-                            <span className="font-bold text-black">
-                              {index + 1}. {item.label}
-                            </span>
-                            <span className="font-bold text-red-700">{item.count}</span>
-                          </div>
-                          <div className="h-1.5 overflow-hidden rounded-full bg-red-500/10">
-                            <div
-                              className="h-full rounded-full bg-red-500"
-                              style={{ width: getRankingBarWidth(item.count, maxIssueCount) }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="glass-card p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-green-700">
-                      Most Praised Aspects
-                    </p>
-                    <span className="text-[10px] font-bold text-black/45">Positive mentions</span>
-                  </div>
-                  {selectedFeedbackSummary.mostPraisedAspects.length === 0 ? (
-                    <p className="dashboard-empty-state rounded-xl px-3 py-4 text-center text-xs font-bold text-black/50">
-                      No positive aspect mentions yet.
-                    </p>
-                  ) : (
-                    <div className="space-y-2.5">
-                      {selectedFeedbackSummary.mostPraisedAspects.slice(0, 5).map((item, index) => (
-                        <div key={item.aspect}>
-                          <div className="mb-1 flex items-center justify-between text-xs">
-                            <span className="font-bold text-black">
-                              {index + 1}. {item.label}
-                            </span>
-                            <span className="font-bold text-green-700">{item.count}</span>
-                          </div>
-                          <div className="h-1.5 overflow-hidden rounded-full bg-green-500/10">
-                            <div
-                              className="h-full rounded-full bg-green-500"
-                              style={{ width: getRankingBarWidth(item.count, maxPraiseCount) }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                   </div>
-
+                  </section>
+                   <FacilityPerformanceSection categories={categoryPerformance} />
                    {(selectedFeedbackSummary.genderBreakdown?.length ?? 0) > 0 && (
                 <div className="glass-card p-4">
                   <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/55">
+                      <h3 className="text-base font-bold text-black">
                         Sentiment by Gender
-                      </p>
+                      </h3>
                       <p className="mt-1 text-xs text-black/55">
                         Building-wide comparison using each author&apos;s current optional profile value.
                       </p>
@@ -842,7 +854,6 @@ export default function AdminFeedbackTab({
                   </div>
                 </div>
                    )}
-                   <ActionableInsightsSection insights={feedbackInsights.actionableInsights} />
                  </>
                ) : null}
              </div>
