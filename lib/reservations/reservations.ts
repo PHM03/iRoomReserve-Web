@@ -408,7 +408,8 @@ export function onReservationsByBuilding(
 
 export function onReservationsByBuildingIds(
   buildingIds: string[],
-  callback: (reservations: Reservation[]) => void
+  callback: (reservations: Reservation[]) => void,
+  onError?: (error: unknown) => void
 ): Unsubscribe {
   const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
   if (uniqueBuildingIds.length === 0) {
@@ -453,6 +454,7 @@ export function onReservationsByBuildingIds(
           "Firestore listener error (reservations by building ids):",
           error
         );
+        onError?.(error);
       }
     )
   );

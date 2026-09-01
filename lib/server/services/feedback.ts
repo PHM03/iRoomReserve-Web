@@ -25,6 +25,10 @@ import {
   filterFeedbackByPeriod,
   type FeedbackAnalyticsPeriod,
 } from "@/lib/feedback/feedback-period";
+import {
+  buildRoomFeedbackSummaries,
+  type RoomFeedbackSummary,
+} from "@/lib/feedback/feedback-summaries";
 import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
 import { assertFeedbackSubmissionEligibility } from "@/lib/server/feedback-eligibility";
 import { normalizeRole } from "@/lib/auth/roles";
@@ -437,6 +441,34 @@ export async function getAverageFeedbackSentiment(roomId: string) {
       return typeof data.compoundScore === "number" ? data.compoundScore : null;
     })
   );
+}
+
+const FEEDBACK_ROOM_QUERY_LIMIT = 30;
+
+export async function getFeedbackRoomSummaries(
+  roomIds: readonly string[],
+): Promise<RoomFeedbackSummary[]> {
+  const uniqueRoomIds = [...new Set(roomIds.map((roomId) => roomId.trim()).filter(Boolean))];
+
+  if (uniqueRoomIds.length === 0) {
+    return [];
+  }
+
+  const roomIdChunks: string[][] = [];
+  for (let index = 0; index < uniqueRoomIds.length; index += FEEDBACK_ROOM_QUERY_LIMIT) {
+    roomIdChunks.push(uniqueRoomIds.slice(index, index + FEEDBACK_ROOM_QUERY_LIMIT));
+  }
+
+  const snapshots = await Promise.all(
+    roomIdChunks.map((roomIdChunk) =>
+      db.collection("feedback").where("roomId", "in", roomIdChunk).get(),
+    ),
+  );
+  const feedback = snapshots.flatMap((snapshot) =>
+    snapshot.docs.map(mapFeedbackDocument),
+  );
+
+  return buildRoomFeedbackSummaries(uniqueRoomIds, feedback);
 }
 
 export async function respondToFeedbackRecord(feedbackId: string, response: string) {

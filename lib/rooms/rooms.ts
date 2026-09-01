@@ -222,7 +222,8 @@ export function onRoomsByBuilding(
 
 export function onRoomsByBuildingIds(
   buildingIds: string[],
-  callback: (rooms: Room[]) => void
+  callback: (rooms: Room[]) => void,
+  onError?: (error: unknown) => void
 ): Unsubscribe {
   const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
   if (uniqueBuildingIds.length === 0) {
@@ -262,6 +263,7 @@ export function onRoomsByBuildingIds(
           return;
         }
         console.warn("Firestore listener error (rooms by building ids):", error);
+        onError?.(error);
       }
     )
   );

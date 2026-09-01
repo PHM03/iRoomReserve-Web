@@ -4,7 +4,11 @@ import {
   ASSISTANT_ROOM_TYPE_OPTIONS,
   checkAssistantRoomAvailability,
   findAlternativeAssistantRooms,
+  findAssistantRoomMatchesForDatePreference,
   findAssistantRoomMatches,
+  getAssistantFutureWeekdayDates,
+  getAssistantBuildingIds,
+  getAssistantListenerFailureState,
   suggestAssistantTimeslotsForRoom,
   toAssistantReservationRecords,
   toAssistantRoomRecord,
@@ -94,6 +98,313 @@ describe('roomAssistantRealtime', () => {
     expect(result.conflictingReservations).toHaveLength(1);
   });
 
+  it('excludes rooms that do not match the requested room type', () => {
+    const rooms = [
+      toAssistantRoomRecord(createRoom({ id: 'conference-101' })),
+      toAssistantRoomRecord(createRoom({ id: 'glass-101', roomType: 'Glass Room' })),
+    ];
+
+    const results = findAssistantRoomMatches(rooms, [], {}, {
+      preferredType: 'conference-room',
+      requiredFeatures: [],
+    });
+
+    expect(results.map((room) => room.roomId)).toEqual(['conference-101']);
+  });
+
+  it('excludes rooms below the requested minimum capacity', () => {
+    const rooms = [
+      toAssistantRoomRecord(createRoom({ id: 'small-room', capacity: 8 })),
+      toAssistantRoomRecord(createRoom({ id: 'large-room', capacity: 20 })),
+    ];
+
+    const results = findAssistantRoomMatches(rooms, [], {}, {
+      minCapacity: 12,
+      requiredFeatures: [],
+    });
+
+    expect(results.map((room) => room.roomId)).toEqual(['large-room']);
+  });
+
+  it('resolves a specific future date before matching rooms', () => {
+    const room = toAssistantRoomRecord(createRoom({ id: 'future-room' }));
+    const result = findAssistantRoomMatchesForDatePreference(
+      [room],
+      [],
+      [],
+      {
+        date: '2026-06-10',
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      { kind: 'specific-date-time' },
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+
+    expect(result.status).toBe('resolved');
+    expect(result.resolvedTimeslot).toMatchObject({ date: '2026-06-10' });
+    expect(result.recommendations.map((roomResult) => roomResult.roomId)).toEqual(['future-room']);
+  });
+
+  it('rejects a past specific date', () => {
+    const result = findAssistantRoomMatchesForDatePreference(
+      [toAssistantRoomRecord(createRoom())],
+      [],
+      [],
+      {
+        date: '2026-05-31',
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      { kind: 'specific-date-time' },
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+
+    expect(result.status).toBe('past-date');
+    expect(result.recommendations).toHaveLength(0);
+  });
+
+  it('rejects a past time on the current local date', () => {
+    const result = findAssistantRoomMatchesForDatePreference(
+      [toAssistantRoomRecord(createRoom())],
+      [],
+      [],
+      {
+        date: '2026-06-05',
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      { kind: 'specific-date-time' },
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-05T12:00:00') }
+    );
+
+    expect(result.status).toBe('past-date');
+    expect(result.recommendations).toHaveLength(0);
+  });
+
+  it('resolves Friday preferences only to future Fridays', () => {
+    const dates = getAssistantFutureWeekdayDates(5, new Date('2026-06-01T08:00:00'));
+
+    expect(dates).toEqual(['2026-06-05', '2026-06-12']);
+    expect(dates.every((date) => new Date(`${date}T00:00:00`).getDay() === 5)).toBe(true);
+  });
+
+  it('resolves Saturday preferences only to future Saturdays', () => {
+    const dates = getAssistantFutureWeekdayDates(6, new Date('2026-06-01T08:00:00'));
+
+    expect(dates).toEqual(['2026-06-06', '2026-06-13']);
+    expect(dates.every((date) => new Date(`${date}T00:00:00`).getDay() === 6)).toBe(true);
+  });
+
+  it.each([
+    [{ dayOfWeek: 5, kind: 'weekday' }, '2026-06-05'],
+    [{ dayOfWeek: 6, kind: 'weekday' }, '2026-06-06'],
+  ] as const)('resolves a weekday preference with a concrete time', (datePreference, expectedDate) => {
+    const result = findAssistantRoomMatchesForDatePreference(
+      [toAssistantRoomRecord(createRoom())],
+      [],
+      [],
+      {
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      datePreference,
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+
+    expect(result.status).toBe('resolved');
+    expect(result.resolvedTimeslot?.date).toBe(expectedDate);
+  });
+
+  it('requires a concrete time for a weekday preference', () => {
+    const result = findAssistantRoomMatchesForDatePreference(
+      [toAssistantRoomRecord(createRoom())],
+      [],
+      [],
+      {},
+      { dayOfWeek: 5, kind: 'weekday' },
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+
+    expect(result.status).toBe('missing-time');
+    expect(result.recommendations).toHaveLength(0);
+  });
+
+  it('skips a Friday with an approved reservation conflict', () => {
+    const result = findAssistantRoomMatchesForDatePreference(
+      [toAssistantRoomRecord(createRoom({ id: 'weekday-room' }))],
+      [toAssistantReservationRecords([createReservation({
+        roomId: 'weekday-room',
+        date: '2026-06-05',
+        startTime: '10:00',
+        endTime: '11:00',
+      })])[0]],
+      [],
+      {
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      { dayOfWeek: 5, kind: 'weekday' },
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+
+    expect(result.status).toBe('resolved');
+    expect(result.resolvedTimeslot?.date).toBe('2026-06-12');
+  });
+
+  it('skips a Friday with a class schedule conflict', () => {
+    const result = findAssistantRoomMatchesForDatePreference(
+      [toAssistantRoomRecord(createRoom({ id: 'weekday-room' }))],
+      [],
+      [{
+        buildingId: 'gd1',
+        dayOfWeek: 5,
+        endTime: '11:00',
+        roomId: 'weekday-room',
+        startTime: '10:00',
+      }],
+      {
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      { dayOfWeek: 5, kind: 'weekday' },
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+
+    expect(result.status).toBe('no-match');
+    expect(result.resolvedTimeslot).toBeNull();
+  });
+
+  it('applies room requirements after resolving the preferred date', () => {
+    const rooms = [
+      toAssistantRoomRecord(createRoom({
+        id: 'wrong-type',
+        roomType: 'Glass Room',
+      })),
+      toAssistantRoomRecord(createRoom({
+        id: 'too-small',
+        capacity: 8,
+      })),
+      toAssistantRoomRecord(createRoom({
+        id: 'missing-facility',
+        acStatus: 'No Air Conditioning',
+      })),
+      toAssistantRoomRecord(createRoom({ id: 'matches-all' })),
+    ];
+    const result = findAssistantRoomMatchesForDatePreference(
+      rooms,
+      [],
+      [],
+      {
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      { dayOfWeek: 5, kind: 'weekday' },
+      {
+        minCapacity: 12,
+        preferredType: 'conference-room',
+        requiredFeatures: ['AC'],
+      },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+
+    expect(result.recommendations.map((room) => room.roomId)).toEqual(['matches-all']);
+  });
+
+  it('returns a concrete selection that can update the existing reservation form', () => {
+    const result = findAssistantRoomMatchesForDatePreference(
+      [toAssistantRoomRecord(createRoom())],
+      [],
+      [],
+      {
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      { dayOfWeek: 5, kind: 'weekday' },
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+    const formUpdates: Required<{ date: string; endTime: string; startTime: string }>[] = [];
+
+    if (result.resolvedTimeslot) {
+      formUpdates.push(result.resolvedTimeslot);
+    }
+
+    expect(formUpdates).toEqual([{
+      date: '2026-06-05',
+      endTime: '11:00',
+      startTime: '10:00',
+    }]);
+  });
+
+  it('keeps weekday resolution separate from recurring reservation state', () => {
+    const recurringState = { isRecurring: false, selectedDays: [] as number[] };
+    const result = findAssistantRoomMatchesForDatePreference(
+      [toAssistantRoomRecord(createRoom())],
+      [],
+      [],
+      {
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      { dayOfWeek: 6, kind: 'weekday' },
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+
+    expect(result.status).toBe('resolved');
+    expect(recurringState).toEqual({ isRecurring: false, selectedDays: [] });
+  });
+
+  it('excludes rooms that do not provide every requested facility', () => {
+    const rooms = [
+      toAssistantRoomRecord(createRoom({ id: 'with-ac', acStatus: 'Working' })),
+      toAssistantRoomRecord(createRoom({ id: 'without-ac', acStatus: 'No Air Conditioning' })),
+    ];
+
+    const results = findAssistantRoomMatches(rooms, [], {}, {
+      requiredFeatures: ['AC'],
+    });
+
+    expect(results.map((room) => room.roomId)).toEqual(['with-ac']);
+  });
+
+  it('treats class schedules as availability conflicts', () => {
+    const room = toAssistantRoomRecord(createRoom({ id: 'conference-101' }));
+    const timeslot = {
+      date: '2026-06-03',
+      endTime: '11:00',
+      startTime: '10:00',
+    };
+    const schedules = [{
+      buildingId: 'gd1',
+      dayOfWeek: 3,
+      endTime: '11:30',
+      roomId: 'conference-101',
+      startTime: '09:30',
+    }];
+    const result = checkAssistantRoomAvailability(
+      room,
+      timeslot,
+      [],
+      new Date('2026-06-01T08:00:00'),
+      schedules
+    );
+
+    expect(result.available).toBe(false);
+    expect(result.conflictingSchedules).toHaveLength(1);
+    expect(findAssistantRoomMatches([room], [], timeslot, {
+      requiredFeatures: [],
+    }, schedules)).toHaveLength(0);
+  });
+
   it('suggests another date or time for the same room when the requested slot is taken', () => {
     const selectedRoom = toAssistantRoomRecord(
       createRoom({
@@ -119,7 +430,8 @@ describe('roomAssistantRealtime', () => {
       {
         endMinutes: 21 * 60,
         startMinutes: 7 * 60,
-      }
+      },
+      { now: new Date('2026-06-03T08:00:00') }
     );
 
     expect(suggestions.length).toBeGreaterThan(0);
@@ -179,7 +491,7 @@ describe('roomAssistantRealtime', () => {
       preferences
     );
 
-    expect(results).toHaveLength(2);
+    expect(results).toHaveLength(1);
     expect(results[0].roomId).toBe('conference-102');
     expect(results[0].reason).toContain('preferred conference room');
   });
@@ -211,6 +523,68 @@ describe('roomAssistantRealtime', () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].roomId).toBe('conference-101');
+  });
+
+  it('searches every building for a campus while preserving building scope', () => {
+    expect(getAssistantBuildingIds(null, 'main')).toEqual(['gd1', 'gd2', 'gd3']);
+    expect(getAssistantBuildingIds('gd2', 'main')).toEqual(['gd2']);
+  });
+
+  it('does not infer facilities from missing status values', () => {
+    const room = toAssistantRoomRecord(
+      createRoom({
+        acStatus: '',
+        tvProjectorStatus: '',
+        whiteboardStatus: undefined,
+      })
+    );
+
+    expect(room.features).not.toEqual(expect.arrayContaining(['AC', 'Projector', 'Whiteboard']));
+    expect(findAssistantRoomMatches([room], [], {}, {
+      requiredFeatures: ['AC'],
+    })).toHaveLength(0);
+  });
+
+  it('keeps unknown room types from satisfying a requested type', () => {
+    const room = toAssistantRoomRecord(createRoom({ roomType: 'Unclassified Room' }));
+
+    expect(room.type).toBe('unknown');
+    expect(findAssistantRoomMatches([room], [], {}, {
+      preferredType: 'class-room',
+      requiredFeatures: [],
+    })).toHaveLength(0);
+  });
+
+  it('does not return past alternative times', () => {
+    const room = toAssistantRoomRecord(createRoom({ id: 'conference-101' }));
+    const suggestions = suggestAssistantTimeslotsForRoom(
+      room,
+      [],
+      {
+        date: '2026-06-03',
+        endTime: '14:00',
+        startTime: '13:00',
+      },
+      {
+        endMinutes: 21 * 60,
+        startMinutes: 7 * 60,
+      },
+      { now: new Date('2026-06-03T12:00:00') }
+    );
+
+    expect(
+      suggestions.every(
+        (suggestion) =>
+          suggestion.date !== '2026-06-03' || (suggestion.startTime ?? '') > '12:00'
+      )
+    ).toBe(true);
+  });
+
+  it('clears loading when an assistant listener fails', () => {
+    expect(getAssistantListenerFailureState('reservations')).toEqual({
+      error: 'Unable to load live reservations data. Refresh the page and try again.',
+      loading: false,
+    });
   });
 
   it('maps legacy Firestore room field aliases before scoring recommendations', () => {

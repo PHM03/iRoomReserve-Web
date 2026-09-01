@@ -1,6 +1,11 @@
 import type { Reservation } from '../reservations/reservations';
 import type { Room } from '../rooms/rooms';
+import type { Schedule } from '../schedules/schedules';
 import { formatDate, formatTimeRange } from '../utils/dateTime';
+import {
+  getManagedBuildingIdsForCampus,
+} from '../buildings/campusAssignments';
+import type { ReservationCampus } from '../buildings/campuses';
 
 export type AssistantRoomTypeValue =
   | 'conference-room'
@@ -8,12 +13,32 @@ export type AssistantRoomTypeValue =
   | 'class-room'
   | 'specialized-room'
   | 'gymnasium'
-  | 'open-area';
+  | 'open-area'
+  | 'unknown';
 
 export interface AssistantTimeslot {
   date?: string;
   endTime?: string;
   startTime?: string;
+}
+
+export type AssistantDatePreference =
+  | { kind: 'selected-date-time' }
+  | { kind: 'specific-date-time' }
+  | { dayOfWeek: number; kind: 'weekday' };
+
+export type AssistantDatePreferenceResultStatus =
+  | 'invalid-time'
+  | 'missing-date'
+  | 'missing-time'
+  | 'no-match'
+  | 'past-date'
+  | 'resolved';
+
+export interface AssistantDatePreferenceResult {
+  recommendations: AssistantRecommendation[];
+  resolvedTimeslot: Required<AssistantTimeslot> | null;
+  status: AssistantDatePreferenceResultStatus;
 }
 
 export interface AssistantRoomFeatureRoom extends Room {
@@ -45,6 +70,11 @@ export interface AssistantReservationRecord {
   status: Reservation['status'];
 }
 
+export type AssistantScheduleRecord = Pick<
+  Schedule,
+  'buildingId' | 'dayOfWeek' | 'endTime' | 'roomId' | 'startTime'
+>;
+
 export interface AssistantPreferences {
   minCapacity?: number;
   preferredBuilding?: string;
@@ -56,6 +86,7 @@ export interface AssistantAvailabilityResult {
   availabilityLabel: 'available' | 'taken' | 'unavailable';
   available: boolean;
   conflictingReservations: AssistantReservationRecord[];
+  conflictingSchedules: AssistantScheduleRecord[];
   roomStatus: Room['status'];
 }
 
@@ -101,6 +132,7 @@ export const ASSISTANT_ROOM_TYPE_OPTIONS: Array<{
 export const ASSISTANT_FEATURE_OPTIONS = ['AC', 'Projector', 'Whiteboard'];
 export const ASSISTANT_ROOMS_COLLECTION_PATH = 'rooms';
 export const ASSISTANT_RESERVATIONS_COLLECTION_PATH = 'reservations';
+export const ASSISTANT_DATE_SEARCH_DAYS = 14;
 
 const BLOCKING_RESERVATION_STATUSES: Reservation['status'][] = ['approved'];
 const SCORE_LIMIT = 3;
@@ -330,6 +362,24 @@ export function logAssistantAuthState(context: {
   logAssistantDebug('Auth state', context);
 }
 
+export function getAssistantListenerFailureState(source: 'rooms' | 'reservations' | 'schedules') {
+  return {
+    error: `Unable to load live ${source} data. Refresh the page and try again.`,
+    loading: false,
+  };
+}
+
+export function getAssistantBuildingIds(
+  activeBuildingId?: string | null,
+  activeCampus?: ReservationCampus | null
+) {
+  if (activeBuildingId) {
+    return [activeBuildingId];
+  }
+
+  return activeCampus ? getManagedBuildingIdsForCampus(activeCampus) : [];
+}
+
 function normalizeText(value?: string | null) {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
@@ -349,15 +399,11 @@ function capitalizeWords(value: string) {
   return value.replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-function hasNegativeFeatureStatus(value?: string | null) {
+function hasPositiveFeatureStatus(value?: string | null) {
   const normalizedValue = normalizeText(value);
 
-  return (
-    normalizedValue.includes('no ') ||
-    normalizedValue.startsWith('no') ||
-    normalizedValue.includes('none') ||
-    normalizedValue.includes('not available') ||
-    normalizedValue.includes('unavailable')
+  return ['available', 'functional', 'operational', 'true', 'working', 'yes'].includes(
+    normalizedValue
   );
 }
 
@@ -438,6 +484,48 @@ function isCurrentTimeslot(
   );
 }
 
+function isPastTimeslot(timeslot: Required<AssistantTimeslot>, now: Date = new Date()) {
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+
+  return (
+    timeslot.date < today ||
+    (timeslot.date === today && timeStringToMinutes(timeslot.startTime) <= (now.getHours() * 60) + now.getMinutes())
+  );
+}
+
+export function isAssistantTimeslotInPast(
+  timeslot: Required<AssistantTimeslot>,
+  now: Date = new Date()
+) {
+  return isPastTimeslot(timeslot, now);
+}
+
+function toAssistantLocalIsoDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
+}
+
+export function getAssistantFutureWeekdayDates(
+  dayOfWeek: number,
+  now: Date = new Date(),
+  daysToSearch = ASSISTANT_DATE_SEARCH_DAYS
+) {
+  const dates: string[] = [];
+
+  for (let dayOffset = 0; dayOffset <= daysToSearch; dayOffset += 1) {
+    const candidateDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
+
+    if (candidateDate.getDay() === dayOfWeek) {
+      dates.push(toAssistantLocalIsoDate(candidateDate));
+    }
+  }
+
+  return dates;
+}
+
 export function getAssistantRoomTypeValue(roomType?: string | null): AssistantRoomTypeValue {
   const normalizedValue = normalizeText(roomType);
 
@@ -473,7 +561,7 @@ export function getAssistantRoomTypeValue(roomType?: string | null): AssistantRo
     return 'open-area';
   }
 
-  return 'class-room';
+  return 'unknown';
 }
 
 export function getAssistantRoomTypeLabel(type: AssistantRoomTypeValue | string) {
@@ -499,20 +587,19 @@ export function getAssistantRoomFeatures(room: AssistantRoomFeatureRoom) {
   const whiteboardStatus =
     resolvedRoomFields.whiteboardStatus.value ?? room.whiteboardStatus;
 
-  if (!hasNegativeFeatureStatus(acStatus) && !normalizedDerivedFeatures.has('ac')) {
+  if (hasPositiveFeatureStatus(acStatus) && !normalizedDerivedFeatures.has('ac')) {
     features.push('AC');
   }
 
   if (
-    !hasNegativeFeatureStatus(tvProjectorStatus) &&
+    hasPositiveFeatureStatus(tvProjectorStatus) &&
     !normalizedDerivedFeatures.has('projector')
   ) {
     features.push('Projector');
   }
 
   if (
-    typeof whiteboardStatus === 'string' &&
-    !hasNegativeFeatureStatus(whiteboardStatus) &&
+    hasPositiveFeatureStatus(whiteboardStatus) &&
     !normalizedDerivedFeatures.has('whiteboard')
   ) {
     features.push('Whiteboard');
@@ -632,13 +719,15 @@ export function checkAssistantRoomAvailability(
   room: AssistantRoomRecord,
   timeslot: AssistantTimeslot,
   reservations: readonly AssistantReservationRecord[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  schedules: readonly AssistantScheduleRecord[] = []
 ): AssistantAvailabilityResult {
   if (!isCompleteTimeslot(timeslot)) {
     return {
       availabilityLabel: 'unavailable',
       available: false,
       conflictingReservations: [],
+      conflictingSchedules: [],
       roomStatus: room.status,
     };
   }
@@ -651,12 +740,20 @@ export function checkAssistantRoomAvailability(
       reservation.date === requiredTimeslot.date &&
       slotOverlaps(requiredTimeslot, reservation)
   );
+  const requestedDayOfWeek = new Date(`${requiredTimeslot.date}T00:00:00`).getDay();
+  const conflictingSchedules = schedules.filter(
+    (schedule) =>
+      schedule.roomId === room.roomId &&
+      schedule.dayOfWeek === requestedDayOfWeek &&
+      slotOverlaps(requiredTimeslot, schedule)
+  );
 
   if (room.status === 'Unavailable') {
     return {
       availabilityLabel: 'unavailable',
       available: false,
       conflictingReservations,
+      conflictingSchedules,
       roomStatus: room.status,
     };
   }
@@ -669,6 +766,7 @@ export function checkAssistantRoomAvailability(
       availabilityLabel: 'taken',
       available: false,
       conflictingReservations,
+      conflictingSchedules,
       roomStatus: room.status,
     };
   }
@@ -678,6 +776,17 @@ export function checkAssistantRoomAvailability(
       availabilityLabel: 'taken',
       available: false,
       conflictingReservations,
+      conflictingSchedules,
+      roomStatus: room.status,
+    };
+  }
+
+  if (conflictingSchedules.length > 0) {
+    return {
+      availabilityLabel: 'taken',
+      available: false,
+      conflictingReservations,
+      conflictingSchedules,
       roomStatus: room.status,
     };
   }
@@ -686,6 +795,7 @@ export function checkAssistantRoomAvailability(
     availabilityLabel: 'available',
     available: true,
     conflictingReservations: [],
+    conflictingSchedules: [],
     roomStatus: room.status,
   };
 }
@@ -718,6 +828,25 @@ function scoreRoomAgainstPreferences(
   score += getMatchingFeatures(preferences.requiredFeatures, room.features).length;
 
   return score;
+}
+
+function roomMatchesPreferences(
+  room: AssistantRoomRecord,
+  preferences: AssistantPreferences
+) {
+  const typeMatch =
+    !preferences.preferredType || room.type === preferences.preferredType;
+  const capacityMatch =
+    typeof preferences.minCapacity !== 'number' ||
+    !Number.isFinite(preferences.minCapacity) ||
+    room.capacity >= preferences.minCapacity;
+  const featureMatches = getMatchingFeatures(preferences.requiredFeatures, room.features);
+
+  return (
+    typeMatch &&
+    capacityMatch &&
+    featureMatches.length >= normalizeFeatures(preferences.requiredFeatures).length
+  );
 }
 
 function scoreRoomAgainstReference(
@@ -818,20 +947,22 @@ export function getFallbackPreferencesFromRoom(
 function isRecommendationAvailable(
   room: AssistantRoomRecord,
   reservations: readonly AssistantReservationRecord[],
-  timeslot: AssistantTimeslot
+  timeslot: AssistantTimeslot,
+  schedules: readonly AssistantScheduleRecord[] = []
 ) {
   if (!isCompleteTimeslot(timeslot)) {
     return room.status === 'Available';
   }
 
-  return checkAssistantRoomAvailability(room, timeslot, reservations).available;
+  return checkAssistantRoomAvailability(room, timeslot, reservations, new Date(), schedules).available;
 }
 
 export function findAssistantRoomMatches(
   rooms: readonly AssistantRoomRecord[],
   reservations: readonly AssistantReservationRecord[],
   timeslot: AssistantTimeslot,
-  preferences: AssistantPreferences
+  preferences: AssistantPreferences,
+  schedules: readonly AssistantScheduleRecord[] = []
 ) {
   const normalizedPreferences: AssistantPreferences = {
     minCapacity: preferences.minCapacity,
@@ -842,7 +973,7 @@ export function findAssistantRoomMatches(
 
   const roomEvaluations = rooms.map((room) => {
     const availability = isCompleteTimeslot(timeslot)
-      ? checkAssistantRoomAvailability(room, timeslot, reservations)
+      ? checkAssistantRoomAvailability(room, timeslot, reservations, new Date(), schedules)
       : null;
     const available = availability ? availability.available : room.status === 'Available';
     const featureMatches = getMatchingFeatures(
@@ -887,7 +1018,11 @@ export function findAssistantRoomMatches(
   });
 
   const recommendations = roomEvaluations
-    .filter((roomEvaluation) => roomEvaluation.evaluation.available)
+    .filter(
+      (roomEvaluation) =>
+        roomEvaluation.evaluation.available &&
+        roomMatchesPreferences(roomEvaluation.recommendation, normalizedPreferences)
+    )
     .map((roomEvaluation) => roomEvaluation.recommendation)
     .sort(sortRecommendations)
     .slice(0, SCORE_LIMIT);
@@ -916,12 +1051,120 @@ export function findAssistantRoomMatches(
   return recommendations;
 }
 
+function hasValidAssistantTimeRange(timeslot: AssistantTimeslot) {
+  if (!timeslot.startTime || !timeslot.endTime) {
+    return false;
+  }
+
+  const startMinutes = timeStringToMinutes(timeslot.startTime);
+  const endMinutes = timeStringToMinutes(timeslot.endTime);
+
+  return Number.isFinite(startMinutes) && Number.isFinite(endMinutes) && endMinutes > startMinutes;
+}
+
+function getDatePreferenceCandidateDates(
+  datePreference: AssistantDatePreference,
+  timeslot: AssistantTimeslot,
+  now: Date,
+  daysToSearch: number
+) {
+  if (datePreference.kind === 'weekday') {
+    return getAssistantFutureWeekdayDates(datePreference.dayOfWeek, now, daysToSearch);
+  }
+
+  return timeslot.date ? [timeslot.date] : [];
+}
+
+export function findAssistantRoomMatchesForDatePreference(
+  rooms: readonly AssistantRoomRecord[],
+  reservations: readonly AssistantReservationRecord[],
+  schedules: readonly AssistantScheduleRecord[],
+  timeslot: AssistantTimeslot,
+  datePreference: AssistantDatePreference,
+  preferences: AssistantPreferences,
+  options: {
+    daysToSearch?: number;
+    now?: Date;
+  } = {}
+): AssistantDatePreferenceResult {
+  if (!timeslot.startTime || !timeslot.endTime) {
+    return {
+      recommendations: [],
+      resolvedTimeslot: null,
+      status: 'missing-time',
+    };
+  }
+
+  if (!hasValidAssistantTimeRange(timeslot)) {
+    return {
+      recommendations: [],
+      resolvedTimeslot: null,
+      status: 'invalid-time',
+    };
+  }
+
+  const now = options.now ?? new Date();
+  const daysToSearch = options.daysToSearch ?? ASSISTANT_DATE_SEARCH_DAYS;
+  const candidateDates = getDatePreferenceCandidateDates(
+    datePreference,
+    timeslot,
+    now,
+    daysToSearch
+  );
+
+  if (candidateDates.length === 0) {
+    return {
+      recommendations: [],
+      resolvedTimeslot: null,
+      status: 'missing-date',
+    };
+  }
+
+  let skippedPastDate = false;
+
+  for (const date of candidateDates) {
+    const candidateTimeslot = {
+      date,
+      endTime: timeslot.endTime,
+      startTime: timeslot.startTime,
+    } as Required<AssistantTimeslot>;
+
+    if (isPastTimeslot(candidateTimeslot, now)) {
+      skippedPastDate = true;
+      continue;
+    }
+
+    const recommendations = findAssistantRoomMatches(
+      rooms,
+      reservations,
+      candidateTimeslot,
+      preferences,
+      schedules
+    );
+
+    if (recommendations.length > 0) {
+      return {
+        recommendations,
+        resolvedTimeslot: candidateTimeslot,
+        status: 'resolved',
+      };
+    }
+  }
+
+  return {
+    recommendations: [],
+    resolvedTimeslot: null,
+    status: skippedPastDate && datePreference.kind !== 'weekday' ? 'past-date' : 'no-match',
+  };
+}
+
 export function findAlternativeAssistantRooms(
   rooms: readonly AssistantRoomRecord[],
   reservations: readonly AssistantReservationRecord[],
   selectedRoom: AssistantRoomRecord,
   timeslot: AssistantTimeslot,
-  preferences?: AssistantPreferences | null
+  preferences?: AssistantPreferences | null,
+  schedules: readonly AssistantScheduleRecord[] = []
 ) {
   const resolvedPreferences = (
     preferences?.preferredType ||
@@ -939,7 +1182,8 @@ export function findAlternativeAssistantRooms(
 
   return rooms
     .filter((room) => room.roomId !== selectedRoom.roomId)
-    .filter((room) => isRecommendationAvailable(room, reservations, timeslot))
+    .filter((room) => isRecommendationAvailable(room, reservations, timeslot, schedules))
+    .filter((room) => !resolvedPreferences || roomMatchesPreferences(room, resolvedPreferences))
     .map((room) => {
       const score = resolvedPreferences
         ? scoreRoomAgainstPreferences(room, resolvedPreferences)
@@ -966,7 +1210,9 @@ export function suggestAssistantTimeslotsForRoom(
   options: {
     daysToSearch?: number;
     maxSuggestions?: number;
-  } = {}
+    now?: Date;
+  } = {},
+  schedules: readonly AssistantScheduleRecord[] = []
 ) {
   if (!isCompleteTimeslot(requestedTimeslot) || room.status === 'Unavailable') {
     return [];
@@ -981,7 +1227,8 @@ export function suggestAssistantTimeslotsForRoom(
   }
 
   const maxSuggestions = options.maxSuggestions ?? 5;
-  const daysToSearch = options.daysToSearch ?? 14;
+  const daysToSearch = options.daysToSearch ?? ASSISTANT_DATE_SEARCH_DAYS;
+  const now = options.now ?? new Date();
   const requestedStartMinutes = timeStringToMinutes(resolvedTimeslot.startTime);
   const suggestions: AssistantTimeslotSuggestion[] = [];
   const roomReservations = reservations.filter(
@@ -1028,6 +1275,16 @@ export function suggestAssistantTimeslotsForRoom(
         continue;
       }
 
+      if (
+        isPastTimeslot({
+          date: nextDate,
+          endTime,
+          startTime,
+        }, now)
+      ) {
+        continue;
+      }
+
       const isBlocked = roomReservations.some(
         (reservation) =>
           reservation.date === nextDate &&
@@ -1040,7 +1297,21 @@ export function suggestAssistantTimeslotsForRoom(
           )
       );
 
-      if (isBlocked) {
+      const candidateDayOfWeek = new Date(`${nextDate}T00:00:00`).getDay();
+      const hasScheduleConflict = schedules.some(
+        (schedule) =>
+          schedule.roomId === room.roomId &&
+          schedule.dayOfWeek === candidateDayOfWeek &&
+          slotOverlaps(
+            {
+              endTime,
+              startTime,
+            },
+            schedule
+          )
+      );
+
+      if (isBlocked || hasScheduleConflict) {
         continue;
       }
 

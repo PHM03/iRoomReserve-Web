@@ -36,6 +36,7 @@ import {
   type DetectedFeedbackAspects,
   type FeedbackCategoryRatings,
 } from "@/lib/feedback/feedback-analytics";
+import type { RoomFeedbackSummary } from "@/lib/feedback/feedback-summaries";
 
 export interface Feedback {
   id: string;
@@ -422,4 +423,28 @@ export async function getAverageSentiment(roomId: string): Promise<number> {
   });
 
   return payload.average;
+}
+
+export async function getRoomFeedbackSummaries(
+  roomIds: readonly string[],
+): Promise<Readonly<Record<string, RoomFeedbackSummary>>> {
+  const normalizedRoomIds = [
+    ...new Set(roomIds.map((roomId) => roomId.trim()).filter(Boolean)),
+  ];
+
+  if (normalizedRoomIds.length === 0) {
+    return {};
+  }
+
+  const payload = await apiRequest<{ summaries: RoomFeedbackSummary[] }>(
+    "/api/feedback/room-summaries",
+    {
+      body: { roomIds: normalizedRoomIds },
+      method: "POST",
+    },
+  );
+
+  return Object.fromEntries(
+    payload.summaries.map((summary) => [summary.roomId, summary]),
+  );
 }

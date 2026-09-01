@@ -126,7 +126,8 @@ function mapScheduleDocument(scheduleDoc: { id: string; data: () => DocumentData
 function subscribeToScheduleQueries(
   queries: Query<DocumentData>[],
   activeContext: ScheduleContext | null,
-  callback: (schedules: Schedule[]) => void
+  callback: (schedules: Schedule[]) => void,
+  onError?: (error: unknown) => void
 ): Unsubscribe {
   if (queries.length === 0) {
     return () => {};
@@ -156,6 +157,7 @@ function subscribeToScheduleQueries(
       (error) => {
         if (!listener.isCancelled()) {
           console.warn("Firestore listener error (schedule authorization query):", error);
+          onError?.(error);
         }
       }
     )
@@ -379,7 +381,8 @@ export async function getSchedulesByRoomId(roomId: string): Promise<Schedule[]> 
 
 export function onSchedulesByBuildingIds(
   buildingIds: string[],
-  callback: (schedules: Schedule[]) => void
+  callback: (schedules: Schedule[]) => void,
+  onError?: (error: unknown) => void
 ): Unsubscribe {
   const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
   if (uniqueBuildingIds.length === 0) {
@@ -398,13 +401,24 @@ export function onSchedulesByBuildingIds(
 
       const queries = buildBuildingQueriesForScope(scope, uniqueBuildingIds);
 
-      unsubscribe = subscribeToScheduleQueries(queries, null, (schedules) => {
-        listener.emit(schedules);
-      });
+      if (queries.length === 0) {
+        listener.emit([]);
+        return;
+      }
+
+      unsubscribe = subscribeToScheduleQueries(
+        queries,
+        null,
+        (schedules) => {
+          listener.emit(schedules);
+        },
+        onError
+      );
     })
     .catch((error) => {
       if (!cancelled) {
         console.warn("Unable to load schedule authorization context:", error);
+        onError?.(error);
       }
     });
 

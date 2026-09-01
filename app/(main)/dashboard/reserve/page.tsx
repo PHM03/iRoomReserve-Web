@@ -11,7 +11,6 @@ import RoomAssistantWidget from '@/components/rooms/RoomAssistantWidget';
 import { useAuth } from '@/context/AuthContext';
 import {
   getCampusName,
-  getManagedBuildingIdsForCampus,
   getManagedBuildingsForCampus,
 } from '@/lib/buildings/campusAssignments';
 import { inferCampusFromBuilding, type ReservationCampus } from '@/lib/buildings/campuses';
@@ -21,6 +20,8 @@ import {
   logAssistantCampusFilter,
   logAssistantFirestoreQuery,
   logAssistantFirestoreSnapshot,
+  getAssistantListenerFailureState,
+  getAssistantBuildingIds,
   toAssistantRoomRecord,
   toAssistantReservationRecords,
 } from '@/lib/ai/roomAssistantRealtime';
@@ -42,7 +43,11 @@ import {
   type UserActiveSlot,
 } from '@/lib/reservations/roomAvailability';
 import { getRoomsByBuilding, onRoomsByBuildingIds, type Room } from '@/lib/rooms/rooms';
-import { getSchedulesByRoomId, type Schedule } from '@/lib/schedules/schedules';
+import {
+  getSchedulesByRoomId,
+  onSchedulesByBuildingIds,
+  type Schedule,
+} from '@/lib/schedules/schedules';
 import { formatDate, formatTime } from '@/lib/utils/dateTime';
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
 
@@ -78,7 +83,6 @@ const CAMPUS_TIME_RANGES: Record<ReservationCampus, { endMinutes: number; startM
     endMinutes: 21 * 60
   },
 };
-const ASSISTANT_CAMPUS_ORDER: ReservationCampus[] = ['main', 'digi'];
 const FILTER_CHIPS: Array<{ key: RoomFilterKey; label: string }> = [
   {
     key: 'classroom',
@@ -133,28 +137,6 @@ const PAST_TIME_MESSAGE =
   'That timeslot has already started or passed. Please choose a future 1-hour slot.';
 const NO_RECURRING_DATES_MESSAGE =
   'No reservation dates match the selected recurring schedule. Choose another date range or weekday.';
-
-function getFirstAssistantScope(preferredCampus?: ReservationCampus | null) {
-  const campusCandidates = preferredCampus
-    ? [preferredCampus]
-    : ASSISTANT_CAMPUS_ORDER;
-
-  for (const campus of campusCandidates) {
-    const [building] = getManagedBuildingsForCampus(campus);
-
-    if (building) {
-      return {
-        campus,
-        building: {
-          id: building.id,
-          name: building.name,
-        },
-      };
-    }
-  }
-
-  return null;
-}
 
 function timeStringToMinutes(value: string): number {
   const [hours, minutes] = value.split(':').map(Number);
@@ -367,19 +349,13 @@ export default function ReserveRoomPage() {
   const [roomSchedules, setRoomSchedules] = useState<Schedule[]>([]);
   const [assistantRooms, setAssistantRooms] = useState<Room[]>([]);
   const [assistantReservations, setAssistantReservations] = useState<Reservation[]>([]);
+  const [assistantSchedules, setAssistantSchedules] = useState<Schedule[]>([]);
   const [assistantDataLoading, setAssistantDataLoading] = useState(false);
+  const [assistantDataError, setAssistantDataError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
 
   const assistantBuildingIds = useMemo(() => {
-    if (activeBuilding) {
-      return [activeBuilding.id];
-    }
-
-    if (activeCampus) {
-      return getManagedBuildingIdsForCampus(activeCampus);
-    }
-
-    return [];
+    return getAssistantBuildingIds(activeBuilding?.id, activeCampus);
   }, [activeBuilding, activeCampus]);
 
   useEffect(() => {
@@ -460,6 +436,8 @@ export default function ReserveRoomPage() {
     if (assistantBuildingIds.length === 0) {
       setAssistantRooms([]);
       setAssistantReservations([]);
+      setAssistantSchedules([]);
+      setAssistantDataError(null);
       setAssistantDataLoading(false);
       return;
     }
@@ -467,6 +445,8 @@ export default function ReserveRoomPage() {
     if (authLoading) {
       setAssistantRooms([]);
       setAssistantReservations([]);
+      setAssistantSchedules([]);
+      setAssistantDataError(null);
       setAssistantDataLoading(true);
       return;
     }
@@ -475,21 +455,37 @@ export default function ReserveRoomPage() {
       console.warn('[room-assistant] Skipping Firestore room reads until the user is authenticated.');
       setAssistantRooms([]);
       setAssistantReservations([]);
+      setAssistantSchedules([]);
+      setAssistantDataError(null);
       setAssistantDataLoading(false);
       return;
     }
 
     let cancelled = false;
+    let loadError = false;
     let roomsLoaded = false;
     let reservationsLoaded = false;
+    let schedulesLoaded = false;
 
     const updateLoading = () => {
-      if (!cancelled) {
-        setAssistantDataLoading(!(roomsLoaded && reservationsLoaded));
+      if (!cancelled && !loadError) {
+        setAssistantDataLoading(!(roomsLoaded && reservationsLoaded && schedulesLoaded));
       }
     };
 
+    const handleListenerFailure = (source: 'rooms' | 'reservations' | 'schedules') => {
+      if (cancelled) {
+        return;
+      }
+
+      loadError = true;
+      const failureState = getAssistantListenerFailureState(source);
+      setAssistantDataLoading(failureState.loading);
+      setAssistantDataError(failureState.error);
+    };
+
     setAssistantDataLoading(true);
+    setAssistantDataError(null);
     logAssistantFirestoreQuery({
       buildingIds: assistantBuildingIds,
       collection: 'rooms',
@@ -499,20 +495,24 @@ export default function ReserveRoomPage() {
       collection: 'reservations',
     });
 
-    const unsubscribeRooms = onRoomsByBuildingIds(assistantBuildingIds, (nextRooms) => {
-      if (cancelled) {
-        return;
-      }
+    const unsubscribeRooms = onRoomsByBuildingIds(
+      assistantBuildingIds,
+      (nextRooms) => {
+        if (cancelled) {
+          return;
+        }
 
-      logAssistantFirestoreSnapshot({
-        buildingIds: assistantBuildingIds,
-        collection: 'rooms',
-        rawDocuments: nextRooms,
-      });
-      roomsLoaded = true;
-      setAssistantRooms(nextRooms);
-      updateLoading();
-    });
+        logAssistantFirestoreSnapshot({
+          buildingIds: assistantBuildingIds,
+          collection: 'rooms',
+          rawDocuments: nextRooms,
+        });
+        roomsLoaded = true;
+        setAssistantRooms(nextRooms);
+        updateLoading();
+      },
+      () => handleListenerFailure('rooms')
+    );
 
     const unsubscribeReservations = onReservationsByBuildingIds(
       assistantBuildingIds,
@@ -529,13 +529,29 @@ export default function ReserveRoomPage() {
         reservationsLoaded = true;
         setAssistantReservations(nextReservations);
         updateLoading();
-      }
+      },
+      () => handleListenerFailure('reservations')
+    );
+
+    const unsubscribeSchedules = onSchedulesByBuildingIds(
+      assistantBuildingIds,
+      (nextSchedules) => {
+        if (cancelled) {
+          return;
+        }
+
+        schedulesLoaded = true;
+        setAssistantSchedules(nextSchedules);
+        updateLoading();
+      },
+      () => handleListenerFailure('schedules')
     );
 
     return () => {
       cancelled = true;
       unsubscribeRooms();
       unsubscribeReservations();
+      unsubscribeSchedules();
     };
   }, [assistantBuildingIds, authLoading, firebaseUser?.uid]);
 
@@ -1038,14 +1054,14 @@ export default function ReserveRoomPage() {
   }
 
   function applyAssistantScope(nextCampus?: ReservationCampus | null) {
-    const scope = getFirstAssistantScope(nextCampus);
+    const scopeCampus = nextCampus ?? activeCampus;
 
-    if (!scope) {
+    if (!scopeCampus) {
       return;
     }
 
-    setActiveCampus(scope.campus);
-    setActiveBuilding(scope.building);
+    setActiveCampus(scopeCampus);
+    setActiveBuilding(null);
     setActiveFloor(null);
     setRooms([]);
     setRoomsError('');
@@ -1054,11 +1070,9 @@ export default function ReserveRoomPage() {
   }
 
   function handleAssistantOpen() {
-    if (activeCampus) {
-      return;
+    if (!activeCampus) {
+      setActiveBuilding(null);
     }
-
-    applyAssistantScope();
   }
 
   function handleAssistantCampusSelect(nextCampus: ReservationCampus) {
@@ -2324,6 +2338,7 @@ export default function ReserveRoomPage() {
         activeCampus={activeCampus}
         campusTimeRange={(selectedCampus ?? activeCampus) ? CAMPUS_TIME_RANGES[selectedCampus ?? activeCampus!] : null}
         dataLoading={assistantDataLoading}
+        dataError={assistantDataError}
         onOpenWithoutCampus={handleAssistantOpen}
         onSelectCampus={handleAssistantCampusSelect}
         onSelectRoom={handleRoomSelect}
@@ -2335,6 +2350,7 @@ export default function ReserveRoomPage() {
           setSubmitError('');
         }}
         reservations={assistantReservationRecords}
+        schedules={assistantSchedules}
         rooms={recommendationRooms}
         selectedRoom={selectedRecommendationRoom}
         timeslot={selectedTimeslot}
