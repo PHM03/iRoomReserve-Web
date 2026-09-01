@@ -251,6 +251,10 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
         href: '/dashboard'
       },
       {
+        label: 'Class Schedules',
+        href: '/dashboard/class-schedules'
+      },
+      {
         label: 'Room Status',
         href: '/dashboard/room-status'
       },
@@ -276,6 +280,10 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
         label: 'My Reservations',
         href: '/dashboard/reservations'
       },
+      ...(isFacultyRole ? [{
+        label: 'Class Schedules',
+        href: '/dashboard/class-schedules'
+      }] : []),
       {
         label: 'Inbox',
         href: '/dashboard/inbox'

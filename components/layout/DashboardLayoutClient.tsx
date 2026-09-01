@@ -71,6 +71,7 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
       "/dashboard/reservations": "my-reservations",
       "/dashboard/room-status": "room-status",
       "/dashboard/ble-beacon": "ble-beacon-status",
+      "/dashboard/class-schedules": "class-schedules",
     };
     const dashboardTab =
       requestedTab === 'dashboard' ||
@@ -196,6 +197,12 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
       icon: navIcons.history
     },
     {
+      label: 'Schedules',
+      href: '/dashboard/class-schedules',
+      active: pathname === '/dashboard/class-schedules',
+      icon: navIcons.status
+    },
+    {
       label: 'Inbox',
       href: '/dashboard/inbox',
       active: pathname === '/dashboard/inbox',
@@ -214,6 +221,12 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
       label: 'Status',
       href: '/dashboard/room-status',
       active: pathname === '/dashboard/room-status',
+      icon: navIcons.status
+    },
+    {
+      label: 'Schedules',
+      href: '/dashboard/class-schedules',
+      active: pathname === '/dashboard/class-schedules',
       icon: navIcons.status
     },
     {
@@ -283,7 +296,7 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
       {/* Mobile Bottom Nav (Faculty only) */}
       {isFaculty && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 glass-nav border-t border-dark/10 z-40">
-          <div className="grid grid-cols-4 h-16">
+          <div className="grid grid-cols-5 h-16">
             {facultyMobileNav.map((item) => (
               <Link
                 key={item.label}
@@ -302,7 +315,7 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
 
       {isUtility && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 glass-nav border-t border-dark/10 z-40">
-          <div className="grid grid-cols-3 h-16">
+          <div className="grid grid-cols-4 h-16">
             {utilityMobileNav.map((item) => (
               <Link
                 key={item.label}

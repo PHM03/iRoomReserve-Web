@@ -21,7 +21,7 @@ function room(input: Partial<Parameters<typeof getAssignedRoomDisplayLabel>[0]>)
 }
 
 describe('assigned-room schedule UI data', () => {
-  it('removes Faculty integration while retaining the Utility schedule surface', () => {
+  it('uses a dedicated role-aware Class Schedules page', () => {
     const facultyDashboard = readFileSync(
       resolve(process.cwd(), 'components', 'dashboards', 'FacultyDashboard.tsx'),
       'utf8'
@@ -34,13 +34,24 @@ describe('assigned-room schedule UI data', () => {
       resolve(process.cwd(), 'components', 'schedules', 'AssignedRoomScheduleSection.tsx'),
       'utf8'
     );
+    const classSchedulesPage = readFileSync(
+      resolve(process.cwd(), 'app', '(main)', 'dashboard', 'class-schedules', 'page.tsx'),
+      'utf8'
+    );
 
-    expect(facultyDashboard).toContain('showScheduleManagement');
-    expect(memberDashboard).toContain('AssignedRoomScheduleSection');
-    expect(memberDashboard).toContain('showScheduleManagement');
+    expect(facultyDashboard).not.toContain('showScheduleManagement');
+    expect(memberDashboard).not.toContain('AssignedRoomScheduleSection');
+    expect(memberDashboard).not.toContain('showScheduleManagement');
+    expect(classSchedulesPage).toContain('AssignedRoomScheduleSection');
+    expect(classSchedulesPage).toContain('showLocationFilters');
     expect(scheduleSection).toContain('Faculty Professor');
     expect(scheduleSection).toContain('Utility Staff');
+    expect(scheduleSection).toContain("normalizeRole(profile?.role) === USER_ROLES.UTILITY");
     expect(scheduleSection).toContain('readOnly={isUtilityStaff}');
+    expect(scheduleSection).toContain('room.buildingId === effectiveSelectedBuildingId');
+    expect(scheduleSection).toContain('room.floor.trim() === effectiveSelectedFloor');
+    expect(scheduleSection).toContain("setSelectedFloor('')");
+    expect(scheduleSection).toContain("setSelectedRoomId('')");
   });
 
   it('shows room and campus context in the selector label', () => {

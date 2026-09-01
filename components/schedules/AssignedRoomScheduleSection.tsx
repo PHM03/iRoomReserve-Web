@@ -2,11 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import AdminClassSchedulesSection from '@/components/admin/AdminClassSchedulesSection';
 import { useAuth } from '@/context/AuthContext';
+import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
 import { onBuildingById } from '@/lib/buildings/buildings';
-import { getManagedBuildingIdsForCampus } from '@/lib/buildings/campusAssignments';
+import {
+  getManagedBuildingIdsForCampus,
+  getManagedBuildingsForCampus,
+} from '@/lib/buildings/campusAssignments';
 import { inferCampusFromBuilding } from '@/lib/buildings/campuses';
+import { sortFloorOptions, type FloorOption } from '@/lib/buildings/floorLabels';
 import { onAllRooms, onRoomsByBuildingIds, type Room } from '@/lib/rooms/rooms';
 import { getAssignedRoomDisplayLabel } from '@/lib/schedules/assignedRoomSchedule';
 import {
@@ -28,6 +34,7 @@ import {
 interface AssignedRoomScheduleSectionProps {
   className?: string;
   roleLabel: 'Faculty Professor' | 'Utility Staff';
+  showLocationFilters?: boolean;
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -37,12 +44,15 @@ function getErrorMessage(error: unknown, fallback: string) {
 export default function AssignedRoomScheduleSection({
   className = '',
   roleLabel,
+  showLocationFilters = false,
 }: Readonly<AssignedRoomScheduleSectionProps>) {
   const { firebaseUser, profile } = useAuth();
-  const isUtilityStaff = roleLabel === 'Utility Staff';
+  const isUtilityStaff = normalizeRole(profile?.role) === USER_ROLES.UTILITY;
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [roomsError, setRoomsError] = useState<string | null>(null);
+  const [selectedBuildingId, setSelectedBuildingId] = useState('');
+  const [selectedFloor, setSelectedFloor] = useState('');
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [schedulesLoading, setSchedulesLoading] = useState(false);
@@ -68,7 +78,69 @@ export default function AssignedRoomScheduleSection({
     [isUtilityStaff, profile?.campus]
   );
   const roomScopeKey = isUtilityStaff ? authorizedBuildingIds.join('|') : 'all';
-  const scheduleRooms = useMemo(() => rooms, [rooms]);
+  const buildingOptions = useMemo(() => {
+    const buildings = new Map<string, { value: string; label: string }>();
+
+    if (isUtilityStaff) {
+      getManagedBuildingsForCampus(profile?.campus).forEach((building) => {
+        buildings.set(building.id, {
+          value: building.id,
+          label: building.name,
+        });
+      });
+    }
+
+    rooms.forEach((room) => {
+      if (!buildings.has(room.buildingId)) {
+        buildings.set(room.buildingId, {
+          value: room.buildingId,
+          label: room.buildingName || room.buildingId,
+        });
+      }
+    });
+
+    return [...buildings.values()].sort((left, right) =>
+      left.label.localeCompare(right.label, undefined, { numeric: true })
+    );
+  }, [isUtilityStaff, profile?.campus, rooms]);
+  const effectiveSelectedBuildingId = buildingOptions.some(
+    (building) => building.value === selectedBuildingId
+  )
+    ? selectedBuildingId
+    : buildingOptions[0]?.value ?? '';
+  const floorOptions = useMemo<FloorOption[]>(() => {
+    if (!showLocationFilters || !effectiveSelectedBuildingId) {
+      return [];
+    }
+
+    const floors = new Set(
+      rooms
+        .filter((room) => room.buildingId === effectiveSelectedBuildingId)
+        .map((room) => room.floor.trim())
+        .filter(Boolean)
+    );
+
+    return sortFloorOptions(
+      [...floors].map((floor) => ({ label: floor, value: floor }))
+    );
+  }, [effectiveSelectedBuildingId, rooms, showLocationFilters]);
+  const effectiveSelectedFloor = floorOptions.some(
+    (floor) => floor.value === selectedFloor
+  )
+    ? selectedFloor
+    : floorOptions[0]?.value ?? '';
+  const visibleRooms = useMemo(() => {
+    if (!showLocationFilters) {
+      return rooms;
+    }
+
+    return rooms.filter(
+      (room) =>
+        room.buildingId === effectiveSelectedBuildingId &&
+        room.floor.trim() === effectiveSelectedFloor
+    );
+  }, [effectiveSelectedBuildingId, effectiveSelectedFloor, rooms, showLocationFilters]);
+  const scheduleRooms = visibleRooms;
   const selectedRoom = scheduleRooms.find((room) => room.id === selectedRoomId) ?? null;
   const selectedRoomSchedules = useMemo(
     () => schedules.filter((schedule) => schedule.roomId === selectedRoomId),
@@ -104,6 +176,26 @@ export default function AssignedRoomScheduleSection({
       unsubscribe();
     };
   }, [authorizedBuildingIds, firebaseUser?.uid, isUtilityStaff, roomScopeKey]);
+
+  useEffect(() => {
+    if (!showLocationFilters) {
+      return;
+    }
+
+    if (!selectedBuildingId || !buildingOptions.some((building) => building.value === selectedBuildingId)) {
+      setSelectedBuildingId(effectiveSelectedBuildingId);
+    }
+  }, [buildingOptions, effectiveSelectedBuildingId, selectedBuildingId, showLocationFilters]);
+
+  useEffect(() => {
+    if (!showLocationFilters) {
+      return;
+    }
+
+    if (!floorOptions.some((floor) => floor.value === selectedFloor)) {
+      setSelectedFloor(effectiveSelectedFloor);
+    }
+  }, [effectiveSelectedFloor, floorOptions, selectedFloor, showLocationFilters]);
 
   useEffect(() => {
     if (scheduleRooms.length === 0) {
@@ -187,6 +279,19 @@ export default function AssignedRoomScheduleSection({
     resetScheduleForm();
     setSelectedRoomId(nextRoomId);
     setSchedRoomId(nextRoomId);
+  };
+
+  const handleBuildingChange = (nextBuildingId: string) => {
+    setSelectedBuildingId(nextBuildingId);
+    setSelectedFloor('');
+    setSelectedRoomId('');
+    resetScheduleForm();
+  };
+
+  const handleFloorChange = (nextFloor: string) => {
+    setSelectedFloor(nextFloor);
+    setSelectedRoomId('');
+    resetScheduleForm();
   };
 
   const handleScheduleRoomChange = (nextRoomId: string) => {
@@ -318,42 +423,97 @@ export default function AssignedRoomScheduleSection({
   return (
     <section className={`space-y-4 ${className}`}>
       <div className="rounded-2xl border border-white/35 bg-white/75 p-6 shadow-xl backdrop-blur-xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-primary">
-              {roleLabel} schedule management
+              {isUtilityStaff
+                ? `${roleLabel} schedule viewer`
+                : `${roleLabel} schedule management`}
             </p>
             <h3 className="mt-1 text-xl font-bold text-gray-900">
               {isUtilityStaff ? 'Authorized Rooms' : 'Available Rooms'}
             </h3>
             <p className="mt-1 text-sm text-gray-500">
               {isUtilityStaff
-                ? 'Manage class schedules for rooms in your authorized campus buildings.'
+                ? 'View class schedules for rooms in your authorized campus buildings.'
                 : 'Manage class schedules for available rooms.'}
             </p>
           </div>
-          <div className="w-full sm:max-w-sm">
-            <label
-              className="mb-2 block text-xs font-bold uppercase tracking-wide text-gray-500"
-              htmlFor="assigned-schedule-room"
-            >
-              Room
-            </label>
-            <select
-              id="assigned-schedule-room"
-              aria-label="Assigned schedule room"
-              value={selectedRoomId}
-              onChange={(event) => handleAssignedRoomChange(event.target.value)}
-              disabled={roomsLoading || scheduleRooms.length === 0}
-              className="glass-input w-full px-4 py-2.5 text-sm"
-            >
-              {scheduleRooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {getAssignedRoomDisplayLabel(room)}
-                </option>
-              ))}
-            </select>
-          </div>
+          {showLocationFilters ? (
+            <div className="grid w-full gap-3 sm:max-w-2xl sm:grid-cols-3">
+              <AdminBuildingSelect
+                label="Building"
+                options={buildingOptions}
+                value={effectiveSelectedBuildingId}
+                onChange={handleBuildingChange}
+                disabled={roomsLoading || buildingOptions.length === 0}
+                fullWidth
+              />
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-gray-500">
+                  Floor
+                </label>
+                <select
+                  aria-label="Schedule floor"
+                  value={effectiveSelectedFloor}
+                  onChange={(event) => handleFloorChange(event.target.value)}
+                  disabled={roomsLoading || floorOptions.length === 0}
+                  className="glass-input w-full px-4 py-2.5 text-sm"
+                >
+                  {floorOptions.map((floor) => (
+                    <option key={floor.value} value={floor.value}>
+                      {floor.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  className="mb-2 block text-xs font-bold uppercase tracking-wide text-gray-500"
+                  htmlFor="assigned-schedule-room"
+                >
+                  Room
+                </label>
+                <select
+                  id="assigned-schedule-room"
+                  aria-label="Assigned schedule room"
+                  value={selectedRoomId}
+                  onChange={(event) => handleAssignedRoomChange(event.target.value)}
+                  disabled={roomsLoading || scheduleRooms.length === 0}
+                  className="glass-input w-full px-4 py-2.5 text-sm"
+                >
+                  {scheduleRooms.map((room) => (
+                    <option key={room.id} value={room.id}>
+                      {getAssignedRoomDisplayLabel(room)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="w-full sm:max-w-sm">
+              <label
+                className="mb-2 block text-xs font-bold uppercase tracking-wide text-gray-500"
+                htmlFor="assigned-schedule-room"
+              >
+                Room
+              </label>
+              <select
+                id="assigned-schedule-room"
+                aria-label="Assigned schedule room"
+                value={selectedRoomId}
+                onChange={(event) => handleAssignedRoomChange(event.target.value)}
+                disabled={roomsLoading || scheduleRooms.length === 0}
+                className="glass-input w-full px-4 py-2.5 text-sm"
+              >
+                {scheduleRooms.map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {getAssignedRoomDisplayLabel(room)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         {roomsError ? <p className="mt-4 text-sm font-medium text-red-700">{roomsError}</p> : null}
         {scheduleLoadError ? (

@@ -500,26 +500,23 @@ export function onRoomsByIds(
 }
 
 export function onAllRooms(callback: (rooms: Room[]) => void): Unsubscribe {
-  const roomQuery = query(
-    collection(db, "rooms"),
-    orderBy("buildingName"),
-    orderBy("floor"),
-    orderBy("name")
-  );
+  const roomQuery = query(collection(db, "rooms"));
 
   const listener = createGuardedSnapshotCallback(callback);
   const unsubscribe = onSnapshot(
     roomQuery,
     (snapshot) => {
       listener.emit(
-        snapshot.docs.map((roomDoc) =>
-          mapRoom(
-            roomDoc.id,
-            roomDoc.data() as Omit<Room, "id" | "status"> & {
-              status?: string | null;
-            }
+        snapshot.docs
+          .map((roomDoc) =>
+            mapRoom(
+              roomDoc.id,
+              roomDoc.data() as Omit<Room, "id" | "status"> & {
+                status?: string | null;
+              }
+            )
           )
-        )
+          .sort(sortRooms)
       );
     },
     (error) => {

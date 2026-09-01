@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
-import AssignedRoomScheduleSection from '@/components/schedules/AssignedRoomScheduleSection';
 import { getManagedBuildingOptionLabel } from '@/components/admin/dashboard/shared';
 import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -775,10 +774,6 @@ export default function UtilityStaffDashboard({
             </p>
           </div>
 
-          <AssignedRoomScheduleSection
-            className="mt-8"
-            roleLabel="Utility Staff"
-          />
         </div>
       </main>
     );
@@ -925,11 +920,6 @@ export default function UtilityStaffDashboard({
           className="mb-10"
           currentUserId={uid}
           reservations={reservations}
-        />
-
-        <AssignedRoomScheduleSection
-          className="mb-10"
-          roleLabel="Utility Staff"
         />
 
         <section className="rounded-2xl border border-white/35 bg-white/75 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10 backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl">
