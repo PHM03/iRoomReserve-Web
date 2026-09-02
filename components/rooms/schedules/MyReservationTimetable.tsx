@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import type { Reservation } from '@/lib/reservations/reservations';
+import { getCurrentDateTimeStringInTimeZone } from '@/lib/rooms/roomStatus';
 import { formatTimeRange } from '@/lib/utils/dateTime';
 
 interface MyReservationTimetableProps {
@@ -86,9 +88,19 @@ function formatCurrentDateLabel(date: Date = new Date()) {
   }).format(date);
 }
 
+function isCurrentOrUpcomingOccurrence(
+  date: string,
+  endTime: string,
+  currentDate: string,
+  currentTime: string
+) {
+  return date > currentDate || (date === currentDate && endTime > currentTime);
+}
+
 function buildEntriesByDay(
   reservations: Reservation[],
-  currentUserId?: string | null
+  currentUserId?: string | null,
+  currentDateTime = getCurrentDateTimeStringInTimeZone()
 ) {
   const entriesByDay = new Map<number, Map<string, TimetableEntry>>();
 
@@ -105,37 +117,46 @@ function buildEntriesByDay(
       return;
     }
 
-    getReservationDates(reservation).forEach((date) => {
-      const weekday = getWeekdayValue(date);
+    getReservationDates(reservation)
+      .filter((date) =>
+        isCurrentOrUpcomingOccurrence(
+          date,
+          reservation.endTime,
+          currentDateTime.date,
+          currentDateTime.time
+        )
+      )
+      .forEach((date) => {
+        const weekday = getWeekdayValue(date);
 
-      if (!weekday) {
-        return;
-      }
+        if (!weekday) {
+          return;
+        }
 
-      const dayEntries = entriesByDay.get(weekday);
+        const dayEntries = entriesByDay.get(weekday);
 
-      if (!dayEntries) {
-        return;
-      }
+        if (!dayEntries) {
+          return;
+        }
 
-      const key = [
-        reservation.roomId,
-        reservation.buildingId,
-        reservation.startTime,
-        reservation.endTime,
-      ].join(':');
+        const key = [
+          reservation.roomId,
+          reservation.buildingId,
+          reservation.startTime,
+          reservation.endTime,
+        ].join(':');
 
-      if (!dayEntries.has(key)) {
-        dayEntries.set(key, {
-          buildingName: reservation.buildingName,
-          campus: reservation.campus,
-          endTime: reservation.endTime,
-          roomName: reservation.roomName,
-          startTime: reservation.startTime,
-          purpose: reservation.purpose,
-        });
-      }
-    });
+        if (!dayEntries.has(key)) {
+          dayEntries.set(key, {
+            buildingName: reservation.buildingName,
+            campus: reservation.campus,
+            endTime: reservation.endTime,
+            roomName: reservation.roomName,
+            startTime: reservation.startTime,
+            purpose: reservation.purpose,
+          });
+        }
+      });
   });
 
   return entriesByDay;
@@ -148,8 +169,17 @@ export default function MyReservationTimetable({
   currentUserId,
   reservations,
 }: Readonly<MyReservationTimetableProps>) {
-  const entriesByDay = buildEntriesByDay(reservations, currentUserId);
-  const orderedTimetableDays = getOrderedTimetableDays();
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(new Date()), 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const currentDateTime = getCurrentDateTimeStringInTimeZone(now);
+  const entriesByDay = buildEntriesByDay(reservations, currentUserId, currentDateTime);
+  const orderedTimetableDays = getOrderedTimetableDays(now);
 
   if (compact) {
     if (compactVariant === 'today') {
