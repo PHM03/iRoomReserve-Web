@@ -48,6 +48,10 @@ import {
   onSchedulesByBuildingIds,
   type Schedule,
 } from '@/lib/schedules/schedules';
+import {
+  getReservationTimeOptions,
+  reservationTimeToMinutes,
+} from '@/lib/reservations/timeSlots';
 import { formatDate, formatTime } from '@/lib/utils/dateTime';
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
 
@@ -138,17 +142,6 @@ const PAST_TIME_MESSAGE =
 const NO_RECURRING_DATES_MESSAGE =
   'No reservation dates match the selected recurring schedule. Choose another date range or weekday.';
 
-function timeStringToMinutes(value: string): number {
-  const [hours, minutes] = value.split(':').map(Number);
-  return hours * 60 + minutes;
-}
-
-function minutesToTimeString(value: number): string {
-  const hours = Math.floor(value / 60);
-  const minutes = value % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-}
-
 function toLocalIsoDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -165,14 +158,7 @@ function getCampusTimeOptions(campus: ReservationCampus | null): string[] {
     return [];
   }
 
-  const { startMinutes, endMinutes } = CAMPUS_TIME_RANGES[campus];
-  const options: string[] = [];
-
-  for (let minutes = startMinutes; minutes <= endMinutes; minutes += 60) {
-    options.push(minutesToTimeString(minutes));
-  }
-
-  return options;
+  return getReservationTimeOptions(CAMPUS_TIME_RANGES[campus]);
 }
 
 function isTimeRangeValid(
@@ -185,8 +171,8 @@ function isTimeRangeValid(
   }
 
   const { startMinutes, endMinutes } = CAMPUS_TIME_RANGES[campus];
-  const start = timeStringToMinutes(startTime);
-  const end = timeStringToMinutes(endTime);
+  const start = reservationTimeToMinutes(startTime);
+  const end = reservationTimeToMinutes(endTime);
 
   return (
     start >= startMinutes &&
@@ -212,7 +198,7 @@ function isPastTimeSelection(date: string, startTime: string, now: Date): boolea
   }
 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  return timeStringToMinutes(startTime) <= nowMinutes;
+  return reservationTimeToMinutes(startTime) <= nowMinutes;
 }
 
 function formatConflictDates(dates: string[]): string {
@@ -690,7 +676,7 @@ export default function ReserveRoomPage() {
   const campusTimeOptions = getCampusTimeOptions(selectedCampus);
   const startTimeOptions = selectedCampus
     ? campusTimeOptions.filter((time) => {
-        const optionMinutes = timeStringToMinutes(time);
+        const optionMinutes = reservationTimeToMinutes(time);
         return (
           optionMinutes <= CAMPUS_TIME_RANGES[selectedCampus].endMinutes - 60 &&
           !isPastTimeSelection(reservationDate, time, now)
@@ -703,9 +689,9 @@ export default function ReserveRoomPage() {
           return false;
         }
 
-        const optionMinutes = timeStringToMinutes(time);
+        const optionMinutes = reservationTimeToMinutes(time);
         return (
-          optionMinutes >= timeStringToMinutes(startTime) + 60 &&
+          optionMinutes >= reservationTimeToMinutes(startTime) + 60 &&
           optionMinutes <= CAMPUS_TIME_RANGES[selectedCampus].endMinutes
         );
       })

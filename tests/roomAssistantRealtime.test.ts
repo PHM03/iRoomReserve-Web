@@ -5,6 +5,7 @@ import {
   checkAssistantRoomAvailability,
   findAlternativeAssistantRooms,
   findAssistantRoomMatchesForDatePreference,
+  getAssistantRoomSelectionTimeslot,
   findAssistantRoomMatches,
   getAssistantFutureWeekdayDates,
   getAssistantBuildingIds,
@@ -13,7 +14,12 @@ import {
   toAssistantReservationRecords,
   toAssistantRoomRecord,
   type AssistantPreferences,
+  validateAssistantTimeslot,
 } from '../lib/ai/roomAssistantRealtime';
+import {
+  formatReservationTimeSlot,
+  getReservationTimeSlots,
+} from '../lib/reservations/timeSlots';
 
 function createRoom(overrides: Record<string, unknown> = {}) {
   return {
@@ -58,6 +64,17 @@ function createReservation(overrides: Record<string, unknown> = {}) {
 }
 
 describe('roomAssistantRealtime', () => {
+  it('uses the reservation form one-hour slot boundaries and labels', () => {
+    const slots = getReservationTimeSlots({ startMinutes: 7 * 60, endMinutes: 10 * 60 });
+
+    expect(slots).toEqual([
+      { endTime: '08:00', startTime: '07:00' },
+      { endTime: '09:00', startTime: '08:00' },
+      { endTime: '10:00', startTime: '09:00' },
+    ]);
+    expect(formatReservationTimeSlot(slots[1])).toBe('8:00 AM - 9:00 AM');
+  });
+
   it('exposes the complete room type preference list', () => {
     expect(ASSISTANT_ROOM_TYPE_OPTIONS.map((option) => option.label)).toEqual([
       'Conference Room',
@@ -96,6 +113,77 @@ describe('roomAssistantRealtime', () => {
     expect(result.available).toBe(false);
     expect(result.availabilityLabel).toBe('taken');
     expect(result.conflictingReservations).toHaveLength(1);
+  });
+
+  it('restores the latest complete timeslot after room selection clears form details', () => {
+    const formState = {
+      date: '',
+      endTime: '',
+      roomId: '',
+      startTime: '',
+    };
+    const latestTimeslot = {
+      date: '2026-06-12',
+      endTime: '09:00',
+      startTime: '08:00',
+    };
+
+    formState.roomId = 'recommended-room';
+    formState.date = '';
+    formState.startTime = '';
+    formState.endTime = '';
+
+    const timeslotToRestore = getAssistantRoomSelectionTimeslot(latestTimeslot);
+    if (timeslotToRestore) {
+      formState.date = timeslotToRestore.date;
+      formState.startTime = timeslotToRestore.startTime;
+      formState.endTime = timeslotToRestore.endTime;
+    }
+
+    expect(formState).toEqual({
+      date: '2026-06-12',
+      endTime: '09:00',
+      roomId: 'recommended-room',
+      startTime: '08:00',
+    });
+  });
+
+  it('does not restore an incomplete form-selected timeslot', () => {
+    expect(getAssistantRoomSelectionTimeslot({ date: '2026-06-12', startTime: '08:00' })).toBeNull();
+  });
+
+  it('validates each required chatbot date and time field', () => {
+    const now = new Date('2026-06-01T08:00:00');
+
+    expect(validateAssistantTimeslot({}, now)).toBe('missing-date');
+    expect(validateAssistantTimeslot({ date: '2026-06-10' }, now)).toBe('missing-start-time');
+    expect(validateAssistantTimeslot({ date: '2026-06-10', startTime: '10:00' }, now)).toBe(
+      'missing-end-time'
+    );
+    expect(
+      validateAssistantTimeslot(
+        { date: '2026-06-10', endTime: '10:00', startTime: '10:00' },
+        now
+      )
+    ).toBe('invalid-time');
+    expect(
+      validateAssistantTimeslot(
+        { date: '2026-06-10', endTime: '09:00', startTime: '10:00' },
+        now
+      )
+    ).toBe('invalid-time');
+    expect(
+      validateAssistantTimeslot(
+        { date: '2026-06-01', endTime: '09:00', startTime: '07:00' },
+        now
+      )
+    ).toBe('past-date');
+    expect(
+      validateAssistantTimeslot(
+        { date: '2026-06-10', endTime: '11:00', startTime: '10:00' },
+        now
+      )
+    ).toBe('valid');
   });
 
   it('excludes rooms that do not match the requested room type', () => {
@@ -145,6 +233,50 @@ describe('roomAssistantRealtime', () => {
     expect(result.status).toBe('resolved');
     expect(result.resolvedTimeslot).toMatchObject({ date: '2026-06-10' });
     expect(result.recommendations.map((roomResult) => roomResult.roomId)).toEqual(['future-room']);
+  });
+
+  it('routes a valid chatbot-selected date and time through recommendations', () => {
+    const result = findAssistantRoomMatchesForDatePreference(
+      [toAssistantRoomRecord(createRoom({ id: 'chatbot-selected-room' }))],
+      [],
+      [],
+      {
+        date: '2026-06-10',
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      { kind: 'chatbot-date-time' },
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+
+    expect(result.status).toBe('resolved');
+    expect(result.resolvedTimeslot).toEqual({
+      date: '2026-06-10',
+      endTime: '11:00',
+      startTime: '10:00',
+    });
+    expect(result.recommendations.map((room) => room.roomId)).toEqual(['chatbot-selected-room']);
+  });
+
+  it('keeps Use selected date/time behavior unchanged', () => {
+    const result = findAssistantRoomMatchesForDatePreference(
+      [toAssistantRoomRecord(createRoom({ id: 'selected-slot-room' }))],
+      [],
+      [],
+      {
+        date: '2026-06-10',
+        endTime: '11:00',
+        startTime: '10:00',
+      },
+      { kind: 'selected-date-time' },
+      { requiredFeatures: [] },
+      { now: new Date('2026-06-01T08:00:00') }
+    );
+
+    expect(result.status).toBe('resolved');
+    expect(result.resolvedTimeslot?.date).toBe('2026-06-10');
+    expect(result.recommendations.map((room) => room.roomId)).toEqual(['selected-slot-room']);
   });
 
   it('rejects a past specific date', () => {

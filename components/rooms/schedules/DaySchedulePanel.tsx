@@ -13,7 +13,11 @@ import type {
   EnrichedBookingSlot,
   UserActiveSlot,
 } from '@/lib/reservations/roomAvailability';
-import { formatTime } from '@/lib/utils/dateTime';
+import {
+  formatReservationTimeSlot,
+  getReservationTimeSlots,
+  reservationTimeToMinutes,
+} from '@/lib/reservations/timeSlots';
 
 type SlotStatus = ScheduleSlotStatus;
 
@@ -34,12 +38,6 @@ interface DaySchedulePanelProps {
   selectedStartTime?: string;
   selectedEndTime?: string;
   onSelectionChange: (selection: ScheduleSelection | null) => void;
-}
-
-function minutesToTimeString(value: number): string {
-  const hours = Math.floor(value / 60);
-  const minutes = value % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 }
 
 function toLocalIsoDate(date: Date): string {
@@ -102,7 +100,6 @@ export default function DaySchedulePanel({
 
   const timeSlots = useMemo<TimeSlot[]>(() => {
     const slots: TimeSlot[] = [];
-    const { startMinutes, endMinutes } = campusTimeRange;
     const today = toLocalIsoDate(now);
     const isBeforeToday = date < today;
     const isToday = date === today;
@@ -110,11 +107,9 @@ export default function DaySchedulePanel({
     const roomSlotsForDate = roomEnrichedSlots.filter((slot) => slot.date === date);
     const userSlotsForDate = userActiveSlots.filter((slot) => slot.date === date);
 
-    for (let minutes = startMinutes; minutes < endMinutes; minutes += 60) {
-      const slotStart = minutesToTimeString(minutes);
-      const slotEnd = minutesToTimeString(minutes + 60);
+    for (const { endTime: slotEnd, startTime: slotStart } of getReservationTimeSlots(campusTimeRange)) {
 
-      if (isBeforeToday || (isToday && minutes <= nowMinutes)) {
+      if (isBeforeToday || (isToday && reservationTimeToMinutes(slotStart) <= nowMinutes)) {
         slots.push({
           startTime: slotStart,
           endTime: slotEnd,
@@ -477,7 +472,7 @@ export default function DaySchedulePanel({
             >
               {getStatusIcon(slot.status)}
               <span className={`min-w-[6.75rem] text-left ${getSlotTimeClasses(slot.status)}`}>
-                {formatTime(slot.startTime)} - {formatTime(slot.endTime)}
+                {formatReservationTimeSlot(slot)}
               </span>
               <span
                 className={`ml-auto inline-flex min-w-[6.8rem] shrink-0 items-center justify-center rounded-full px-2 py-1 text-[10px] font-bold ${getStatusPillClasses(

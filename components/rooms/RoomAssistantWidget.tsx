@@ -10,6 +10,7 @@ import {
   findAssistantRoomMatchesForDatePreference,
   formatAssistantTimeslot,
   getAssistantRoomTypeLabel,
+  getAssistantRoomSelectionTimeslot,
   getFallbackPreferencesFromRoom,
   isAssistantTimeslotInPast,
   isCompleteTimeslot,
@@ -23,11 +24,17 @@ import {
   type AssistantTimeslot,
   type AssistantTimeslotSuggestion,
   type AssistantRoomTypeValue,
+  validateAssistantTimeslot,
 } from '@/lib/ai/roomAssistantRealtime';
 import { getCampusName } from '@/lib/buildings/campusAssignments';
 import type { ReservationCampus } from '@/lib/buildings/campuses';
 import { getRoomFeedbackSummaries } from '@/lib/feedback/feedback';
 import type { RoomFeedbackSummary } from '@/lib/feedback/feedback-summaries';
+import {
+  formatReservationTimeSlot,
+  getReservationTimeSlots,
+  type ReservationTimeSlot,
+} from '@/lib/reservations/timeSlots';
 
 type AssistantOptionValue =
   | number
@@ -50,13 +57,14 @@ type AssistantMessage = {
   recommendations?: AssistantRecommendationCard[];
   role: 'system' | 'user';
   text: string;
-  type: 'buttons' | 'feature-picker' | 'recommendations' | 'text';
+  type: 'buttons' | 'date-time-picker' | 'feature-picker' | 'recommendations' | 'text';
 };
 
 type AssistantStep =
   | 'campus'
   | 'capacity'
   | 'date'
+  | 'date-time'
   | 'entry'
   | 'features'
   | 'results'
@@ -122,6 +130,10 @@ const DATE_PREFERENCE_OPTIONS: AssistantOption[] = [
   {
     label: 'Specific date/time in form',
     value: 'specific-date-time'
+  },
+  {
+    label: 'Choose date & time',
+    value: 'choose-date-time'
   },
   {
     label: 'Any Friday',
@@ -259,6 +271,7 @@ function buildFeatureOptions(rooms: AssistantRoomRecord[]): AssistantOption[] {
 function isInteractiveMessage(message: AssistantMessage) {
   return (
     message.type === 'buttons' ||
+    message.type === 'date-time-picker' ||
     message.type === 'feature-picker' ||
     message.type === 'recommendations'
   );
@@ -327,6 +340,14 @@ function createDatePreferencePromptMessage(timeslot: AssistantTimeslot, notice?:
   );
 }
 
+function createDateTimePickerMessage() {
+  return createMessage(
+    'Choose the date and time to search. I will also update the reservation form for you.',
+    'system',
+    'date-time-picker'
+  );
+}
+
 function createTypePromptMessage() {
   return createMessage(
     'Sure. What kind of room are you looking for?',
@@ -385,7 +406,7 @@ function createFeaturePromptMessage(options: AssistantOption[]) {
 }
 
 function createSearchMessage() {
-  return createMessage('Checking live Firebase room data for you...', 'system', 'text');
+  return createMessage('Checking live room data for you...', 'system', 'text');
 }
 
 function createRecommendationMessage(
@@ -573,6 +594,8 @@ export default function RoomAssistantWidget({
     initialConversation.initialMessage,
   ]);
   const [datePreference, setDatePreference] = useState<AssistantDatePreference | null>(null);
+  const [dateTimeDraft, setDateTimeDraft] = useState<AssistantTimeslot>({});
+  const [dateTimeError, setDateTimeError] = useState('');
   const [preferences, setPreferences] = useState<AssistantPreferences>({ requiredFeatures: [] });
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
   const [step, setStep] = useState<AssistantStep>('entry');
@@ -585,6 +608,10 @@ export default function RoomAssistantWidget({
 
   const capacityOptions = useMemo(() => buildCapacityOptions(rooms), [rooms]);
   const featureOptions = useMemo(() => buildFeatureOptions(rooms), [rooms]);
+  const reservationTimeSlots = useMemo(
+    () => (campusTimeRange ? getReservationTimeSlots(campusTimeRange) : []),
+    [campusTimeRange]
+  );
 
   function clearReplyTimers() {
     replyTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
@@ -598,6 +625,8 @@ export default function RoomAssistantWidget({
     clearReplyTimers();
     setMessages([nextEntryMessage]);
     setDatePreference(null);
+    setDateTimeDraft({});
+    setDateTimeError('');
     setPreferences({ requiredFeatures: [] });
     setSelectedFeatures([]);
     setStep('entry');
@@ -700,6 +729,17 @@ export default function RoomAssistantWidget({
   }
 
   function handleDatePreferenceSelection(value: string) {
+    if (value === 'choose-date-time') {
+      setDateTimeDraft({
+        date: timeslot.date ?? '',
+      });
+      setDateTimeError('');
+      setStep('date-time');
+      appendUserMessage('Choose date & time');
+      queueBotMessages([createDateTimePickerMessage()]);
+      return;
+    }
+
     const nextPreference: AssistantDatePreference | null =
       value === 'use-selected-date-time'
         ? { kind: 'selected-date-time' }
@@ -756,6 +796,57 @@ export default function RoomAssistantWidget({
           ? 'Specific date and time'
           : 'Use selected date and time'
     );
+    queueBotMessages([createTypePromptMessage()]);
+  }
+
+  function handleDateTimeDateChange(value: string) {
+    setDateTimeDraft({ date: value });
+    setDateTimeError('');
+  }
+
+  function handleDateTimeSlotSelection(slot: ReservationTimeSlot) {
+    if (!dateTimeDraft.date || isAssistantTimeslotInPast({ ...slot, date: dateTimeDraft.date })) {
+      return;
+    }
+
+    setDateTimeDraft({
+      date: dateTimeDraft.date,
+      endTime: slot.endTime,
+      startTime: slot.startTime,
+    });
+    setDateTimeError('');
+  }
+
+  function handleDateTimeSubmit(messageId: string) {
+    if (messageId !== activePromptId || isBotTyping) {
+      return;
+    }
+
+    const validationStatus = validateAssistantTimeslot(dateTimeDraft);
+    const validationMessage =
+      validationStatus === 'missing-date'
+        ? 'Please choose a date.'
+        : validationStatus === 'missing-start-time'
+          ? 'Please choose a start time.'
+          : validationStatus === 'missing-end-time'
+            ? 'Please choose an end time.'
+            : validationStatus === 'invalid-time'
+              ? 'End time must be after start time.'
+              : validationStatus === 'past-date'
+                ? 'Please choose a date and time that is not in the past.'
+                : '';
+
+    if (validationMessage) {
+      setDateTimeError(validationMessage);
+      return;
+    }
+
+    const resolvedTimeslot = dateTimeDraft as Required<AssistantTimeslot>;
+    onSelectTimeslot(resolvedTimeslot);
+    setDatePreference({ kind: 'chatbot-date-time' });
+    setDateTimeError('');
+    setStep('type');
+    appendUserMessage(`Date and time: ${formatAssistantTimeslot(resolvedTimeslot)}`);
     queueBotMessages([createTypePromptMessage()]);
   }
 
@@ -990,7 +1081,15 @@ export default function RoomAssistantWidget({
             'system',
             'text'
           )
-        : null;
+        : datePreference.kind === 'chatbot-date-time'
+          ? createMessage(
+              `I will search for ${formatAssistantTimeslot(
+                resolvedTimeslot
+              )}. I updated the reservation form to use it.`,
+              'system',
+              'text'
+            )
+          : null;
     queueBotMessages([
       ...(dateResolutionMessage ? [dateResolutionMessage] : []),
       createSearchMessage(),
@@ -1165,6 +1264,10 @@ export default function RoomAssistantWidget({
 
     appendUserMessage(`Select ${getRoomDisplayName(recommendation)}`);
     onSelectRoom(recommendation.roomId);
+    const timeslotToRestore = getAssistantRoomSelectionTimeslot(timeslot);
+    if (timeslotToRestore) {
+      onSelectTimeslot(timeslotToRestore);
+    }
     setIsOpen(false);
   }
 
@@ -1266,6 +1369,81 @@ export default function RoomAssistantWidget({
                           </button>
                         ))}
                       </div>
+                    )}
+
+                    {message.type === 'date-time-picker' && (
+                      <form
+                        className="mt-3 space-y-3"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          handleDateTimeSubmit(message.id);
+                        }}
+                      >
+                        <label className="block text-xs font-semibold text-black/75">
+                          Date
+                          <input
+                            type="date"
+                            value={dateTimeDraft.date ?? ''}
+                            onChange={(event) => handleDateTimeDateChange(event.target.value)}
+                            disabled={!isCurrentPrompt}
+                            className="mt-1 block w-full rounded-xl border border-black/12 bg-white px-3 py-2 text-sm font-normal text-black outline-none focus:border-[#a12124] disabled:cursor-not-allowed disabled:opacity-55"
+                          />
+                        </label>
+                        <div>
+                          <p className="text-xs font-semibold text-black/75">Time</p>
+                          <div className="mt-1 max-h-52 space-y-2 overflow-y-auto pr-1">
+                            {reservationTimeSlots.length === 0 ? (
+                              <p className="rounded-xl border border-black/8 bg-black/5 px-3 py-2 text-xs text-black/60">
+                                Choose a campus first to load reservation time slots.
+                              </p>
+                            ) : (
+                              reservationTimeSlots.map((slot) => {
+                                const selected =
+                                  slot.startTime === dateTimeDraft.startTime &&
+                                  slot.endTime === dateTimeDraft.endTime;
+                                const past = Boolean(
+                                  dateTimeDraft.date &&
+                                    isAssistantTimeslotInPast({
+                                      ...slot,
+                                      date: dateTimeDraft.date,
+                                    })
+                                );
+
+                                return (
+                                  <button
+                                    key={`${slot.startTime}-${slot.endTime}`}
+                                    type="button"
+                                    onClick={() => handleDateTimeSlotSelection(slot)}
+                                    disabled={!isCurrentPrompt || !dateTimeDraft.date || past}
+                                    className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                                      selected
+                                        ? 'border-[#a12124]/35 bg-[#a12124]/12 text-[#8f1d20]'
+                                        : 'border-black/8 bg-black/5 text-black hover:bg-[#a12124]/8 hover:text-[#8f1d20]'
+                                    }`}
+                                  >
+                                    <span>{formatReservationTimeSlot(slot)}</span>
+                                    <span className="text-[10px]">
+                                      {past ? 'Unavailable' : selected ? 'Selected' : 'Select'}
+                                    </span>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                        {dateTimeError && (
+                          <p className="text-xs font-semibold text-[#a12124]" role="alert">
+                            {dateTimeError}
+                          </p>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={!isCurrentPrompt}
+                          className="w-full rounded-full bg-[#a12124] px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-[#871d20] disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          Search availability
+                        </button>
+                      </form>
                     )}
 
                     {message.type === 'feature-picker' && message.options && (
@@ -1400,7 +1578,9 @@ export default function RoomAssistantWidget({
                   : step === 'campus'
                     ? 'Choose a campus so I can load the right rooms.'
                   : step === 'date'
-                    ? 'Use the reservation form for a specific date and time, or choose a future weekday.'
+                    ? 'Use the reservation form or Choose date & time for a specific date and time, or choose a future weekday.'
+                    : step === 'date-time'
+                      ? 'Choose a date and a 1-hour time slot, then search availability.'
                   : step === 'features'
                     ? 'Choose any features you want, then press Done.'
                     : step === 'timeslot-suggestions'

@@ -25,7 +25,16 @@ export interface AssistantTimeslot {
 export type AssistantDatePreference =
   | { kind: 'selected-date-time' }
   | { kind: 'specific-date-time' }
+  | { kind: 'chatbot-date-time' }
   | { dayOfWeek: number; kind: 'weekday' };
+
+export type AssistantTimeslotValidationStatus =
+  | 'invalid-time'
+  | 'missing-date'
+  | 'missing-end-time'
+  | 'missing-start-time'
+  | 'past-date'
+  | 'valid';
 
 export type AssistantDatePreferenceResultStatus =
   | 'invalid-time'
@@ -709,6 +718,48 @@ export function toAssistantReservationRecords(
 
 export function isCompleteTimeslot(timeslot: AssistantTimeslot) {
   return Boolean(timeslot.date && timeslot.startTime && timeslot.endTime);
+}
+
+export function getAssistantRoomSelectionTimeslot(
+  timeslot: AssistantTimeslot
+): Required<AssistantTimeslot> | null {
+  const { date, endTime, startTime } = timeslot;
+  if (!date || !endTime || !startTime) {
+    return null;
+  }
+
+  return {
+    date,
+    endTime,
+    startTime,
+  };
+}
+
+export function validateAssistantTimeslot(
+  timeslot: AssistantTimeslot,
+  now: Date = new Date()
+): AssistantTimeslotValidationStatus {
+  if (!timeslot.date) {
+    return 'missing-date';
+  }
+
+  if (!timeslot.startTime) {
+    return 'missing-start-time';
+  }
+
+  if (!timeslot.endTime) {
+    return 'missing-end-time';
+  }
+
+  if (!hasValidAssistantTimeRange(timeslot)) {
+    return 'invalid-time';
+  }
+
+  if (isPastTimeslot(timeslot as Required<AssistantTimeslot>, now)) {
+    return 'past-date';
+  }
+
+  return 'valid';
 }
 
 export function formatAssistantTimeslot(timeslot: Required<AssistantTimeslot>) {
