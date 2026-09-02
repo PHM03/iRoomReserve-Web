@@ -10,6 +10,7 @@ import {
   hasTimeConflict,
   toIsoDateString,
 } from '@/lib/reservations/roomAvailability';
+import { isReservationDateSelectable } from '@/lib/reservations/timeSlots';
 
 interface RoomAvailabilityPickerProps {
   bookedSlots: readonly BookingSlot[];
@@ -63,7 +64,7 @@ export default function RoomAvailabilityPicker({
     () =>
       Array.from(new Set(bookedSlots.map((slot) => slot.date)))
         .map((isoDate) => fromIsoDateString(isoDate))
-        .filter((date): date is Date => date !== undefined && date.getDay() !== 0),
+        .filter((date): date is Date => date !== undefined && isReservationDateSelectable(date)),
     [bookedSlots]
   );
 
@@ -104,7 +105,7 @@ export default function RoomAvailabilityPicker({
           selected={selectedDate}
           onSelect={(nextDate) => {
             if (disabled) return;
-            if (nextDate?.getDay() === 0) return;
+            if (nextDate && !isReservationDateSelectable(nextDate)) return;
             onChange(nextDate ? toIsoDateString(nextDate) : '');
           }}
           disabled={disabled ? () => true : disabledMatcher}

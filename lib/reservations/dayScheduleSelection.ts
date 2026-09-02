@@ -16,6 +16,12 @@ export interface ScheduleSelection {
   endTime: string;
 }
 
+export interface ContiguousScheduleSelectionResult {
+  reason?: 'non-contiguous';
+  selectedSlots: ScheduleSelection[];
+  selection: ScheduleSelection | null;
+}
+
 export interface NextScheduleSelectionResult {
   selection: ScheduleSelection | null;
   reason?: 'blocked-range';
@@ -139,4 +145,59 @@ export function getNextScheduleSelection(
   }
 
   return { selection: nextSelection };
+}
+
+export function getNextContiguousScheduleSelection(
+  selectedSlots: readonly ScheduleSelection[],
+  clickedSlot: ScheduleSelection
+): ContiguousScheduleSelectionResult {
+  const clickedInsideSelection = selectedSlots.some(
+    (slot) =>
+      slot.startTime === clickedSlot.startTime && slot.endTime === clickedSlot.endTime
+  );
+
+  if (clickedInsideSelection) {
+    return {
+      selectedSlots: [],
+      selection: null,
+    };
+  }
+
+  if (selectedSlots.length === 0) {
+    return {
+      selectedSlots: [clickedSlot],
+      selection: clickedSlot,
+    };
+  }
+
+  const sortedSlots = [...selectedSlots].sort((left, right) =>
+    left.startTime.localeCompare(right.startTime)
+  );
+  const firstSlot = sortedSlots[0];
+  const lastSlot = sortedSlots[sortedSlots.length - 1];
+  const canAppend = clickedSlot.startTime === lastSlot.endTime;
+  const canPrepend = clickedSlot.endTime === firstSlot.startTime;
+
+  if (!canAppend && !canPrepend) {
+    return {
+      reason: 'non-contiguous',
+      selectedSlots: [...selectedSlots],
+      selection: {
+        endTime: lastSlot.endTime,
+        startTime: firstSlot.startTime,
+      },
+    };
+  }
+
+  const nextSelectedSlots = [...selectedSlots, clickedSlot].sort((left, right) =>
+    left.startTime.localeCompare(right.startTime)
+  );
+
+  return {
+    selectedSlots: nextSelectedSlots,
+    selection: {
+      endTime: nextSelectedSlots[nextSelectedSlots.length - 1].endTime,
+      startTime: nextSelectedSlots[0].startTime,
+    },
+  };
 }

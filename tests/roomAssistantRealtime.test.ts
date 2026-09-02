@@ -17,8 +17,12 @@ import {
   validateAssistantTimeslot,
 } from '../lib/ai/roomAssistantRealtime';
 import {
+  getNextContiguousScheduleSelection,
+} from '../lib/reservations/dayScheduleSelection';
+import {
   formatReservationTimeSlot,
   getReservationTimeSlots,
+  isReservationDateSelectable,
 } from '../lib/reservations/timeSlots';
 
 function createRoom(overrides: Record<string, unknown> = {}) {
@@ -64,6 +68,20 @@ function createReservation(overrides: Record<string, unknown> = {}) {
 }
 
 describe('roomAssistantRealtime', () => {
+  it('matches reservation weekday rules by excluding Sunday only', () => {
+    expect(isReservationDateSelectable(new Date('2026-06-07T00:00:00'))).toBe(false);
+    expect(
+      [
+        '2026-06-08',
+        '2026-06-09',
+        '2026-06-10',
+        '2026-06-11',
+        '2026-06-12',
+        '2026-06-13',
+      ].every((date) => isReservationDateSelectable(new Date(`${date}T00:00:00`)))
+    ).toBe(true);
+  });
+
   it('uses the reservation form one-hour slot boundaries and labels', () => {
     const slots = getReservationTimeSlots({ startMinutes: 7 * 60, endMinutes: 10 * 60 });
 
@@ -73,6 +91,33 @@ describe('roomAssistantRealtime', () => {
       { endTime: '10:00', startTime: '09:00' },
     ]);
     expect(formatReservationTimeSlot(slots[1])).toBe('8:00 AM - 9:00 AM');
+  });
+
+  it('selects one chatbot slot and expands only adjacent slots', () => {
+    const firstSlot = { endTime: '10:00', startTime: '09:00' };
+    const adjacentSlot = { endTime: '11:00', startTime: '10:00' };
+    const thirdAdjacentSlot = { endTime: '12:00', startTime: '11:00' };
+    const nonContiguousSlot = { endTime: '13:00', startTime: '12:00' };
+
+    const oneSlot = getNextContiguousScheduleSelection([], firstSlot);
+    expect(oneSlot.selection).toEqual(firstSlot);
+
+    const twoSlots = getNextContiguousScheduleSelection(oneSlot.selectedSlots, adjacentSlot);
+    expect(twoSlots.selection).toEqual({ endTime: '11:00', startTime: '09:00' });
+
+    const threeSlots = getNextContiguousScheduleSelection(
+      twoSlots.selectedSlots,
+      thirdAdjacentSlot
+    );
+    expect(threeSlots.selection).toEqual({ endTime: '12:00', startTime: '09:00' });
+
+    const rejectedGap = getNextContiguousScheduleSelection(
+      [firstSlot],
+      nonContiguousSlot
+    );
+    expect(rejectedGap.reason).toBe('non-contiguous');
+    expect(rejectedGap.selection).toEqual(firstSlot);
+    expect(rejectedGap.selectedSlots).toEqual([firstSlot]);
   });
 
   it('exposes the complete room type preference list', () => {
@@ -115,18 +160,56 @@ describe('roomAssistantRealtime', () => {
     expect(result.conflictingReservations).toHaveLength(1);
   });
 
-  it('restores the latest complete timeslot after room selection clears form details', () => {
+  it('passes the selected date and contiguous time range back to the form after room selection', () => {
+    const firstSlot = { endTime: '10:00', startTime: '09:00' };
+    const secondSlot = { endTime: '11:00', startTime: '10:00' };
+    const selectedRange = getNextContiguousScheduleSelection([firstSlot], secondSlot).selection;
     const formState = {
       date: '',
       endTime: '',
       roomId: '',
       startTime: '',
     };
-    const latestTimeslot = {
+    const chatbotTimeslot = {
+      date: '2026-06-12',
+      ...selectedRange,
+    };
+
+    formState.roomId = 'recommended-room';
+    const timeslotToRestore = getAssistantRoomSelectionTimeslot(chatbotTimeslot);
+    if (timeslotToRestore) {
+      formState.date = timeslotToRestore.date;
+      formState.startTime = timeslotToRestore.startTime;
+      formState.endTime = timeslotToRestore.endTime;
+    }
+
+    expect(formState).toEqual({
+      date: '2026-06-12',
+      endTime: '11:00',
+      roomId: 'recommended-room',
+      startTime: '09:00',
+    });
+  });
+
+  it('restores the latest changed chatbot timeslot after room selection', () => {
+    const formState = {
+      date: '',
+      endTime: '',
+      roomId: '',
+      startTime: '',
+    };
+    const initialTimeslot = {
       date: '2026-06-12',
       endTime: '09:00',
       startTime: '08:00',
     };
+    const latestTimeslot = {
+      date: '2026-06-12',
+      endTime: '11:00',
+      startTime: '10:00',
+    };
+
+    expect(getAssistantRoomSelectionTimeslot(initialTimeslot)).toEqual(initialTimeslot);
 
     formState.roomId = 'recommended-room';
     formState.date = '';
@@ -142,9 +225,9 @@ describe('roomAssistantRealtime', () => {
 
     expect(formState).toEqual({
       date: '2026-06-12',
-      endTime: '09:00',
+      endTime: '11:00',
       roomId: 'recommended-room',
-      startTime: '08:00',
+      startTime: '10:00',
     });
   });
 

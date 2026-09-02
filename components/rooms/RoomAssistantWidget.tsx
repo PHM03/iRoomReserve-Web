@@ -3,6 +3,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  getNextContiguousScheduleSelection,
+} from '@/lib/reservations/dayScheduleSelection';
+import RoomAvailabilityPicker from '@/components/rooms/RoomAvailabilityPicker';
+import {
   ASSISTANT_FEATURE_OPTIONS,
   ASSISTANT_ROOM_TYPE_OPTIONS,
   checkAssistantRoomAvailability,
@@ -595,6 +599,7 @@ export default function RoomAssistantWidget({
   ]);
   const [datePreference, setDatePreference] = useState<AssistantDatePreference | null>(null);
   const [dateTimeDraft, setDateTimeDraft] = useState<AssistantTimeslot>({});
+  const [selectedDateTimeSlots, setSelectedDateTimeSlots] = useState<ReservationTimeSlot[]>([]);
   const [dateTimeError, setDateTimeError] = useState('');
   const [preferences, setPreferences] = useState<AssistantPreferences>({ requiredFeatures: [] });
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
@@ -626,6 +631,7 @@ export default function RoomAssistantWidget({
     setMessages([nextEntryMessage]);
     setDatePreference(null);
     setDateTimeDraft({});
+    setSelectedDateTimeSlots([]);
     setDateTimeError('');
     setPreferences({ requiredFeatures: [] });
     setSelectedFeatures([]);
@@ -733,6 +739,7 @@ export default function RoomAssistantWidget({
       setDateTimeDraft({
         date: timeslot.date ?? '',
       });
+      setSelectedDateTimeSlots([]);
       setDateTimeError('');
       setStep('date-time');
       appendUserMessage('Choose date & time');
@@ -801,6 +808,7 @@ export default function RoomAssistantWidget({
 
   function handleDateTimeDateChange(value: string) {
     setDateTimeDraft({ date: value });
+    setSelectedDateTimeSlots([]);
     setDateTimeError('');
   }
 
@@ -809,10 +817,17 @@ export default function RoomAssistantWidget({
       return;
     }
 
+    const nextSelection = getNextContiguousScheduleSelection(selectedDateTimeSlots, slot);
+    setSelectedDateTimeSlots(nextSelection.selectedSlots);
+
+    if (nextSelection.reason === 'non-contiguous') {
+      setDateTimeError('Choose a time slot next to the selected range.');
+      return;
+    }
+
     setDateTimeDraft({
       date: dateTimeDraft.date,
-      endTime: slot.endTime,
-      startTime: slot.startTime,
+      ...(nextSelection.selection ?? {}),
     });
     setDateTimeError('');
   }
@@ -1379,16 +1394,17 @@ export default function RoomAssistantWidget({
                           handleDateTimeSubmit(message.id);
                         }}
                       >
-                        <label className="block text-xs font-semibold text-black/75">
-                          Date
-                          <input
-                            type="date"
+                        <div>
+                          <p className="text-xs font-semibold text-black/75">Date</p>
+                          <RoomAvailabilityPicker
+                            bookedSlots={[]}
                             value={dateTimeDraft.date ?? ''}
-                            onChange={(event) => handleDateTimeDateChange(event.target.value)}
+                            onChange={handleDateTimeDateChange}
                             disabled={!isCurrentPrompt}
-                            className="mt-1 block w-full rounded-xl border border-black/12 bg-white px-3 py-2 text-sm font-normal text-black outline-none focus:border-[#a12124] disabled:cursor-not-allowed disabled:opacity-55"
+                            hideLegend
+                            className="mt-1"
                           />
-                        </label>
+                        </div>
                         <div>
                           <p className="text-xs font-semibold text-black/75">Time</p>
                           <div className="mt-1 max-h-52 space-y-2 overflow-y-auto pr-1">
@@ -1399,8 +1415,11 @@ export default function RoomAssistantWidget({
                             ) : (
                               reservationTimeSlots.map((slot) => {
                                 const selected =
-                                  slot.startTime === dateTimeDraft.startTime &&
-                                  slot.endTime === dateTimeDraft.endTime;
+                                  selectedDateTimeSlots.some(
+                                    (selectedSlot) =>
+                                      selectedSlot.startTime === slot.startTime &&
+                                      selectedSlot.endTime === slot.endTime
+                                  );
                                 const past = Boolean(
                                   dateTimeDraft.date &&
                                     isAssistantTimeslotInPast({

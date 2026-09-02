@@ -10,6 +10,10 @@ export interface ReservationTimeSlot {
   startTime: string;
 }
 
+export function isReservationDateSelectable(date: Date): boolean {
+  return date.getDay() !== 0;
+}
+
 function minutesToTimeString(value: number): string {
   const hours = Math.floor(value / 60);
   const minutes = value % 60;
