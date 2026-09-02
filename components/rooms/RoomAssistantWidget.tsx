@@ -594,6 +594,7 @@ export default function RoomAssistantWidget({
     };
   });
   const [isOpen, setIsOpen] = useState(false);
+  const [isLarge, setIsLarge] = useState(false);
   const [messages, setMessages] = useState<AssistantMessage[]>([
     initialConversation.initialMessage,
   ]);
@@ -1304,7 +1305,15 @@ export default function RoomAssistantWidget({
   return (
     <>
       {isOpen && (
-        <div className="assistant-chat-shell assistant-pop fixed bottom-4 right-4 z-40 flex h-[min(31rem,calc(100dvh-7rem))] w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-[28px] border border-[var(--assistant-outline)] md:bottom-6 md:right-6 md:h-[min(32rem,calc(100dvh-8.5rem))] md:w-[22.5rem]">
+        <div
+          role="dialog"
+          aria-label="Room Recommendation Assistant"
+          className={`assistant-chat-shell assistant-pop fixed z-40 flex flex-col overflow-hidden rounded-[28px] border border-[var(--assistant-outline)] ${
+            isLarge
+              ? 'bottom-2 right-2 h-[min(42rem,calc(100dvh-1rem))] w-[min(42rem,calc(100vw-1rem))] md:bottom-6 md:right-6 md:h-[min(42rem,calc(100dvh-8.5rem))] md:w-[min(42rem,calc(100vw-3rem))]'
+              : 'bottom-4 right-4 h-[min(31rem,calc(100dvh-7rem))] w-[min(22rem,calc(100vw-1rem))] md:bottom-6 md:right-6 md:h-[min(32rem,calc(100dvh-8.5rem))] md:w-[22.5rem]'
+          }`}
+        >
           <div className="border-b border-black/8 bg-[linear-gradient(135deg,#a12124_0%,#7a191c_100%)] px-4 py-3 text-white">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1324,17 +1333,29 @@ export default function RoomAssistantWidget({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/18 bg-white/10 text-white transition-colors hover:bg-white/18"
-                  aria-label="Close room assistant"
+                  onClick={() => setIsLarge((current) => !current)}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-white/18 bg-white/10 px-2.5 text-[10px] font-bold text-white transition-colors hover:bg-white/18"
+                  aria-label={isLarge ? 'Shrink room assistant' : 'Enlarge room assistant'}
+                  title={isLarge ? 'Shrink room assistant' : 'Enlarge room assistant'}
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      d="M6 6l12 12M18 6L6 18"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                    />
+                    {isLarge ? (
+                      <path d="M8 8v4h4M16 16v-4h-4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+                    ) : (
+                      <path d="M8 8h4v4M16 16h-4v-4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+                    )}
+                  </svg>
+                  <span aria-hidden="true">{isLarge ? 'Shrink' : 'Enlarge'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/18 bg-white/10 text-white transition-colors hover:bg-white/18"
+                  aria-label="Minimize room assistant"
+                  title="Minimize room assistant"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 12h12" strokeLinecap="round" strokeWidth="2" />
                   </svg>
                 </button>
               </div>
@@ -1619,7 +1640,7 @@ export default function RoomAssistantWidget({
               onOpenWithoutCampus();
             }
 
-            resetConversation();
+            setIsLarge(false);
             setIsOpen(true);
           }}
           className="assistant-bubble-button assistant-float fixed bottom-5 right-5 z-40 flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full border border-white/55 shadow-[0_18px_38px_rgba(122,25,28,0.34)] transition-all hover:-translate-y-1 md:bottom-6 md:right-6"
