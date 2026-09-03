@@ -119,6 +119,7 @@ function SortableHeader({
 function LocationTable({
   title,
   items,
+  showBuildingContext = false,
   showFloor = false,
   nameHeader = 'Location',
   nameSortKey,
@@ -127,6 +128,7 @@ function LocationTable({
 }: {
   title: string;
   items: FeedbackLocationAnalytics['rooms'];
+  showBuildingContext?: boolean;
   showFloor?: boolean;
   nameHeader?: string;
   nameSortKey?: 'floor' | 'room';
@@ -156,6 +158,7 @@ function LocationTable({
                 ) : (
                   <th scope="col" className="pb-2 pr-3">{nameHeader}</th>
                 )}
+                {showBuildingContext ? <th scope="col" className="pb-2 pr-3">Building</th> : null}
                 {showFloor ? (
                   sort && onSortChange ? (
                     <SortableHeader label="Floor" sortKey="floor" sort={sort} onSortChange={onSortChange} />
@@ -185,6 +188,7 @@ function LocationTable({
               {ranked.map((item) => (
                 <tr key={item.id} className="border-t border-dark/10">
                   <td className="py-2 pr-3 font-bold text-black">{item.name}</td>
+                  {showBuildingContext ? <td className="py-2 pr-3 text-black/65">{item.buildingId}</td> : null}
                   {showFloor ? <td className="py-2 pr-3 text-black/65">{item.floor ?? '—'}</td> : null}
                   <td className="py-2 pr-3 text-black/65">{item.totalReviews}</td>
                   <td className="py-2 pr-3 font-bold text-black">{displayNumber(item.averageRating, ' / 5')}</td>
@@ -293,9 +297,11 @@ function getConcernAspectKey(category: FeedbackCategoryRatingKey | typeof ALL_LO
 export function LocationPerformanceSection({
   analytics,
   activeBuildingLabel,
+  showBuildingContext = false,
 }: {
   analytics: FeedbackLocationAnalytics;
   activeBuildingLabel: string;
+  showBuildingContext?: boolean;
 }) {
   const [floorFilter, setFloorFilter] = useState(ALL_LOCATION_FILTER);
   const [roomFilter, setRoomFilter] = useState(ALL_LOCATION_FILTER);
@@ -309,12 +315,17 @@ export function LocationPerformanceSection({
 
   const floors = useMemo(() => analytics.floors, [analytics.floors]);
   const selectedFloor = floors.some((floor) => floor.id === floorFilter) ? floorFilter : ALL_LOCATION_FILTER;
-  const selectedFloorValue = floors.find((floor) => floor.id === selectedFloor)?.floor ?? null;
+  const selectedFloorItem = floors.find((floor) => floor.id === selectedFloor);
+  const selectedFloorValue = selectedFloorItem?.floor ?? null;
   const rooms = useMemo(
     () => analytics.rooms.filter((room) =>
-      (selectedFloorValue === null || room.floor === selectedFloorValue)
+      selectedFloorValue === null
+      || (
+        room.floor === selectedFloorValue
+        && (!showBuildingContext || room.buildingId === selectedFloorItem?.buildingId)
+      )
     ),
-    [analytics.rooms, selectedFloorValue],
+    [analytics.rooms, selectedFloorItem?.buildingId, selectedFloorValue, showBuildingContext],
   );
   const selectedRoom = rooms.some((room) => room.id === roomFilter) ? roomFilter : ALL_LOCATION_FILTER;
 
@@ -422,7 +433,11 @@ export function LocationPerformanceSection({
             className="glass-input h-8 px-2 text-xs font-bold normal-case tracking-normal text-black"
           >
             <option value={ALL_LOCATION_FILTER}>All</option>
-            {floors.map((floor) => <option key={floor.id} value={floor.id}>{floor.name}</option>)}
+            {floors.map((floor) => (
+              <option key={floor.id} value={floor.id}>
+                {showBuildingContext ? `${floor.name} — ${floor.buildingId}` : floor.name}
+              </option>
+            ))}
           </select>
         </label>
         <label className="flex min-w-0 flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-black/50">
@@ -434,7 +449,11 @@ export function LocationPerformanceSection({
             className="glass-input h-8 px-2 text-xs font-bold normal-case tracking-normal text-black"
           >
             <option value={ALL_LOCATION_FILTER}>All</option>
-            {rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+            {rooms.map((room) => (
+              <option key={room.id} value={room.id}>
+                {showBuildingContext ? `${room.name} — ${room.buildingId}` : room.name}
+              </option>
+            ))}
           </select>
         </label>
         <label className="flex min-w-0 flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-black/50">
@@ -484,10 +503,11 @@ export function LocationPerformanceSection({
           <details className="mb-3 rounded-xl border border-dark/10 bg-white/55 p-3">
             <summary className="cursor-pointer text-xs font-bold text-black">View location breakdown</summary>
             <div className="mt-3 space-y-3">
-              <LocationTable title="Buildings" items={visibleBuildings} />
+              <LocationTable title="Buildings" items={visibleBuildings} showBuildingContext={showBuildingContext} />
               <LocationTable
                 title="Floor Breakdown"
                 items={visibleFloors}
+                showBuildingContext={showBuildingContext}
                 nameHeader="Floor"
                 nameSortKey="floor"
                 sort={floorSort}
@@ -496,6 +516,7 @@ export function LocationPerformanceSection({
               <LocationTable
                 title="Room Breakdown"
                 items={visibleRooms}
+                showBuildingContext={showBuildingContext}
                 showFloor
                 nameHeader="Room"
                 nameSortKey="room"

@@ -237,5 +237,13 @@ export function scopeFeedbackToBuilding<T extends { buildingId?: string }>(
   items: T[],
   buildingId: string,
 ) {
-  return items.filter((item) => item.buildingId === buildingId);
+  return scopeFeedbackToBuildings(items, [buildingId]);
+}
+
+export function scopeFeedbackToBuildings<T extends { buildingId?: string }>(
+  items: T[],
+  buildingIds: readonly string[],
+) {
+  const allowedBuildingIds = new Set(buildingIds.filter(Boolean));
+  return items.filter((item) => item.buildingId && allowedBuildingIds.has(item.buildingId));
 }

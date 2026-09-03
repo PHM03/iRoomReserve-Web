@@ -21,6 +21,11 @@ import type { AdminDashboardSummary } from '@/lib/admin/adminDashboard';
 import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
 import { getBuildingById } from '@/lib/buildings/buildings';
 import { getFeedbackByBuilding, type BuildingFeedbackResult } from '@/lib/feedback/feedback';
+import {
+  getWholeCampusBuildingIds,
+  isWholeCampusFeedbackScope,
+  WHOLE_CAMPUS_SCOPE_ID,
+} from '@/lib/feedback/feedback-campus-scope';
 import type { Feedback } from '@/lib/feedback/feedback';
 import type { FeedbackSentimentSummary } from '@/lib/feedback/feedback-sentiment';
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
@@ -74,6 +79,38 @@ export default function AdminDashboard({
     id: buildingId,
     name: buildingName,
   });
+  const wholeCampusBuildingIds = useMemo(
+    () => getWholeCampusBuildingIds(managedCampus),
+    [managedCampus],
+  );
+  const [feedbackScopeId, setFeedbackScopeId] = useState<string | null>(null);
+  const effectiveFeedbackScopeId = useMemo(() => {
+    const isWholeCampus = feedbackScopeId
+      ? isWholeCampusFeedbackScope(feedbackScopeId, managedCampus)
+      : false;
+    const isManagedBuilding = feedbackScopeId
+      ? managedBuildings.some((building) => building.id === feedbackScopeId)
+      : false;
+    if (feedbackScopeId && (isWholeCampus || isManagedBuilding)) {
+      return feedbackScopeId;
+    }
+    return buildingId ?? '';
+  }, [buildingId, feedbackScopeId, managedBuildings, managedCampus]);
+  const isWholeCampusFeedback = isWholeCampusFeedbackScope(effectiveFeedbackScopeId, managedCampus);
+  const feedbackBuildingIds = useMemo(
+    () => isWholeCampusFeedback ? wholeCampusBuildingIds : (buildingId ? [buildingId] : []),
+    [buildingId, isWholeCampusFeedback, wholeCampusBuildingIds],
+  );
+  const feedbackActiveBuildingLabel = isWholeCampusFeedback
+    ? 'Main Campus — Whole Campus'
+    : activeBuildingLabel;
+
+  const handleFeedbackScopeChange = useCallback((scopeId: string) => {
+    setFeedbackScopeId(scopeId);
+    if (scopeId !== WHOLE_CAMPUS_SCOPE_ID && managedBuildings.some((building) => building.id === scopeId)) {
+      setSelectedBuildingId(scopeId);
+    }
+  }, [managedBuildings, setSelectedBuildingId]);
 
   const [requests, setRequests] = useState<Reservation[]>([]);
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
@@ -108,21 +145,26 @@ export default function AdminDashboard({
 
     try {
       if (isFeedbackTab) {
-        const [feedbackSnapshot, roomSnapshot] = await Promise.all([
-          getFeedbackByBuilding(buildingId),
-          fetchAdminDashboardSnapshot(buildingId, {
-            includeApprovedReservations: false,
-            includePendingRequests: false,
-            includeRoomHistory: false,
-            includeRooms: true,
-            includeSchedules: false,
-            includeSummary: false,
+        const snapshots = await Promise.all(
+          feedbackBuildingIds.map(async (feedbackBuildingId) => {
+            const [feedbackSnapshot, roomSnapshot] = await Promise.all([
+              getFeedbackByBuilding(feedbackBuildingId),
+              fetchAdminDashboardSnapshot(feedbackBuildingId, {
+                includeApprovedReservations: false,
+                includePendingRequests: false,
+                includeRoomHistory: false,
+                includeRooms: true,
+                includeSchedules: false,
+                includeSummary: false,
+              }),
+            ]);
+            return { feedbackSnapshot, roomSnapshot };
           }),
-        ]);
-        setFeedbackList(feedbackSnapshot.feedback);
-        setFeedbackSummary(feedbackSnapshot.summary);
-        setGenderBreakdownByPeriod(feedbackSnapshot.genderBreakdownByPeriod ?? {});
-        setRooms(roomSnapshot.rooms);
+        );
+        setFeedbackList(snapshots.flatMap(({ feedbackSnapshot }) => feedbackSnapshot.feedback));
+        setFeedbackSummary(snapshots.length === 1 ? snapshots[0].feedbackSnapshot.summary : null);
+        setGenderBreakdownByPeriod(snapshots.length === 1 ? snapshots[0].feedbackSnapshot.genderBreakdownByPeriod ?? {} : {});
+        setRooms(snapshots.flatMap(({ roomSnapshot }) => roomSnapshot.rooms));
         return;
       }
 
@@ -168,7 +210,7 @@ export default function AdminDashboard({
         setFeedbackLoading(false);
       }
     }
-  }, [activeTab, buildingId, firebaseUser?.uid]);
+  }, [activeTab, buildingId, feedbackBuildingIds, firebaseUser?.uid]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -389,16 +431,19 @@ export default function AdminDashboard({
 
       {activeTab === 'feedback' && (
         <AdminFeedbackTab
-          activeBuildingLabel={activeBuildingLabel}
+          activeBuildingLabel={feedbackActiveBuildingLabel}
           buildingId={buildingId}
+          feedbackBuildingIds={feedbackBuildingIds}
+          feedbackScopeId={effectiveFeedbackScopeId}
           feedbackList={feedbackList}
           feedbackLoading={feedbackLoading}
           feedbackError={feedbackError}
           feedbackSummary={feedbackSummary}
           genderBreakdownByPeriod={genderBreakdownByPeriod}
           managedBuildings={managedBuildings}
-          onBuildingChange={setSelectedBuildingId}
+          onFeedbackScopeChange={handleFeedbackScopeChange}
           onReload={reloadDashboard}
+          wholeCampusBuildingIds={wholeCampusBuildingIds}
           rooms={rooms}
         />
       )}

@@ -13,7 +13,7 @@ import {
   compareFeedbackPeriods,
   filterFeedbackByPeriod,
   getFeedbackCreatedAt,
-  scopeFeedbackToBuilding,
+  scopeFeedbackToBuildings,
   type FeedbackAnalyticsPeriod,
 } from '@/lib/feedback/feedback-period';
 import {
@@ -24,6 +24,7 @@ import {
 import {
   buildFeedbackInsights,
 } from '@/lib/feedback/feedback-insights';
+import { WHOLE_CAMPUS_SCOPE_ID } from '@/lib/feedback/feedback-campus-scope';
 import type { BuildingFeedbackResult } from '@/lib/feedback/feedback';
 import {
   FEEDBACK_ASPECT_LABELS,
@@ -75,15 +76,18 @@ type FeedbackReviewView = 'reviews' | 'room-analytics';
 interface AdminFeedbackTabProps {
   activeBuildingLabel: string;
   buildingId: string;
+  feedbackBuildingIds: readonly string[];
+  feedbackScopeId: string;
   feedbackList: Feedback[];
   feedbackSummary: FeedbackSentimentSummary | null;
   genderBreakdownByPeriod?: BuildingFeedbackResult['genderBreakdownByPeriod'];
   managedBuildings: BuildingOption[];
-  onBuildingChange: (buildingId: string) => void;
+  onFeedbackScopeChange: (scopeId: string) => void;
   onReload: () => Promise<void>;
   feedbackLoading?: boolean;
   feedbackError?: string | null;
   rooms?: Room[];
+  wholeCampusBuildingIds: readonly string[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -150,13 +154,16 @@ function applyFeedbackFilters(
 export default function AdminFeedbackTab({
   activeBuildingLabel,
   buildingId,
+  feedbackBuildingIds,
+  feedbackScopeId,
   feedbackList,
   feedbackLoading = false,
   feedbackError = null,
   managedBuildings,
-  onBuildingChange,
+  onFeedbackScopeChange,
   onReload,
   rooms = [],
+  wholeCampusBuildingIds,
 }: Readonly<AdminFeedbackTabProps>) {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
@@ -186,9 +193,19 @@ export default function AdminFeedbackTab({
     [analyticsAcademicYear, analyticsSemester],
   );
 
+  const activeFeedbackBuildingIds = useMemo(
+    () => feedbackBuildingIds.length > 0 ? feedbackBuildingIds : [buildingId],
+    [buildingId, feedbackBuildingIds],
+  );
+  const activeFeedbackBuildingIdSet = useMemo(
+    () => new Set(activeFeedbackBuildingIds),
+    [activeFeedbackBuildingIds],
+  );
+  const isWholeCampus = feedbackScopeId === WHOLE_CAMPUS_SCOPE_ID && wholeCampusBuildingIds.length > 0;
+
   const buildingFeedbackList = useMemo(
-    () => scopeFeedbackToBuilding(feedbackList, buildingId),
-    [buildingId, feedbackList]
+    () => scopeFeedbackToBuildings(feedbackList, activeFeedbackBuildingIds),
+    [activeFeedbackBuildingIds, feedbackList]
   );
 
   const handleRespondFeedback = async (feedbackId: string) => {
@@ -206,8 +223,8 @@ export default function AdminFeedbackTab({
   // ── Derived data ─────────────────────────────────────────────────────────
 
   const buildingRooms = useMemo(
-    () => rooms.filter((room) => room.buildingId === buildingId),
-    [buildingId, rooms],
+    () => rooms.filter((room) => activeFeedbackBuildingIdSet.has(room.buildingId)),
+    [activeFeedbackBuildingIdSet, rooms],
   );
   const floorOptions = useMemo(
     () => sortFloors([...new Set(buildingRooms.map((room) => room.floor))]),
@@ -228,11 +245,12 @@ export default function AdminFeedbackTab({
 
   const scopedFeedback = useMemo(() => scopeFeedback(buildingFeedbackList, {
       buildingId,
+      buildingIds: activeFeedbackBuildingIds,
       floor: selectedFeedbackFloor,
       roomId: selectedFeedbackRoomId,
       rooms: buildingRooms,
       scope: feedbackScope,
-    }), [buildingFeedbackList, buildingId, buildingRooms, feedbackScope, selectedFeedbackFloor, selectedFeedbackRoomId]);
+    }), [activeFeedbackBuildingIds, buildingFeedbackList, buildingId, buildingRooms, feedbackScope, selectedFeedbackFloor, selectedFeedbackRoomId]);
 
   const filteredFeedback = useMemo(() => {
     const periodFeedback = filterFeedbackByPeriod(
@@ -300,8 +318,9 @@ export default function AdminFeedbackTab({
       buildingId,
       selectedFeedbackFloor,
       selectedFeedbackRoomId,
+      activeFeedbackBuildingIds,
     ),
-    [buildingId, buildingRooms, feedbackScope, filteredFeedback, insightPeriodFeedback.comparable, insightPeriodFeedback.previousItems, selectedFeedbackFloor, selectedFeedbackRoomId],
+    [activeFeedbackBuildingIds, buildingId, buildingRooms, feedbackScope, filteredFeedback, insightPeriodFeedback.comparable, insightPeriodFeedback.previousItems, selectedFeedbackFloor, selectedFeedbackRoomId],
   );
   const demographicAnalytics = useMemo(
     () => buildFeedbackDemographicAnalytics(filteredFeedback),
@@ -318,6 +337,19 @@ export default function AdminFeedbackTab({
     setRoleFilter('');
     setGenderFilter('');
   };
+
+  const feedbackScopeOptions = useMemo(
+    () => [
+      ...(wholeCampusBuildingIds.length > 0
+        ? [{ value: WHOLE_CAMPUS_SCOPE_ID, label: 'Whole Campus' }]
+        : []),
+      ...managedBuildings.map((building) => ({
+        value: building.id,
+        label: getManagedBuildingOptionLabel(building),
+      })),
+    ],
+    [managedBuildings, wholeCampusBuildingIds],
+  );
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -342,16 +374,13 @@ export default function AdminFeedbackTab({
           <h3 className="text-xl font-bold text-gray-800">Room Feedback</h3>
           <span className="text-sm text-gray-600">{buildingFeedbackList.length} total</span>
         </div>
-        {managedBuildings.length > 1 ? (
+        {feedbackScopeOptions.length > 1 ? (
           <div className="w-full sm:ml-auto sm:w-72">
             <AdminBuildingSelect
-              label="Active Building:"
-              options={managedBuildings.map((building) => ({
-                value: building.id,
-                label: getManagedBuildingOptionLabel(building),
-              }))}
-              value={buildingId}
-              onChange={onBuildingChange}
+              label="Feedback Scope:"
+              options={feedbackScopeOptions}
+              value={feedbackScopeId}
+              onChange={onFeedbackScopeChange}
               fullWidth
             />
           </div>
@@ -895,6 +924,7 @@ export default function AdminFeedbackTab({
                   <LocationPerformanceSection
                     analytics={locationAnalytics}
                     activeBuildingLabel={activeBuildingLabel}
+                    showBuildingContext={isWholeCampus}
                   />
                 </>
               ) : null}

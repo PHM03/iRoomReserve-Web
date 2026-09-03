@@ -650,8 +650,12 @@ export function filterFeedbackLocationAnalytics(
   buildingId: string,
   floor: string,
   roomId: string,
+  buildingIds: readonly string[] = [buildingId],
 ): FeedbackLocationAnalytics {
-  const buildings = analytics.buildings.filter((building) => building.id === buildingId);
+  const scopedBuildingIds = new Set(
+    (buildingIds.length ? buildingIds : [buildingId]).filter(Boolean),
+  );
+  const buildings = analytics.buildings.filter((building) => scopedBuildingIds.has(building.id));
 
   if (scope === "building") {
     return { ...analytics, buildings };
@@ -661,17 +665,17 @@ export function filterFeedbackLocationAnalytics(
     return {
       ...analytics,
       buildings,
-      floors: analytics.floors.filter((item) => item.id === `${buildingId}::${floor}`),
-      rooms: analytics.rooms.filter((item) => item.buildingId === buildingId && item.floor === floor),
+      floors: analytics.floors.filter((item) => scopedBuildingIds.has(item.buildingId) && item.floor === floor),
+      rooms: analytics.rooms.filter((item) => scopedBuildingIds.has(item.buildingId) && item.floor === floor),
     };
   }
 
-  const selectedRoom = analytics.rooms.find((item) => item.id === roomId);
+  const selectedRoom = analytics.rooms.find((item) => scopedBuildingIds.has(item.buildingId) && item.id === roomId);
   return {
     ...analytics,
     buildings,
     floors: selectedRoom
-      ? analytics.floors.filter((item) => item.id === `${buildingId}::${selectedRoom.floor}`)
+      ? analytics.floors.filter((item) => item.buildingId === selectedRoom.buildingId && item.floor === selectedRoom.floor)
       : [],
     rooms: selectedRoom ? [selectedRoom] : [],
   };
