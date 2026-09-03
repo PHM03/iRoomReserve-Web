@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type MouseEvent } from 'react';
 import {
   FEEDBACK_ASPECT_KEYS,
   FEEDBACK_ASPECT_LABELS,
@@ -14,6 +14,11 @@ import {
   type FeedbackAnalyticsDirection,
   type LocationPerformance,
 } from '@/lib/feedback/feedback-analytics';
+import {
+  sortLocationPerformance,
+  type FloorBreakdownSort,
+  type FloorBreakdownSortKey,
+} from '@/lib/feedback/feedback-location-sorting';
 
 function displayNumber(value: number | null, suffix = '') {
   return value === null || !Number.isFinite(value) ? '—' : `${value.toFixed(1)}${suffix}`;
@@ -71,21 +76,73 @@ export function FeedbackOverviewSection({
   );
 }
 
+function SortableHeader({
+  label,
+  sortKey,
+  sort,
+  onSortChange,
+  title,
+}: {
+  label: string;
+  sortKey: FloorBreakdownSortKey;
+  sort: FloorBreakdownSort;
+  onSortChange: (sort: FloorBreakdownSort) => void;
+  title?: string;
+}) {
+  const isActive = sort.key === sortKey;
+  const direction = isActive ? sort.direction : null;
+  return (
+    <th
+      scope="col"
+      className="pb-2 pr-3"
+      aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
+      title={title}
+    >
+      <button
+        type="button"
+        onClick={() => onSortChange({
+          key: sortKey,
+          direction: isActive && sort.direction === 'asc' ? 'desc' : 'asc',
+        })}
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-md text-left transition-colors hover:text-black focus:outline-none focus:ring-2 focus:ring-primary/40"
+        aria-label={`Sort by ${label}${direction ? `, currently ${direction}` : ''}`}
+      >
+        <span>{label}</span>
+        <span className={`text-sm leading-none ${isActive ? 'text-primary' : 'text-black/30'}`} aria-hidden="true">
+          {direction === 'asc' ? '↑' : direction === 'desc' ? '↓' : '↕'}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 function LocationTable({
   title,
   items,
   showFloor = false,
+  nameHeader = 'Location',
+  nameSortKey,
+  sort,
+  onSortChange,
 }: {
   title: string;
   items: FeedbackLocationAnalytics['rooms'];
   showFloor?: boolean;
+  nameHeader?: string;
+  nameSortKey?: 'floor' | 'room';
+  sort?: FloorBreakdownSort;
+  onSortChange?: (sort: FloorBreakdownSort) => void;
 }) {
-  const ranked = [...items].sort((left, right) => Number(right.reliable) - Number(left.reliable) || right.negativeRate - left.negativeRate);
+  const ranked = sort
+    ? sortLocationPerformance(items, sort)
+    : [...items].sort((left, right) => Number(right.reliable) - Number(left.reliable) || right.negativeRate - left.negativeRate);
   return (
     <div className="rounded-xl border border-dark/10 bg-white/65 p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h4 className="text-sm font-bold text-black">{title}</h4>
-        <span className="text-[10px] font-bold text-black/45">Highest negative rate first</span>
+        {!sort || !onSortChange ? (
+          <span className="text-[10px] font-bold text-black/45">Highest negative rate first</span>
+        ) : null}
       </div>
       {ranked.length === 0 ? (
         <p className="dashboard-empty-state rounded-xl px-3 py-5 text-center text-xs text-black/50">No feedback available for the selected filters.</p>
@@ -94,19 +151,34 @@ function LocationTable({
           <table className="w-full min-w-[620px] text-left text-xs">
             <thead className="text-[10px] uppercase tracking-[0.12em] text-black/45">
               <tr>
-                <th className="pb-2 pr-3">Location</th>
-                {showFloor ? <th className="pb-2 pr-3">Floor</th> : null}
-                <th className="pb-2 pr-3">Reviews</th>
-                <th className="pb-2 pr-3">Avg rating</th>
-                <th className="pb-2 pr-3">Positive</th>
-                <th className="pb-2 pr-3">Negative</th>
-                <th
-                  className="pb-2 pr-3"
-                  title="VADER sentiment score ranges from -1 (very negative) to +1 (very positive)."
-                >
-                  Avg Sentiment Score (VADER)
-                </th>
-                <th className="pb-2">Trend</th>
+                {sort && onSortChange && nameSortKey ? (
+                  <SortableHeader label={nameHeader} sortKey={nameSortKey} sort={sort} onSortChange={onSortChange} />
+                ) : (
+                  <th scope="col" className="pb-2 pr-3">{nameHeader}</th>
+                )}
+                {showFloor ? (
+                  sort && onSortChange ? (
+                    <SortableHeader label="Floor" sortKey="floor" sort={sort} onSortChange={onSortChange} />
+                  ) : (
+                    <th scope="col" className="pb-2 pr-3">Floor</th>
+                  )
+                ) : null}
+                {sort && onSortChange ? <SortableHeader label="Reviews" sortKey="reviews" sort={sort} onSortChange={onSortChange} /> : <th className="pb-2 pr-3">Reviews</th>}
+                {sort && onSortChange ? <SortableHeader label="Avg rating" sortKey="rating" sort={sort} onSortChange={onSortChange} /> : <th className="pb-2 pr-3">Avg rating</th>}
+                {sort && onSortChange ? <SortableHeader label="Positive" sortKey="positive" sort={sort} onSortChange={onSortChange} /> : <th className="pb-2 pr-3">Positive</th>}
+                {sort && onSortChange ? <SortableHeader label="Negative" sortKey="negative" sort={sort} onSortChange={onSortChange} /> : <th className="pb-2 pr-3">Negative</th>}
+                {sort && onSortChange ? (
+                  <SortableHeader
+                    label="Avg Sentiment Score (VADER)"
+                    sortKey="sentiment"
+                    sort={sort}
+                    onSortChange={onSortChange}
+                    title="VADER sentiment score ranges from -1 (very negative) to +1 (very positive)."
+                  />
+                ) : (
+                  <th className="pb-2 pr-3" title="VADER sentiment score ranges from -1 (very negative) to +1 (very positive).">Avg Sentiment Score (VADER)</th>
+                )}
+                {sort && onSortChange ? <SortableHeader label="Trend" sortKey="trend" sort={sort} onSortChange={onSortChange} /> : <th className="pb-2">Trend</th>}
               </tr>
             </thead>
             <tbody>
@@ -131,6 +203,11 @@ function LocationTable({
 }
 
 const ALL_LOCATION_FILTER = 'all';
+const CONCERN_CHART_COLORS = ['#2563eb', '#db2777', '#16a34a', '#f59e0b', '#7c3aed', '#0891b2', '#ea580c'];
+const DONUT_RADIUS = 78;
+const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
+const CONCERN_TOOLTIP_WIDTH = 176;
+const CONCERN_TOOLTIP_HEIGHT = 58;
 
 function weightedAverage<T>(items: T[], value: (item: T) => number | null, weight: (item: T) => number) {
   const weightedItems = items
@@ -223,7 +300,12 @@ export function LocationPerformanceSection({
   const [floorFilter, setFloorFilter] = useState(ALL_LOCATION_FILTER);
   const [roomFilter, setRoomFilter] = useState(ALL_LOCATION_FILTER);
   const [categoryFilter, setCategoryFilter] = useState<FeedbackCategoryRatingKey | typeof ALL_LOCATION_FILTER>(ALL_LOCATION_FILTER);
-  const [showAllConcerns, setShowAllConcerns] = useState(false);
+  const [floorSort, setFloorSort] = useState<FloorBreakdownSort>({ key: 'floor', direction: 'asc' });
+  const [roomSort, setRoomSort] = useState<FloorBreakdownSort>({ key: 'room', direction: 'asc' });
+  const [activeConcern, setActiveConcern] = useState<string | null>(null);
+  const [hoveredConcern, setHoveredConcern] = useState<string | null>(null);
+  const [concernTooltipPosition, setConcernTooltipPosition] = useState<{ left: number; top: number } | null>(null);
+  const concernChartRef = useRef<HTMLDivElement>(null);
 
   const floors = useMemo(() => analytics.floors, [analytics.floors]);
   const selectedFloor = floors.some((floor) => floor.id === floorFilter) ? floorFilter : ALL_LOCATION_FILTER;
@@ -272,7 +354,52 @@ export function LocationPerformanceSection({
   const visibleBuildings = analytics.buildings;
   const visibleFloors = floors.filter((floor) => selectedFloor === ALL_LOCATION_FILTER || floor.id === selectedFloor);
   const visibleRooms = rooms.filter((room) => selectedRoom === ALL_LOCATION_FILTER || room.id === selectedRoom);
-  const displayedConcerns = showAllConcerns ? concernEntries : concernEntries.slice(0, 3);
+  const totalConcernMentions = concernEntries.reduce((sum, concern) => sum + concern.count, 0);
+  const concernChartSegments = useMemo(() => {
+    if (totalConcernMentions === 0) return [];
+    let offset = 0;
+    return concernEntries.map((concern, index) => {
+      const percentage = (concern.count / totalConcernMentions) * 100;
+      const segmentLength = (percentage / 100) * DONUT_CIRCUMFERENCE;
+      const segment = {
+        ...concern,
+        color: CONCERN_CHART_COLORS[index % CONCERN_CHART_COLORS.length],
+        percentage,
+        dashArray: `${segmentLength} ${DONUT_CIRCUMFERENCE - segmentLength}`,
+        dashOffset: -offset,
+      };
+      offset += segmentLength;
+      return segment;
+    });
+  }, [concernEntries, totalConcernMentions]);
+  const hoveredConcernDetails = concernChartSegments.find((concern) => concern.label === hoveredConcern) ?? null;
+  const updateConcernHover = (event: MouseEvent<SVGCircleElement>, label: string) => {
+    setActiveConcern(label);
+    setHoveredConcern(label);
+    const chartBounds = concernChartRef.current?.getBoundingClientRect();
+    if (!chartBounds) return;
+
+    const cursorX = event.clientX - chartBounds.left;
+    const cursorY = event.clientY - chartBounds.top;
+    const gap = 12;
+    const maxLeft = Math.max(8, chartBounds.width - CONCERN_TOOLTIP_WIDTH - 8);
+    const maxTop = Math.max(8, chartBounds.height - CONCERN_TOOLTIP_HEIGHT - 8);
+    let left = cursorX + gap;
+    let top = cursorY - CONCERN_TOOLTIP_HEIGHT - gap;
+
+    if (left > maxLeft) left = cursorX - CONCERN_TOOLTIP_WIDTH - gap;
+    if (top < 8) top = cursorY + gap;
+
+    setConcernTooltipPosition({
+      left: Math.max(8, Math.min(left, maxLeft)),
+      top: Math.max(8, Math.min(top, maxTop)),
+    });
+  };
+  const clearConcernHover = () => {
+    setActiveConcern(null);
+    setHoveredConcern(null);
+    setConcernTooltipPosition(null);
+  };
 
   return (
     <section className="glass-card p-4" aria-labelledby="location-performance-heading">
@@ -358,8 +485,23 @@ export function LocationPerformanceSection({
             <summary className="cursor-pointer text-xs font-bold text-black">View location breakdown</summary>
             <div className="mt-3 space-y-3">
               <LocationTable title="Buildings" items={visibleBuildings} />
-              <LocationTable title="Floors" items={visibleFloors} showFloor />
-              <LocationTable title="Rooms" items={visibleRooms} showFloor />
+              <LocationTable
+                title="Floor Breakdown"
+                items={visibleFloors}
+                nameHeader="Floor"
+                nameSortKey="floor"
+                sort={floorSort}
+                onSortChange={setFloorSort}
+              />
+              <LocationTable
+                title="Room Breakdown"
+                items={visibleRooms}
+                showFloor
+                nameHeader="Room"
+                nameSortKey="room"
+                sort={roomSort}
+                onSortChange={setRoomSort}
+              />
             </div>
           </details>
 
@@ -368,25 +510,93 @@ export function LocationPerformanceSection({
               <h4 className="text-sm font-bold text-amber-800">Top Concerns</h4>
               <span className="text-[10px] font-bold text-black/45">{concernEntries.length} found</span>
             </div>
-            {displayedConcerns.length > 0 ? (
-              <div className="mt-2 space-y-1.5">
-                {displayedConcerns.map((concern) => (
-                  <div key={concern.label} className="flex items-center justify-between gap-2 text-xs text-black/70">
-                    <span>{concern.label}</span>
-                    <span className="font-bold text-amber-800">{concern.count} {concern.count === 1 ? 'mention' : 'mentions'}</span>
-                  </div>
-                ))}
+            {concernEntries.length > 0 ? (
+              <div className="mt-3 grid gap-5 md:grid-cols-[minmax(240px,300px)_1fr] md:items-center">
+                <div ref={concernChartRef} className="relative flex min-h-[280px] items-center justify-center">
+                  {hoveredConcernDetails && concernTooltipPosition ? (
+                    <div
+                      id="top-concerns-tooltip"
+                      role="tooltip"
+                      className="pointer-events-none absolute z-10 w-44 rounded-xl border border-dark/15 bg-white px-3 py-2 text-center text-xs text-black shadow-lg"
+                      style={{ left: concernTooltipPosition.left, top: concernTooltipPosition.top }}
+                    >
+                      <p className="font-bold">{hoveredConcernDetails.label}</p>
+                      <p className="mt-1 text-black/65">
+                        {hoveredConcernDetails.count} {hoveredConcernDetails.count === 1 ? 'mention' : 'mentions'} · {hoveredConcernDetails.percentage.toFixed(1)}%
+                      </p>
+                    </div>
+                  ) : null}
+                  <svg
+                    className="h-56 w-56 overflow-visible sm:h-64 sm:w-64"
+                    viewBox="0 0 220 220"
+                    role="img"
+                    aria-label={`Top concerns donut chart with ${totalConcernMentions} negative mentions`}
+                  >
+                    <circle cx="110" cy="110" r={DONUT_RADIUS} fill="none" stroke="currentColor" strokeWidth="40" className="text-black/10" />
+                    {concernChartSegments.map((concern) => {
+                      const isActive = concern.label === activeConcern;
+                      return (
+                        <circle
+                          key={concern.label}
+                          cx="110"
+                          cy="110"
+                          r={DONUT_RADIUS}
+                          fill="none"
+                          stroke={concern.color}
+                          strokeWidth={isActive ? 48 : 40}
+                          strokeDasharray={concern.dashArray}
+                          strokeDashoffset={concern.dashOffset}
+                          transform="rotate(-90 110 110)"
+                          className="cursor-pointer transition-all duration-150"
+                          opacity={activeConcern && !isActive ? 0.42 : 1}
+                          tabIndex={0}
+                          role="img"
+                          aria-label={`${concern.label}: ${concern.count} ${concern.count === 1 ? 'mention' : 'mentions'}, ${concern.percentage.toFixed(1)} percent`}
+                          aria-describedby={isActive && hoveredConcern === concern.label ? 'top-concerns-tooltip' : undefined}
+                          onMouseEnter={(event) => updateConcernHover(event, concern.label)}
+                          onMouseMove={(event) => updateConcernHover(event, concern.label)}
+                          onMouseLeave={clearConcernHover}
+                          onFocus={() => {
+                            setActiveConcern(concern.label);
+                            setHoveredConcern(concern.label);
+                            setConcernTooltipPosition({ left: 8, top: 8 });
+                          }}
+                          onBlur={clearConcernHover}
+                        />
+                      );
+                    })}
+                    <circle cx="110" cy="110" r="55" fill="#fffaf0" />
+                    <text x="110" y="106" textAnchor="middle" className="fill-black text-[24px] font-bold">{totalConcernMentions}</text>
+                    <text x="110" y="124" textAnchor="middle" className="fill-black/50 text-[10px] font-bold uppercase tracking-[0.12em]">mentions</text>
+                  </svg>
+                </div>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  {concernChartSegments.map((concern) => {
+                    const isActive = concern.label === activeConcern;
+                    return (
+                      <button
+                        key={concern.label}
+                        type="button"
+                        className={`flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-xs text-black/70 transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-primary/40 ${isActive ? 'bg-white/75' : ''}`}
+                        onMouseEnter={() => setActiveConcern(concern.label)}
+                        onMouseLeave={() => setActiveConcern(null)}
+                        onFocus={() => setActiveConcern(concern.label)}
+                        onBlur={() => setActiveConcern(null)}
+                        aria-label={`${concern.label}: ${concern.count} mentions, ${concern.percentage.toFixed(1)} percent`}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: concern.color }} aria-hidden="true" />
+                          <span className="truncate">{concern.label}</span>
+                        </span>
+                        <span className="shrink-0 font-bold text-amber-800">{concern.count} ({concern.percentage.toFixed(1)}%)</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            ) : <p className="mt-2 text-xs text-black/55">No negative concerns for the selected filters.</p>}
-            {concernEntries.length > 3 ? (
-              <button
-                type="button"
-                onClick={() => setShowAllConcerns((current) => !current)}
-                className="mt-3 text-xs font-bold text-primary hover:text-primary/80"
-              >
-                {showAllConcerns ? 'Show top concerns' : 'View all concerns'}
-              </button>
-            ) : null}
+            ) : (
+              <p className="mt-2 text-xs text-black/55">No negative concerns for the selected filters.</p>
+            )}
           </div>
         </>
       ) : <p className="dashboard-empty-state rounded-xl px-3 py-5 text-center text-xs text-black/50">No location performance data is available for the selected filters.</p>}

@@ -160,6 +160,7 @@ export default function AdminFeedbackTab({
 }: Readonly<AdminFeedbackTabProps>) {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
+  const [expandedFeedbackId, setExpandedFeedbackId] = useState<string | null>(null);
   const [dashboardView, setDashboardView] = useState<FeedbackDashboardView>('analysis');
   const [reviewView, setReviewView] = useState<FeedbackReviewView>('reviews');
 
@@ -912,12 +913,42 @@ export default function AdminFeedbackTab({
               const sentimentLabel = resolveFeedbackSentimentLabel(feedback);
               const positiveAspects = getAspectEntries(feedback, 'positive');
               const negativeAspects = getAspectEntries(feedback, 'negative');
+              const isExpanded = expandedFeedbackId === feedback.id;
               const categoryEntries = FEEDBACK_CATEGORY_KEYS.filter(
                 (key) => typeof feedback.categoryRatings[key] === 'number'
               );
 
               return (
-              <div key={feedback.id} className="glass-card p-5">
+              <div key={feedback.id} className="glass-card overflow-hidden">
+                {!isExpanded ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-white/45 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-inset"
+                    onClick={() => setExpandedFeedbackId(feedback.id)}
+                    aria-expanded={false}
+                    aria-controls={`feedback-details-${feedback.id}`}
+                    aria-label={`Expand feedback from ${anonymizeFilteredFeedback ? 'anonymous user' : feedback.userName}`}
+                  >
+                    <div className="min-w-0">
+                      <h4 className="truncate text-sm font-bold text-black">
+                        {anonymizeFilteredFeedback ? 'Anonymous user' : feedback.userName}
+                      </h4>
+                      <p className="mt-1 line-clamp-2 text-sm italic leading-relaxed text-black/70">
+                        “{feedback.message || feedback.text || 'No comment provided.'}”
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <div className="flex flex-col items-end gap-1">
+                        <StarRating rating={feedback.overallRating} />
+                        <span className="text-[10px] font-bold text-black/45">{feedback.overallRating}/5</span>
+                      </div>
+                      <svg className="h-4 w-4 text-black/50" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m19 9-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </button>
+                ) : null}
+                {isExpanded ? <div id={`feedback-details-${feedback.id}`} className="border-t border-dark/10 p-5" aria-label={`Expanded feedback from ${anonymizeFilteredFeedback ? 'anonymous user' : feedback.userName}`}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-dark/5 border border-dark/10 flex items-center justify-center text-black font-bold text-sm">
@@ -939,9 +970,16 @@ export default function AdminFeedbackTab({
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <StarRating rating={feedback.overallRating} />
-                    <span className="text-[10px] font-bold text-black/45">
-                      Overall {feedback.overallRating}/5
-                    </span>
+                    <span className="text-[10px] font-bold text-black/45">Overall {feedback.overallRating}/5</span>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedFeedbackId(null)}
+                      className="mt-1 rounded-lg border border-dark/10 px-2 py-1 text-[10px] font-bold text-black/60 hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      aria-expanded={true}
+                      aria-controls={`feedback-details-${feedback.id}`}
+                    >
+                      Collapse
+                    </button>
                   </div>
                 </div>
 
@@ -1106,6 +1144,7 @@ export default function AdminFeedbackTab({
                     Reply
                   </button>
                 )}
+                </div> : null}
               </div>
               );
             })

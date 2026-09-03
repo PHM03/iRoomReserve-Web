@@ -8,6 +8,8 @@ import {
   summarizeFeedbackAnalytics,
 } from '../lib/feedback/feedback-analytics';
 import { buildSentimentTrend } from '../lib/feedback/feedback-trend';
+import { sortLocationPerformance } from '../lib/feedback/feedback-location-sorting';
+import type { LocationPerformance } from '../lib/feedback/feedback-analytics';
 
 function feedback(input: Record<string, unknown> = {}) {
   return {
@@ -37,6 +39,29 @@ function feedback(input: Record<string, unknown> = {}) {
     adminResponse: null,
     createdAt: { toDate: () => new Date('2026-08-24T09:00:00') },
     ...input,
+  };
+}
+
+function location(name: string, totalReviews: number, averageRating: number | null): LocationPerformance {
+  return {
+    id: name,
+    name,
+    buildingId: 'building-1',
+    floor: name,
+    totalReviews,
+    averageRating,
+    averageCompound: averageRating === null ? null : 0.2,
+    positiveCount: 0,
+    neutralCount: 0,
+    negativeCount: 0,
+    positiveRate: 0,
+    neutralRate: 0,
+    negativeRate: 0,
+    categoryRatings: {},
+    aspectMentions: {},
+    reliable: totalReviews >= 5,
+    trendDirection: 'stable',
+    relevantFacilityConcerns: [],
   };
 }
 
@@ -88,6 +113,53 @@ describe('feedback analytics refinement', () => {
     expect(analytics.rooms[0].name).toBe('Room 201');
     expect(analytics.rooms[0].reliable).toBe(true);
     expect(analytics.rooms[0].negativeRate).toBe(100);
+  });
+
+  it('sorts floor breakdowns by physical floor order and selected metrics', () => {
+    const items = [
+      location('5th Floor', 15, 3.4),
+      location('Ground Floor', 8, 4.2),
+      location('10th Floor', 4, 3.1),
+      location('2nd Floor', 12, 4.8),
+      location('3rd Floor', 20, null),
+    ];
+
+    expect(sortLocationPerformance(items, { key: 'floor', direction: 'asc' }).map((item) => item.name)).toEqual([
+      'Ground Floor',
+      '2nd Floor',
+      '3rd Floor',
+      '5th Floor',
+      '10th Floor',
+    ]);
+    expect(sortLocationPerformance(items, { key: 'reviews', direction: 'desc' }).map((item) => item.name)).toEqual([
+      '3rd Floor',
+      '5th Floor',
+      '2nd Floor',
+      'Ground Floor',
+      '10th Floor',
+    ]);
+    expect(sortLocationPerformance(items, { key: 'rating', direction: 'asc' }).map((item) => item.name)).toEqual([
+      '10th Floor',
+      '5th Floor',
+      'Ground Floor',
+      '2nd Floor',
+      '3rd Floor',
+    ]);
+    const rooms = [
+      { ...location('Room 10', 1, 4), floor: 'Ground Floor' },
+      { ...location('Room 2', 2, 3), floor: '2nd Floor' },
+      { ...location('Room 1', 3, 5), floor: 'Ground Floor' },
+    ];
+    expect(sortLocationPerformance(rooms, { key: 'room', direction: 'asc' }).map((item) => item.name)).toEqual([
+      'Room 1',
+      'Room 2',
+      'Room 10',
+    ]);
+    expect(sortLocationPerformance(rooms, { key: 'floor', direction: 'asc' }).map((item) => item.name)).toEqual([
+      'Room 10',
+      'Room 1',
+      'Room 2',
+    ]);
   });
 
   it('retains zero-review buildings, floors, and rooms without marking them reliable', () => {
