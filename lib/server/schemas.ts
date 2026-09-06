@@ -58,6 +58,10 @@ export const roomCheckInMethodSchema = z.preprocess(
 );
 
 export const equipmentSchema = z.record(z.string(), z.number().int().min(0));
+export const otherEquipmentSchema = z.preprocess(
+  (value) => (typeof value === "string" ? value.trim() : value),
+  z.string().min(1).max(250).optional()
+);
 export const reservationCampusSchema = z.preprocess(
   (value) =>
     typeof value === "string"
@@ -146,6 +150,7 @@ const reservationCommonSchema = z.object({
   approvalDocumentMimeType: nonEmptyString.optional(),
   approvalDocumentSize: positiveInteger.optional(),
   equipment: equipmentSchema.optional(),
+  otherEquipment: otherEquipmentSchema,
 });
 
 function withStudentApprovalDocumentRequirement<
@@ -308,6 +313,10 @@ export const roomUpdateSchema = z.preprocess(
   normalizeRoomPayload,
   roomBaseSchema.partial().refine((value) => Object.keys(value).length > 0, { message: "At least one room field must be provided." })
 );
+
+export const floorCreateSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+});
 
 export const roomStatusUpdateSchema = z.object({
   status: roomStatusSchema,

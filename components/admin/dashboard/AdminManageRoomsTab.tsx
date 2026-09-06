@@ -9,6 +9,12 @@ import {
     getPreferredDefaultFloorValue,
 } from '@/lib/buildings/floorLabels';
 import {
+    addFloor,
+    deleteFloor,
+    getFloorsByBuilding,
+    type Floor,
+} from '@/lib/buildings/floors';
+import {
     addRoom,
     deleteRoom,
     getRoomCountsByBuilding,
@@ -124,6 +130,16 @@ export default function AdminManageRoomsTab({
     managedBuildings,
     onBuildingChange,
 }: Readonly<AdminManageRoomsTabProps>) {
+    const [showAddFloor, setShowAddFloor] = useState(false);
+    const [newFloorName, setNewFloorName] = useState('');
+    const [addingFloor, setAddingFloor] = useState(false);
+    const [deletingFloorId, setDeletingFloorId] = useState<string | null>(null);
+    const [floors, setFloors] = useState<Floor[]>([]);
+    const [floorsLoading, setFloorsLoading] = useState(true);
+    const [floorLoadError, setFloorLoadError] = useState('');
+    const [floorActionError, setFloorActionError] = useState('');
+    const [floorReloadKey, setFloorReloadKey] = useState(0);
+
     const [addRoomStep, setAddRoomStep] = useState(0);
     const [newRoomName, setNewRoomName] = useState('');
     const [newRoomFloor, setNewRoomFloor] = useState('');
@@ -153,7 +169,7 @@ export default function AdminManageRoomsTab({
     const [roomLoadError, setRoomLoadError] = useState('');
     const [roomReloadKey, setRoomReloadKey] = useState(0);
 
-    const floorOptions = useMemo(
+    const legacyFloorOptions = useMemo(
         () =>
             getBuildingFloorOptions({
                 id: buildingId,
@@ -162,8 +178,23 @@ export default function AdminManageRoomsTab({
             }),
         [buildingFloors, buildingId, buildingName]
     );
+    const floorOptions = useMemo(() => {
+        const primaryOptions = floors.length > 0
+            ? floors.map((floor) => ({ label: floor.name, value: floor.name }))
+            : legacyFloorOptions;
+        const knownValues = new Set(primaryOptions.map((floorOption) => floorOption.value));
+        const legacyRoomOptions = rooms
+            .map((room) => room.floor.trim())
+            .filter((floor) => floor && !knownValues.has(floor))
+            .map((floor) => ({ label: floor, value: floor }));
+
+        return floors.length > 0
+            ? [...primaryOptions, ...sortFloors(legacyRoomOptions.map((floor) => floor.value)).map((floor) => ({ label: floor, value: floor }))]
+            : sortFloors([...primaryOptions.map((floor) => floor.value), ...legacyRoomOptions.map((floor) => floor.value)])
+                .map((floor) => ({ label: floor, value: floor }));
+    }, [floors, legacyFloorOptions, rooms]);
     const roomFloorOptions = useMemo(
-        () => sortFloors(floorOptions.map((floorOption) => floorOption.value)),
+        () => floorOptions.map((floorOption) => floorOption.value),
         [floorOptions]
     );
     const hasAnyRooms = roomCounts.total > 0;
@@ -182,6 +213,46 @@ export default function AdminManageRoomsTab({
             }),
         [roomFloorFilter, roomSearch, rooms]
     );
+
+    useEffect(() => {
+        let cancelled = false;
+
+        setFloors([]);
+        setFloorLoadError('');
+        setFloorActionError('');
+        setNewFloorName('');
+        setShowAddFloor(false);
+
+        if (!buildingId) {
+            setFloorsLoading(false);
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        setFloorsLoading(true);
+        void getFloorsByBuilding(buildingId)
+            .then((nextFloors) => {
+                if (!cancelled) {
+                    setFloors(nextFloors);
+                }
+            })
+            .catch((error) => {
+                if (!cancelled) {
+                    setFloors([]);
+                    setFloorLoadError(error instanceof Error ? error.message : 'Failed to load floors.');
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setFloorsLoading(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [buildingId, floorReloadKey]);
 
     useEffect(() => {
         setRoomFloorFilter(getPreferredDefaultFloorValue(floorOptions));
@@ -245,6 +316,50 @@ export default function AdminManageRoomsTab({
 
     const reloadRoomData = () => {
         setRoomReloadKey((currentKey) => currentKey + 1);
+    };
+
+    const reloadFloorData = () => {
+        setFloorReloadKey((currentKey) => currentKey + 1);
+    };
+
+    const handleAddFloor = async () => {
+        const trimmedName = newFloorName.trim();
+        if (!trimmedName) {
+            setFloorActionError('Floor name is required.');
+            return;
+        }
+
+        setAddingFloor(true);
+        setFloorActionError('');
+
+        try {
+            await addFloor(buildingId, trimmedName);
+            setNewFloorName('');
+            setShowAddFloor(false);
+            reloadFloorData();
+        } catch (error) {
+            setFloorActionError(error instanceof Error ? error.message : 'Failed to add floor.');
+        } finally {
+            setAddingFloor(false);
+        }
+    };
+
+    const handleDeleteFloor = async (floor: Floor) => {
+        if (!window.confirm(`Delete ${floor.name}?`)) {
+            return;
+        }
+
+        setDeletingFloorId(floor.id);
+        setFloorActionError('');
+
+        try {
+            await deleteFloor(buildingId, floor.id);
+            reloadFloorData();
+        } catch (error) {
+            setFloorActionError(error instanceof Error ? error.message : 'Failed to delete floor.');
+        } finally {
+            setDeletingFloorId(null);
+        }
     };
 
     const resetAddRoomWizard = () => {
@@ -376,13 +491,13 @@ export default function AdminManageRoomsTab({
         <div className="space-y-5">
             <div className="relative z-[60] flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-                    <h3 className="text-xl font-bold text-gray-800">Manage Rooms</h3>
+                    <h3 className="text-xl font-bold text-gray-800">Manage Spaces</h3>
                     <button
                         onClick={() => setAddRoomStep(1)}
                         className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#a12124] px-4 py-1 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#8f1c1f] hover:shadow-md sm:order-1"
                     >
                         <PlusIcon className="h-4 w-4" />
-                        New Room
+                        Add Room
                     </button>
                 </div>
                 <div className="flex w-full flex-col gap-3 sm:ml-auto sm:w-auto sm:flex-row sm:items-center sm:justify-end">
@@ -405,6 +520,100 @@ export default function AdminManageRoomsTab({
                         </div>
                     )}
                 </div>
+            </div>
+
+            <div className="glass-card rounded-2xl p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h4 className="text-lg font-bold text-gray-800">Floors</h4>
+                        <p className="mt-1 text-xs text-black/60">Manage the floors available in the selected building.</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setFloorActionError('');
+                            setShowAddFloor((current) => !current);
+                        }}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#a12124] px-4 py-2 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#8f1c1f] hover:shadow-md"
+                    >
+                        <PlusIcon className="h-4 w-4" />
+                        Add Floor
+                    </button>
+                </div>
+
+                {showAddFloor ? (
+                    <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                        <label className="mb-1.5 block text-xs font-bold text-black" htmlFor="new-floor-name">
+                            Floor Name
+                        </label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <input
+                                id="new-floor-name"
+                                type="text"
+                                value={newFloorName}
+                                onChange={(event) => setNewFloorName(event.target.value)}
+                                placeholder="e.g. Ground Floor"
+                                className="glass-input w-full px-4 py-2.5 text-sm"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleAddFloor}
+                                disabled={addingFloor || !newFloorName.trim()}
+                                className="btn-primary whitespace-nowrap px-4 py-2.5 text-sm font-bold disabled:opacity-50"
+                            >
+                                {addingFloor ? 'Adding Floor...' : 'Add Floor'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setNewFloorName('');
+                                    setFloorActionError('');
+                                    setShowAddFloor(false);
+                                }}
+                                disabled={addingFloor}
+                                className="rounded-xl border border-dark/10 bg-dark/5 px-4 py-2.5 text-sm font-bold text-black transition-all hover:bg-primary/10 disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
+                {floorActionError ? (
+                    <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                        {floorActionError}
+                    </p>
+                ) : null}
+
+                {floorsLoading ? (
+                    <p className="mt-4 text-sm text-black/60">Loading floors...</p>
+                ) : floorLoadError ? (
+                    <p className="mt-4 text-sm text-red-700">{floorLoadError}</p>
+                ) : floors.length === 0 ? (
+                    <p className="mt-4 rounded-xl border border-dashed border-dark/15 px-4 py-4 text-sm text-black/60">
+                        No persisted floors have been configured yet.
+                    </p>
+                ) : (
+                    <div className="mt-4 space-y-2">
+                        {floors.map((floor) => (
+                            <div
+                                key={floor.id}
+                                className="flex items-center justify-between gap-3 rounded-xl border border-dark/10 bg-white/70 px-4 py-3"
+                            >
+                                <span className="text-sm font-bold text-black">{floor.name}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDeleteFloor(floor)}
+                                    disabled={deletingFloorId === floor.id}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition-all hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <TrashIcon className="h-3.5 w-3.5" />
+                                    {deletingFloorId === floor.id ? 'Deleting...' : 'Delete'}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {hasAnyRooms && (
@@ -664,7 +873,7 @@ export default function AdminManageRoomsTab({
                 <div className="glass-card p-12 text-center">
                     <div className="text-4xl mb-3">Rooms</div>
                     <h4 className="text-lg font-bold text-black mb-1">No Rooms Yet</h4>
-                    <p className="text-sm text-black">Click &quot;New Room&quot; above to add your first room.</p>
+                    <p className="text-sm text-black">Click &quot;Add Room&quot; above to add your first room.</p>
                 </div>
             ) : filteredRooms.length === 0 && hasAnyRooms ? (
                 <div className="glass-card p-8 text-center">

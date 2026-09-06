@@ -77,6 +77,7 @@ interface ReservationRecord {
   approvalDocumentMimeType?: string;
   approvalDocumentSize?: number;
   equipment?: Record<string, number>;
+  otherEquipment?: string;
   approvalFlow: ReservationApprovalStep[];
   currentStep: number;
   approvals: ReservationApprovalRecord[];
@@ -125,6 +126,7 @@ interface ReservationCreateBaseInput {
   approvalDocumentMimeType?: string;
   approvalDocumentSize?: number;
   equipment?: Record<string, number>;
+  otherEquipment?: string;
 }
 
 function formatReservationScheduleLabel(input: {
@@ -953,6 +955,9 @@ export async function createReservationRecord(data: ReservationCreateInput) {
         ? { approvalDocumentUrl: data.approvalDocumentUrl }
         : {}),
       ...(data.equipment ? { equipment: data.equipment } : {}),
+      ...(data.otherEquipment?.trim()
+        ? { otherEquipment: data.otherEquipment.trim() }
+        : {}),
       approvalFlow,
       currentStep: 0,
       approvals: [],
@@ -1052,6 +1057,9 @@ export async function createRecurringReservationRecord(
           ? { approvalDocumentUrl: data.approvalDocumentUrl }
           : {}),
         ...(data.equipment ? { equipment: data.equipment } : {}),
+        ...(data.otherEquipment?.trim()
+          ? { otherEquipment: data.otherEquipment.trim() }
+          : {}),
         approvalFlow,
         currentStep: 0,
         approvals: [],

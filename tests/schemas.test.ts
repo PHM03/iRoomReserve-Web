@@ -19,6 +19,73 @@ const approvalDocument = {
 };
 
 describe('server schemas', () => {
+  const validFacultyReservation = {
+    userId: 'user-1',
+    userName: 'Alex Faculty',
+    userRole: 'Faculty Professor',
+    roomId: 'room-1',
+    roomName: 'Room 101',
+    buildingId: 'building-1',
+    buildingName: 'Main Building',
+    campus: 'main',
+    date: '2026-03-25',
+    startTime: '08:00',
+    endTime: '09:00',
+    programDepartmentOrganization: 'BSIT',
+    purpose: 'Study session',
+    isEvent: 'No',
+    advisorEmail: 'advisor@sdca.edu.ph',
+    dsasEmail: 'dsas@sdca.edu.ph',
+    registrarEmail: 'registrar@sdca.edu.ph',
+    buildingAdminEmail: 'building-admin@sdca.edu.ph',
+  };
+
+  function parseOtherEquipmentReservation(
+    otherEquipment?: unknown,
+    equipment: Record<string, number> = {}
+  ) {
+    return createReservationSchema.safeParse({
+      type: 'single',
+      reservation: {
+        ...validFacultyReservation,
+        equipment,
+        ...(otherEquipment !== undefined ? { otherEquipment } : {}),
+      },
+    });
+  }
+
+  it('preserves valid equipment quantities and accepts omitted other equipment', () => {
+    const result = parseOtherEquipmentReservation(undefined, {
+      fans: 0,
+      speakers: 1,
+      televisions: 0,
+      hdmiCables: 0,
+      monoblockChairs: 0,
+      tables: 0,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects negative and fractional equipment quantities', () => {
+    expect(parseOtherEquipmentReservation(undefined, { fans: -1 }).success).toBe(false);
+    expect(parseOtherEquipmentReservation(undefined, { fans: 1.5 }).success).toBe(false);
+  });
+
+  it('trims valid other equipment text', () => {
+    const result = parseOtherEquipmentReservation('  HDMI adapter  ');
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.reservation.otherEquipment).toBe('HDMI adapter');
+    }
+  });
+
+  it('rejects whitespace-only and overlong other equipment text', () => {
+    expect(parseOtherEquipmentReservation('     ').success).toBe(false);
+    expect(parseOtherEquipmentReservation('x'.repeat(251)).success).toBe(false);
+  });
+
   it('accepts a valid Main Campus single reservation payload', () => {
     const result = createReservationSchema.safeParse({
       type: 'single',

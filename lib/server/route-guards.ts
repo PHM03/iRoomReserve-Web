@@ -82,3 +82,17 @@ export function assertCanManageBuilding(
     throw new ApiError(403, "forbidden", "You can only manage resources for your assigned campus.");
   }
 }
+
+export function assertCanManageFloors(
+  context: RequestAuthContext,
+  buildingId: string
+) {
+  assertVerifiedAuthentication(context);
+  assertRole(context, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
+
+  if (context.status !== "approved") {
+    throw new ApiError(403, "account_not_approved", "Your account is not approved to manage floors.");
+  }
+
+  assertCanManageBuilding(context, buildingId);
+}

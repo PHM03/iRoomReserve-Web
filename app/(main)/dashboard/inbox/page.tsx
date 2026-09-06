@@ -281,6 +281,14 @@ function ReservationApprovals({
                           <p className="text-[10px] text-black font-bold uppercase tracking-wider mb-1">Equipment</p>
                           <p className="text-sm text-black">{formatEquipment(request.equipment)}</p>
                         </div>
+                        {request.otherEquipment?.trim() && (
+                          <div className="bg-dark/3 rounded-xl p-3 border border-dark/5 sm:col-span-2">
+                            <p className="text-[10px] text-black font-bold uppercase tracking-wider mb-1">Other Equipment</p>
+                            <p className="text-sm text-black whitespace-pre-wrap break-words">
+                              {request.otherEquipment.trim()}
+                            </p>
+                          </div>
+                        )}
                         {request.approvalDocumentUrl && (
                           <div className="bg-dark/3 rounded-xl p-3 border border-dark/5 sm:col-span-2">
                             <p className="text-[10px] text-black font-bold uppercase tracking-wider mb-1">Concept Paper / Letter of Approval</p>

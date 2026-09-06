@@ -925,12 +925,113 @@ export default function AdminPendingTab({
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap', minWidth: 0 }}>
                         <span style={{ fontSize: '13px', color: '#222', fontWeight: 600 }}>{request.roomName}</span>
-                        <span style={{ fontSize: '13px', color: '#555' }}>{dateLabel}</span>
-                        <span style={{ fontSize: '13px', color: '#555' }}>{timeLabel}</span>
-                        <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>{badge.label}</span>
-                        <ChevronDownIcon className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                      </div>
-                    </div>
+                         <span style={{ fontSize: '13px', color: '#555' }}>{dateLabel}</span>
+                         <span style={{ fontSize: '13px', color: '#555' }}>{timeLabel}</span>
+                         <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>{badge.label}</span>
+                         {isExpanded && (
+                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+                             {isExpired ? (
+                               <button
+                                 onClick={async (e) => {
+                                   e.stopPropagation();
+                                   if (!window.confirm('Delete this expired reservation request?')) {
+                                     return;
+                                   }
+                                   await handleDelete(request.id);
+                                 }}
+                                 disabled={actionLoading === request.id}
+                                 style={{
+                                   display: 'inline-flex',
+                                   alignItems: 'center',
+                                   gap: '6px',
+                                   padding: '8px 20px',
+                                   borderRadius: '8px',
+                                   border: '1px solid #e53935',
+                                   background: 'transparent',
+                                   color: '#e53935',
+                                   fontSize: '13px',
+                                   fontWeight: 700,
+                                   cursor: 'pointer',
+                                   opacity: actionLoading === request.id ? 0.6 : 1,
+                                   transition: 'background 0.15s'
+                                 }}
+                                 onMouseEnter={(e) => { if (!actionLoading) (e.currentTarget as HTMLButtonElement).style.background = '#fff0f0'; }}
+                                 onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                               >
+                                 <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
+                                 {actionLoading === request.id ? 'Deleting...' : 'Delete'}
+                               </button>
+                             ) : (
+                               <>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     openApproveConfirm(request);
+                                   }}
+                                   disabled={actionLoading === request.id || approveCheckLoading === request.id}
+                                   style={{
+                                     display: 'inline-flex',
+                                     alignItems: 'center',
+                                     gap: '6px',
+                                     padding: '8px 20px',
+                                     borderRadius: '8px',
+                                     border: '1px solid rgba(34, 197, 94, 0.25)',
+                                     background: 'rgba(34, 197, 94, 0.1)',
+                                     color: '#15803d',
+                                     fontSize: '13px',
+                                     fontWeight: 700,
+                                     cursor: 'pointer',
+                                     opacity: actionLoading === request.id || approveCheckLoading === request.id ? 0.6 : 1,
+                                     transition: 'background 0.15s'
+                                   }}
+                                   onMouseEnter={(e) => {
+                                     if (actionLoading || approveCheckLoading) return;
+                                     (e.currentTarget as HTMLButtonElement).style.background = 'rgba(34, 197, 94, 0.15)';
+                                   }}
+                                   onMouseLeave={(e) => {
+                                     (e.currentTarget as HTMLButtonElement).style.background = 'rgba(34, 197, 94, 0.1)';
+                                   }}
+                                 >
+                                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
+                                   {approveCheckLoading === request.id ? 'Checking...' : 'Approve'}
+                                 </button>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     openConfirm('reject', request.id);
+                                   }}
+                                   disabled={actionLoading === request.id}
+                                   style={{
+                                     display: 'inline-flex',
+                                     alignItems: 'center',
+                                     gap: '6px',
+                                     padding: '8px 20px',
+                                     borderRadius: '8px',
+                                     border: '1px solid rgba(239, 68, 68, 0.25)',
+                                     background: 'rgba(239, 68, 68, 0.1)',
+                                     color: '#b91c1c',
+                                     fontSize: '13px',
+                                     fontWeight: 700,
+                                     cursor: 'pointer',
+                                     opacity: actionLoading === request.id ? 0.6 : 1,
+                                     transition: 'background 0.15s'
+                                   }}
+                                   onMouseEnter={(e) => {
+                                     if (actionLoading) return;
+                                     (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.15)';
+                                   }}
+                                   onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.1)'; }}
+                                 >
+                                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
+                                   Reject
+                                 </button>
+                               </>
+                             )}
+                           </div>
+                         )}
+                         <ChevronDownIcon className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                       </div>
+                     </div>
 
                     {isExpanded && (
                       <>
@@ -1017,6 +1118,25 @@ export default function AdminPendingTab({
                           fontWeight: 500
                         }}>N/A</p>
                       )}
+                      {request.otherEquipment?.trim() && (
+                        <div style={{ marginTop: '12px' }}>
+                          <p style={{
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            letterSpacing: '0.08em',
+                            color: '#999',
+                            textTransform: 'uppercase',
+                            marginBottom: '4px'
+                          }}>Other Equipment</p>
+                          <p style={{
+                            fontSize: '14px',
+                            color: '#222',
+                            fontWeight: 500,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word'
+                          }}>{request.otherEquipment.trim()}</p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Concept paper */}
@@ -1048,112 +1168,6 @@ export default function AdminPendingTab({
                       </div>
                     )}
 
-                    {/* Actions */}
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'flex-end',
-                      gap: '10px',
-                      paddingTop: '14px',
-                      borderTop: '1px solid #f0f0f0'
-                    }}>
-                      {isExpired ? (
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            if (!window.confirm('Delete this expired reservation request?')) {
-                              return;
-                            }
-                            await handleDelete(request.id);
-                          }}
-                          disabled={actionLoading === request.id}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '8px 20px',
-                            borderRadius: '8px',
-                            border: '1px solid #e53935',
-                            background: 'transparent',
-                            color: '#e53935',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            opacity: actionLoading === request.id ? 0.6 : 1,
-                            transition: 'background 0.15s'
-                          }}
-                          onMouseEnter={(e) => { if (!actionLoading) (e.currentTarget as HTMLButtonElement).style.background = '#fff0f0'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-                        >
-                          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
-                          {actionLoading === request.id ? 'Deleting...' : 'Delete'}
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openApproveConfirm(request);
-                            }}
-                            disabled={actionLoading === request.id || approveCheckLoading === request.id}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '8px 20px',
-                              borderRadius: '8px',
-                              border: '1px solid rgba(34, 197, 94, 0.25)',
-                              background: 'rgba(34, 197, 94, 0.1)',
-                              color: '#15803d',
-                              fontSize: '13px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              opacity: actionLoading === request.id || approveCheckLoading === request.id ? 0.6 : 1,
-                              transition: 'background 0.15s'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (actionLoading || approveCheckLoading) return;
-                              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(34, 197, 94, 0.15)';
-                            }}
-                            onMouseLeave={(e) => {
-                              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(34, 197, 94, 0.1)';
-                            }}
-                          >
-                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
-                            {approveCheckLoading === request.id ? 'Checking...' : 'Approve'}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openConfirm('reject', request.id);
-                            }}
-                            disabled={actionLoading === request.id}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '8px 20px',
-                              borderRadius: '8px',
-                              border: '1px solid rgba(239, 68, 68, 0.25)',
-                              background: 'rgba(239, 68, 68, 0.1)',
-                              color: '#b91c1c',
-                              fontSize: '13px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              opacity: actionLoading === request.id ? 0.6 : 1,
-                              transition: 'background 0.15s'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (actionLoading) return;
-                              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.15)';
-                            }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239, 68, 68, 0.1)'; }}
-                          >
-                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
-                            Reject
-                          </button>
-                        </>
-                      )}
-                    </div>
                       </>
                     )}
                   </div>

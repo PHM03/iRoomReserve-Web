@@ -314,6 +314,9 @@ export default function ReserveRoomPage() {
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
   const [equipment, setEquipment] = useState<Record<string, number>>({ ...INITIAL_EQUIPMENT });
+  const [otherEquipmentSelected, setOtherEquipmentSelected] = useState(false);
+  const [otherEquipment, setOtherEquipment] = useState('');
+  const [otherEquipmentError, setOtherEquipmentError] = useState('');
   const [approvalDocument, setApprovalDocument] = useState<File | null>(null);
   const [uploadedApprovalDocument, setUploadedApprovalDocument] = useState<{
     contentType: string;
@@ -846,6 +849,9 @@ export default function ReserveRoomPage() {
     setSelectedDays([]);
     setRecurringEndDate('');
     setEquipment({ ...INITIAL_EQUIPMENT });
+    setOtherEquipmentSelected(false);
+    setOtherEquipment('');
+    setOtherEquipmentError('');
     setApprovalDocument(null);
     setUploadedApprovalDocument(null);
     setApprovalDocumentError('');
@@ -1175,8 +1181,20 @@ export default function ReserveRoomPage() {
       return;
     }
 
+    const trimmedOtherEquipment = otherEquipment.trim();
+    if (otherEquipmentSelected && !trimmedOtherEquipment) {
+      setOtherEquipmentError('Specify the other equipment you need.');
+      return;
+    }
+
+    if (otherEquipmentSelected && trimmedOtherEquipment.length > 250) {
+      setOtherEquipmentError('Other equipment must be 250 characters or fewer.');
+      return;
+    }
+
     setTimeError('');
     setSubmitError('');
+    setOtherEquipmentError('');
     setSubmitPhase('idle');
     setApprovalDocumentError('');
 
@@ -1245,6 +1263,9 @@ export default function ReserveRoomPage() {
             }
           : {}),
         equipment,
+        ...(otherEquipmentSelected && trimmedOtherEquipment
+          ? { otherEquipment: trimmedOtherEquipment }
+          : {}),
       };
 
       setSubmitPhase('creating-reservation');
@@ -2162,6 +2183,61 @@ export default function ReserveRoomPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="rounded-xl border border-dark/10 bg-dark/5 p-3">
+                    <label className="flex items-center gap-3 text-sm font-bold text-black">
+                      <input
+                        type="checkbox"
+                        checked={otherEquipmentSelected}
+                        onChange={(event) => {
+                          setOtherEquipmentSelected(event.target.checked);
+                          setOtherEquipmentError('');
+                        }}
+                        className="h-4 w-4 rounded border-dark/20 text-primary focus:ring-primary"
+                      />
+                      <span>Others</span>
+                    </label>
+
+                    {otherEquipmentSelected && (
+                      <div className="mt-3">
+                        <label
+                          htmlFor="other-equipment"
+                          className="mb-2 block text-xs font-bold text-black"
+                        >
+                          Specify other equipment
+                        </label>
+                        <textarea
+                          id="other-equipment"
+                          value={otherEquipment}
+                          onChange={(event) => {
+                            setOtherEquipment(event.target.value);
+                            if (event.target.value.trim()) {
+                              setOtherEquipmentError('');
+                            }
+                          }}
+                          maxLength={250}
+                          rows={3}
+                          className="glass-input w-full resize-none px-4 py-3"
+                          placeholder="e.g., HDMI adapter, extension cord"
+                          aria-invalid={Boolean(otherEquipmentError)}
+                          aria-describedby={
+                            otherEquipmentError ? 'other-equipment-error' : undefined
+                          }
+                        />
+                        <div className="mt-1 flex items-center justify-between gap-3 text-xs">
+                          <p
+                            id="other-equipment-error"
+                            className={otherEquipmentError ? 'ui-text-red' : 'text-black/70'}
+                          >
+                            {otherEquipmentError || 'Describe any equipment not listed above.'}
+                          </p>
+                          <span className={otherEquipment.length >= 250 ? 'ui-text-red' : 'text-black/70'}>
+                            {250 - otherEquipment.length}/250 characters
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {isStudentReservation && (

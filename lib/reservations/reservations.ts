@@ -49,6 +49,7 @@ export interface Reservation {
   approvalDocumentMimeType?: string;
   approvalDocumentSize?: number;
   equipment?: Record<string, number>;
+  otherEquipment?: string;
   approvalFlow: ReservationApprovalStep[];
   currentStep: number;
   approvals: ReservationApprovalRecord[];

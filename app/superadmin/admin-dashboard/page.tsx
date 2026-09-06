@@ -28,7 +28,7 @@ const CAMPUS_NAMES: Record<CampusOverride, string> = {
 const adminLinks: Array<{ label: string; tab: AdminTab }> = [
   { label: 'Dashboard', tab: 'dashboard' },
   { label: 'Pending', tab: 'pending' },
-  { label: 'Manage Rooms', tab: 'manage-rooms' },
+  { label: 'Manage Spaces', tab: 'manage-rooms' },
   { label: 'Feedback', tab: 'feedback' },
   { label: 'Reservation History', tab: 'reservation-history' },
   { label: 'Inbox', tab: 'inbox' },

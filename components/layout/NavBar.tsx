@@ -58,7 +58,7 @@ const adminLinks: Array<{ label: string; tab: AdminTab }> = [
     tab: 'pending'
   },
   {
-    label: 'Manage Rooms',
+    label: 'Manage Spaces',
     tab: 'manage-rooms'
   },
   {
