@@ -1,5 +1,5 @@
 import type { Feedback } from './feedback';
-import { summarizeFeedbackSentiment, summarizeFeedbackSentimentByRoom } from './feedback-sentiment';
+import { resolveFeedbackSentimentLabel, summarizeFeedbackSentiment, summarizeFeedbackSentimentByRoom } from './feedback-sentiment';
 import {
   buildFeedbackLocationAnalytics,
   compareCategoryPerformance,
@@ -51,7 +51,8 @@ interface InsightRoom {
 function getScoredFeedback(feedbackItems: Feedback[]) {
   return feedbackItems.filter((feedback) => {
     const score = feedback.vaderCompoundScore ?? feedback.compoundScore;
-    return typeof score === 'number' && Number.isFinite(score);
+    return typeof score === 'number' && Number.isFinite(score)
+      && resolveFeedbackSentimentLabel(feedback) !== 'insufficient_context';
   });
 }
 

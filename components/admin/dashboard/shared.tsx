@@ -111,6 +111,10 @@ export function formatSentimentLabel(label: string) {
 }
 
 export function getSentimentBadgeClasses(label: string) {
+  if (label === 'insufficient_context') {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-700';
+  }
+
   if (label === 'very_positive') {
     return 'border-emerald-600/30 bg-emerald-600/15 text-emerald-800';
   }

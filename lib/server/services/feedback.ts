@@ -179,6 +179,8 @@ function mapFeedbackDocument(
           : undefined;
   const sentimentClassification = resolveFeedbackSentimentLabel({
     compoundScore: vaderCompoundScore,
+    contextualOverride: data.contextualOverride,
+    contextualOverrideReason: data.contextualOverrideReason,
     detectedAspects,
     sentimentClassification:
       data.sentimentClassification ?? data.sentiment_classification ?? undefined,
@@ -201,6 +203,8 @@ function mapFeedbackDocument(
     categoryRatings,
     category_ratings: categoryRatings,
     compoundScore: vaderCompoundScore,
+    contextualOverride: data.contextualOverride,
+    contextualOverrideReason: data.contextualOverrideReason ?? null,
     createdAt: data.createdAt ?? data.created_at,
     created_at: data.created_at ?? data.createdAt,
     detectedAspects,
@@ -261,6 +265,8 @@ export async function createFeedbackRecord(
     text: feedbackText,
     message: feedbackText,
     compoundScore: sentiment.compound,
+    contextualOverride: analytics.contextualOverride,
+    contextualOverrideReason: analytics.contextualOverrideReason,
     positiveScore: sentiment.positive,
     neutralScore: sentiment.neutral,
     negativeScore: sentiment.negative,
@@ -428,7 +434,16 @@ export async function getAverageFeedbackSentiment(roomId: string) {
         compoundScore?: unknown;
         vaderCompoundScore?: unknown;
         vader_compound_score?: unknown;
+        sentimentClassification?: unknown;
+        sentiment_classification?: unknown;
+        sentimentLabel?: unknown;
       };
+
+      const sentimentLabel =
+        data.sentimentClassification ?? data.sentiment_classification ?? data.sentimentLabel;
+      if (sentimentLabel === "insufficient_context") {
+        return null;
+      }
 
       if (typeof data.vaderCompoundScore === "number") {
         return data.vaderCompoundScore;

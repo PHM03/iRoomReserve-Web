@@ -34,6 +34,8 @@ export interface FeedbackGenderSentimentSummary {
 }
 
 export interface FeedbackSentimentFields {
+  contextualOverride?: boolean | null;
+  contextualOverrideReason?: string | null;
   compoundScore?: number | null;
   vaderCompoundScore?: number | null;
   vader_compound_score?: number | null;
@@ -75,6 +77,8 @@ export interface FeedbackSentimentSummary {
   mostPraisedAspects: FeedbackAspectRanking[];
   negativeCount: number;
   negativePercentage: number;
+  insufficientContextCount: number;
+  insufficientContextPercentage: number;
   neutralCount: number;
   neutralPercentage: number;
   positiveCount: number;
@@ -197,13 +201,22 @@ function rankAspects(
 export function resolveFeedbackSentimentLabel(
   feedback: FeedbackSentimentFields
 ): SentimentLabel {
+  const storedLabel = getStoredSentimentLabel(feedback);
+  if (feedback.contextualOverride === true && storedLabel) {
+    return storedLabel;
+  }
+
+  if (storedLabel === "insufficient_context") {
+    return storedLabel;
+  }
+
   const compoundScore = getCompoundScore(feedback);
 
   if (typeof compoundScore === "number") {
     return getSentimentLabel(compoundScore);
   }
 
-  return getStoredSentimentLabel(feedback) ?? "neutral";
+  return storedLabel ?? "neutral";
 }
 
 export function summarizeFeedbackSentiment(
@@ -232,13 +245,17 @@ export function summarizeFeedbackSentiment(
     aspectMentions,
     averageCompoundScore: Number(
       averageSentimentScores(
-        feedbackItems.map((feedback) => getCompoundScore(feedback))
+        feedbackItems
+          .filter((feedback) => resolveFeedbackSentimentLabel(feedback) !== "insufficient_context")
+          .map((feedback) => getCompoundScore(feedback))
       ).toFixed(3)
     ),
     mostMentionedIssues: rankAspects(aspectMentions, "negativeCount"),
     mostPraisedAspects: rankAspects(aspectMentions, "positiveCount"),
     negativeCount: distributionCounts.negative,
     negativePercentage: toPercentage(distributionCounts.negative, total),
+    insufficientContextCount: distributionCounts.insufficient_context,
+    insufficientContextPercentage: toPercentage(distributionCounts.insufficient_context, total),
     neutralCount: distributionCounts.neutral,
     neutralPercentage: toPercentage(distributionCounts.neutral, total),
     positiveCount: distributionCounts.positive,

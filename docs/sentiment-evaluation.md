@@ -29,10 +29,14 @@ Allowed `humanLabel` values:
 - `positive`
 - `neutral`
 - `negative`
+- `insufficient_context`
+
+Use `insufficient_context` for a bare Yes/No response whose meaning cannot be
+determined without the question or additional feedback context.
 
 Label each row manually from the user's intended meaning, not from the system prediction. Do not delete difficult or ambiguous examples after seeing predictions. If a label is corrected later, record why it was a human-labeling correction.
 
-## 5-Class To 3-Class Mapping
+## Production Label Mapping
 
 The production system keeps its five overall labels. The capstone evaluation maps them deterministically:
 
@@ -43,6 +47,7 @@ The production system keeps its five overall labels. The capstone evaluation map
 | `neutral` | `neutral` |
 | `negative` | `negative` |
 | `very_negative` | `negative` |
+| `insufficient_context` | `insufficient_context` |
 
 ## Run
 
@@ -50,6 +55,6 @@ The production system keeps its five overall labels. The capstone evaluation map
 npm run evaluate:sentiment -- data/sentiment-evaluation.csv --out reports/sentiment-evaluation-report.json
 ```
 
-The report includes every evaluated row with the original text, human label, compound score, production five-class label, mapped three-class prediction, and correctness. It also prints total samples, correct/incorrect counts, accuracy, a confusion matrix, per-class precision/recall/F1, and misclassified examples.
+The report includes every evaluated row with the original text, human label, raw VADER scores and label, final contextual label, contextual override reason, mapped prediction, and correctness. Aspect results are reserved for callers that already have aspect analysis available; the standalone evaluator records that field as unavailable. It also prints total samples, correct/incorrect counts, accuracy, a confusion matrix, per-class precision/recall/F1, and misclassified examples.
 
 Do not claim the approximately 85% capstone target is achieved unless this script reports a measured accuracy at or above 85% on a human-labeled dataset.

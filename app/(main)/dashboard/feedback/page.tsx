@@ -25,7 +25,7 @@ function formatSentimentLabel(label: string) {
 }
 
 function getSentimentBadgeClasses(label: string) {
-  if (label === 'conflicted') {
+  if (label === 'conflicted' || label === 'insufficient_context') {
     return 'border-amber-500/30 bg-amber-500/10 text-amber-700';
   }
 

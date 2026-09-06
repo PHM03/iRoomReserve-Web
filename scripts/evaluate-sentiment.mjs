@@ -2,13 +2,19 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-const VALID_LABELS = Object.freeze(["positive", "neutral", "negative"]);
-const THREE_CLASS_LABEL_BY_FIVE_CLASS_LABEL = Object.freeze({
+const VALID_LABELS = Object.freeze([
+  "positive",
+  "neutral",
+  "negative",
+  "insufficient_context",
+]);
+const EVALUATION_LABEL_BY_PRODUCTION_LABEL = Object.freeze({
   very_positive: "positive",
   positive: "positive",
   neutral: "neutral",
   negative: "negative",
   very_negative: "negative",
+  insufficient_context: "insufficient_context",
 });
 
 function printUsage() {
@@ -19,14 +25,15 @@ Dataset columns/fields:
   text,humanLabel
 
 Allowed humanLabel values:
-  positive, neutral, negative
+  positive, neutral, negative, insufficient_context
 
 5-class to 3-class evaluation mapping:
   very_positive -> positive
   positive      -> positive
   neutral       -> neutral
   negative      -> negative
-  very_negative -> negative`);
+  very_negative -> negative
+  insufficient_context -> insufficient_context`);
 }
 
 function parseArgs(argv) {
@@ -178,14 +185,19 @@ async function evaluate(records) {
   const { analyzeSentiment, getSentimentLabel } = await import(
     "../lib/ai/sentiment.js"
   );
+  const { interpretSentimentContext } = await import(
+    "../lib/ai/sentiment-context.js"
+  );
   const confusionMatrix = createEmptyConfusionMatrix();
 
   const results = records.map((record) => {
     const text = normalizeText(record.text, record.rowNumber);
     const humanLabel = normalizeHumanLabel(record.humanLabel, record.rowNumber);
     const sentiment = analyzeSentiment(text);
-    const systemFiveClassLabel = getSentimentLabel(sentiment.compound);
-    const prediction = THREE_CLASS_LABEL_BY_FIVE_CLASS_LABEL[systemFiveClassLabel];
+    const rawVaderLabel = getSentimentLabel(sentiment.compound);
+    const interpretation = interpretSentimentContext(text, sentiment);
+    const finalLabel = interpretation.sentimentLabel;
+    const prediction = EVALUATION_LABEL_BY_PRODUCTION_LABEL[finalLabel];
     const correct = prediction === humanLabel;
 
     confusionMatrix[humanLabel][prediction] += 1;
@@ -195,7 +207,14 @@ async function evaluate(records) {
       text,
       humanLabel,
       compoundScore: sentiment.compound,
-      systemFiveClassLabel,
+      rawVaderLabel,
+      rawPositiveScore: sentiment.positive,
+      rawNeutralScore: sentiment.neutral,
+      rawNegativeScore: sentiment.negative,
+      finalLabel,
+      contextualOverride: interpretation.contextualOverride,
+      contextualOverrideReason: interpretation.contextualOverrideReason,
+      aspectResult: null,
       prediction,
       correct,
     };
@@ -247,7 +266,7 @@ async function evaluate(records) {
     accuracyPercentage: round(accuracy * 100, 2),
     targetAccuracyPercentage: 85,
     targetAchieved: accuracy >= 0.85,
-    labelMapping: THREE_CLASS_LABEL_BY_FIVE_CLASS_LABEL,
+    labelMapping: EVALUATION_LABEL_BY_PRODUCTION_LABEL,
     confusionMatrix,
     perClassMetrics,
     misclassifiedExamples: results.filter((result) => !result.correct),
@@ -257,7 +276,7 @@ async function evaluate(records) {
 
 function printConfusionMatrix(confusionMatrix) {
   console.log("\nConfusion matrix (rows = human label, columns = prediction):");
-  console.log("human\\predicted,positive,neutral,negative");
+  console.log("human\\predicted,positive,neutral,negative,insufficient_context");
   VALID_LABELS.forEach((label) => {
     console.log(
       [
@@ -265,6 +284,7 @@ function printConfusionMatrix(confusionMatrix) {
         confusionMatrix[label].positive,
         confusionMatrix[label].neutral,
         confusionMatrix[label].negative,
+        confusionMatrix[label].insufficient_context,
       ].join(",")
     );
   });
@@ -290,7 +310,7 @@ function printMisclassifications(report) {
 
   report.misclassifiedExamples.forEach((example) => {
     console.log(
-      `Row ${example.rowNumber}: human=${example.humanLabel}, predicted=${example.prediction}, fiveClass=${example.systemFiveClassLabel}, compound=${example.compoundScore}`
+      `Row ${example.rowNumber}: human=${example.humanLabel}, predicted=${example.prediction}, rawLabel=${example.rawVaderLabel}, finalLabel=${example.finalLabel}, compound=${example.compoundScore}`
     );
     console.log(`  ${example.text}`);
   });

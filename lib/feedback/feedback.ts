@@ -61,6 +61,8 @@ export interface Feedback {
   positiveScore?: number;
   neutralScore?: number;
   negativeScore?: number;
+  contextualOverride?: boolean;
+  contextualOverrideReason?: string | null;
   sentimentLabel?: SentimentLabel;
   sentimentClassification?: SentimentLabel;
   detectedAspects: DetectedFeedbackAspects;
@@ -186,6 +188,8 @@ function mapFeedbackData(id: string, data: FeedbackSnapshot): Feedback {
           ? data.compoundScore
           : undefined;
   const sentimentClassification = resolveFeedbackSentimentLabel({
+    contextualOverride: data.contextualOverride,
+    contextualOverrideReason: data.contextualOverrideReason,
     compoundScore,
     detectedAspects,
     sentimentClassification:
@@ -227,6 +231,8 @@ function mapFeedbackData(id: string, data: FeedbackSnapshot): Feedback {
       typeof data.neutralScore === "number" ? data.neutralScore : undefined,
     negativeScore:
       typeof data.negativeScore === "number" ? data.negativeScore : undefined,
+    contextualOverride: data.contextualOverride ?? undefined,
+    contextualOverrideReason: data.contextualOverrideReason ?? null,
     sentimentClassification,
     sentimentLabel: sentimentClassification,
     detectedAspects,
@@ -298,6 +304,8 @@ export async function submitFeedback(
     positiveScore: sentiment.positive,
     neutralScore: sentiment.neutral,
     negativeScore: sentiment.negative,
+    contextualOverride: analytics.contextualOverride,
+    contextualOverrideReason: analytics.contextualOverrideReason,
     detectedAspects: analytics.detectedAspects,
     detected_aspects: analytics.detectedAspects,
     extractedKeywords: analytics.extractedKeywords,

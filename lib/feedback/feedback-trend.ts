@@ -25,9 +25,11 @@ export interface SentimentTrendBucket {
   positiveCount: number;
   neutralCount: number;
   negativeCount: number;
+  insufficientContextCount: number;
   positiveRate: number;
   neutralRate: number;
   negativeRate: number;
+  insufficientContextRate: number;
   averageRating: number | null;
   averageCompound: number | null;
 }
@@ -124,13 +126,19 @@ function createEmptyBucket(
     positiveCount: 0,
     neutralCount: 0,
     negativeCount: 0,
+    insufficientContextCount: 0,
     positiveRate: 0,
     neutralRate: 0,
     negativeRate: 0,
+    insufficientContextRate: 0,
   };
 }
 
 function getStoredCompoundScore(feedback: Feedback) {
+  if (resolveFeedbackSentimentLabel(feedback) === 'insufficient_context') {
+    return null;
+  }
+
   const score = feedback.vaderCompoundScore ?? feedback.compoundScore;
   return typeof score === 'number' && Number.isFinite(score) ? score : null;
 }
@@ -252,6 +260,7 @@ export function buildSentimentTrend(
     positiveCount: 0,
     neutralCount: 0,
     negativeCount: 0,
+    insufficientContextCount: 0,
   }));
 
   feedbackItems.forEach((feedback) => {
@@ -272,6 +281,7 @@ export function buildSentimentTrend(
     const sentimentLabel = resolveFeedbackSentimentLabel(feedback);
     if (sentimentLabel === 'positive' || sentimentLabel === 'very_positive') bucket.positiveCount += 1;
     else if (sentimentLabel === 'negative' || sentimentLabel === 'very_negative') bucket.negativeCount += 1;
+    else if (sentimentLabel === 'insufficient_context') bucket.insufficientContextCount += 1;
     else bucket.neutralCount += 1;
 
     const score = getStoredCompoundScore(feedback);
@@ -290,6 +300,7 @@ export function buildSentimentTrend(
     ...result,
     buckets: result.buckets.map((bucket, index) => {
       const total = totals[index];
+      const evaluableReviews = total.totalReviews - total.insufficientContextCount;
       const averageCompoundScore = total.compoundCount > 0
         ? total.compoundSum / total.compoundCount
         : null;
@@ -303,9 +314,11 @@ export function buildSentimentTrend(
         positiveCount: total.positiveCount,
         neutralCount: total.neutralCount,
         negativeCount: total.negativeCount,
-        positiveRate: toPercentage(total.positiveCount, total.totalReviews),
-        neutralRate: toPercentage(total.neutralCount, total.totalReviews),
-        negativeRate: toPercentage(total.negativeCount, total.totalReviews),
+        insufficientContextCount: total.insufficientContextCount,
+        positiveRate: toPercentage(total.positiveCount, evaluableReviews),
+        neutralRate: toPercentage(total.neutralCount, evaluableReviews),
+        negativeRate: toPercentage(total.negativeCount, evaluableReviews),
+        insufficientContextRate: toPercentage(total.insufficientContextCount, total.totalReviews),
       };
     }),
   };

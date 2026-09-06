@@ -65,6 +65,32 @@ describe('buildSentimentTrend', () => {
     expect(result.buckets[1].feedbackCount).toBe(1);
   });
 
+  it('tracks insufficient-context responses separately from evaluable rates and averages', () => {
+    const result = buildSentimentTrend(
+      [
+        feedback({ date: '2026-08-24T09:00:00', compoundScore: 0.4019 }) as unknown as Record<string, unknown>,
+        feedback({ date: '2026-08-24T10:00:00', compoundScore: -0.296 }) as unknown as Record<string, unknown>,
+      ].map((item, index) => ({
+        ...item,
+        sentimentClassification: 'insufficient_context',
+        id: `insufficient-${index}`,
+      })) as never,
+      'weekly',
+      new Date('2026-08-26T12:00:00'),
+    );
+
+    expect(result.buckets[1]).toMatchObject({
+      totalReviews: 2,
+      feedbackCount: 0,
+      insufficientContextCount: 2,
+      insufficientContextRate: 100,
+      positiveRate: 0,
+      neutralRate: 0,
+      negativeRate: 0,
+      averageCompoundScore: null,
+    });
+  });
+
   it('uses week buckets for months and month buckets for years', () => {
     const monthly = buildSentimentTrend(
       [feedback({ date: '2026-08-29T09:00:00', compoundScore: -0.2 })],

@@ -17,7 +17,8 @@ export type SentimentLabel =
   | "positive"
   | "neutral"
   | "negative"
-  | "very_negative";
+  | "very_negative"
+  | "insufficient_context";
 export type HybridSentimentLabel = SentimentLabel | "conflicted";
 
 export const DEFAULT_SENTIMENT_ANALYSIS: Readonly<SentimentAnalysis>;
@@ -26,6 +27,10 @@ export const ROOM_SENTIMENT_LEXICON: Readonly<Record<string, number>>;
 export function analyzeSentiment(
   text: string | null | undefined
 ): SentimentAnalysis;
+
+export function isInsufficientContextResponse(
+  text: string | null | undefined
+): boolean;
 
 export function analyzeFeedbackSentiment(
   text: string | null | undefined,

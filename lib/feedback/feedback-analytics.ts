@@ -4,6 +4,11 @@ import {
   type SentimentAnalysis,
   type SentimentLabel,
 } from "../ai/sentiment";
+import {
+  getNegatedCuePolarity,
+  interpretSentimentContext,
+  type SentimentContextOverrideReason,
+} from "../ai/sentiment-context";
 import { normalizeRole } from "../auth/roles";
 
 export const FEEDBACK_CATEGORY_KEYS = [
@@ -55,6 +60,7 @@ export const SENTIMENT_DISTRIBUTION_ORDER: SentimentLabel[] = [
   "neutral",
   "negative",
   "very_negative",
+  "insufficient_context",
 ];
 
 export type FeedbackAspectKey = (typeof FEEDBACK_ASPECT_KEYS)[number];
@@ -64,6 +70,8 @@ export type DetectedFeedbackAspects = Partial<
 >;
 
 export interface FeedbackTextAnalytics {
+  contextualOverride: boolean;
+  contextualOverrideReason: SentimentContextOverrideReason;
   detectedAspects: DetectedFeedbackAspects;
   extractedKeywords: string[];
   sentiment: SentimentAnalysis;
@@ -351,6 +359,15 @@ function classifyAspectSegment(
   segment: string
 ): AspectSentiment {
   const cues = ASPECT_SENTIMENT_CUES[aspect];
+  const negatedCuePolarity = getNegatedCuePolarity(
+    segment,
+    cues.positive,
+    cues.negative,
+  );
+  if (negatedCuePolarity) {
+    return negatedCuePolarity;
+  }
+
   const positiveCueCount = countCueMatches(segment, cues.positive);
   const negativeCueCount = countCueMatches(segment, cues.negative);
   const compound = analyzeSentiment(segment).compound;
@@ -493,13 +510,16 @@ export function analyzeFeedbackText(
   text: string | null | undefined
 ): FeedbackTextAnalytics {
   const sentiment = analyzeSentiment(text);
+  const interpretation = interpretSentimentContext(text, sentiment);
   const detectedAspects = detectFeedbackAspects(text);
 
   return {
+    contextualOverride: interpretation.contextualOverride,
+    contextualOverrideReason: interpretation.contextualOverrideReason,
     detectedAspects,
     extractedKeywords: extractFeedbackKeywords(text, detectedAspects),
     sentiment,
-    sentimentClassification: getSentimentLabel(sentiment.compound),
+    sentimentClassification: interpretation.sentimentLabel,
   };
 }
 
@@ -569,6 +589,8 @@ export interface FeedbackAnalyticsRecord {
   buildingName?: string;
   categoryRatings?: unknown;
   category_ratings?: unknown;
+  contextualOverride?: unknown;
+  contextualOverrideReason?: unknown;
   compoundScore?: unknown;
   detectedAspects?: unknown;
   detected_aspects?: unknown;
@@ -596,9 +618,11 @@ export interface FeedbackAnalyticsMetrics {
   positiveCount: number;
   neutralCount: number;
   negativeCount: number;
+  insufficientContextCount: number;
   positiveRate: number;
   neutralRate: number;
   negativeRate: number;
+  insufficientContextRate: number;
   categoryRatings: Partial<Record<FeedbackCategoryRatingKey, CategoryPerformance>>;
   aspectMentions: Partial<Record<FeedbackAspectKey, AspectPerformance>>;
 }
@@ -718,15 +742,23 @@ function getFeedbackRating(feedback: FeedbackAnalyticsRecord) {
 }
 
 function getAnalyticsSentimentLabel(feedback: FeedbackAnalyticsRecord): SentimentLabel {
+  const rawValue = feedback.sentimentClassification ?? feedback.sentiment_classification ?? feedback.sentimentLabel;
+  const normalized = typeof rawValue === "string"
+    ? rawValue.trim().toLowerCase().replace(/[\s-]+/g, "_")
+    : "";
+  if (feedback.contextualOverride === true && SENTIMENT_DISTRIBUTION_ORDER.includes(normalized as SentimentLabel)) {
+    return normalized as SentimentLabel;
+  }
+
+  if (normalized === "insufficient_context") {
+    return "insufficient_context";
+  }
+
   const score = getFeedbackCompoundScore(feedback);
   if (score !== null) {
     return getSentimentLabel(score);
   }
 
-  const rawValue = feedback.sentimentClassification ?? feedback.sentiment_classification ?? feedback.sentimentLabel;
-  const normalized = typeof rawValue === "string"
-    ? rawValue.trim().toLowerCase().replace(/[\s-]+/g, "_")
-    : "";
   return SENTIMENT_DISTRIBUTION_ORDER.includes(normalized as SentimentLabel)
     ? normalized as SentimentLabel
     : "neutral";
@@ -763,6 +795,7 @@ export function summarizeFeedbackAnalytics(
     positive: 0,
     neutral: 0,
     negative: 0,
+    insufficient_context: 0,
   };
   const ratings: number[] = [];
   const compounds: number[] = [];
@@ -771,13 +804,16 @@ export function summarizeFeedbackAnalytics(
     const label = getAnalyticsSentimentLabel(feedback);
     if (label === "positive" || label === "very_positive") sentimentCounts.positive += 1;
     else if (label === "negative" || label === "very_negative") sentimentCounts.negative += 1;
+    else if (label === "insufficient_context") sentimentCounts.insufficient_context += 1;
     else sentimentCounts.neutral += 1;
 
     const rating = getFeedbackRating(feedback);
     if (rating !== null) ratings.push(rating);
     const compound = getFeedbackCompoundScore(feedback);
-    if (compound !== null) compounds.push(compound);
+    if (compound !== null && label !== "insufficient_context") compounds.push(compound);
   });
+
+  const evaluableReviews = items.length - sentimentCounts.insufficient_context;
 
   const aspectMentions = calculateAspectMentions(items);
   const categoryRatings: Partial<Record<FeedbackCategoryRatingKey, CategoryPerformance>> = {};
@@ -812,9 +848,11 @@ export function summarizeFeedbackAnalytics(
     positiveCount: sentimentCounts.positive,
     neutralCount: sentimentCounts.neutral,
     negativeCount: sentimentCounts.negative,
-    positiveRate: safePercentage(sentimentCounts.positive, items.length),
-    neutralRate: safePercentage(sentimentCounts.neutral, items.length),
-    negativeRate: safePercentage(sentimentCounts.negative, items.length),
+    insufficientContextCount: sentimentCounts.insufficient_context,
+    positiveRate: safePercentage(sentimentCounts.positive, evaluableReviews),
+    neutralRate: safePercentage(sentimentCounts.neutral, evaluableReviews),
+    negativeRate: safePercentage(sentimentCounts.negative, evaluableReviews),
+    insufficientContextRate: safePercentage(sentimentCounts.insufficient_context, items.length),
     categoryRatings,
     aspectMentions,
   };

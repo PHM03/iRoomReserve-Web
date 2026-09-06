@@ -54,9 +54,11 @@ function location(name: string, totalReviews: number, averageRating: number | nu
     positiveCount: 0,
     neutralCount: 0,
     negativeCount: 0,
-    positiveRate: 0,
-    neutralRate: 0,
-    negativeRate: 0,
+        positiveRate: 0,
+        neutralRate: 0,
+        negativeRate: 0,
+        insufficientContextCount: 0,
+        insufficientContextRate: 0,
     categoryRatings: {},
     aspectMentions: {},
     reliable: totalReviews >= 5,
@@ -81,6 +83,54 @@ describe('feedback analytics refinement', () => {
     expect(metrics.negativeRate).toBe(40);
     expect(metrics.averageRating).toBe(4);
     expect(Number.isFinite(metrics.negativeRate)).toBe(true);
+  });
+
+  it('excludes insufficient-context feedback from sentiment rates and averages', () => {
+    const metrics = summarizeFeedbackAnalytics([
+      feedback({ compoundScore: 0.8 }),
+      feedback({
+        compoundScore: 0.4019,
+        sentimentClassification: 'insufficient_context',
+      }),
+      feedback({ compoundScore: -0.8 }),
+    ]);
+
+    expect(metrics).toMatchObject({
+      totalReviews: 3,
+      positiveCount: 1,
+      neutralCount: 0,
+      negativeCount: 1,
+      insufficientContextCount: 1,
+      positiveRate: 50,
+      neutralRate: 0,
+      negativeRate: 50,
+      insufficientContextRate: 33.3,
+      averageCompound: 0,
+    });
+  });
+
+  it('uses the contextual final label for analytics while averaging the raw score', () => {
+    const metrics = summarizeFeedbackAnalytics([
+      feedback({
+        compoundScore: -0.1027,
+        sentimentClassification: 'positive',
+        contextualOverride: true,
+        contextualOverrideReason: 'contextual_response',
+      }),
+      feedback({
+        compoundScore: 0.4588,
+        sentimentClassification: 'neutral',
+        contextualOverride: true,
+        contextualOverrideReason: 'contrast_exception',
+      }),
+    ]);
+
+    expect(metrics).toMatchObject({
+      positiveCount: 1,
+      neutralCount: 1,
+      negativeCount: 0,
+      averageCompound: 0.18,
+    });
   });
 
   it('builds positive and negative time-bucket rates from feedback submission dates', () => {

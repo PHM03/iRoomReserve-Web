@@ -30,6 +30,50 @@ describe("feedback sentiment helpers", () => {
     ).toBe("very_positive");
   });
 
+  it("preserves an explicit insufficient-context label over a stored VADER score", () => {
+    expect(
+      resolveFeedbackSentimentLabel({
+        compoundScore: 0.4019,
+        sentimentClassification: "insufficient_context",
+      })
+    ).toBe("insufficient_context");
+
+    expect(
+      resolveFeedbackSentimentLabel({
+        compoundScore: -0.296,
+        sentimentLabel: "insufficient_context",
+      })
+    ).toBe("insufficient_context");
+  });
+
+  it("honors a contextual final label while keeping the raw score available", () => {
+    expect(
+      resolveFeedbackSentimentLabel({
+        compoundScore: -0.1027,
+        contextualOverride: true,
+        contextualOverrideReason: "contextual_response",
+        sentimentClassification: "positive",
+      })
+    ).toBe("positive");
+
+    expect(
+      resolveFeedbackSentimentLabel({
+        compoundScore: 0.4588,
+        contextualOverride: true,
+        contextualOverrideReason: "contrast_exception",
+        sentimentClassification: "neutral",
+      })
+    ).toBe("neutral");
+
+    expect(
+      resolveFeedbackSentimentLabel({
+        compoundScore: 0.4588,
+        contextualOverride: false,
+        sentimentClassification: "negative",
+      })
+    ).toBe("positive");
+  });
+
   it("builds an aggregate sentiment summary for a building", () => {
     const summary = summarizeFeedbackSentiment([
       {
@@ -78,6 +122,7 @@ describe("feedback sentiment helpers", () => {
       { count: 1, label: "neutral", percentage: 33.3 },
       { count: 0, label: "negative", percentage: 0 },
       { count: 1, label: "very_negative", percentage: 33.3 },
+      { count: 0, label: "insufficient_context", percentage: 0 },
     ]);
     expect(summary.mostMentionedIssues).toEqual([
       { aspect: "air_conditioning", count: 1, label: "Air Conditioning" },
@@ -215,6 +260,7 @@ describe("feedback sentiment helpers", () => {
       { count: 0, label: "neutral", percentage: 0 },
       { count: 0, label: "negative", percentage: 0 },
       { count: 1, label: "very_negative", percentage: 50 },
+      { count: 0, label: "insufficient_context", percentage: 0 },
     ]);
   });
 
