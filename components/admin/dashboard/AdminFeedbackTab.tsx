@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import {
   resolveFeedbackSentimentLabel,
@@ -16,6 +16,7 @@ import {
   scopeFeedbackToBuildings,
   type FeedbackAnalyticsPeriod,
 } from '@/lib/feedback/feedback-period';
+import { buildSentimentTrend } from '@/lib/feedback/feedback-trend';
 import {
   FEEDBACK_ANALYTICS_SCOPES,
   scopeFeedback,
@@ -38,6 +39,15 @@ import {
   SENTIMENT_DISTRIBUTION_ORDER,
   type FeedbackAspectKey,
 } from '@/lib/feedback/feedback-analytics';
+import {
+  createFeedbackAnalyticsReportFilters,
+  buildFeedbackAnalyticsReport,
+  type FeedbackAnalyticsReportFilters,
+  type FeedbackAnalyticsReport,
+  type FeedbackReportRating,
+} from '@/lib/feedback/feedback-report';
+import { createFeedbackAnalyticsReportScope } from '@/lib/feedback/feedback-report-dashboard';
+import { apiRequestBlob } from '@/lib/api/client';
 import { respondToFeedback, type Feedback } from '@/lib/feedback/feedback';
 import { FEEDBACK_ROLE_OPTIONS, matchesFeedbackRole } from '@/lib/feedback/feedback-role';
 import { USER_GENDER_LABELS, USER_GENDER_VALUES, normalizeUserGender } from '@/lib/auth/profile-types';
@@ -174,7 +184,7 @@ export default function AdminFeedbackTab({
   const [feedbackScope, setFeedbackScope] = useState<FeedbackAnalyticsScope>('building');
   const [feedbackFloor, setFeedbackFloor] = useState('');
   const [feedbackRoomId, setFeedbackRoomId] = useState('');
-  const [starFilter, setStarFilter] = useState<number | null>(null);
+  const [starFilter, setStarFilter] = useState<FeedbackReportRating | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -187,6 +197,23 @@ export default function AdminFeedbackTab({
     DEFAULT_SCHEDULE_CONTEXT.semester,
   );
   const [analyticsNow] = useState(() => new Date());
+  const [reportMenuOpen, setReportMenuOpen] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState<'pdf' | 'xlsx' | 'docx' | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const reportMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!reportMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (reportMenuRef.current && !reportMenuRef.current.contains(event.target as Node)) {
+        setReportMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [reportMenuOpen]);
 
   const analyticsScheduleContext = useMemo(
     () => ({ academicYear: analyticsAcademicYear, semester: analyticsSemester }),
@@ -241,41 +268,96 @@ export default function AdminFeedbackTab({
     ? feedbackRoomId
     : roomOptions[0]?.id ?? '';
 
+  // This is the explicit, serializable snapshot a future report action will
+  // pass to the report builder. It is intentionally independent of
+  // `hasActiveFilters`, which does not represent every control in this tab.
+  const reportFilters: FeedbackAnalyticsReportFilters = useMemo(
+    () => createFeedbackAnalyticsReportFilters({
+      scope: feedbackScopeId,
+      locationScope: feedbackScope,
+      floor: selectedFeedbackFloor,
+      roomId: selectedFeedbackRoomId,
+      period: analyticsPeriod,
+      academicYear: analyticsAcademicYear,
+      semester: analyticsSemester,
+      star: starFilter,
+      dateFrom,
+      dateTo,
+      role: roleFilter,
+      gender: genderFilter,
+    }),
+    [
+      analyticsAcademicYear,
+      analyticsPeriod,
+      analyticsSemester,
+      dateFrom,
+      dateTo,
+      feedbackScope,
+      feedbackScopeId,
+      genderFilter,
+      roleFilter,
+      selectedFeedbackFloor,
+      selectedFeedbackRoomId,
+      starFilter,
+    ],
+  );
+
   // ── Filter logic ─────────────────────────────────────────────────────────
 
   const scopedFeedback = useMemo(() => scopeFeedback(buildingFeedbackList, {
       buildingId,
       buildingIds: activeFeedbackBuildingIds,
-      floor: selectedFeedbackFloor,
-      roomId: selectedFeedbackRoomId,
+      floor: reportFilters.floor,
+      roomId: reportFilters.roomId,
       rooms: buildingRooms,
-      scope: feedbackScope,
-    }), [activeFeedbackBuildingIds, buildingFeedbackList, buildingId, buildingRooms, feedbackScope, selectedFeedbackFloor, selectedFeedbackRoomId]);
+      scope: reportFilters.locationScope,
+    }), [activeFeedbackBuildingIds, buildingFeedbackList, buildingId, buildingRooms, reportFilters]);
 
   const filteredFeedback = useMemo(() => {
     const periodFeedback = filterFeedbackByPeriod(
       scopedFeedback,
-      analyticsPeriod,
+      reportFilters.period,
       analyticsNow,
       analyticsScheduleContext,
     );
 
-    return applyFeedbackFilters(periodFeedback.items, starFilter, dateFrom, dateTo, roleFilter, genderFilter);
-  }, [analyticsNow, analyticsPeriod, analyticsScheduleContext, dateFrom, dateTo, genderFilter, roleFilter, scopedFeedback, starFilter]);
+    return applyFeedbackFilters(
+      periodFeedback.items,
+      reportFilters.star,
+      reportFilters.dateFrom,
+      reportFilters.dateTo,
+      reportFilters.role,
+      reportFilters.gender,
+    );
+  }, [analyticsNow, analyticsScheduleContext, reportFilters, scopedFeedback]);
 
   const selectedPeriodFeedback = useMemo(() => {
     const comparison = compareFeedbackPeriods(
       scopedFeedback,
-      analyticsPeriod,
+      reportFilters.period,
       analyticsNow,
       analyticsScheduleContext,
     );
     return {
       ...comparison,
-      currentItems: applyFeedbackFilters(comparison.currentItems, starFilter, dateFrom, dateTo, roleFilter, genderFilter),
-      previousItems: applyFeedbackFilters(comparison.previousItems, starFilter, dateFrom, dateTo, roleFilter, genderFilter),
+      currentItems: applyFeedbackFilters(
+        comparison.currentItems,
+        reportFilters.star,
+        reportFilters.dateFrom,
+        reportFilters.dateTo,
+        reportFilters.role,
+        reportFilters.gender,
+      ),
+      previousItems: applyFeedbackFilters(
+        comparison.previousItems,
+        reportFilters.star,
+        reportFilters.dateFrom,
+        reportFilters.dateTo,
+        reportFilters.role,
+        reportFilters.gender,
+      ),
     };
-  }, [analyticsNow, analyticsPeriod, analyticsScheduleContext, dateFrom, dateTo, genderFilter, roleFilter, scopedFeedback, starFilter]);
+  }, [analyticsNow, analyticsScheduleContext, reportFilters, scopedFeedback]);
 
   const selectedFeedbackSummary = useMemo(() => {
     if (!selectedPeriodFeedback.configured || filteredFeedback.length === 0) return null;
@@ -286,7 +368,7 @@ export default function AdminFeedbackTab({
   }, [filteredFeedback, selectedPeriodFeedback.configured]);
 
   const hasActiveFilters =
-    feedbackScope !== 'building' || starFilter !== null || !!dateFrom || !!dateTo || !!roleFilter || !!genderFilter;
+    reportFilters.locationScope !== 'building' || reportFilters.star !== null || !!reportFilters.dateFrom || !!reportFilters.dateTo || !!reportFilters.role || !!reportFilters.gender;
   const anonymizeFilteredFeedback = false;
 
   const insightPeriodFeedback = selectedPeriodFeedback;
@@ -314,18 +396,93 @@ export default function AdminFeedbackTab({
         buildingRooms,
         insightPeriodFeedback.comparable,
       ),
-      feedbackScope,
+      reportFilters.locationScope,
       buildingId,
-      selectedFeedbackFloor,
-      selectedFeedbackRoomId,
+      reportFilters.floor,
+      reportFilters.roomId,
       activeFeedbackBuildingIds,
     ),
-    [activeFeedbackBuildingIds, buildingId, buildingRooms, feedbackScope, filteredFeedback, insightPeriodFeedback.comparable, insightPeriodFeedback.previousItems, selectedFeedbackFloor, selectedFeedbackRoomId],
+    [activeFeedbackBuildingIds, buildingId, buildingRooms, filteredFeedback, insightPeriodFeedback.comparable, insightPeriodFeedback.previousItems, reportFilters],
   );
   const demographicAnalytics = useMemo(
     () => buildFeedbackDemographicAnalytics(filteredFeedback),
     [filteredFeedback],
   );
+
+  const reportScope = useMemo(
+    () => createFeedbackAnalyticsReportScope({
+      activeBuildingLabel,
+      activeFeedbackBuildingIds,
+      buildingId,
+      feedbackScopeId,
+      managedBuildings,
+      wholeCampusBuildingIds,
+    }),
+    [
+      activeBuildingLabel,
+      activeFeedbackBuildingIds,
+      buildingId,
+      feedbackScopeId,
+      managedBuildings,
+      wholeCampusBuildingIds,
+    ],
+  );
+
+  const handleGenerateReport = async (format: 'pdf' | 'xlsx' | 'docx') => {
+    if (generatingReport) return;
+
+    setReportMenuOpen(false);
+    setReportError(null);
+    setGeneratingReport(format);
+
+    try {
+      const report: FeedbackAnalyticsReport = buildFeedbackAnalyticsReport({
+        filteredFeedback,
+        filters: reportFilters,
+        scope: reportScope,
+        metrics: selectedMetrics,
+        sentimentSummary: summarizeFeedbackSentiment(filteredFeedback),
+        categoryPerformance,
+        locationAnalytics,
+        demographicAnalytics,
+        trend: buildSentimentTrend(
+          filteredFeedback,
+          reportFilters.period,
+          analyticsNow,
+          analyticsScheduleContext,
+        ),
+        insights: feedbackInsights,
+        generatedAt: new Date(),
+      });
+      const response = await apiRequestBlob('/api/admin/feedback/report', {
+        body: { format, report },
+      });
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get('content-disposition') ?? '';
+      const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+      const fallbackExtension = format === 'pdf' ? 'pdf' : format === 'xlsx' ? 'xlsx' : 'docx';
+      const filename = filenameMatch?.[1] ?? `feedback-analytics-report.${fallbackExtension}`;
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    } catch (error) {
+      console.error('Failed to generate feedback analytics report.', error);
+      setReportError(
+          format === 'pdf'
+            ? 'Unable to generate the PDF findings report. Please try again.'
+            : format === 'xlsx'
+              ? 'Unable to generate the Excel analytics workbook. Please try again.'
+              : 'Unable to generate the Word document. Please try again.',
+      );
+    } finally {
+      setGeneratingReport(null);
+    }
+  };
 
   const clearFilters = () => {
     setFeedbackScope('building');
@@ -419,7 +576,7 @@ export default function AdminFeedbackTab({
         <div className="space-y-4">
 
           {/* ── Existing summary cards — unchanged ── */}
-          <div className="glass-card p-4">
+          <div className={`glass-card relative p-4 ${reportMenuOpen ? 'z-30' : ''}`}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-base font-bold text-black">Feedback Analytics</h3>
@@ -476,7 +633,60 @@ export default function AdminFeedbackTab({
                   </label>
                 </>
               ) : null}
+              <div ref={reportMenuRef} className="relative sm:ml-auto">
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={reportMenuOpen}
+                  aria-busy={generatingReport !== null}
+                  disabled={generatingReport !== null}
+                  onClick={() => setReportMenuOpen((open) => !open)}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-extrabold text-white shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {generatingReport
+                    ? `Generating ${generatingReport === 'pdf' ? 'PDF' : generatingReport === 'xlsx' ? 'Excel' : 'Word'}…`
+                    : 'Generate Report'}
+                  {!generatingReport ? <span aria-hidden="true">▾</span> : null}
+                </button>
+                {reportMenuOpen && !generatingReport ? (
+                  <div
+                    role="menu"
+                    aria-label="Generate feedback report"
+                    className="absolute right-0 top-11 z-20 min-w-56 overflow-hidden rounded-xl border border-black/10 bg-white p-1 shadow-xl"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void handleGenerateReport('pdf')}
+                      className="block w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-black hover:bg-black/5"
+                    >
+                      PDF Findings Report
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void handleGenerateReport('xlsx')}
+                      className="block w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-black hover:bg-black/5"
+                    >
+                      Excel Analytics Workbook
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => void handleGenerateReport('docx')}
+                      className="block w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-black hover:bg-black/5"
+                    >
+                      Word Document (DOCX)
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
+            {reportError ? (
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700" role="alert">
+                {reportError}
+              </p>
+            ) : null}
           </div>
 
           <div className="glass-card flex flex-wrap gap-2 p-2" role="tablist" aria-label="Feedback dashboard sections">
@@ -550,7 +760,7 @@ export default function AdminFeedbackTab({
                 <button
                   key={star}
                   type="button"
-                  onClick={() => setStarFilter(starFilter === star ? null : star)}
+                  onClick={() => setStarFilter(starFilter === star ? null : star as FeedbackReportRating)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
                     starFilter === star
                       ? 'bg-yellow-400 text-yellow-900 border-yellow-500'

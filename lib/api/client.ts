@@ -111,3 +111,44 @@ export async function apiRequest<T>(
 
   return payload as T;
 }
+
+export async function apiRequestBlob(
+  input: string,
+  { body, method = "POST", params, role, userId }: ApiRequestOptions = {}
+): Promise<Response> {
+  await waitForAuthReady();
+  const currentUser = auth.currentUser;
+  const token = currentUser ? await currentUser.getIdToken(true) : null;
+
+  const response = await fetch(buildUrl(input, params), {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(currentUser?.uid ? { "x-user-id": currentUser.uid } : {}),
+      ...(userId ? { "x-user-id": userId } : {}),
+      ...(role ? { "x-user-role": role } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+
+  if (!response.ok) {
+    const responseText = await response.text();
+    let message = `The request failed (status ${response.status}).`;
+    try {
+      message =
+        (JSON.parse(responseText) as ApiErrorResponse)?.error?.message ??
+        (responseText.trim() || message);
+    } catch {
+      if (responseText.trim()) message = responseText.trim();
+    }
+
+    const error = new Error(message) as ApiRequestError;
+    error.status = response.status;
+    error.responseBody = responseText;
+    error.contentType = response.headers.get("content-type") ?? "";
+    throw error;
+  }
+
+  return response;
+}

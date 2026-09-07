@@ -733,7 +733,7 @@ export function getFeedbackCompoundScore(feedback: FeedbackAnalyticsRecord) {
   return score ?? null;
 }
 
-function getFeedbackRating(feedback: FeedbackAnalyticsRecord) {
+export function getFeedbackRating(feedback: FeedbackAnalyticsRecord) {
   const candidates = [feedback.overallRating, feedback.overall_rating, feedback.rating];
   const rating = candidates.find(
     (value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 5,

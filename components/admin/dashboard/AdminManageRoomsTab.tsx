@@ -178,24 +178,37 @@ export default function AdminManageRoomsTab({
             }),
         [buildingFloors, buildingId, buildingName]
     );
-    const floorOptions = useMemo(() => {
-        const primaryOptions = floors.length > 0
-            ? floors.map((floor) => ({ label: floor.name, value: floor.name }))
-            : legacyFloorOptions;
-        const knownValues = new Set(primaryOptions.map((floorOption) => floorOption.value));
-        const legacyRoomOptions = rooms
+    const primaryFloorOptions = useMemo(
+        () =>
+            floors.length > 0
+                ? floors.map((floor) => ({ label: floor.name, value: floor.name }))
+                : legacyFloorOptions,
+        [floors, legacyFloorOptions]
+    );
+    const legacyRoomFloorOptions = useMemo(() => {
+        const knownValues = new Set(primaryFloorOptions.map((floorOption) => floorOption.value));
+        const legacyFloorValues = rooms
             .map((room) => room.floor.trim())
-            .filter((floor) => floor && !knownValues.has(floor))
-            .map((floor) => ({ label: floor, value: floor }));
+            .filter((floor) => floor && !knownValues.has(floor));
 
-        return floors.length > 0
-            ? [...primaryOptions, ...sortFloors(legacyRoomOptions.map((floor) => floor.value)).map((floor) => ({ label: floor, value: floor }))]
-            : sortFloors([...primaryOptions.map((floor) => floor.value), ...legacyRoomOptions.map((floor) => floor.value)])
-                .map((floor) => ({ label: floor, value: floor }));
-    }, [floors, legacyFloorOptions, rooms]);
+        return sortFloors([...new Set(legacyFloorValues)]).map((floor) => ({
+            label: floor,
+            value: floor,
+        }));
+    }, [primaryFloorOptions, rooms]);
+    const floorOptions = useMemo(
+        () =>
+            floors.length > 0
+                ? [...primaryFloorOptions, ...legacyRoomFloorOptions]
+                : sortFloors([
+                      ...primaryFloorOptions.map((floorOption) => floorOption.value),
+                      ...legacyRoomFloorOptions.map((floorOption) => floorOption.value),
+                  ]).map((floor) => ({ label: floor, value: floor })),
+        [floors.length, legacyRoomFloorOptions, primaryFloorOptions]
+    );
     const roomFloorOptions = useMemo(
-        () => floorOptions.map((floorOption) => floorOption.value),
-        [floorOptions]
+        () => primaryFloorOptions.map((floorOption) => floorOption.value),
+        [primaryFloorOptions]
     );
     const hasAnyRooms = roomCounts.total > 0;
     const filteredRooms = useMemo(
@@ -255,24 +268,34 @@ export default function AdminManageRoomsTab({
     }, [buildingId, floorReloadKey]);
 
     useEffect(() => {
-        setRoomFloorFilter(getPreferredDefaultFloorValue(floorOptions));
-        setRoomSearch('');
-        setRooms([]);
-        setRoomCounts(EMPTY_ROOM_COUNTS);
-    }, [buildingId, floorOptions]);
+        const preferredFloor = getPreferredDefaultFloorValue(primaryFloorOptions);
+
+        setRoomFloorFilter((currentFloor) => (currentFloor === preferredFloor ? currentFloor : preferredFloor));
+        setRoomSearch((currentSearch) => (currentSearch === '' ? currentSearch : ''));
+        setRooms((currentRooms) => (currentRooms.length === 0 ? currentRooms : []));
+        setRoomCounts((currentCounts) => (
+            currentCounts.total === 0 && currentCounts.floors.length === 0
+                ? currentCounts
+                : EMPTY_ROOM_COUNTS
+        ));
+    }, [buildingId, primaryFloorOptions]);
 
     useEffect(() => {
         let cancelled = false;
 
         if (!buildingId) {
-            setRooms([]);
-            setRoomCounts(EMPTY_ROOM_COUNTS);
+            setRooms((currentRooms) => (currentRooms.length === 0 ? currentRooms : []));
+            setRoomCounts((currentCounts) => (
+                currentCounts.total === 0 && currentCounts.floors.length === 0
+                    ? currentCounts
+                    : EMPTY_ROOM_COUNTS
+            ));
             return () => {
                 cancelled = true;
             };
         }
 
-        setRooms([]);
+        setRooms((currentRooms) => (currentRooms.length === 0 ? currentRooms : []));
         setRoomsLoading(true);
         setRoomLoadError('');
 
