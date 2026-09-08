@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   compareFloorsBySortOrder,
   getFloorDocumentId,
+  getNextSequentialFloorName,
   getNextFloorSortOrder,
   normalizeFloorName,
 } from "../lib/buildings/floorNames";
@@ -47,6 +48,13 @@ describe("floor helpers", () => {
   it("appends new floors after the highest existing sortOrder", () => {
     expect(getNextFloorSortOrder([-1, 0, 2, 10])).toBe(11);
     expect(getNextFloorSortOrder([])).toBe(0);
+  });
+
+  it("names a new floor after the highest numbered floor", () => {
+    expect(getNextSequentialFloorName(["Ground Floor", "2nd Floor", "11th Floor"])).toBe(
+      "12th Floor"
+    );
+    expect(getNextSequentialFloorName(["19th Floor", "20th Floor"])).toBe("21st Floor");
   });
 
   it("validates a non-empty floor name with the server schema", () => {

@@ -10,10 +10,10 @@ import {
 } from '@/lib/buildings/floorLabels';
 import {
     addFloor,
-    deleteFloor,
     getFloorsByBuilding,
     type Floor,
 } from '@/lib/buildings/floors';
+import { getNextSequentialFloorName } from '@/lib/buildings/floorNames';
 import {
     addRoom,
     deleteRoom,
@@ -130,12 +130,8 @@ export default function AdminManageRoomsTab({
     managedBuildings,
     onBuildingChange,
 }: Readonly<AdminManageRoomsTabProps>) {
-    const [showAddFloor, setShowAddFloor] = useState(false);
-    const [newFloorName, setNewFloorName] = useState('');
     const [addingFloor, setAddingFloor] = useState(false);
-    const [deletingFloorId, setDeletingFloorId] = useState<string | null>(null);
     const [floors, setFloors] = useState<Floor[]>([]);
-    const [floorsLoading, setFloorsLoading] = useState(true);
     const [floorLoadError, setFloorLoadError] = useState('');
     const [floorActionError, setFloorActionError] = useState('');
     const [floorReloadKey, setFloorReloadKey] = useState(0);
@@ -233,17 +229,13 @@ export default function AdminManageRoomsTab({
         setFloors([]);
         setFloorLoadError('');
         setFloorActionError('');
-        setNewFloorName('');
-        setShowAddFloor(false);
 
         if (!buildingId) {
-            setFloorsLoading(false);
             return () => {
                 cancelled = true;
             };
         }
 
-        setFloorsLoading(true);
         void getFloorsByBuilding(buildingId)
             .then((nextFloors) => {
                 if (!cancelled) {
@@ -254,11 +246,6 @@ export default function AdminManageRoomsTab({
                 if (!cancelled) {
                     setFloors([]);
                     setFloorLoadError(error instanceof Error ? error.message : 'Failed to load floors.');
-                }
-            })
-            .finally(() => {
-                if (!cancelled) {
-                    setFloorsLoading(false);
                 }
             });
 
@@ -346,42 +333,21 @@ export default function AdminManageRoomsTab({
     };
 
     const handleAddFloor = async () => {
-        const trimmedName = newFloorName.trim();
-        if (!trimmedName) {
-            setFloorActionError('Floor name is required.');
-            return;
-        }
+        if (!buildingId) return;
 
+        const nextFloorName = getNextSequentialFloorName(
+            floorOptions.map((floorOption) => floorOption.value)
+        );
         setAddingFloor(true);
         setFloorActionError('');
 
         try {
-            await addFloor(buildingId, trimmedName);
-            setNewFloorName('');
-            setShowAddFloor(false);
+            await addFloor(buildingId, nextFloorName);
             reloadFloorData();
         } catch (error) {
             setFloorActionError(error instanceof Error ? error.message : 'Failed to add floor.');
         } finally {
             setAddingFloor(false);
-        }
-    };
-
-    const handleDeleteFloor = async (floor: Floor) => {
-        if (!window.confirm(`Delete ${floor.name}?`)) {
-            return;
-        }
-
-        setDeletingFloorId(floor.id);
-        setFloorActionError('');
-
-        try {
-            await deleteFloor(buildingId, floor.id);
-            reloadFloorData();
-        } catch (error) {
-            setFloorActionError(error instanceof Error ? error.message : 'Failed to delete floor.');
-        } finally {
-            setDeletingFloorId(null);
         }
     };
 
@@ -545,100 +511,6 @@ export default function AdminManageRoomsTab({
                 </div>
             </div>
 
-            <div className="glass-card rounded-2xl p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h4 className="text-lg font-bold text-gray-800">Floors</h4>
-                        <p className="mt-1 text-xs text-black/60">Manage the floors available in the selected building.</p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setFloorActionError('');
-                            setShowAddFloor((current) => !current);
-                        }}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#a12124] px-4 py-2 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#8f1c1f] hover:shadow-md"
-                    >
-                        <PlusIcon className="h-4 w-4" />
-                        Add Floor
-                    </button>
-                </div>
-
-                {showAddFloor ? (
-                    <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
-                        <label className="mb-1.5 block text-xs font-bold text-black" htmlFor="new-floor-name">
-                            Floor Name
-                        </label>
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                            <input
-                                id="new-floor-name"
-                                type="text"
-                                value={newFloorName}
-                                onChange={(event) => setNewFloorName(event.target.value)}
-                                placeholder="e.g. Ground Floor"
-                                className="glass-input w-full px-4 py-2.5 text-sm"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleAddFloor}
-                                disabled={addingFloor || !newFloorName.trim()}
-                                className="btn-primary whitespace-nowrap px-4 py-2.5 text-sm font-bold disabled:opacity-50"
-                            >
-                                {addingFloor ? 'Adding Floor...' : 'Add Floor'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setNewFloorName('');
-                                    setFloorActionError('');
-                                    setShowAddFloor(false);
-                                }}
-                                disabled={addingFloor}
-                                className="rounded-xl border border-dark/10 bg-dark/5 px-4 py-2.5 text-sm font-bold text-black transition-all hover:bg-primary/10 disabled:opacity-50"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                ) : null}
-
-                {floorActionError ? (
-                    <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                        {floorActionError}
-                    </p>
-                ) : null}
-
-                {floorsLoading ? (
-                    <p className="mt-4 text-sm text-black/60">Loading floors...</p>
-                ) : floorLoadError ? (
-                    <p className="mt-4 text-sm text-red-700">{floorLoadError}</p>
-                ) : floors.length === 0 ? (
-                    <p className="mt-4 rounded-xl border border-dashed border-dark/15 px-4 py-4 text-sm text-black/60">
-                        No persisted floors have been configured yet.
-                    </p>
-                ) : (
-                    <div className="mt-4 space-y-2">
-                        {floors.map((floor) => (
-                            <div
-                                key={floor.id}
-                                className="flex items-center justify-between gap-3 rounded-xl border border-dark/10 bg-white/70 px-4 py-3"
-                            >
-                                <span className="text-sm font-bold text-black">{floor.name}</span>
-                                <button
-                                    type="button"
-                                    onClick={() => handleDeleteFloor(floor)}
-                                    disabled={deletingFloorId === floor.id}
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-700 transition-all hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    <TrashIcon className="h-3.5 w-3.5" />
-                                    {deletingFloorId === floor.id ? 'Deleting...' : 'Delete'}
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
             {hasAnyRooms && (
                 <div className="flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/70 p-3 shadow-lg backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
                     <div className="relative sm:w-1/2">
@@ -710,6 +582,11 @@ export default function AdminManageRoomsTab({
                             </div>
                         )}
                     </div>
+                    {floorLoadError || floorActionError ? (
+                        <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                            {floorActionError || floorLoadError}
+                        </p>
+                    ) : null}
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                         {floorOptions.map((floorOption, index) => (
                             <button
@@ -734,6 +611,19 @@ export default function AdminManageRoomsTab({
                                 </p>
                             </button>
                         ))}
+                        <button
+                            type="button"
+                            onClick={handleAddFloor}
+                            disabled={addingFloor}
+                            className="rounded-xl bg-[#a12124] p-4 text-center text-white shadow-sm transition-all hover:bg-[#8f1c1f] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-white/15">
+                                <PlusIcon className="h-5 w-5" />
+                            </div>
+                            <p className="text-sm font-bold">
+                                {addingFloor ? 'Adding Floor...' : 'Add Floor'}
+                            </p>
+                        </button>
                     </div>
                 </div>
             )}
