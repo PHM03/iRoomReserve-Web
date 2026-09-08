@@ -318,6 +318,8 @@ export const floorCreateSchema = z.object({
   name: z.string().trim().min(1).max(100),
 });
 
+export const floorUpdateSchema = floorCreateSchema;
+
 export const roomStatusUpdateSchema = z.object({
   status: roomStatusSchema,
   reservedBy: z.string().trim().nullable().optional(),

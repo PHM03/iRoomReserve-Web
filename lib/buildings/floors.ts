@@ -6,6 +6,8 @@ export interface Floor {
   name: string;
   normalizedName: string;
   sortOrder: number;
+  hidden?: boolean;
+  replacesName?: string | null;
 }
 
 export async function getFloorsByBuilding(buildingId: string): Promise<Floor[]> {
@@ -34,6 +36,21 @@ export async function deleteFloor(buildingId: string, floorId: string): Promise<
     `/api/buildings/${encodeURIComponent(buildingId)}/floors/${encodeURIComponent(floorId)}`,
     {
       method: "DELETE",
+      userId: auth.currentUser?.uid,
+    }
+  );
+}
+
+export async function updateFloor(
+  buildingId: string,
+  floorId: string,
+  name: string
+): Promise<Floor> {
+  return apiRequest<Floor>(
+    `/api/buildings/${encodeURIComponent(buildingId)}/floors/${encodeURIComponent(floorId)}`,
+    {
+      body: { name },
+      method: "PATCH",
       userId: auth.currentUser?.uid,
     }
   );

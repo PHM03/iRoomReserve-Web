@@ -65,7 +65,7 @@ describe("floor helpers", () => {
   });
 });
 
-describe("floor V1 integration contracts", () => {
+describe("floor integration contracts", () => {
   it("keeps rooms on the legacy string floor field", () => {
     const roomService = readFileSync(
       resolve(repositoryRoot, "lib", "server", "services", "rooms.ts"),
@@ -80,7 +80,7 @@ describe("floor V1 integration contracts", () => {
     expect(roomRoute).not.toContain("floorId");
   });
 
-  it("exposes only the V1 floor methods", () => {
+  it("exposes the floor management methods", () => {
     const collectionRoute = readFileSync(
       resolve(repositoryRoot, "app", "api", "buildings", "[buildingId]", "floors", "route.ts"),
       "utf8"
@@ -93,7 +93,7 @@ describe("floor V1 integration contracts", () => {
     expect(collectionRoute).toContain("export async function GET");
     expect(collectionRoute).toContain("export async function POST");
     expect(itemRoute).toContain("export async function DELETE");
-    expect(itemRoute).not.toContain("export async function PATCH");
+    expect(itemRoute).toContain("export async function PATCH");
   });
 
   it("keeps floor creation and deletion building-scoped and non-cascading", () => {

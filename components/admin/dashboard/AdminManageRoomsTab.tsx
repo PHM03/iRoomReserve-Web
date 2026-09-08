@@ -10,8 +10,10 @@ import {
 } from '@/lib/buildings/floorLabels';
 import {
     addFloor,
+    deleteFloor,
     getFloorsByBuilding,
     type Floor,
+    updateFloor,
 } from '@/lib/buildings/floors';
 import { getNextSequentialFloorName } from '@/lib/buildings/floorNames';
 import {
@@ -119,6 +121,14 @@ function PencilIcon({ className }: Readonly<IconProps>) {
     );
 }
 
+function FloorTrashIcon({ className }: Readonly<IconProps>) {
+    return (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166M19.228 5.79L18.16 19.673A2.25 2.25 0 0115.916 21H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .563c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916A2.25 2.25 0 0013.5 2.25h-3A2.25 0 008.25 4.5v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+        </svg>
+    );
+}
+
 function TrashIcon({ className }: Readonly<IconProps>) {
     return (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,6 +146,10 @@ export default function AdminManageRoomsTab({
     onBuildingChange,
 }: Readonly<AdminManageRoomsTabProps>) {
     const [addingFloor, setAddingFloor] = useState(false);
+    const [managingFloors, setManagingFloors] = useState(false);
+    const [editingFloorName, setEditingFloorName] = useState<string | null>(null);
+    const [editedFloorName, setEditedFloorName] = useState('');
+    const [savingFloorName, setSavingFloorName] = useState<string | null>(null);
     const [floors, setFloors] = useState<Floor[]>([]);
     const [floorLoadError, setFloorLoadError] = useState('');
     const [floorActionError, setFloorActionError] = useState('');
@@ -182,8 +196,18 @@ export default function AdminManageRoomsTab({
     const primaryFloorOptions = useMemo(
         () => {
             const uniqueFloors = new Map<string, string>();
+            const hiddenFloorNames = new Set(
+                floors
+                    .filter((floor) => floor.hidden)
+                    .map((floor) => (floor.replacesName ?? floor.name).trim().toLowerCase())
+            );
 
-            [...legacyFloorOptions.map((floor) => floor.value), ...floors.map((floor) => floor.name)]
+            [
+                ...legacyFloorOptions
+                    .map((floor) => floor.value)
+                    .filter((floorName) => !hiddenFloorNames.has(floorName.trim().toLowerCase())),
+                ...floors.filter((floor) => !floor.hidden).map((floor) => floor.name),
+            ]
                 .forEach((floorName) => {
                     const normalizedName = floorName.trim().toLowerCase();
                     if (normalizedName) {
@@ -363,6 +387,51 @@ export default function AdminManageRoomsTab({
             setFloorActionError(error instanceof Error ? error.message : 'Failed to add floor.');
         } finally {
             setAddingFloor(false);
+        }
+    };
+
+    const getFloorRecord = (floorName: string) =>
+        floors.find((floor) => !floor.hidden && floor.name === floorName);
+
+    const ensureFloorRecord = async (floorName: string, floorId?: string) => {
+        if (floorId) return floorId;
+        const floor = await addFloor(buildingId, floorName);
+        return floor.id;
+    };
+
+    const handleDeleteFloor = async (floorName: string, floorId?: string) => {
+        if (!window.confirm(`Delete ${floorName}?`)) return;
+
+        setSavingFloorName(floorName);
+        setFloorActionError('');
+        try {
+            await deleteFloor(buildingId, await ensureFloorRecord(floorName, floorId));
+            reloadFloorData();
+        } catch (error) {
+            setFloorActionError(error instanceof Error ? error.message : 'Failed to delete floor.');
+        } finally {
+            setSavingFloorName(null);
+        }
+    };
+
+    const handleSaveFloor = async (floorName: string, floorId?: string) => {
+        const nextFloorName = editedFloorName.trim();
+        if (!nextFloorName || nextFloorName === floorName) {
+            setEditingFloorName(null);
+            return;
+        }
+
+        setSavingFloorName(floorName);
+        setFloorActionError('');
+        try {
+            await updateFloor(buildingId, await ensureFloorRecord(floorName, floorId), nextFloorName);
+            setEditingFloorName(null);
+            reloadFloorData();
+            reloadRoomData();
+        } catch (error) {
+            setFloorActionError(error instanceof Error ? error.message : 'Failed to rename floor.');
+        } finally {
+            setSavingFloorName(null);
         }
     };
 
@@ -561,14 +630,28 @@ export default function AdminManageRoomsTab({
                             <h4 className="text-lg font-bold text-black">Select Floor</h4>
                             <p className="text-xs text-black mt-0.5">Step 1 of 2 - Choose which floor the room is on</p>
                         </div>
-                        <button
-                            onClick={resetAddRoomWizard}
-                            className="p-2 rounded-lg text-black hover:text-primary hover:bg-primary/10 transition-all"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setManagingFloors((current) => !current);
+                                    setEditingFloorName(null);
+                                    setFloorActionError('');
+                                }}
+                                className="rounded-lg border border-primary/40 bg-white/70 px-3 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary/10"
+                            >
+                                {managingFloors ? 'Done Managing' : 'Manage Floors'}
+                            </button>
+                            <button
+                                onClick={resetAddRoomWizard}
+                                className="p-2 rounded-lg text-black hover:text-primary hover:bg-primary/10 transition-all"
+                                aria-label="Close floor selection"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                     <div className="flex gap-2 mb-6">
                         <div className="h-1 flex-1 rounded-full bg-primary" />
@@ -603,29 +686,96 @@ export default function AdminManageRoomsTab({
                         </p>
                     ) : null}
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {floorOptions.map((floorOption, index) => (
-                            <button
+                        {floorOptions.map((floorOption) => {
+                            const floorRecord = getFloorRecord(floorOption.value);
+                            const isEditing = editingFloorName === floorOption.value;
+                            const isSaving = savingFloorName === floorOption.value;
+
+                            return (
+                            <div
                                 key={floorOption.value}
-                                onClick={() => {
-                                    setNewRoomFloor(floorOption.value);
-                                    setAddRoomStep(2);
-                                }}
-                                className="glass-card !bg-dark/5 p-4 !rounded-xl text-center group hover:!border-primary/40 transition-all cursor-pointer"
+                                className="glass-card relative !bg-dark/5 p-4 !rounded-xl text-center group hover:!border-primary/40 transition-all"
                             >
-                                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                                    <span className="text-primary font-bold text-sm">
-                                        {floorOption.label.toLowerCase().includes('basement')
-                                            ? 'B'
-                                            : floorOption.label === 'Ground Floor'
-                                                ? 'G'
-                                                : floorOption.label.match(/(\d+)/)?.[1] ?? index}
-                                    </span>
-                                </div>
-                                <p className="text-sm font-bold text-black group-hover:text-primary transition-colors">
-                                    {floorOption.label}
-                                </p>
-                            </button>
-                        ))}
+                                {managingFloors ? (
+                                    <div className="absolute right-2 top-2 flex gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEditingFloorName(floorOption.value);
+                                                setEditedFloorName(floorOption.value);
+                                            }}
+                                            disabled={isSaving}
+                                            className="rounded-md p-1 text-primary hover:bg-primary/10 disabled:opacity-50"
+                                            aria-label={`Rename ${floorOption.label}`}
+                                        >
+                                            <PencilIcon className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleDeleteFloor(floorOption.value, floorRecord?.id)}
+                                            disabled={isSaving}
+                                            className="rounded-md p-1 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                            aria-label={`Delete ${floorOption.label}`}
+                                        >
+                                            <FloorTrashIcon className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                ) : null}
+                                {isEditing ? (
+                                    <div className="space-y-2 pt-5">
+                                        <input
+                                            type="text"
+                                            value={editedFloorName}
+                                            onChange={(event) => setEditedFloorName(event.target.value)}
+                                            onClick={(event) => event.stopPropagation()}
+                                            className="glass-input w-full px-2 py-1.5 text-center text-sm"
+                                            aria-label={`New name for ${floorOption.label}`}
+                                            autoFocus
+                                        />
+                                        <div className="flex justify-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleSaveFloor(floorOption.value, floorRecord?.id)}
+                                                disabled={isSaving || !editedFloorName.trim()}
+                                                className="rounded-md bg-primary px-2 py-1 text-xs font-bold text-white disabled:opacity-50"
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditingFloorName(null)}
+                                                disabled={isSaving}
+                                                className="rounded-md px-2 py-1 text-xs font-bold text-black hover:bg-dark/10"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (!managingFloors) {
+                                                setNewRoomFloor(floorOption.value);
+                                                setAddRoomStep(2);
+                                            }
+                                        }}
+                                        className="w-full"
+                                        disabled={managingFloors}
+                                    >
+                                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
+                                            <span className="text-primary font-bold text-sm">
+                                                {floorOption.label.trim().match(/^\d+/)?.[0] ?? floorOption.label.trim().charAt(0).toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm font-bold text-black group-hover:text-primary transition-colors">
+                                            {floorOption.label}
+                                        </p>
+                                    </button>
+                                )}
+                            </div>
+                            );
+                        })}
                         <button
                             type="button"
                             onClick={handleAddFloor}

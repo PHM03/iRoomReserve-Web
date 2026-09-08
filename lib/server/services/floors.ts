@@ -14,6 +14,8 @@ export interface FloorRecord {
   name: string;
   normalizedName: string;
   sortOrder: number;
+  hidden: boolean;
+  replacesName: string | null;
 }
 
 function getBuildingRef(buildingId: string) {
@@ -45,6 +47,8 @@ function mapFloor(floorId: string, data: FirebaseFirestore.DocumentData): FloorR
         ? data.normalizedName
         : normalizeFloorName(typeof data.name === "string" ? data.name : ""),
     sortOrder: typeof data.sortOrder === "number" ? data.sortOrder : 0,
+    hidden: data.hidden === true,
+    replacesName: typeof data.replacesName === "string" ? data.replacesName : null,
   };
 }
 
@@ -133,5 +137,71 @@ export async function deleteFloor(buildingId: string, floorId: string) {
     );
   }
 
-  await floorRef.delete();
+  await floorRef.update({ hidden: true, updatedAt: serverTimestamp() });
+}
+
+export async function updateFloor(
+  buildingId: string,
+  floorId: string,
+  name: string
+): Promise<FloorRecord> {
+  const trimmedName = name.trim();
+  const normalizedName = normalizeFloorName(trimmedName);
+  if (!trimmedName || !normalizedName) {
+    throw new ApiError(400, "invalid_floor_name", "A valid floor name is required.");
+  }
+
+  const buildingRef = getBuildingRef(buildingId);
+  const floorRef = buildingRef.collection("floors").doc(floorId);
+  let updatedFloor: FloorRecord | null = null;
+
+  await db.runTransaction(async (transaction) => {
+    const buildingSnapshot = await transaction.get(buildingRef);
+    if (!buildingSnapshot.exists) {
+      throw new ApiError(404, "not_found", "Building not found.");
+    }
+
+    const floorSnapshot = await transaction.get(floorRef);
+    if (!floorSnapshot.exists || floorSnapshot.data()?.hidden === true) {
+      throw new ApiError(404, "not_found", "Floor not found.");
+    }
+
+    const currentFloor = mapFloor(floorSnapshot.id, floorSnapshot.data() ?? {});
+    const allFloors = await transaction.get(buildingRef.collection("floors"));
+    const duplicateFloor = allFloors.docs.find(
+      (floorDoc) =>
+        floorDoc.id !== floorId &&
+        floorDoc.data().hidden !== true &&
+        normalizeFloorName(String(floorDoc.data().name ?? "")) === normalizedName
+    );
+    if (duplicateFloor) {
+      throw new ApiError(409, "duplicate_floor", "This floor already exists in the selected building.");
+    }
+
+    const replacesName = currentFloor.replacesName ?? currentFloor.name;
+    transaction.update(floorRef, {
+      name: trimmedName,
+      normalizedName,
+      replacesName,
+      updatedAt: serverTimestamp(),
+    });
+
+    const referencedRooms = await transaction.get(
+      db.collection("rooms")
+        .where("buildingId", "==", buildingId.trim())
+        .where("floor", "==", currentFloor.name)
+    );
+    referencedRooms.docs.forEach((roomDoc) => {
+      transaction.update(roomDoc.ref, { floor: trimmedName, updatedAt: serverTimestamp() });
+    });
+
+    updatedFloor = {
+      ...currentFloor,
+      name: trimmedName,
+      normalizedName,
+      replacesName,
+    };
+  });
+
+  return updatedFloor!;
 }
