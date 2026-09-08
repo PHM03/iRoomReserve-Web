@@ -52,7 +52,7 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
     const tabTitles: Record<string, string> = {
       dashboard: "e-RoomReserve | Dashboard",
       pending: "e-RoomReserve | Pending",
-      "manage-rooms": "e-RoomReserve | Manage Spaces",
+      "manage-rooms": "e-RoomReserve | Manage Facilities",
       feedback: "e-RoomReserve | Feedback",
       "reservation-history": "e-RoomReserve | Reservation History",
       inbox: "e-RoomReserve | Inbox",

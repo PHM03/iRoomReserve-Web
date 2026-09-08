@@ -514,7 +514,7 @@ export default function AdminManageRoomsTab({
         <div className="space-y-5">
             <div className="relative z-[60] flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-                    <h3 className="text-xl font-bold text-gray-800">Manage Spaces</h3>
+                    <h3 className="text-xl font-bold text-gray-800">Manage Facilities</h3>
                     <button
                         onClick={() => setAddRoomStep(1)}
                         className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#a12124] px-4 py-1 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#8f1c1f] hover:shadow-md sm:order-1"
