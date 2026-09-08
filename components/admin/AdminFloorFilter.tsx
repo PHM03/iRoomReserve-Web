@@ -29,7 +29,9 @@ interface AdminFloorFilterProps {
 const DROPDOWN_VIEWPORT_MARGIN_PX = 16;
 const DROPDOWN_OFFSET_PX = 8;
 const DROPDOWN_MIN_WIDTH_PX = 176;
-const DROPDOWN_MAX_HEIGHT_PX = 320;
+// A standard building can have basement, ground, and nine or more numbered floors.
+// Keep the complete list visible whenever the viewport has room for it.
+const DROPDOWN_MAX_HEIGHT_PX = 520;
 const DROPDOWN_ITEM_HEIGHT_PX = 44;
 const DROPDOWN_CHROME_HEIGHT_PX = 16;
 

@@ -42,7 +42,7 @@ describe('buildAdminDropdownMenuStyle', () => {
 
     expect(style.top).toBeUndefined();
     expect(style.bottom).toBe(108);
-    expect(style.maxHeight).toBe(320);
+    expect(style.maxHeight).toBe(520);
   });
 
   it('keeps right-aligned menus inside the viewport', () => {

@@ -60,7 +60,12 @@ interface IconProps {
 function sortFloors(floors: string[]) {
     return [...floors].sort((left, right) => {
         const floorOrder = (value: string) => {
-            if (value.toLowerCase().includes('ground')) {
+            const normalizedValue = value.toLowerCase();
+            if (normalizedValue.includes('basement')) {
+                return -1;
+            }
+
+            if (normalizedValue.includes('ground')) {
                 return 0;
             }
 
@@ -175,10 +180,22 @@ export default function AdminManageRoomsTab({
         [buildingFloors, buildingId, buildingName]
     );
     const primaryFloorOptions = useMemo(
-        () =>
-            floors.length > 0
-                ? floors.map((floor) => ({ label: floor.name, value: floor.name }))
-                : legacyFloorOptions,
+        () => {
+            const uniqueFloors = new Map<string, string>();
+
+            [...legacyFloorOptions.map((floor) => floor.value), ...floors.map((floor) => floor.name)]
+                .forEach((floorName) => {
+                    const normalizedName = floorName.trim().toLowerCase();
+                    if (normalizedName) {
+                        uniqueFloors.set(normalizedName, floorName);
+                    }
+                });
+
+            return sortFloors([...uniqueFloors.values()]).map((floor) => ({
+                label: floor,
+                value: floor,
+            }));
+        },
         [floors, legacyFloorOptions]
     );
     const legacyRoomFloorOptions = useMemo(() => {
@@ -194,13 +211,11 @@ export default function AdminManageRoomsTab({
     }, [primaryFloorOptions, rooms]);
     const floorOptions = useMemo(
         () =>
-            floors.length > 0
-                ? [...primaryFloorOptions, ...legacyRoomFloorOptions]
-                : sortFloors([
-                      ...primaryFloorOptions.map((floorOption) => floorOption.value),
-                      ...legacyRoomFloorOptions.map((floorOption) => floorOption.value),
-                  ]).map((floor) => ({ label: floor, value: floor })),
-        [floors.length, legacyRoomFloorOptions, primaryFloorOptions]
+            sortFloors([
+                ...primaryFloorOptions.map((floorOption) => floorOption.value),
+                ...legacyRoomFloorOptions.map((floorOption) => floorOption.value),
+            ]).map((floor) => ({ label: floor, value: floor })),
+        [legacyRoomFloorOptions, primaryFloorOptions]
     );
     const roomFloorOptions = useMemo(
         () => primaryFloorOptions.map((floorOption) => floorOption.value),
@@ -599,7 +614,7 @@ export default function AdminManageRoomsTab({
                             >
                                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
                                     <span className="text-primary font-bold text-sm">
-                                        {floorOption.label === 'Basement Floor'
+                                        {floorOption.label.toLowerCase().includes('basement')
                                             ? 'B'
                                             : floorOption.label === 'Ground Floor'
                                                 ? 'G'
