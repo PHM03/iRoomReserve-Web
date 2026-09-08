@@ -59,7 +59,12 @@ export function onBookedDatesByRoom(
     where("status", "in", [...BLOCKING_STATUSES])
   );
 
-  return onSnapshot(
+  let reservationSlots: BookingSlot[] = [];
+  let manualSlots: BookingSlot[] = [];
+  const emit = () => callback([...reservationSlots, ...manualSlots].sort(
+    (left, right) => left.date.localeCompare(right.date) || left.startTime.localeCompare(right.startTime)
+  ));
+  const unsubscribeReservations = onSnapshot(
     reservationsQuery,
     (snapshot) => {
       const bookedSlots: BookingSlot[] = [];
@@ -75,19 +80,30 @@ export function onBookedDatesByRoom(
         }
       });
 
-      callback(
-        bookedSlots.sort(
-          (left, right) =>
-            left.date.localeCompare(right.date) ||
-            left.startTime.localeCompare(right.startTime) ||
-            left.endTime.localeCompare(right.endTime)
-        )
-      );
+      reservationSlots = bookedSlots;
+      emit();
     },
     (error) => {
       console.warn("Firestore listener error (booked slots by room):", error);
     }
   );
+  const unsubscribeManual = onSnapshot(
+    query(collection(db, "roomUnavailability"), where("roomId", "==", roomId)),
+    (snapshot) => {
+      manualSlots = snapshot.docs.flatMap((doc) => {
+        const data = doc.data() as ReservationSlotRecord;
+        return data.date && data.startTime && data.endTime
+          ? [{ date: data.date, startTime: data.startTime, endTime: data.endTime }]
+          : [];
+      });
+      emit();
+    },
+    (error) => console.warn("Firestore listener error (manual room unavailability):", error)
+  );
+  return () => {
+    unsubscribeReservations();
+    unsubscribeManual();
+  };
 }
 
 /**
@@ -119,8 +135,8 @@ const VISIBLE_STATUSES = ["approved", "pending"] as const;
  * schedule panel can color-code and enforce interaction rules per slot.
  */
 export interface EnrichedBookingSlot extends BookingSlot {
-  status: "approved" | "pending";
-  userId: string;
+  status: "approved" | "pending" | "manual-unavailable";
+  userId?: string;
 }
 
 /**
@@ -167,7 +183,12 @@ export function onEnrichedSlotsByRoom(
     where("status", "in", [...VISIBLE_STATUSES])
   );
 
-  return onSnapshot(
+  let reservationSlots: EnrichedBookingSlot[] = [];
+  let manualSlots: EnrichedBookingSlot[] = [];
+  const emit = () => callback([...reservationSlots, ...manualSlots].sort(
+    (left, right) => left.date.localeCompare(right.date) || left.startTime.localeCompare(right.startTime)
+  ));
+  const unsubscribeReservations = onSnapshot(
     reservationsQuery,
     (snapshot) => {
       const slots: EnrichedBookingSlot[] = [];
@@ -191,14 +212,8 @@ export function onEnrichedSlotsByRoom(
         }
       });
 
-      callback(
-        slots.sort(
-          (left, right) =>
-            left.date.localeCompare(right.date) ||
-            left.startTime.localeCompare(right.startTime) ||
-            left.endTime.localeCompare(right.endTime)
-        )
-      );
+      reservationSlots = slots;
+      emit();
     },
     (error) => {
       console.warn(
@@ -207,6 +222,23 @@ export function onEnrichedSlotsByRoom(
       );
     }
   );
+  const unsubscribeManual = onSnapshot(
+    query(collection(db, "roomUnavailability"), where("roomId", "==", roomId)),
+    (snapshot) => {
+      manualSlots = snapshot.docs.flatMap((doc) => {
+        const data = doc.data() as ReservationSlotRecord;
+        return data.date && data.startTime && data.endTime
+          ? [{ date: data.date, startTime: data.startTime, endTime: data.endTime, status: "manual-unavailable" as const }]
+          : [];
+      });
+      emit();
+    },
+    (error) => console.warn("Firestore listener error (manual schedule slots):", error)
+  );
+  return () => {
+    unsubscribeReservations();
+    unsubscribeManual();
+  };
 }
 
 /**

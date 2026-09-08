@@ -271,6 +271,19 @@ async function getActiveReservationsForRoom(roomId: string) {
     .sort(compareReservationSchedule);
 }
 
+async function getManualUnavailableSlotsForRoom(roomId: string) {
+  const snapshot = await db
+    .collection("roomUnavailability")
+    .where("roomId", "==", roomId)
+    .get();
+
+  return snapshot.docs.map((document) => document.data() as {
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+  });
+}
+
 async function getActiveReservationsForUser(userId: string) {
   const reservationsSnapshot = await db
     .collection("reservations")
@@ -320,10 +333,11 @@ async function assertReservationDatesAvailable(
     endTime: input.endTime,
     startTime: input.startTime,
   };
-  const [roomSchedules, roomReservations, userReservations] = await Promise.all([
+  const [roomSchedules, roomReservations, userReservations, manualUnavailableSlots] = await Promise.all([
     getSchedulesForRoom(input.roomId),
     getActiveReservationsForRoom(input.roomId),
     getActiveReservationsForUser(input.userId),
+    getManualUnavailableSlotsForRoom(input.roomId),
   ]);
 
   for (const dateKey of dateKeys) {
@@ -369,6 +383,23 @@ async function assertReservationDatesAvailable(
           date: dateKey,
           reason: "schedule_conflict",
         }
+      );
+    }
+
+    const manualUnavailableSlot = manualUnavailableSlots.find(
+      (slot) =>
+        slot.date === dateKey &&
+        typeof slot.startTime === "string" &&
+        typeof slot.endTime === "string" &&
+        slotsOverlap(requestSlot, { startTime: slot.startTime, endTime: slot.endTime })
+    );
+
+    if (manualUnavailableSlot) {
+      throw new ApiError(
+        409,
+        "room_timeslot_unavailable",
+        "This room is unavailable for the selected timeslot/s. Would you like to see alternative rooms?",
+        { date: dateKey, reason: "manual_unavailability" }
       );
     }
 

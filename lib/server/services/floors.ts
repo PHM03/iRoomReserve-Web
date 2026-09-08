@@ -109,6 +109,8 @@ export async function createFloor(
     name: trimmedName,
     normalizedName,
     sortOrder: createdSortOrder,
+    hidden: false,
+    replacesName: null,
   };
 }
 

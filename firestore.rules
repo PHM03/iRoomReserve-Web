@@ -244,6 +244,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Read-only client access keeps room availability in sync. Changes are
+    // made only through the authenticated server route.
+    match /roomUnavailability/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     // Staff-to-staff messaging (Administrator <-> Utility Staff <-> Faculty
     // Professor). Documents are immutable on create except for the `isRead`
     // flag, which only the receiver can flip.

@@ -45,6 +45,17 @@ export const roomStatusSchema = z.enum([
   "Unavailable",
 ]);
 
+export const manualRoomUnavailabilitySchema = z
+  .object({
+    date: dateString,
+    startTime: timeString,
+    endTime: timeString,
+  })
+  .refine((value) => value.startTime < value.endTime, {
+    message: "The end time must be after the start time.",
+    path: ["endTime"],
+  });
+
 export const roomCheckInMethodSchema = z.preprocess(
   (value) => {
     if (typeof value !== "string") {

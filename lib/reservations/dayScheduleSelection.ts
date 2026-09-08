@@ -1,6 +1,7 @@
 export type ScheduleSlotStatus =
   | 'available'
   | 'past'
+  | 'manual-unavailable'
   | 'reserved-others'
   | 'pending-others'
   | 'user-conflict';

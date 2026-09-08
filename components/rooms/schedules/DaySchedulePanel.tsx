@@ -134,6 +134,17 @@ export default function DaySchedulePanel({
         continue;
       }
 
+      const manualUnavailable = roomSlotsForDate.find(
+        (slot) =>
+          slot.status === 'manual-unavailable' &&
+          slotsOverlap(slotStart, slotEnd, slot.startTime, slot.endTime)
+      );
+
+      if (manualUnavailable) {
+        slots.push({ startTime: slotStart, endTime: slotEnd, status: 'manual-unavailable' });
+        continue;
+      }
+
       const userCrossRoomConflict = userSlotsForDate.find(
         (slot) =>
           slot.roomId !== currentRoomId &&
@@ -251,6 +262,7 @@ export default function DaySchedulePanel({
       case 'available':
         return `${base} cursor-pointer schedule-slot-available${selectedClass}`;
       case 'past':
+      case 'manual-unavailable':
         return `${base} cursor-not-allowed schedule-slot-unavailable${selectedClass}`;
       case 'reserved-others':
         return `${base} cursor-pointer schedule-slot-reserved${selectedClass}`;
@@ -268,6 +280,7 @@ export default function DaySchedulePanel({
       case 'reserved-others':
         return 'line-through opacity-80';
       case 'past':
+      case 'manual-unavailable':
         return 'line-through opacity-70';
       default:
         return '';
@@ -283,6 +296,7 @@ export default function DaySchedulePanel({
       case 'available':
         return 'border border-green-200/80 bg-green-50/90 text-green-700';
       case 'past':
+      case 'manual-unavailable':
         return 'border border-gray-200/90 bg-gray-100/95 text-gray-600';
       case 'reserved-others':
         return 'border border-red-200/90 bg-red-50/95 text-red-700';
@@ -314,6 +328,7 @@ export default function DaySchedulePanel({
           </svg>
         );
       case 'past':
+      case 'manual-unavailable':
         return (
           <svg
             className="h-3.5 w-3.5 shrink-0 text-gray-500"
@@ -388,6 +403,8 @@ export default function DaySchedulePanel({
         return 'Available';
       case 'past':
         return 'Unavailable';
+      case 'manual-unavailable':
+        return 'Manually unavailable';
       case 'reserved-others':
         return 'Reserved';
       case 'user-conflict':

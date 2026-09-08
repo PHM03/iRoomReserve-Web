@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
+import AdminRoomScheduleModal from '@/components/admin/dashboard/AdminRoomScheduleModal';
 import {
     getBuildingFloorOptions,
     getFloorDisplayLabel,
@@ -175,6 +176,7 @@ export default function AdminManageRoomsTab({
     const [editBeaconId, setEditBeaconId] = useState('');
     const [savingRoomId, setSavingRoomId] = useState<string | null>(null);
     const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
+    const [scheduleRoom, setScheduleRoom] = useState<Room | null>(null);
 
     const [roomSearch, setRoomSearch] = useState('');
     const [roomFloorFilter, setRoomFloorFilter] = useState('');
@@ -621,6 +623,13 @@ export default function AdminManageRoomsTab({
                         />
                     </div>
                 </div>
+            )}
+
+            {scheduleRoom && (
+                <AdminRoomScheduleModal
+                    room={scheduleRoom}
+                    onClose={() => setScheduleRoom(null)}
+                />
             )}
 
             {addRoomStep === 1 && (
@@ -1120,6 +1129,15 @@ export default function AdminManageRoomsTab({
                                     </div>
 
                                     <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setScheduleRoom(room)}
+                                            disabled={deletingRoomId === room.id}
+                                            className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 transition-all hover:border-[#a12124]/30 hover:bg-[#a12124]/5 hover:text-[#a12124] disabled:cursor-not-allowed disabled:opacity-60"
+                                            title={`View schedule for ${room.name}`}
+                                        >
+                                            View Schedule
+                                        </button>
                                         <button
                                             type="button"
                                             onClick={() => startEditingRoom(room)}
