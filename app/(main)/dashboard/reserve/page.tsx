@@ -48,6 +48,7 @@ import {
   onSchedulesByBuildingIds,
   type Schedule,
 } from '@/lib/schedules/schedules';
+import { scheduleConflictsWithReservationSlot } from '@/lib/schedules/scheduleConflicts';
 import {
   getReservationTimeOptions,
   reservationTimeToMinutes,
@@ -139,6 +140,8 @@ const USER_CONFLICT_MESSAGE =
   'Only one reservation at a time. You already have a booking at another room during this time.';
 const PAST_TIME_MESSAGE =
   'That timeslot has already started or passed. Please choose a future 1-hour slot.';
+const CLASS_SCHEDULE_CONFLICT_MESSAGE =
+  'A class schedule occupies this room during the selected time. Please choose another time or room.';
 const NO_RECURRING_DATES_MESSAGE =
   'No reservation dates match the selected recurring schedule. Choose another date range or weekday.';
 
@@ -209,17 +212,31 @@ function formatConflictDates(dates: string[]): string {
   }`;
 }
 
-function timeRangesOverlap(
-  startTime: string,
-  endTime: string,
-  rangeStart: string,
-  rangeEnd: string
-): boolean {
-  return startTime < rangeEnd && endTime > rangeStart;
-}
-
 function isSelectableRecurringDay(day: number): boolean {
   return WEEKDAY_VALUES.has(day);
+}
+
+function hasClassScheduleConflictForRange(
+  roomSchedules: readonly Schedule[],
+  roomId: string,
+  buildingId: string,
+  date: string,
+  startTime: string,
+  endTime: string
+): boolean {
+  if (!roomId || !date || !startTime || !endTime) {
+    return false;
+  }
+
+  return roomSchedules.some((schedule) =>
+    scheduleConflictsWithReservationSlot(schedule, {
+      buildingId,
+      dayOfWeek: new Date(`${date}T00:00:00`).getDay(),
+      endTime,
+      roomId,
+      startTime,
+    })
+  );
 }
 
 function getRoomCampus(room: Room): ReservationCampus | null {
@@ -705,6 +722,20 @@ export default function ReserveRoomPage() {
     Boolean(startTime) &&
     Boolean(endTime) &&
     hasTimeConflict(reservationDate, startTime, endTime, bookedSlots);
+  const selectedClassScheduleConflict =
+    !isRecurring &&
+    Boolean(reservationDate) &&
+    Boolean(startTime) &&
+    Boolean(endTime) &&
+    roomSchedules.some((schedule) =>
+      scheduleConflictsWithReservationSlot(schedule, {
+        buildingId: selectedBuildingId,
+        dayOfWeek: new Date(`${reservationDate}T00:00:00`).getDay(),
+        endTime,
+        roomId: selectedRoomId,
+        startTime,
+      })
+    );
 
   // Cross-room conflict: user already has a booking at this time in another room.
   const selectedUserConflict =
@@ -785,10 +816,14 @@ export default function ReserveRoomPage() {
     isRecurring && startTime && endTime
       ? previewDates.filter((date) => {
           const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
-          return roomSchedules.some(
-            (schedule) =>
-              schedule.dayOfWeek === dayOfWeek &&
-              timeRangesOverlap(startTime, endTime, schedule.startTime, schedule.endTime)
+          return roomSchedules.some((schedule) =>
+            scheduleConflictsWithReservationSlot(schedule, {
+              buildingId: selectedBuildingId,
+              dayOfWeek,
+              endTime,
+              roomId: selectedRoomId,
+              startTime,
+            })
           );
         })
       : [];
@@ -820,6 +855,7 @@ export default function ReserveRoomPage() {
     if (
       timeError &&
       !selectedTimeConflict &&
+      !selectedClassScheduleConflict &&
       !selectedUserConflict &&
       !selectedPastTimeConflict &&
       !recurringAvailabilityMessage
@@ -829,6 +865,7 @@ export default function ReserveRoomPage() {
   }, [
     recurringAvailabilityMessage,
     selectedPastTimeConflict,
+    selectedClassScheduleConflict,
     selectedTimeConflict,
     selectedUserConflict,
     timeError,
@@ -940,7 +977,12 @@ export default function ReserveRoomPage() {
       return false;
     }
 
-    return !selectedTimeConflict && !selectedUserConflict && !selectedPastTimeConflict;
+    return (
+      !selectedTimeConflict &&
+      !selectedClassScheduleConflict &&
+      !selectedUserConflict &&
+      !selectedPastTimeConflict
+    );
   }
 
   function toggleDay(day: number) {
@@ -1158,6 +1200,11 @@ export default function ReserveRoomPage() {
 
       if (hasTimeConflict(reservationDate, startTime, endTime, bookedSlots)) {
         setTimeError(TIME_CONFLICT_MESSAGE);
+        return;
+      }
+
+      if (selectedClassScheduleConflict) {
+        setTimeError(CLASS_SCHEDULE_CONFLICT_MESSAGE);
         return;
       }
 
@@ -1934,6 +1981,7 @@ export default function ReserveRoomPage() {
                             <DaySchedulePanel
                               date={reservationDate}
                               roomEnrichedSlots={enrichedSlots}
+                              roomSchedules={roomSchedules}
                               userActiveSlots={userActiveSlots}
                               currentUserId={firebaseUser.uid}
                               currentRoomId={selectedRoomId}
@@ -1950,9 +1998,15 @@ export default function ReserveRoomPage() {
                       </div>
                       {(timeError ||
                         (reservationDate && startTime && selectedPastTimeConflict) ||
-                        (reservationDate && startTime && endTime && selectedTimeConflict)) && (
+                        (reservationDate && startTime && endTime && selectedTimeConflict) ||
+                        (reservationDate && startTime && endTime && selectedClassScheduleConflict)) && (
                         <p className="mt-2 text-xs font-bold ui-text-red">
-                          {timeError || (selectedPastTimeConflict ? PAST_TIME_MESSAGE : TIME_CONFLICT_MESSAGE)}
+                          {timeError ||
+                            (selectedPastTimeConflict
+                              ? PAST_TIME_MESSAGE
+                              : selectedClassScheduleConflict
+                                ? CLASS_SCHEDULE_CONFLICT_MESSAGE
+                                : TIME_CONFLICT_MESSAGE)}
                         </p>
                       )}
                       {reservationDate && startTime && endTime && selectedUserConflict && !selectedTimeConflict && (
@@ -1984,7 +2038,21 @@ export default function ReserveRoomPage() {
                       >
                         <option value="">Select start time</option>
                         {startTimeOptions.map((time) => (
-                          <option key={time} value={time}>
+                          <option
+                            key={time}
+                            value={time}
+                            disabled={
+                              !isRecurring &&
+                              hasClassScheduleConflictForRange(
+                                roomSchedules,
+                                selectedRoomId,
+                                selectedBuildingId,
+                                reservationDate,
+                                time,
+                                `${String(reservationTimeToMinutes(time) + 60).padStart(2, '0')}:00`
+                              )
+                            }
+                          >
                             {formatTimeLabel(time)}
                           </option>
                         ))}
@@ -2000,7 +2068,21 @@ export default function ReserveRoomPage() {
                       >
                         <option value="">{startTime ? 'Select end time' : 'Choose start time first'}</option>
                         {endTimeOptions.map((time) => (
-                          <option key={time} value={time}>
+                          <option
+                            key={time}
+                            value={time}
+                            disabled={
+                              !isRecurring &&
+                              hasClassScheduleConflictForRange(
+                                roomSchedules,
+                                selectedRoomId,
+                                selectedBuildingId,
+                                reservationDate,
+                                startTime,
+                                time
+                              )
+                            }
+                          >
                             {formatTimeLabel(time)}
                           </option>
                         ))}

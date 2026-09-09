@@ -1,14 +1,57 @@
+import type { ScheduleContext } from './scheduleContext';
+
 export const SCHEDULE_CONFLICT_MESSAGE =
   'This room already has a schedule that overlaps with your selected time. Choose a different time or room, or override the existing schedule.';
 
 export interface ScheduleConflictComparable {
   academicYear?: string | null;
+  buildingId?: string | null;
   dayOfWeek: number;
   endTime: string;
   id?: string;
   roomId: string;
   semester?: string | null;
   startTime: string;
+}
+
+export interface ScheduleAvailabilityContext extends ScheduleContext {
+  buildingId: string;
+}
+
+export interface ReservationScheduleSlot {
+  buildingId?: string | null;
+  dayOfWeek: number;
+  endTime: string;
+  roomId: string;
+  startTime: string;
+}
+
+export function isScheduleInActiveContext(
+  schedule: ScheduleConflictComparable,
+  context: ScheduleAvailabilityContext
+): boolean {
+  return (
+    schedule.buildingId === context.buildingId &&
+    schedule.academicYear === context.academicYear &&
+    schedule.semester === context.semester
+  );
+}
+
+export function scheduleConflictsWithReservationSlot(
+  schedule: ScheduleConflictComparable,
+  reservation: ReservationScheduleSlot
+): boolean {
+  return (
+    schedule.roomId === reservation.roomId &&
+    (!reservation.buildingId || schedule.buildingId === reservation.buildingId) &&
+    schedule.dayOfWeek === reservation.dayOfWeek &&
+    timeRangesOverlap(
+      schedule.startTime,
+      schedule.endTime,
+      reservation.startTime,
+      reservation.endTime
+    )
+  );
 }
 
 export function timeRangesOverlap(

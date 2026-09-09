@@ -13,6 +13,9 @@ import type {
   EnrichedBookingSlot,
   UserActiveSlot,
 } from '@/lib/reservations/roomAvailability';
+import { scheduleConflictsWithReservationSlot } from '@/lib/schedules/scheduleConflicts';
+import { getScheduleProgramSection } from '@/lib/schedules/scheduleLabels';
+import type { Schedule } from '@/lib/schedules/schedules';
 import {
   formatReservationTimeSlot,
   getReservationTimeSlots,
@@ -26,11 +29,13 @@ interface TimeSlot {
   endTime: string;
   status: SlotStatus;
   conflictRoomName?: string;
+  classSchedule?: Schedule;
 }
 
 interface DaySchedulePanelProps {
   date: string;
   roomEnrichedSlots: readonly EnrichedBookingSlot[];
+  roomSchedules: readonly Schedule[];
   userActiveSlots: readonly UserActiveSlot[];
   currentUserId: string;
   currentRoomId: string;
@@ -67,9 +72,35 @@ function selectionsMatch(
   return left.startTime === right.startTime && left.endTime === right.endTime;
 }
 
+function getDistinctCourseCodeLabel(schedule: Schedule): string {
+  const courseCode = schedule.courseCode?.trim() ?? '';
+  const subjectName = schedule.subjectName.trim();
+  const programSection = getScheduleProgramSection(schedule);
+
+  return courseCode && courseCode !== subjectName && courseCode !== programSection
+    ? `Course code: ${courseCode}`
+    : '';
+}
+
+function getClassScheduleDetails(schedule: Schedule): string {
+  const subjectName = schedule.subjectName.trim() || schedule.courseName?.trim() || 'Class scheduled';
+  const courseCode = getDistinctCourseCodeLabel(schedule);
+
+  return [
+    subjectName,
+    getScheduleProgramSection(schedule),
+    courseCode,
+    schedule.instructorName.trim(),
+    formatReservationTimeSlot(schedule),
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 export default function DaySchedulePanel({
   date,
   roomEnrichedSlots,
+  roomSchedules,
   userActiveSlots,
   currentUserId,
   currentRoomId,
@@ -106,6 +137,7 @@ export default function DaySchedulePanel({
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     const roomSlotsForDate = roomEnrichedSlots.filter((slot) => slot.date === date);
     const userSlotsForDate = userActiveSlots.filter((slot) => slot.date === date);
+    const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
 
     for (const { endTime: slotEnd, startTime: slotStart } of getReservationTimeSlots(campusTimeRange)) {
 
@@ -142,6 +174,25 @@ export default function DaySchedulePanel({
 
       if (manualUnavailable) {
         slots.push({ startTime: slotStart, endTime: slotEnd, status: 'manual-unavailable' });
+        continue;
+      }
+
+      const classSchedule = roomSchedules.find((schedule) =>
+        scheduleConflictsWithReservationSlot(schedule, {
+          dayOfWeek,
+          endTime: slotEnd,
+          roomId: currentRoomId,
+          startTime: slotStart,
+        })
+      );
+
+      if (classSchedule) {
+        slots.push({
+          classSchedule,
+          endTime: slotEnd,
+          startTime: slotStart,
+          status: 'class-scheduled',
+        });
         continue;
       }
 
@@ -192,6 +243,7 @@ export default function DaySchedulePanel({
     date,
     now,
     roomEnrichedSlots,
+    roomSchedules,
     userActiveSlots,
   ]);
 
@@ -244,6 +296,15 @@ export default function DaySchedulePanel({
           type: 'info',
         });
         return;
+      case 'class-scheduled':
+        if (slot.classSchedule) {
+          const schedule = slot.classSchedule;
+          setToast({
+            message: getClassScheduleDetails(schedule),
+            type: 'warning',
+          });
+        }
+        return;
       default:
         return;
     }
@@ -262,6 +323,7 @@ export default function DaySchedulePanel({
       case 'available':
         return `${base} cursor-pointer schedule-slot-available${selectedClass}`;
       case 'past':
+      case 'class-scheduled':
       case 'manual-unavailable':
         return `${base} cursor-not-allowed schedule-slot-unavailable${selectedClass}`;
       case 'reserved-others':
@@ -280,6 +342,7 @@ export default function DaySchedulePanel({
       case 'reserved-others':
         return 'line-through opacity-80';
       case 'past':
+      case 'class-scheduled':
       case 'manual-unavailable':
         return 'line-through opacity-70';
       default:
@@ -298,6 +361,8 @@ export default function DaySchedulePanel({
       case 'past':
       case 'manual-unavailable':
         return 'border border-gray-200/90 bg-gray-100/95 text-gray-600';
+      case 'class-scheduled':
+        return 'border border-blue-200/90 bg-blue-50/95 text-blue-700';
       case 'reserved-others':
         return 'border border-red-200/90 bg-red-50/95 text-red-700';
       case 'user-conflict':
@@ -341,6 +406,22 @@ export default function DaySchedulePanel({
               strokeLinejoin="round"
               strokeWidth={2.5}
               d="M12 6v6l3 2m6-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+            />
+          </svg>
+        );
+      case 'class-scheduled':
+        return (
+          <svg
+            className="h-3.5 w-3.5 shrink-0 text-blue-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 7V3m8 4V3M4 11h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
             />
           </svg>
         );
@@ -403,6 +484,8 @@ export default function DaySchedulePanel({
         return 'Available';
       case 'past':
         return 'Unavailable';
+      case 'class-scheduled':
+        return 'Class scheduled';
       case 'manual-unavailable':
         return 'Manually unavailable';
       case 'reserved-others':
@@ -466,6 +549,10 @@ export default function DaySchedulePanel({
           <span className="inline-block h-2.5 w-2.5 rounded-sm border border-amber-300/60 bg-amber-100" />
           Pending
         </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm border border-blue-300/60 bg-blue-100" />
+          Class scheduled
+        </span>
       </div>
 
       {singleSlotSelection && (
@@ -483,8 +570,13 @@ export default function DaySchedulePanel({
               key={slot.startTime}
               type="button"
               onClick={() => handleSlotClick(slot)}
-              aria-disabled={slot.status === 'past'}
+              aria-disabled={slot.status === 'past' || slot.status === 'class-scheduled'}
               aria-pressed={selected}
+              title={
+                slot.classSchedule
+                  ? getClassScheduleDetails(slot.classSchedule)
+                  : undefined
+              }
               className={getSlotClasses(slot.status, selected)}
             >
               {getStatusIcon(slot.status)}
@@ -501,6 +593,8 @@ export default function DaySchedulePanel({
                   ? singleSlotSelection
                     ? 'Start selected'
                     : 'Selected'
+                  : slot.status === 'class-scheduled' && slot.classSchedule
+                    ? getScheduleProgramSection(slot.classSchedule)
                   : getStatusLabel(slot.status)}
               </span>
             </button>
@@ -514,7 +608,7 @@ export default function DaySchedulePanel({
             toast.type
           )}`}
         >
-          <p>{toast.message}</p>
+          <p className="whitespace-pre-line">{toast.message}</p>
           <div className="mt-2.5 flex items-center gap-2">
             <button
               type="button"

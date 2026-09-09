@@ -29,6 +29,12 @@ import {
   type RoomCheckInMethod,
 } from "@/lib/rooms/roomStatus";
 import type { Schedule } from "@/lib/schedules/schedules";
+import {
+  isScheduleInActiveContext,
+  scheduleConflictsWithReservationSlot,
+  type ScheduleAvailabilityContext,
+} from "@/lib/schedules/scheduleConflicts";
+import { normalizeScheduleContext } from "@/lib/schedules/scheduleContext";
 import { ApiError } from "@/lib/server/api-error";
 import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
 import {
@@ -302,19 +308,78 @@ async function getActiveReservationsForUser(userId: string) {
     .sort(compareReservationSchedule);
 }
 
-async function getSchedulesForRoom(roomId: string): Promise<Schedule[]> {
+interface ReservationRoomContext {
+  activeScheduleContext: ScheduleAvailabilityContext;
+  buildingId: string;
+}
+
+async function getReservationRoomContext(
+  roomId: string,
+  requestedBuildingId: string
+): Promise<ReservationRoomContext> {
+  const roomSnapshot = await db.collection("rooms").doc(roomId).get();
+
+  if (!roomSnapshot.exists) {
+    throw new ApiError(400, "invalid_room", "The selected room does not exist.");
+  }
+
+  const roomData = roomSnapshot.data() as {
+    buildingId?: unknown;
+  };
+  const buildingId =
+    typeof roomData.buildingId === "string" ? roomData.buildingId.trim() : "";
+
+  if (!buildingId) {
+    throw new ApiError(
+      400,
+      "invalid_room",
+      "The selected room is not associated with a building."
+    );
+  }
+
+  if (buildingId !== requestedBuildingId.trim()) {
+    throw new ApiError(
+      400,
+      "invalid_room",
+      "The selected room does not belong to the requested building."
+    );
+  }
+
+  const buildingSnapshot = await db.collection("buildings").doc(buildingId).get();
+  const scheduleContext = normalizeScheduleContext({
+    academicYear: buildingSnapshot.data()?.activeScheduleAcademicYear,
+    semester: buildingSnapshot.data()?.activeScheduleSemester,
+  });
+
+  return {
+    activeScheduleContext: {
+      ...scheduleContext,
+      buildingId,
+    },
+    buildingId,
+  };
+}
+
+async function getSchedulesForRoom(
+  roomId: string,
+  activeScheduleContext: ScheduleAvailabilityContext
+): Promise<Schedule[]> {
   const schedulesSnapshot = await db
     .collection("schedules")
     .where("roomId", "==", roomId)
     .get();
 
-  return schedulesSnapshot.docs.map(
-    (scheduleDoc) =>
-      ({
-        id: scheduleDoc.id,
-        ...scheduleDoc.data(),
-      }) as Schedule
-  );
+  return schedulesSnapshot.docs
+    .map(
+      (scheduleDoc) =>
+        ({
+          id: scheduleDoc.id,
+          ...scheduleDoc.data(),
+        }) as Schedule
+    )
+    .filter((schedule) =>
+      isScheduleInActiveContext(schedule, activeScheduleContext)
+    );
 }
 
 async function assertReservationDatesAvailable(
@@ -333,8 +398,12 @@ async function assertReservationDatesAvailable(
     endTime: input.endTime,
     startTime: input.startTime,
   };
+  const roomContext = await getReservationRoomContext(
+    input.roomId,
+    input.buildingId
+  );
   const [roomSchedules, roomReservations, userReservations, manualUnavailableSlots] = await Promise.all([
-    getSchedulesForRoom(input.roomId),
+    getSchedulesForRoom(input.roomId, roomContext.activeScheduleContext),
     getActiveReservationsForRoom(input.roomId),
     getActiveReservationsForUser(input.userId),
     getManualUnavailableSlotsForRoom(input.roomId),
@@ -365,13 +434,14 @@ async function assertReservationDatesAvailable(
       );
     }
 
-    const blockedSchedule = roomSchedules.find(
-      (schedule) =>
-        schedule.dayOfWeek === dayOfWeek &&
-        slotsOverlap(requestSlot, {
-          endTime: schedule.endTime,
-          startTime: schedule.startTime,
-        })
+    const blockedSchedule = roomSchedules.find((schedule) =>
+      scheduleConflictsWithReservationSlot(schedule, {
+        buildingId: roomContext.buildingId,
+        dayOfWeek,
+        endTime: requestSlot.endTime,
+        roomId: input.roomId,
+        startTime: requestSlot.startTime,
+      })
     );
 
     if (blockedSchedule) {

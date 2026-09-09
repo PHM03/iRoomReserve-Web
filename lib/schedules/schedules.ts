@@ -23,6 +23,7 @@ import {
   type ScheduleContext,
   type ScheduleSemester,
 } from "@/lib/schedules/scheduleContext";
+export { getScheduleProgramSection } from "@/lib/schedules/scheduleLabels";
 
 export interface Schedule {
   id: string;
@@ -226,6 +227,7 @@ export function getScheduleDisplayTitle(schedule: Pick<Schedule, "courseCode" | 
 
   return courseCode || section || schedule.subjectName;
 }
+
 
 export async function addSchedule(
   data: ScheduleInput,

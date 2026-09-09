@@ -11,8 +11,8 @@ import {
 } from "@/lib/server/services/schedules";
 import { inferCampusFromBuilding } from "@/lib/buildings/campuses";
 import { validateScheduleTimes } from "@/lib/schedules/scheduleTimeRules";
+import { isScheduleInActiveContext } from "@/lib/schedules/scheduleConflicts";
 import {
-  doesScheduleMatchContext,
   normalizeScheduleContext,
 } from "@/lib/schedules/scheduleContext";
 import {
@@ -119,7 +119,12 @@ export async function GET(request: NextRequest) {
           createdBy: data.createdBy ?? "",
         };
       })
-      .filter((schedule) => doesScheduleMatchContext(schedule, activeScheduleContext))
+      .filter((schedule) =>
+        isScheduleInActiveContext(schedule, {
+          ...activeScheduleContext,
+          buildingId,
+        })
+      )
       .sort(
         (left, right) =>
           left.dayOfWeek - right.dayOfWeek ||
