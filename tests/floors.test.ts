@@ -105,6 +105,8 @@ describe("floor integration contracts", () => {
     expect(floorService).toContain('collection("floors")');
     expect(floorService).toContain("runTransaction");
     expect(floorService).toContain('new ApiError(409, "duplicate_floor"');
+    expect(floorService).toContain("if (!existingFloor.hidden)");
+    expect(floorService).toContain("hidden: false");
     expect(floorService).toContain('.where("buildingId", "==", buildingId.trim())');
     expect(floorService).toContain('.where("floor", "==", floor.name)');
     expect(floorService).toContain('"floor_in_use"');

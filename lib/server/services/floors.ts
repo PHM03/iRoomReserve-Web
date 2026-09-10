@@ -76,6 +76,7 @@ export async function createFloor(
   const buildingRef = getBuildingRef(buildingId);
   const floorRef = buildingRef.collection("floors").doc(floorId);
   let createdSortOrder = 0;
+  let restoredFloor: FloorRecord | null = null;
 
   await db.runTransaction(async (transaction) => {
     const buildingSnapshot = await transaction.get(buildingRef);
@@ -85,7 +86,26 @@ export async function createFloor(
 
     const existingFloorSnapshot = await transaction.get(floorRef);
     if (existingFloorSnapshot.exists) {
-      throw new ApiError(409, "duplicate_floor", "This floor already exists in the selected building.");
+      const existingFloor = mapFloor(
+        existingFloorSnapshot.id,
+        existingFloorSnapshot.data() ?? {}
+      );
+
+      if (!existingFloor.hidden) {
+        throw new ApiError(409, "duplicate_floor", "This floor already exists in the selected building.");
+      }
+
+      // Floors are soft-deleted so legacy floor labels can remain hidden. Reuse
+      // the deterministic document when the same floor is added again.
+      createdSortOrder = existingFloor.sortOrder;
+      restoredFloor = existingFloor;
+      transaction.update(floorRef, {
+        name: trimmedName,
+        normalizedName,
+        hidden: false,
+        updatedAt: serverTimestamp(),
+      });
+      return;
     }
 
     const floorsSnapshot = await transaction.get(
@@ -110,7 +130,7 @@ export async function createFloor(
     normalizedName,
     sortOrder: createdSortOrder,
     hidden: false,
-    replacesName: null,
+    replacesName: restoredFloor?.replacesName ?? null,
   };
 }
 
