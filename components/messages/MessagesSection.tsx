@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
+import { filterInboxMessagesByBuildingScope } from '@/lib/admin/adminInboxScope';
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/utils/dateTime';
 import {
   type Message,
@@ -123,6 +124,7 @@ function getActiveDateRange(
 }
 
 interface MessagesSectionProps {
+  inboxBuildingIds?: readonly string[];
   notifications?: AppNotification[];
   registerComposeOpener?: (openCompose: () => void) => void;
   showComposeButton?: boolean;
@@ -449,6 +451,15 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
   const [reservationCustomDateRange, setReservationCustomDateRange] =
     useState<CustomDateRange | null>(null);
 
+  const scopedInbox = useMemo(
+    () =>
+      filterInboxMessagesByBuildingScope(
+        inbox,
+        props.inboxBuildingIds ?? [],
+      ),
+    [inbox, props.inboxBuildingIds],
+  );
+
   useEffect(() => {
     if (!firebaseUser) return;
 
@@ -523,12 +534,12 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
       : activeTab;
 
   const unreadMessages = useMemo(
-    () => inbox.filter((message) => !message.isRead),
-    [inbox]
+    () => scopedInbox.filter((message) => !message.isRead),
+    [scopedInbox]
   );
   const readMessages = useMemo(
-    () => inbox.filter((message) => message.isRead),
-    [inbox]
+    () => scopedInbox.filter((message) => message.isRead),
+    [scopedInbox]
   );
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -954,6 +965,11 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                           <span className="rounded-full bg-dark/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
                             {counterpartRole || 'Staff'}
                           </span>
+                          {props.inboxBuildingIds && message.buildingName && (
+                            <span className="rounded-full border border-primary/15 bg-primary/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">
+                              {message.buildingName}
+                            </span>
+                          )}
                           {isUnread && tab === 'unread' && !isMe && (
                             <span className="inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
                           )}

@@ -1,5 +1,7 @@
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import MessagesSection from '@/components/messages/MessagesSection';
+import { getBuildingAdminInboxBuildingIds } from '@/lib/admin/adminInboxScope';
+import type { ReservationCampus } from '@/lib/buildings/campuses';
 import { getManagedBuildingOptionLabel } from './shared';
 
 interface BuildingOption {
@@ -10,6 +12,7 @@ interface BuildingOption {
 interface AdminInboxTabProps {
   activeBuildingLabel: string;
   buildingId: string;
+  managedCampus?: ReservationCampus | null;
   managedBuildings: BuildingOption[];
   onBuildingChange: (buildingId: string) => void;
 }
@@ -17,9 +20,15 @@ interface AdminInboxTabProps {
 export default function AdminInboxTab({
   activeBuildingLabel,
   buildingId,
+  managedCampus,
   managedBuildings,
   onBuildingChange,
 }: Readonly<AdminInboxTabProps>) {
+  const inboxBuildingIds = getBuildingAdminInboxBuildingIds(
+    managedCampus,
+    buildingId,
+  );
+
   return (
     <div>
       <div className="relative z-[60] mb-6 flex w-full flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
@@ -44,7 +53,11 @@ export default function AdminInboxTab({
         )}
       </div>
 
-      <MessagesSection />
+      <MessagesSection
+        inboxBuildingIds={
+          managedCampus === 'main' ? inboxBuildingIds : undefined
+        }
+      />
     </div>
   );
 }

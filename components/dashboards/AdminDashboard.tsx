@@ -475,6 +475,7 @@ export default function AdminDashboard({
         <AdminInboxTab
           activeBuildingLabel={activeBuildingLabel}
           buildingId={buildingId}
+          managedCampus={managedCampus}
           managedBuildings={managedBuildings}
           onBuildingChange={setSelectedBuildingId}
         />

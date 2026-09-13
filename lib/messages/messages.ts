@@ -50,6 +50,9 @@ export interface Message {
   body: string;
   isRead: boolean;
   closedBySender?: boolean;
+  buildingId?: string;
+  buildingName?: string;
+  campus?: string;
   createdAt?: Timestamp;
 }
 
@@ -126,6 +129,11 @@ function mapMessage(snapshotDoc: {
     body: String(data.body ?? ""),
     isRead: Boolean(data.isRead),
     closedBySender: Boolean(data.closedBySender),
+    buildingId:
+      typeof data.buildingId === "string" ? data.buildingId : undefined,
+    buildingName:
+      typeof data.buildingName === "string" ? data.buildingName : undefined,
+    campus: typeof data.campus === "string" ? data.campus : undefined,
     createdAt: data.createdAt as Timestamp | undefined,
   };
 }
