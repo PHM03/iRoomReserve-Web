@@ -8,7 +8,6 @@ import { onRoomsByIds, Room } from '@/lib/rooms/rooms';
 import {
   cancelReservation,
   completeReservation,
-  expireOpenReservations,
   onReservationsByUser,
   Reservation,
 } from '@/lib/reservations/reservations';
@@ -142,20 +141,6 @@ export default function MyReservationsPage() {
       cancelled = true;
       unsubscribeReservations();
     };
-  }, [uid]);
-
-  useEffect(() => {
-    if (!uid) return;
-
-    const refreshExpiredReservations = () => {
-      void expireOpenReservations().catch((error) => {
-        console.warn('Failed to update expired reservations:', error);
-      });
-    };
-
-    refreshExpiredReservations();
-    const intervalId = window.setInterval(refreshExpiredReservations, 60_000);
-    return () => window.clearInterval(intervalId);
   }, [uid]);
 
   useEffect(() => {
