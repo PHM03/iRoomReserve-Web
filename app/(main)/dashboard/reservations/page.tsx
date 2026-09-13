@@ -6,11 +6,15 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { useAuth } from '@/context/AuthContext';
 import { onRoomsByIds, Room } from '@/lib/rooms/rooms';
 import {
+  acceptReservationRevision,
   cancelReservation,
+  cancelReservationRevision,
   completeReservation,
+  getReservationRevision,
   onReservationsByUser,
   Reservation,
 } from '@/lib/reservations/reservations';
+import type { ReservationRevisionRecord } from '@/lib/reservations/reservation-revisions';
 import {
   canReservationCheckIn,
   getCurrentDateTimeStringInTimeZone,
@@ -84,8 +88,13 @@ export default function MyReservationsPage() {
   const uid = firebaseUser?.uid;
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [revisionRecords, setRevisionRecords] = useState<
+    Record<string, ReservationRevisionRecord>
+  >({});
   const [activeFilter, setActiveFilter] = useState<FilterTab>('pending');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<Record<string, string>>({});
+  const [cancelConfirmationId, setCancelConfirmationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentTime, setCurrentTime] = useState(() => new Date());
 
@@ -142,6 +151,42 @@ export default function MyReservationsPage() {
       unsubscribeReservations();
     };
   }, [uid]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const activeReservations = reservations.filter(
+      (reservation) =>
+        reservation.activeRevisionStatus === 'requested' &&
+        Boolean(reservation.activeRevisionId)
+    );
+
+    if (activeReservations.length === 0) {
+      setRevisionRecords({});
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    Promise.all(
+      activeReservations.map(async (reservation) => {
+        try {
+          return [reservation.id, await getReservationRevision(reservation.id)] as const;
+        } catch (error) {
+          console.warn('Failed to load reservation revision:', error);
+          return null;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      setRevisionRecords(
+        Object.fromEntries(entries.filter((entry): entry is readonly [string, ReservationRevisionRecord] => entry !== null))
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reservations]);
 
   useEffect(() => {
     const roomIds = [...new Set(reservations.map((r) => r.roomId))];
@@ -291,15 +336,57 @@ export default function MyReservationsPage() {
     ]
   );
 
-  const handleCancel = async (reservationId: string) => {
+  const handleCancel = async (reservationId: string, revisionId?: string) => {
     if (!firebaseUser) return;
     setActionLoading(reservationId);
+    setActionError((current) => ({ ...current, [reservationId]: '' }));
     try {
-      await cancelReservation(reservationId, firebaseUser.uid);
+      if (revisionId) {
+        await cancelReservationRevision(reservationId, revisionId);
+      } else {
+        await cancelReservation(reservationId, firebaseUser.uid);
+      }
     } catch (error) {
       console.error('Failed to cancel:', error);
+      setActionError((current) => ({
+        ...current,
+        [reservationId]: error instanceof Error ? error.message : 'Unable to cancel the reservation.',
+      }));
     }
     setActionLoading(null);
+  };
+
+  const handleAcceptRevision = async (
+    reservationId: string,
+    revisionId: string
+  ) => {
+    setActionLoading(`${reservationId}:accept-revision`);
+    setActionError((current) => ({ ...current, [reservationId]: '' }));
+    try {
+      await acceptReservationRevision(reservationId, revisionId);
+      setRevisionRecords((current) => {
+        const next = { ...current };
+        delete next[reservationId];
+        return next;
+      });
+    } catch (error) {
+      console.error('Failed to accept reservation revision:', error);
+      setActionError((current) => ({
+        ...current,
+        [reservationId]: error instanceof Error ? error.message : 'Unable to accept the revision.',
+      }));
+    }
+    setActionLoading(null);
+  };
+
+  const confirmReservationCancellation = async () => {
+    if (!cancelConfirmationId) return;
+    const reservationId = cancelConfirmationId;
+    const revisionId = reservations.find(
+      (reservation) => reservation.id === reservationId
+    )?.activeRevisionId;
+    setCancelConfirmationId(null);
+    await handleCancel(reservationId, revisionId);
   };
 
   const handleComplete = async (reservationId: string) => {
@@ -464,6 +551,15 @@ export default function MyReservationsPage() {
             const showMobileAppStartLabel =
               !isExpired &&
               canReservationCheckIn(reservation) && roomStatus !== 'Unavailable';
+            const hasActiveRevision =
+              reservation.activeRevisionStatus === 'requested' &&
+              Boolean(reservation.activeRevisionId);
+            const revision = hasActiveRevision
+              ? revisionRecords[reservation.id]
+              : undefined;
+            const reservationActionLoading =
+              actionLoading === reservation.id ||
+              actionLoading === `${reservation.id}:accept-revision`;
 
             return (
               <div
@@ -508,17 +604,40 @@ export default function MyReservationsPage() {
                     </div>
 
                     <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:min-w-[140px]">
-                      {!isExpired &&
+                      {!isExpired && hasActiveRevision ? (
+                        <>
+                          <button
+                            onClick={() => setCancelConfirmationId(reservation.id)}
+                            disabled={reservationActionLoading}
+                            className="px-4 py-2 rounded-xl text-xs font-bold ui-button-red disabled:opacity-50"
+                          >
+                            {reservationActionLoading ? 'Processing...' : 'Cancel Reservation'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (revision) {
+                                void handleAcceptRevision(reservation.id, revision.revisionId);
+                              }
+                            }}
+                            disabled={reservationActionLoading || !revision}
+                            className="px-4 py-2 rounded-xl text-xs font-bold ui-button-green disabled:opacity-50"
+                          >
+                            {actionLoading === `${reservation.id}:accept-revision`
+                              ? 'Processing...'
+                              : 'Accept Revision'}
+                          </button>
+                        </>
+                      ) : !isExpired &&
                         (reservation.status === 'pending' ||
-                          reservation.status === 'approved') && (
+                          reservation.status === 'approved') ? (
                         <button
-                          onClick={() => handleCancel(reservation.id)}
+                          onClick={() => void handleCancel(reservation.id)}
                           disabled={actionLoading === reservation.id}
                           className="px-4 py-2 rounded-xl text-xs font-bold ui-button-red disabled:opacity-50"
                         >
                           {actionLoading === reservation.id ? 'Processing...' : 'Cancel'}
                         </button>
-                      )}
+                      ) : null}
                       {!isExpired && reservation.status === 'approved' && (
                         <button
                           onClick={() => handleComplete(reservation.id)}
@@ -530,6 +649,37 @@ export default function MyReservationsPage() {
                       )}
                     </div>
                   </div>
+                  {hasActiveRevision && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                      <p className="text-sm font-bold text-amber-900">
+                        Building Admin requested a room change
+                      </p>
+                      {revision ? (
+                        <div className="mt-2 grid gap-1 text-xs text-amber-950 sm:grid-cols-2">
+                          <p>
+                            <span className="font-bold">Original Room:</span>{' '}
+                            {revision.originalRoomName}
+                          </p>
+                          <p>
+                            <span className="font-bold">Proposed Room:</span>{' '}
+                            {revision.proposedRoomName}
+                          </p>
+                          <p className="sm:col-span-2">
+                            <span className="font-bold">Revision status:</span> Requested
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-amber-900">
+                          Loading revision details...
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {actionError[reservation.id] && (
+                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                      {actionError[reservation.id]}
+                    </p>
+                  )}
                   {showMobileAppStartLabel ? (
                     <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
                       <span className="inline-flex items-center rounded-lg border border-blue-200 bg-white/70 px-3 py-1.5 text-xs font-bold text-blue-800">
@@ -543,6 +693,41 @@ export default function MyReservationsPage() {
           })
         )}
       </div>
+
+      {cancelConfirmationId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-reservation-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <h3 id="cancel-reservation-title" className="text-lg font-bold text-gray-900">
+              Cancel Reservation
+            </h3>
+            <p className="mt-3 text-sm text-gray-700">
+              Are you sure? You&apos;ll have to make a new reservation.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCancelConfirmationId(null)}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmReservationCancellation()}
+                disabled={actionLoading === cancelConfirmationId}
+                className="rounded-xl px-4 py-2 text-xs font-bold ui-button-red disabled:opacity-50"
+              >
+                {actionLoading === cancelConfirmationId ? 'Processing...' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

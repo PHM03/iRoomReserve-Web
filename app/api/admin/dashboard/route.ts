@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError } from "@/lib/server/api-error";
 import { getOptionalAdminDb } from "@/lib/server/firebase-admin";
-import { getCurrentApprovalStep } from "@/lib/reservations/reservation-approval";
 import { groupReservationsForDisplay } from "@/lib/reservations/reservation-groups";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
 import { createReservationDocumentSignedUrl } from "@/lib/server/supabase-storage";
@@ -15,6 +14,10 @@ import {
   normalizeScheduleContext,
 } from "@/lib/schedules/scheduleContext";
 import { isRoomBeaconHardwareOnline } from "@/lib/occupancy/bleMonitor";
+import {
+  isBuildingAdminActionableReservation,
+  type RevisionReservationState,
+} from "@/lib/reservations/reservation-revisions";
 
 type DashboardAdminRequest = {
   createdAt?: unknown;
@@ -28,6 +31,8 @@ type DashboardNotification = {
 
 type DashboardReservation = {
   approvalFlow?: unknown;
+  activeRevisionId?: string;
+  activeRevisionStatus?: "requested";
   createdAt?: unknown;
   currentStep?: number;
   date?: string;
@@ -167,16 +172,19 @@ function sortReservations<
 function isVisiblePendingReservationForBuildingAdmin(
   reservation: DashboardReservation
 ) {
-  if (reservation.status !== "pending") {
-    return false;
-  }
+  const revisionState: RevisionReservationState = {
+    ...reservation,
+    status: typeof reservation.status === "string" ? reservation.status : "",
+    approvalFlow: Array.isArray(reservation.approvalFlow)
+      ? reservation.approvalFlow as RevisionReservationState["approvalFlow"]
+      : undefined,
+    currentStep:
+      typeof reservation.currentStep === "number"
+        ? reservation.currentStep
+        : undefined,
+  };
 
-  const currentStep = getCurrentApprovalStep(
-    Array.isArray(reservation.approvalFlow) ? reservation.approvalFlow : undefined,
-    typeof reservation.currentStep === "number" ? reservation.currentStep : undefined
-  );
-
-  return currentStep?.role === "building_admin";
+  return isBuildingAdminActionableReservation(revisionState);
 }
 
 function parseBooleanFlag(value: string | null, defaultValue: boolean) {
@@ -245,11 +253,6 @@ function hasConfiguredBeacon(room: DashboardRoom) {
   return Boolean(
     normalizeBeaconId(room.bleBeaconId) ?? normalizeBeaconId(room.beaconId)
   );
-}
-
-async function getAggregateCount(query: FirebaseFirestore.Query) {
-  const snapshot = await query.count().get();
-  return snapshot.data().count ?? 0;
 }
 
 async function getApprovalDocumentUrl(reservation: DashboardReservation) {
@@ -371,7 +374,6 @@ export async function GET(request: NextRequest) {
       pendingReservationsSnapshot,
       schedulesSnapshot,
       roomHistorySnapshot,
-      pendingRequestCount,
     ] = await Promise.all([
       includeSummary ? roomsBaseQuery.get() : Promise.resolve(null),
       includeRooms
@@ -381,7 +383,7 @@ export async function GET(request: NextRequest) {
       includeApprovedReservations
         ? approvedReservationsQuery.get()
         : Promise.resolve(null),
-      includePendingRequests
+      includePendingRequests || includeSummary
         ? pendingReservationsQuery.get()
         : Promise.resolve(null),
       includeSchedules
@@ -389,9 +391,6 @@ export async function GET(request: NextRequest) {
         : Promise.resolve(null),
       includeRoomHistory
         ? adminDb.collection("roomHistory").where("buildingId", "==", buildingId).get()
-        : Promise.resolve(null),
-      includeSummary
-        ? getAggregateCount(pendingReservationsQuery)
         : Promise.resolve(null),
     ]);
 
@@ -475,9 +474,10 @@ export async function GET(request: NextRequest) {
         ...doc.data()
       }) as DashboardReservation)
       .filter(isVisiblePendingReservationForBuildingAdmin);
-    const allRequests = groupReservationsForDisplay(
+    const allPendingRequests = groupReservationsForDisplay(
       pendingRequests.sort(sortReservations)
     );
+    const allRequests = includePendingRequests ? allPendingRequests : [];
     const requests = await Promise.all(
       (pendingLimit ? allRequests.slice(0, pendingLimit) : allRequests).map(
         async (reservation) => ({
@@ -505,7 +505,9 @@ export async function GET(request: NextRequest) {
           availableRooms: summaryStatusCounts.availableRooms,
           onlineBeacons: summaryStatusCounts.onlineBeacons,
           occupiedRooms: summaryStatusCounts.occupiedRooms,
-          pendingRequests: includePendingRequests ? allRequests.length : (pendingRequestCount ?? 0),
+          pendingRequests: includePendingRequests
+            ? allPendingRequests.length
+            : pendingRequests.length,
           pendingPreviewLimit: pendingLimit,
           reservedRooms: summaryStatusCounts.reservedRooms,
           roomPreviewLimit: roomLimit,

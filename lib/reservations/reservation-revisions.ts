@@ -67,6 +67,12 @@ export function getReservationRevisionScope(
   return reservation.recurringGroupId ? "series" : "single";
 }
 
+export function getBuildingAdminApprovalStepIndex(
+  approvalFlow: ReservationApprovalStep[] | undefined
+) {
+  return approvalFlow?.findIndex((step) => step.role === "building_admin") ?? -1;
+}
+
 export function hasActiveReservationRevision(
   reservation: Pick<ReservationRevisionMarker, "activeRevisionId" | "activeRevisionStatus">
 ) {
@@ -117,4 +123,20 @@ export function getRevisionRequestStateError(
   }
 
   return null;
+}
+
+export function isBuildingAdminActionableReservation(
+  reservation: RevisionReservationState
+) {
+  const hasActiveRevisionMarker =
+    (typeof reservation.activeRevisionId === "string" &&
+      reservation.activeRevisionId.trim().length > 0) ||
+    reservation.activeRevisionStatus === "requested";
+
+  return (
+    reservation.status === "pending" &&
+    getCurrentApprovalStep(reservation.approvalFlow, reservation.currentStep)
+      ?.role === "building_admin" &&
+    !hasActiveRevisionMarker
+  );
 }

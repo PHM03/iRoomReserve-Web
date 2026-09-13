@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getBuildingAdminApprovalStepIndex,
   getReservationRevisionScope,
   getRevisionRequestStateError,
   hasActiveReservationRevision,
+  isBuildingAdminActionableReservation,
   isCurrentRequestedRevision,
   type ReservationRevisionRecord,
 } from '../lib/reservations/reservation-revisions';
@@ -30,6 +32,7 @@ function reservationState(
     recurringGroupId: string;
     revisionScope: 'single' | 'series';
     status: string;
+    currentStep: number;
   }> = {}
 ) {
   return {
@@ -68,6 +71,21 @@ describe('reservation revision foundation', () => {
     ).toBe('single');
   });
 
+  it('returns the existing Building Admin approval step for both campus flows', () => {
+    expect(
+      getBuildingAdminApprovalStepIndex([
+        { role: 'advisor', email: 'advisor@sdca.edu.ph' },
+        { role: 'building_admin', email: 'admin@sdca.edu.ph' },
+      ])
+    ).toBe(1);
+    expect(
+      getBuildingAdminApprovalStepIndex([
+        { role: 'building_admin', email: 'admin@sdca.edu.ph' },
+      ])
+    ).toBe(0);
+    expect(getBuildingAdminApprovalStepIndex(undefined)).toBe(-1);
+  });
+
   it('rejects duplicate active revisions and non-pending revision requests', () => {
     expect(
       getRevisionRequestStateError(
@@ -80,6 +98,33 @@ describe('reservation revision foundation', () => {
     expect(
       getRevisionRequestStateError(reservationState({ status: 'approved' }))
     ).toContain('Only pending');
+  });
+
+  it('excludes reservations with active revisions from Building Admin pending work', () => {
+    expect(isBuildingAdminActionableReservation(reservationState())).toBe(true);
+    expect(
+      isBuildingAdminActionableReservation(
+        reservationState({
+          activeRevisionId: 'revision-1',
+          activeRevisionStatus: 'requested',
+        })
+      )
+    ).toBe(false);
+    expect(
+      isBuildingAdminActionableReservation(
+        reservationState({ activeRevisionId: 'revision-1' })
+      )
+    ).toBe(false);
+    expect(
+      isBuildingAdminActionableReservation(
+        reservationState({ currentStep: 1 })
+      )
+    ).toBe(false);
+    expect(
+      isBuildingAdminActionableReservation(
+        reservationState({ status: 'approved' })
+      )
+    ).toBe(false);
   });
 
   it('identifies only the current requested revision', () => {

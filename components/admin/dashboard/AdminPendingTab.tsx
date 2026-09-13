@@ -9,9 +9,11 @@ import {
 import {
   approveReservation,
   deleteReservation,
+  requestReservationRevision,
   rejectReservation,
   type Reservation,
 } from '@/lib/reservations/reservations';
+import { isBuildingAdminActionableReservation } from '@/lib/reservations/reservation-revisions';
 import { getRoomsByBuilding, type Room } from '@/lib/rooms/rooms';
 import { DAY_NAMES, getSchedulesByRoomId, type Schedule } from '@/lib/schedules/schedules';
 import { extractTimeString, formatTimeRange } from '@/lib/utils/dateTime';
@@ -191,6 +193,10 @@ export default function AdminPendingTab({
   const [floorFilter, setFloorFilter] = useState('');
   const [roomFilter, setRoomFilter] = useState('');
   const [buildingRooms, setBuildingRooms] = useState<Room[]>([]);
+  const [revisionReservationId, setRevisionReservationId] = useState<string | null>(null);
+  const [revisionRoomId, setRevisionRoomId] = useState('');
+  const [revisionError, setRevisionError] = useState('');
+  const [revisionSubmitting, setRevisionSubmitting] = useState(false);
 
   const isAnyFilterActive =
     userTypeFilter.length > 0 ||
@@ -403,6 +409,55 @@ export default function AdminPendingTab({
     }
   };
 
+  const openRevisionDialog = (request: Reservation) => {
+    if (!isBuildingAdminActionableReservation(request) || isExpiredReservation(request)) {
+      return;
+    }
+
+    setReservationActionError('');
+    setRevisionError('');
+    setRevisionRoomId('');
+    setRevisionReservationId(request.id);
+  };
+
+  const closeRevisionDialog = () => {
+    if (revisionSubmitting) {
+      return;
+    }
+
+    setRevisionReservationId(null);
+    setRevisionRoomId('');
+    setRevisionError('');
+  };
+
+  const handleRequestRevision = async () => {
+    const request = requests.find((candidate) => candidate.id === revisionReservationId);
+    if (!request || !revisionRoomId) {
+      setRevisionError('Select a replacement room before sending the request.');
+      return;
+    }
+
+    setRevisionSubmitting(true);
+    setRevisionError('');
+    try {
+      await requestReservationRevision(
+        request.id,
+        revisionRoomId,
+        request.updatedAt?.toMillis()
+      );
+      setRevisionReservationId(null);
+      setRevisionRoomId('');
+      await onReload();
+    } catch (error) {
+      console.warn('Failed to request reservation revision:', error);
+      setRevisionError(
+        error instanceof Error ? error.message : 'Failed to send the revision request.'
+      );
+    } finally {
+      setRevisionSubmitting(false);
+    }
+  };
+
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Filtered list Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   const q = searchQuery.trim().toLowerCase();
   const filteredRequests = requests.filter((r) => {
@@ -425,6 +480,19 @@ export default function AdminPendingTab({
 
     return true;
   });
+
+  const revisionReservation = revisionReservationId
+    ? requests.find((request) => request.id === revisionReservationId) ?? null
+    : null;
+  const replacementRooms = useMemo(
+    () =>
+      buildingRooms.filter(
+        (room) =>
+          room.id !== revisionReservation?.roomId &&
+          room.status !== 'Unavailable'
+      ),
+    [buildingRooms, revisionReservation?.roomId]
+  );
 
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   const avatarColor = (name: string) => {
@@ -878,6 +946,108 @@ export default function AdminPendingTab({
                       fontWeight: 600
                     }}>{reservationActionError}</p>
               )}
+              {revisionReservation && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 9999,
+                    background: 'rgba(0,0,0,0.45)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '16px',
+                  }}
+                  onClick={(event) => {
+                    if (event.target === event.currentTarget) {
+                      closeRevisionDialog();
+                    }
+                  }}
+                >
+                  <div
+                    style={{
+                      background: '#fff',
+                      borderRadius: '16px',
+                      padding: '28px 32px',
+                      maxWidth: '440px',
+                      width: '100%',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <h4 style={{ fontSize: '16px', fontWeight: 700, color: '#111', marginBottom: '18px' }}>
+                      Request Revision
+                    </h4>
+                    <div style={{ marginBottom: '14px' }}>
+                      <label
+                        htmlFor="revision-original-room"
+                        style={{ fontSize: '11px', fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '6px' }}
+                      >
+                        Original Room
+                      </label>
+                      <input
+                        id="revision-original-room"
+                        type="text"
+                        value={revisionReservation.roomName + ' — ' + revisionReservation.buildingName}
+                        readOnly
+                        style={{ width: '100%', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', background: '#f8f8f8', color: '#555', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label
+                        htmlFor="revision-new-room"
+                        style={{ fontSize: '11px', fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '6px' }}
+                      >
+                        New Room
+                      </label>
+                      <select
+                        id="revision-new-room"
+                        value={revisionRoomId}
+                        onChange={(event) => setRevisionRoomId(event.target.value)}
+                        disabled={revisionSubmitting}
+                        className="glass-input text-sm"
+                        style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box' }}
+                      >
+                        <option value="">Select replacement room</option>
+                        {replacementRooms.map((room) => (
+                          <option key={room.id} value={room.id}>
+                            {room.name} — {room.buildingName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {replacementRooms.length === 0 && (
+                      <p style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
+                        No eligible replacement rooms are available in this building.
+                      </p>
+                    )}
+                    {revisionError && (
+                      <p style={{ fontSize: '12px', color: '#e53935', marginBottom: '12px' }}>
+                        {revisionError}
+                      </p>
+                    )}
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        onClick={closeRevisionDialog}
+                        disabled={revisionSubmitting}
+                        style={{ padding: '8px 18px', borderRadius: '8px', border: '1px solid #e0e0e0', background: 'transparent', fontSize: '13px', fontWeight: 600, color: '#555', cursor: 'pointer' }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRequestRevision}
+                        disabled={revisionSubmitting || !revisionRoomId || replacementRooms.length === 0}
+                        style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: '#8B0000', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: revisionSubmitting || !revisionRoomId || replacementRooms.length === 0 ? 0.6 : 1 }}
+                      >
+                        {revisionSubmitting ? 'Sending...' : 'Send Revision Request'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {filteredRequests.map((request) => {
                 const isExpired = request.status === 'pending' && isExpiredReservation(request);
                 const badge = statusBadge(isExpired ? 'expired' : request.status);
@@ -1169,6 +1339,32 @@ export default function AdminPendingTab({
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
                           {request.approvalDocumentName || 'Open attachment'}
                         </a>
+                      </div>
+                    )}
+
+                    {isBuildingAdminActionableReservation(request) && !isExpired && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openRevisionDialog(request);
+                          }}
+                          disabled={revisionSubmitting || actionLoading === request.id}
+                          style={{
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(139, 0, 0, 0.25)',
+                            background: 'rgba(139, 0, 0, 0.08)',
+                            color: '#8B0000',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            opacity: revisionSubmitting || actionLoading === request.id ? 0.6 : 1,
+                          }}
+                        >
+                          Request Revision
+                        </button>
                       </div>
                     )}
 

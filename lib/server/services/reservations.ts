@@ -1,6 +1,6 @@
 import "server-only";
 
-import { db, serverTimestamp, Timestamp } from "@/lib/firebase/firebase-admin";
+import { db, deleteField, serverTimestamp, Timestamp } from "@/lib/firebase/firebase-admin";
 import {
   inferCampusFromBuilding,
   normalizeCampus,
@@ -48,6 +48,11 @@ import {
   formatOtherEquipment,
   getOtherEquipmentFields,
 } from "@/lib/reservations/equipment";
+import {
+  hasActiveReservationRevision,
+  isCurrentRequestedRevision,
+  type ReservationRevisionRecord,
+} from "@/lib/reservations/reservation-revisions";
 
 type ReservationStatus =
   | "pending"
@@ -475,9 +480,22 @@ async function getSchedulesForRoom(
     );
 }
 
-async function assertReservationDatesAvailable(
-  input: Omit<ReservationCreateInput, "date"> & { date?: string },
-  dateKeys: string[]
+export interface ReservationAvailabilityInput {
+  userId: string;
+  roomId: string;
+  buildingId: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface ReservationAvailabilityOptions {
+  excludeReservationIds?: ReadonlySet<string>;
+}
+
+export async function assertReservationDatesAvailable(
+  input: ReservationAvailabilityInput,
+  dateKeys: string[],
+  options: ReservationAvailabilityOptions = {}
 ) {
   if (dateKeys.length === 0) {
     throw new ApiError(
@@ -508,6 +526,7 @@ async function assertReservationDatesAvailable(
 
     const conflictingUserReservation = userReservations.find(
       (reservation) =>
+        !options.excludeReservationIds?.has(reservation.id) &&
         reservation.date === dateKey &&
         slotsOverlap(requestSlot, {
           endTime: reservation.endTime,
@@ -568,6 +587,7 @@ async function assertReservationDatesAvailable(
 
     const approvedReservation = roomReservations.find(
       (reservation) =>
+        !options.excludeReservationIds?.has(reservation.id) &&
         reservation.date === dateKey &&
         reservation.status === "approved" &&
         slotsOverlap(requestSlot, {
@@ -832,6 +852,14 @@ function assertReservationPendingApproval(reservation: ReservationRecord) {
       400,
       "invalid_status",
       "Only pending reservations can be reviewed."
+    );
+  }
+
+  if (hasActiveReservationRevision(reservation)) {
+    throw new ApiError(
+      409,
+      "revision_pending",
+      "This reservation has an active revision request and cannot be approved or rejected yet."
     );
   }
 }
@@ -1758,6 +1786,167 @@ export async function rejectReservationRecord(
   }
 }
 
+async function cancelActiveRevisionReservationRecord(
+  reservationId: string,
+  userId: string,
+  expectedRevisionId?: string
+) {
+  return db.runTransaction(async (transaction) => {
+    const reservationRef = db.collection("reservations").doc(reservationId);
+    const reservationSnapshot = await transaction.get(reservationRef);
+
+    if (!reservationSnapshot.exists) {
+      throw new ApiError(404, "not_found", "Reservation not found.");
+    }
+
+    const reservation = {
+      id: reservationSnapshot.id,
+      ...reservationSnapshot.data(),
+    } as ReservationRecord;
+    if (reservation.userId !== userId) {
+      throw new ApiError(403, "forbidden", "You cannot cancel this reservation.");
+    }
+    if (reservation.status !== "pending") {
+      throw new ApiError(
+        409,
+        "revision_not_allowed",
+        "Only pending reservations can cancel an active revision reservation."
+      );
+    }
+
+    const activeRevisionId = reservation.activeRevisionId?.trim();
+    if (!activeRevisionId || reservation.activeRevisionStatus !== "requested") {
+      throw new ApiError(409, "stale_revision", "This revision request is no longer active.");
+    }
+    if (expectedRevisionId && activeRevisionId !== expectedRevisionId) {
+      throw new ApiError(409, "stale_revision", "This revision request is no longer active.");
+    }
+
+    const revisionRef = reservationRef
+      .collection("revisions")
+      .doc(activeRevisionId);
+    const revisionSnapshot = await transaction.get(revisionRef);
+    if (!revisionSnapshot.exists) {
+      throw new ApiError(409, "stale_revision", "This revision request is no longer available.");
+    }
+
+    const revision = {
+      revisionId: revisionSnapshot.id,
+      ...revisionSnapshot.data(),
+    } as ReservationRevisionRecord;
+    if (
+      !isCurrentRequestedRevision(
+        reservation,
+        revision,
+        reservationId,
+        activeRevisionId
+      )
+    ) {
+      throw new ApiError(409, "stale_revision", "This revision request is no longer active.");
+    }
+
+    const occurrenceSnapshot = reservation.recurringGroupId
+      ? await transaction.get(
+          db
+            .collection("reservations")
+            .where("recurringGroupId", "==", reservation.recurringGroupId)
+        )
+      : null;
+    const reservationsToCancel = occurrenceSnapshot
+      ? occurrenceSnapshot.docs
+          .map(
+            (occurrenceDoc) =>
+              ({
+                id: occurrenceDoc.id,
+                ...occurrenceDoc.data(),
+              }) as ReservationRecord
+          )
+          .filter(
+            (occurrence) =>
+              occurrence.userId === userId &&
+              occurrence.status === "pending"
+          )
+      : [reservation];
+
+    if (reservationsToCancel.length === 0) {
+      throw new ApiError(409, "stale_revision", "No pending reservation remains to cancel.");
+    }
+
+    reservationsToCancel.forEach((occurrence) => {
+      if (
+        !isCurrentRequestedRevision(
+          occurrence,
+          revision,
+          reservationId,
+          activeRevisionId
+        )
+      ) {
+        throw new ApiError(409, "stale_revision", "The recurring revision request changed before cancellation.");
+      }
+
+      transaction.update(db.collection("reservations").doc(occurrence.id), {
+        status: "cancelled",
+        activeRevisionId: deleteField(),
+        activeRevisionStatus: deleteField(),
+        revisionScope: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+
+    transaction.update(revisionRef, {
+      status: "cancelled",
+      respondedByUid: userId,
+      respondedAt: serverTimestamp(),
+    });
+
+    return { reservation, reservationsToCancel };
+  });
+}
+
+export async function cancelReservationRevisionRecord(
+  reservationId: string,
+  userId: string,
+  revisionId: string
+) {
+  const result = await cancelActiveRevisionReservationRecord(
+    reservationId,
+    userId,
+    revisionId
+  );
+  const managerIds = await getBuildingManagerIds(result.reservation.buildingId);
+  const batch = db.batch();
+  const queuedNotifications: AppNotificationInput[] = [];
+
+  managerIds.forEach((managerUid) => {
+    addNotification(batch, queuedNotifications, {
+      recipientUid: managerUid,
+      type: "reservation_cancelled",
+      title: "Reservation Cancelled",
+      message: `${result.reservation.userName} cancelled their reservation for ${
+        result.reservation.roomName
+      } on ${
+        result.reservationsToCancel.length > 1
+          ? formatGroupedScheduleSummary(result.reservationsToCancel)
+          : formatReservationScheduleLabel(result.reservation)
+      }`,
+      buildingId: result.reservation.buildingId,
+      reservationId,
+    });
+  });
+
+  await batch.commit();
+  await sendQueuedPushNotifications(queuedNotifications);
+  await syncReservationStatuses(
+    result.reservationsToCancel.map((reservationToCancel) => ({
+      dcSpaceEventId: reservationToCancel.dcSpaceEventId,
+      id: reservationToCancel.id,
+      roomId: reservationToCancel.roomId,
+      roomName: reservationToCancel.roomName,
+      status: "cancelled" as const,
+    }))
+  );
+}
+
 export async function cancelReservationRecord(
   reservationId: string,
   userId: string
@@ -1776,6 +1965,23 @@ export async function cancelReservationRecord(
     if (reservation.userId !== userId) {
       throw new ApiError(403, "forbidden", "You cannot cancel this reservation.");
     }
+    const hasRevisionMarker =
+      (typeof reservation.activeRevisionId === "string" &&
+        reservation.activeRevisionId.trim().length > 0) ||
+      reservation.activeRevisionStatus === "requested";
+    if (hasRevisionMarker) {
+      const activeRevisionId = reservation.activeRevisionId?.trim();
+      if (!activeRevisionId) {
+        throw new ApiError(409, "stale_revision", "This revision request is no longer active.");
+      }
+      await cancelReservationRevisionRecord(
+        reservationId,
+        userId,
+        activeRevisionId
+      );
+      return;
+    }
+
     if (reservation.status !== "pending" && reservation.status !== "approved") {
       throw new ApiError(
         400,

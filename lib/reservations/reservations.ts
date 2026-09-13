@@ -23,6 +23,7 @@ import { auth, db } from "@/lib/firebase/firebase";
 import { type RoomCheckInMethod } from "@/lib/rooms/roomStatus";
 import { groupReservationsForDisplay } from "@/lib/reservations/reservation-groups";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
+import type { ReservationRevisionRecord } from "@/lib/reservations/reservation-revisions";
 
 export type EventReservationValue = "Yes" | "No";
 
@@ -559,6 +560,70 @@ export async function rejectReservation(
       action: "reject",
       userEmail,
       reason
+    },
+    method: "PATCH",
+    userId: auth.currentUser?.uid,
+  });
+}
+
+export async function requestReservationRevision(
+  reservationId: string,
+  proposedRoomId: string,
+  baseUpdatedAtMs?: number
+): Promise<{ reservationId: string; revisionId: string }> {
+  return apiRequest<{ reservationId: string; revisionId: string }>(
+    `/api/reservations/${reservationId}`,
+    {
+      body: {
+        action: "request-revision",
+        baseUpdatedAtMs,
+        proposedRoomId,
+      },
+      method: "PATCH",
+      userId: auth.currentUser?.uid,
+    }
+  );
+}
+
+export async function getReservationRevision(
+  reservationId: string
+): Promise<ReservationRevisionRecord> {
+  const payload = await apiRequest<{ revision: ReservationRevisionRecord }>(
+    `/api/reservations/${reservationId}`,
+    {
+      method: "GET",
+      userId: auth.currentUser?.uid,
+    }
+  );
+
+  return payload.revision;
+}
+
+export async function acceptReservationRevision(
+  reservationId: string,
+  revisionId: string
+): Promise<{ reservationId: string; revisionId: string; proposedRoomId: string }> {
+  return apiRequest(
+    `/api/reservations/${reservationId}`,
+    {
+      body: {
+        action: "accept-revision",
+        revisionId,
+      },
+      method: "PATCH",
+      userId: auth.currentUser?.uid,
+    }
+  );
+}
+
+export async function cancelReservationRevision(
+  reservationId: string,
+  revisionId: string
+): Promise<void> {
+  await apiRequest(`/api/reservations/${reservationId}`, {
+    body: {
+      action: "cancel-revision",
+      revisionId,
     },
     method: "PATCH",
     userId: auth.currentUser?.uid,

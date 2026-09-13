@@ -8,6 +8,7 @@ import { assertAuthenticated, assertCanManageBuilding } from "@/lib/server/route
 import { roomCheckInMethodSchema } from "@/lib/server/schemas";
 import {
   approveReservationRecord,
+  cancelReservationRevisionRecord,
   cancelReservationRecord,
   checkInReservationRecord,
   confirmFinishedReservationRecord,
@@ -19,6 +20,11 @@ import {
   startReservationPresenceMonitorRecord,
   stopReservationPresenceMonitorRecord,
 } from "@/lib/server/services/reservations";
+import {
+  acceptReservationRevision,
+  getRequesterReservationRevision,
+  requestReservationRevision,
+} from "@/lib/server/services/reservation-revisions";
 
 export const runtime = "nodejs";
 
@@ -76,6 +82,19 @@ const reservationActionSchema = z.discriminatedUnion("action", [
     action: z.literal("delete"),
     userId: z.string().trim().min(1),
   }),
+  z.object({
+    action: z.literal("request-revision"),
+    proposedRoomId: z.string().trim().min(1),
+    baseUpdatedAtMs: z.number().int().nonnegative().optional(),
+  }),
+  z.object({
+    action: z.literal("accept-revision"),
+    revisionId: z.string().trim().min(1),
+  }),
+  z.object({
+    action: z.literal("cancel-revision"),
+    revisionId: z.string().trim().min(1),
+  }),
 ]);
 
 function getTodayDateKeyInReservationTimeZone(date: Date = new Date()) {
@@ -87,6 +106,24 @@ function getTodayDateKeyInReservationTimeZone(date: Date = new Date()) {
   });
 
   return formatter.format(date);
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ reservationId: string }> }
+) {
+  try {
+    const { reservationId } = await params;
+    const authContext = await getRequestAuthContext(request);
+    const revision = await getRequesterReservationRevision(
+      reservationId,
+      authContext
+    );
+
+    return NextResponse.json({ revision });
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
 
 export async function PATCH(
@@ -131,6 +168,16 @@ export async function PATCH(
         }
         await cancelReservationRecord(reservationId, payload.userId);
         break;
+      case "cancel-revision":
+        if (authContext.uid !== undefined && authContext.uid !== null) {
+          await cancelReservationRevisionRecord(
+            reservationId,
+            authContext.uid,
+            payload.revisionId
+          );
+          break;
+        }
+        throw new ApiError(401, "unauthenticated", "Authentication is required.");
       case "check-in":
         if (authContext.uid !== payload.userId) {
           throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
@@ -245,6 +292,23 @@ export async function PATCH(
         assertCanManageBuilding(authContext, reservation.buildingId);
         await deleteReservationRecord(reservationId, reservation.userId);
         break;
+      case "request-revision": {
+        const result = await requestReservationRevision(
+          reservationId,
+          authContext,
+          payload.proposedRoomId,
+          payload.baseUpdatedAtMs
+        );
+        return NextResponse.json({ ok: true, ...result });
+      }
+      case "accept-revision": {
+        const result = await acceptReservationRevision(
+          reservationId,
+          authContext,
+          payload.revisionId
+        );
+        return NextResponse.json({ ok: true, ...result });
+      }
       default:
         throw new ApiError(400, "invalid_action", "Unsupported reservation action.");
     }
