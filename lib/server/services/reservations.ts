@@ -52,6 +52,7 @@ import {
 type ReservationStatus =
   | "pending"
   | "approved"
+  | "expired"
   | "rejected"
   | "completed"
   | "cancelled";
@@ -102,6 +103,7 @@ interface ReservationRecord {
   recurringGroupId?: string;
   checkedInAt?: FirestoreTimestampLike | null;
   completedAt?: FirestoreTimestampLike | null;
+  expiredAt?: FirestoreTimestampLike | null;
   occupancyReleasedAt?: FirestoreTimestampLike | null;
   occupancyReleasedByUid?: string | null;
   checkInMethod?: RoomCheckInMethod | null;
@@ -183,6 +185,88 @@ function formatNotificationDate(dateString: string) {
     day: "numeric",
     year: "numeric",
   }).format(parsedDate);
+}
+
+function hasReservationEnded(
+  reservation: Pick<ReservationRecord, "date" | "endTime">,
+  now: Date = new Date()
+) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const values = Object.fromEntries(
+    formatter
+      .formatToParts(now)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  ) as Record<string, string>;
+  const currentDate = `${values.year}-${values.month}-${values.day}`;
+  const currentTime = `${values.hour}:${values.minute}`;
+
+  return (
+    reservation.date < currentDate ||
+    (reservation.date === currentDate && reservation.endTime <= currentTime)
+  );
+}
+
+function getMinutesUntilReservation(
+  reservation: Pick<ReservationRecord, "date" | "startTime">,
+  now: Date = new Date()
+) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const values = Object.fromEntries(
+    formatter
+      .formatToParts(now)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  ) as Record<string, string>;
+  const [startHour, startMinute] = reservation.startTime.split(":").map(Number);
+  const reservationTime = Date.UTC(
+    Number(reservation.date.slice(0, 4)),
+    Number(reservation.date.slice(5, 7)) - 1,
+    Number(reservation.date.slice(8, 10)),
+    startHour,
+    startMinute
+  );
+  const currentTime = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute)
+  );
+
+  return Math.floor((reservationTime - currentTime) / 60_000);
+}
+
+function shouldSendUpcomingReservationReminder(
+  reservation: ReservationRecord,
+  now: Date = new Date()
+) {
+  const role = normalizeRole(reservation.userRole);
+  if (
+    reservation.status !== "approved" ||
+    (role !== USER_ROLES.STUDENT && role !== USER_ROLES.FACULTY)
+  ) {
+    return false;
+  }
+
+  const minutesUntilReservation = getMinutesUntilReservation(reservation, now);
+  return minutesUntilReservation >= 55 && minutesUntilReservation <= 60;
 }
 
 export type ReservationCreateInput =
@@ -1232,6 +1316,134 @@ export async function createRecurringReservationRecord(
   }
 }
 
+/**
+ * Converts a user's past, unfinished requests to expired records. Each
+ * reservation uses a deterministic notification id, so repeated page loads
+ * cannot create duplicate in-app expiry notices.
+ */
+export async function expireOpenReservationsForUser(userId: string) {
+  const openSnapshot = await db
+    .collection("reservations")
+    .where("userId", "==", userId)
+    .where("status", "in", ["pending", "approved"])
+    .get();
+  const queuedNotifications: AppNotificationInput[] = [];
+
+  await Promise.all(
+    openSnapshot.docs.map(async (reservationDoc) => {
+      const notification = await db.runTransaction(async (transaction) => {
+        const currentSnapshot = await transaction.get(reservationDoc.ref);
+        if (!currentSnapshot.exists) {
+          return null;
+        }
+
+        const reservation = {
+          id: currentSnapshot.id,
+          ...currentSnapshot.data(),
+        } as ReservationRecord;
+        if (
+          reservation.userId !== userId ||
+          (reservation.status !== "pending" && reservation.status !== "approved") ||
+          !hasReservationEnded(reservation)
+        ) {
+          return null;
+        }
+
+        const message =
+          reservation.status === "approved"
+            ? `Your approved reservation request for ${reservation.roomName} on ${formatReservationScheduleLabel(
+                reservation
+              )} has expired and was not completed.`
+            : `Your reservation request for ${reservation.roomName} on ${formatReservationScheduleLabel(
+                reservation
+              )} has expired and was not approved.`;
+        const notificationInput: AppNotificationInput = {
+          recipientUid: userId,
+          type: "system",
+          title: "Reservation Expired",
+          message,
+          buildingId: reservation.buildingId,
+          reservationId: reservation.id,
+          route: "/dashboard/reservations",
+        };
+        transaction.update(reservationDoc.ref, {
+          expiredAt: serverTimestamp(),
+          status: "expired",
+          updatedAt: serverTimestamp(),
+        });
+        transaction.set(
+          db.collection("notifications").doc(`reservation-expired-${reservation.id}`),
+          {
+            ...notificationInput,
+            read: false,
+            createdAt: serverTimestamp(),
+          }
+        );
+        return notificationInput;
+      });
+
+      if (notification) {
+        queuedNotifications.push(notification);
+      }
+    })
+  );
+
+  await Promise.all(
+    openSnapshot.docs.map(async (reservationDoc) => {
+      const notification = await db.runTransaction(async (transaction) => {
+        const currentSnapshot = await transaction.get(reservationDoc.ref);
+        if (!currentSnapshot.exists) {
+          return null;
+        }
+
+        const reservation = {
+          id: currentSnapshot.id,
+          ...currentSnapshot.data(),
+        } as ReservationRecord;
+        if (
+          reservation.userId !== userId ||
+          !shouldSendUpcomingReservationReminder(reservation)
+        ) {
+          return null;
+        }
+
+        const notificationRef = db
+          .collection("notifications")
+          .doc(`reservation-upcoming-one-hour-${reservation.id}`);
+        const existingNotification = await transaction.get(notificationRef);
+        if (existingNotification.exists) {
+          return null;
+        }
+
+        const notificationInput: AppNotificationInput = {
+          recipientUid: userId,
+          type: "system",
+          title: "Upcoming Reservation",
+          message: `You have an upcoming reservation in 1 hour for ${reservation.roomName} on ${formatReservationScheduleLabel(
+            reservation
+          )}.`,
+          buildingId: reservation.buildingId,
+          reservationId: reservation.id,
+          route: "/dashboard/reservations",
+        };
+        transaction.set(notificationRef, {
+          ...notificationInput,
+          read: false,
+          createdAt: serverTimestamp(),
+        });
+        return notificationInput;
+      });
+
+      if (notification) {
+        queuedNotifications.push(notification);
+      }
+    })
+  );
+
+  await sendQueuedPushNotifications(queuedNotifications);
+  return { expiredCount: queuedNotifications.length };
+}
+
 export async function approveReservationRecord(
   reservationId: string,
   userEmail: string
@@ -1580,7 +1792,25 @@ export async function cancelReservationRecord(
               groupedReservation.status === "pending"
           )
         : [reservation];
-    const managerIds = await getBuildingManagerIds(reservation.buildingId);
+    const cancellationRecipientIds =
+      reservation.status === "approved"
+        ? [
+            ...new Set([
+              ...(await getBuildingManagerIds(reservation.buildingId)),
+              ...(
+                await Promise.all(
+                  reservation.approvalFlow
+                    .filter(
+                      (approvalStep) =>
+                        approvalStep.role !== "building_admin" &&
+                        approvalStep.email.trim().length > 0
+                    )
+                    .map((approvalStep) => getUserIdsByEmail(approvalStep.email))
+                )
+              ).flat(),
+            ]),
+          ]
+        : [];
     const approvedReservations =
       reservation.status === "approved"
         ? await getApprovedReservationsForRoom(reservation.roomId)
@@ -1595,18 +1825,18 @@ export async function cancelReservationRecord(
       });
     });
 
-    managerIds.forEach((managerUid) => {
+    cancellationRecipientIds.forEach((recipientUid) => {
       addNotification(batch, queuedNotifications, {
-        recipientUid: managerUid,
-        type: "reservation_cancelled",
-        title: "Reservation Cancelled",
-        message: `${reservation.userName} cancelled their reservation for ${
+        recipientUid,
+        type: "system",
+        title: "Approved Reservation Cancelled",
+        message: `${reservation.userName} has cancelled their reservation for ${
           reservation.roomName
         } on ${
           reservationsToCancel.length > 1
             ? formatGroupedScheduleSummary(reservationsToCancel)
             : formatReservationScheduleLabel(reservation)
-        }`,
+        }.`,
         buildingId: reservation.buildingId,
         reservationId,
       });

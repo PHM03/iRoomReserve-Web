@@ -17,6 +17,7 @@ import {
 } from '@/lib/notifications/notifications';
 import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
 import { dismissAccountConfigurationReminder } from '@/lib/auth/auth';
+import { expireOpenReservations } from '@/lib/reservations/reservations';
 import AccountSettingsModal from '@/components/auth/AccountSettingsModal';
 
 export type AdminTab =
@@ -175,6 +176,20 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     const unsubscribe = onUnreadNotifications(uid, (next) => setNotifications(next));
 
     return () => unsubscribe();
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) return;
+
+    const refreshReservationNotifications = () => {
+      void expireOpenReservations().catch((error) => {
+        console.warn('Failed to refresh reservation notifications:', error);
+      });
+    };
+
+    refreshReservationNotifications();
+    const intervalId = window.setInterval(refreshReservationNotifications, 60_000);
+    return () => window.clearInterval(intervalId);
   }, [uid]);
 
   useEffect(() => {
@@ -346,6 +361,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
 
   const handleNotificationClick = async (notification: Notification) => {
     const isPending = notification.type === 'new_reservation';
+    const isFeedback = notification.type === 'feedback';
 
     try {
       if (isPending) {
@@ -385,8 +401,9 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     }
 
     if ((isAdmin || isBuildingAdmin) && onTabChange) {
-      onTabChange(isPending ? 'pending' : 'inbox');
-      router.push(`/dashboard?tab=${isPending ? 'pending' : 'inbox'}`);
+      const destinationTab = isPending ? 'pending' : isFeedback ? 'feedback' : 'inbox';
+      onTabChange(destinationTab);
+      router.push(`/dashboard?tab=${destinationTab}`);
       return;
     }
 

@@ -36,7 +36,10 @@ function getDisplayReservationStatus(
   reservation: Reservation,
   currentDateTime = getCurrentDateTimeStringInTimeZone(),
 ): DisplayReservationStatus {
-  if (reservation.status !== 'approved' || reservation.checkedInAt) {
+  if (
+    (reservation.status !== 'pending' && reservation.status !== 'approved') ||
+    reservation.checkedInAt
+  ) {
     return reservation.status;
   }
 

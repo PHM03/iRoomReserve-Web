@@ -33,7 +33,7 @@ function isExpoPushToken(token: string) {
 }
 
 function getExpoPushTokens(userData: Record<string, unknown> | undefined) {
-  if (!userData) {
+  if (!userData || userData.pushNotificationsEnabled === false) {
     return [];
   }
 
