@@ -17,7 +17,7 @@ export type GroupedReservation<T extends ReservationLike> = T & {
   occurrenceCount?: number;
 };
 
-const GROUPABLE_STATUSES = new Set(["pending", "rejected", "cancelled"]);
+const GROUPABLE_STATUSES = new Set(["pending", "expired", "rejected", "cancelled"]);
 
 function getTimestampSeconds(value: unknown) {
   if (!value || typeof value !== "object") {

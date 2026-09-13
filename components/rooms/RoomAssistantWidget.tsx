@@ -92,7 +92,7 @@ interface RoomAssistantWidgetProps {
     roomId: string;
     roomName: string;
     startTime: string;
-    status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+    status: 'pending' | 'approved' | 'expired' | 'rejected' | 'completed' | 'cancelled';
   }>;
   schedules: ReadonlyArray<AssistantScheduleRecord>;
   rooms: AssistantRoomRecord[];

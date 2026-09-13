@@ -55,7 +55,7 @@ export interface Reservation {
   approvals: ReservationApprovalRecord[];
   rejectedBy?: string;
   reason?: string;
-  status: "pending" | "approved" | "rejected" | "completed" | "cancelled";
+  status: "pending" | "approved" | "expired" | "rejected" | "completed" | "cancelled";
   adminUid: string | null;
   recurringGroupId?: string;
   dates?: string[];
@@ -165,6 +165,12 @@ export async function createReservation(
   });
 
   return payload.id;
+}
+
+export async function expireOpenReservations(): Promise<{ expiredCount: number }> {
+  return apiRequest<{ expiredCount: number }>("/api/reservations/expire", {
+    method: "POST",
+  });
 }
 
 export async function createRecurringReservation(

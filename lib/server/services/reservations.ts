@@ -48,6 +48,7 @@ import { syncReservationStatuses } from "@/lib/server/services/reservation-statu
 type ReservationStatus =
   | "pending"
   | "approved"
+  | "expired"
   | "rejected"
   | "completed"
   | "cancelled";
@@ -94,6 +95,7 @@ interface ReservationRecord {
   recurringGroupId?: string;
   checkedInAt?: FirestoreTimestampLike | null;
   completedAt?: FirestoreTimestampLike | null;
+  expiredAt?: FirestoreTimestampLike | null;
   occupancyReleasedAt?: FirestoreTimestampLike | null;
   occupancyReleasedByUid?: string | null;
   checkInMethod?: RoomCheckInMethod | null;
@@ -174,6 +176,34 @@ function formatNotificationDate(dateString: string) {
     day: "numeric",
     year: "numeric",
   }).format(parsedDate);
+}
+
+function isPendingReservationExpired(
+  reservation: Pick<ReservationRecord, "date" | "endTime">,
+  now: Date = new Date()
+) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const values = Object.fromEntries(
+    formatter
+      .formatToParts(now)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  ) as Record<string, string>;
+  const currentDate = `${values.year}-${values.month}-${values.day}`;
+  const currentTime = `${values.hour}:${values.minute}`;
+
+  return (
+    reservation.date < currentDate ||
+    (reservation.date === currentDate && reservation.endTime <= currentTime)
+  );
 }
 
 export type ReservationCreateInput =
@@ -1209,6 +1239,82 @@ export async function createRecurringReservationRecord(
     });
     throw error;
   }
+}
+
+/**
+ * Converts a user's past, unfinished requests to expired records. Each
+ * reservation uses a deterministic notification id, so repeated page loads
+ * cannot create duplicate in-app expiry notices.
+ */
+export async function expireOpenReservationsForUser(userId: string) {
+  const openSnapshot = await db
+    .collection("reservations")
+    .where("userId", "==", userId)
+    .where("status", "in", ["pending", "approved"])
+    .get();
+  const queuedNotifications: AppNotificationInput[] = [];
+
+  await Promise.all(
+    openSnapshot.docs.map(async (reservationDoc) => {
+      const notification = await db.runTransaction(async (transaction) => {
+        const currentSnapshot = await transaction.get(reservationDoc.ref);
+        if (!currentSnapshot.exists) {
+          return null;
+        }
+
+        const reservation = {
+          id: currentSnapshot.id,
+          ...currentSnapshot.data(),
+        } as ReservationRecord;
+        if (
+          reservation.userId !== userId ||
+          (reservation.status !== "pending" && reservation.status !== "approved") ||
+          !isPendingReservationExpired(reservation)
+        ) {
+          return null;
+        }
+
+        const message =
+          reservation.status === "approved"
+            ? `Your approved reservation request for ${reservation.roomName} on ${formatReservationScheduleLabel(
+                reservation
+              )} has expired and was not completed.`
+            : `Your reservation request for ${reservation.roomName} on ${formatReservationScheduleLabel(
+                reservation
+              )} has expired and was not approved.`;
+        const notificationInput: AppNotificationInput = {
+          recipientUid: userId,
+          type: "system",
+          title: "Reservation Expired",
+          message,
+          buildingId: reservation.buildingId,
+          reservationId: reservation.id,
+          route: "/dashboard/reservations",
+        };
+        transaction.update(reservationDoc.ref, {
+          expiredAt: serverTimestamp(),
+          status: "expired",
+          updatedAt: serverTimestamp(),
+        });
+        transaction.set(
+          db.collection("notifications").doc(`reservation-expired-${reservation.id}`),
+          {
+            ...notificationInput,
+            read: false,
+            createdAt: serverTimestamp(),
+          }
+        );
+        return notificationInput;
+      });
+
+      if (notification) {
+        queuedNotifications.push(notification);
+      }
+    })
+  );
+
+  await sendQueuedPushNotifications(queuedNotifications);
+  return { expiredCount: queuedNotifications.length };
 }
 
 export async function approveReservationRecord(
