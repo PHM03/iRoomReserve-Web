@@ -89,6 +89,9 @@ interface ReservationRecord {
   equipment?: Record<string, number>;
   otherEquipment?: string;
   otherEquipmentQuantity?: number;
+  activeRevisionId?: string;
+  activeRevisionStatus?: "requested";
+  revisionScope?: "single" | "series";
   approvalFlow: ReservationApprovalStep[];
   currentStep: number;
   approvals: ReservationApprovalRecord[];

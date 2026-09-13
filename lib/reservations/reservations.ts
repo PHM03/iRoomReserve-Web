@@ -51,6 +51,9 @@ export interface Reservation {
   equipment?: Record<string, number>;
   otherEquipment?: string;
   otherEquipmentQuantity?: number;
+  activeRevisionId?: string;
+  activeRevisionStatus?: "requested";
+  revisionScope?: "single" | "series";
   approvalFlow: ReservationApprovalStep[];
   currentStep: number;
   approvals: ReservationApprovalRecord[];
@@ -80,6 +83,9 @@ export type ReservationInput = Omit<
   | "reason"
   | "status"
   | "adminUid"
+  | "activeRevisionId"
+  | "activeRevisionStatus"
+  | "revisionScope"
   | "checkedInAt"
   | "checkInMethod"
   | "createdAt"

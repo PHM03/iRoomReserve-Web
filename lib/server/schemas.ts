@@ -97,6 +97,41 @@ export const reservationApprovalRecordSchema = reservationApprovalStepSchema.ext
   }
 );
 
+export const reservationRevisionStatusSchema = z.enum([
+  "requested",
+  "accepted",
+  "cancelled",
+]);
+
+export const reservationRevisionScopeSchema = z.enum(["single", "series"]);
+
+export const reservationRevisionRecordSchema = z.object({
+  revisionId: nonEmptyString,
+  reservationId: nonEmptyString,
+  recurringGroupId: nonEmptyString.optional(),
+  scope: reservationRevisionScopeSchema,
+  status: reservationRevisionStatusSchema,
+  requestedByUid: nonEmptyString,
+  requestedByEmail: emailString,
+  requestedAt: z.unknown().refine(
+    (value) => value !== undefined && value !== null,
+    {
+      message: "Revision requestedAt is required.",
+    }
+  ),
+  originalRoomId: nonEmptyString,
+  originalRoomName: nonEmptyString,
+  originalBuildingId: nonEmptyString,
+  originalBuildingName: nonEmptyString,
+  proposedRoomId: nonEmptyString,
+  proposedRoomName: nonEmptyString,
+  proposedBuildingId: nonEmptyString,
+  proposedBuildingName: nonEmptyString,
+  respondedByUid: nonEmptyString.optional(),
+  respondedAt: z.unknown().optional(),
+  baseReservationUpdatedAt: z.unknown().optional(),
+});
+
 function normalizeReservationPayload(
   value: unknown
 ): unknown {
