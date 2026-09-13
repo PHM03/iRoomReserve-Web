@@ -836,7 +836,7 @@ export default function AdminPendingTab({
                     <textarea
                       value={rejectReason}
                       onChange={(e) => setRejectReason(e.target.value)}
-                      placeholder="Explain why this request is being rejectedÃ¢â‚¬Â¦"
+                      placeholder="Explain why this request is being rejected."
                           style={{
                             width: '100%',
                             border: '1px solid #e0e0e0',
