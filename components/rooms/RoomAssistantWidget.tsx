@@ -594,7 +594,12 @@ export default function RoomAssistantWidget({
     };
   });
   const [isOpen, setIsOpen] = useState(false);
-  const [isLarge, setIsLarge] = useState(false);
+  const [panelBounds, setPanelBounds] = useState<{
+    height: number;
+    left: number;
+    top: number;
+    width: number;
+  } | null>(null);
   const [messages, setMessages] = useState<AssistantMessage[]>([
     initialConversation.initialMessage,
   ]);
@@ -610,7 +615,20 @@ export default function RoomAssistantWidget({
     initialConversation.activePromptId
   );
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const replyTimeoutsRef = useRef<number[]>([]);
+  const dragStartRef = useRef<{
+    pointerX: number;
+    pointerY: number;
+    startLeft: number;
+    startTop: number;
+  } | null>(null);
+  const resizeStartRef = useRef<{
+    height: number;
+    pointerX: number;
+    pointerY: number;
+    width: number;
+  } | null>(null);
 
   const capacityOptions = useMemo(() => buildCapacityOptions(rooms), [rooms]);
   const featureOptions = useMemo(() => buildFeatureOptions(rooms), [rooms]);
@@ -1302,19 +1320,132 @@ export default function RoomAssistantWidget({
     messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
   }, [isBotTyping, isOpen, messages]);
 
+  useEffect(() => {
+    if (!isOpen || panelBounds) {
+      return;
+    }
+
+    const width = Math.min(560, window.innerWidth - 32);
+    const height = Math.min(512, window.innerHeight - 32);
+    setPanelBounds({
+      height,
+      left: Math.max(16, window.innerWidth - width - 24),
+      top: Math.max(16, window.innerHeight - height - 24),
+      width,
+    });
+  }, [isOpen, panelBounds]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const dragStart = dragStartRef.current;
+      const resizeStart = resizeStartRef.current;
+      const panel = panelRef.current;
+      if (!panel) {
+        return;
+      }
+
+      if (dragStart) {
+        const { height, width } = panel.getBoundingClientRect();
+        setPanelBounds((current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            left: Math.min(
+              Math.max(0, dragStart.startLeft + event.clientX - dragStart.pointerX),
+              Math.max(0, window.innerWidth - width)
+            ),
+            top: Math.min(
+              Math.max(0, dragStart.startTop + event.clientY - dragStart.pointerY),
+              Math.max(0, window.innerHeight - height)
+            ),
+          };
+        });
+        return;
+      }
+
+      if (resizeStart) {
+        setPanelBounds((current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            height: Math.min(
+              Math.max(352, resizeStart.height + event.clientY - resizeStart.pointerY),
+              window.innerHeight - current.top
+            ),
+            width: Math.min(
+              Math.max(Math.min(320, window.innerWidth - 16), resizeStart.width + event.clientX - resizeStart.pointerX),
+              window.innerWidth - current.left
+            ),
+          };
+        });
+      }
+    };
+    const handlePointerUp = () => {
+      dragStartRef.current = null;
+      resizeStartRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, []);
+
+  function startPanelDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest('button')) {
+      return;
+    }
+
+    const panel = panelRef.current;
+    if (!panel) return;
+    const panelRect = panel.getBoundingClientRect();
+    dragStartRef.current = {
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      startLeft: panelRect.left,
+      startTop: panelRect.top,
+    };
+  }
+
+  function startPanelResize(event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const panel = panelRef.current;
+    if (!panel) return;
+    const panelRect = panel.getBoundingClientRect();
+    resizeStartRef.current = {
+      height: panelRect.height,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      width: panelRect.width,
+    };
+  }
+
   return (
     <>
       {isOpen && (
         <div
+          ref={panelRef}
           role="dialog"
           aria-label="Room Recommendation Assistant"
-          className={`assistant-chat-shell assistant-pop fixed z-40 flex flex-col overflow-hidden rounded-[28px] border border-[var(--assistant-outline)] ${
-            isLarge
-              ? 'bottom-2 right-2 h-[min(42rem,calc(100dvh-1rem))] w-[min(42rem,calc(100vw-1rem))] md:bottom-6 md:right-6 md:h-[min(42rem,calc(100dvh-8.5rem))] md:w-[min(42rem,calc(100vw-3rem))]'
-              : 'bottom-4 right-4 h-[min(31rem,calc(100dvh-7rem))] w-[min(22rem,calc(100vw-1rem))] md:bottom-6 md:right-6 md:h-[min(32rem,calc(100dvh-8.5rem))] md:w-[22.5rem]'
-          }`}
+          className="assistant-chat-shell assistant-pop fixed z-40 flex flex-col overflow-hidden rounded-[28px] border border-[var(--assistant-outline)]"
+          style={panelBounds ? {
+            height: panelBounds.height,
+            left: panelBounds.left,
+            maxHeight: 'calc(100dvh - 1rem)',
+            maxWidth: 'calc(100vw - 1rem)',
+            minHeight: '22rem',
+            minWidth: 'min(20rem, calc(100vw - 1rem))',
+            top: panelBounds.top,
+            width: panelBounds.width,
+          } : undefined}
         >
-          <div className="border-b border-black/8 bg-[linear-gradient(135deg,#a12124_0%,#7a191c_100%)] px-4 py-3 text-white">
+          <div
+            className="cursor-move touch-none border-b border-black/8 bg-[linear-gradient(135deg,#a12124_0%,#7a191c_100%)] px-4 py-3 text-white"
+            onPointerDown={startPanelDrag}
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-bold">Room Recommendation Assistant</p>
@@ -1333,22 +1464,6 @@ export default function RoomAssistantWidget({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsLarge((current) => !current)}
-                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-white/18 bg-white/10 px-2.5 text-[10px] font-bold text-white transition-colors hover:bg-white/18"
-                  aria-label={isLarge ? 'Shrink room assistant' : 'Enlarge room assistant'}
-                  title={isLarge ? 'Shrink room assistant' : 'Enlarge room assistant'}
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    {isLarge ? (
-                      <path d="M8 8v4h4M16 16v-4h-4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                    ) : (
-                      <path d="M8 8h4v4M16 16h-4v-4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                    )}
-                  </svg>
-                  <span aria-hidden="true">{isLarge ? 'Shrink' : 'Enlarge'}</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => setIsOpen(false)}
                   className="flex h-8 w-8 items-center justify-center rounded-full border border-white/18 bg-white/10 text-white transition-colors hover:bg-white/18"
                   aria-label="Minimize room assistant"
@@ -1361,6 +1476,18 @@ export default function RoomAssistantWidget({
               </div>
             </div>
           </div>
+
+          <button
+            type="button"
+            onPointerDown={startPanelResize}
+            className="absolute bottom-0 right-0 z-10 flex h-7 w-7 cursor-se-resize items-end justify-end p-1 text-black/35 transition-colors hover:text-[#a12124]"
+            aria-label="Resize room assistant"
+            title="Drag to resize"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M5 13h8M9 9h4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+            </svg>
+          </button>
 
           <div
             ref={messageListRef}
@@ -1640,7 +1767,6 @@ export default function RoomAssistantWidget({
               onOpenWithoutCampus();
             }
 
-            setIsLarge(false);
             setIsOpen(true);
           }}
           className="assistant-bubble-button assistant-float fixed bottom-5 right-5 z-40 flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full border border-white/55 shadow-[0_18px_38px_rgba(122,25,28,0.34)] transition-all hover:-translate-y-1 md:bottom-6 md:right-6"
