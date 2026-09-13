@@ -333,6 +333,7 @@ export default function ReserveRoomPage() {
   const [equipment, setEquipment] = useState<Record<string, number>>({ ...INITIAL_EQUIPMENT });
   const [otherEquipmentSelected, setOtherEquipmentSelected] = useState(false);
   const [otherEquipment, setOtherEquipment] = useState('');
+  const [otherEquipmentQuantity, setOtherEquipmentQuantity] = useState('');
   const [otherEquipmentError, setOtherEquipmentError] = useState('');
   const [approvalDocument, setApprovalDocument] = useState<File | null>(null);
   const [uploadedApprovalDocument, setUploadedApprovalDocument] = useState<{
@@ -1229,8 +1230,36 @@ export default function ReserveRoomPage() {
     }
 
     const trimmedOtherEquipment = otherEquipment.trim();
-    if (otherEquipmentSelected && !trimmedOtherEquipment) {
+    const trimmedOtherEquipmentQuantity = otherEquipmentQuantity.trim();
+    const parsedOtherEquipmentQuantity = trimmedOtherEquipmentQuantity
+      ? Number(trimmedOtherEquipmentQuantity)
+      : undefined;
+    if (
+      otherEquipmentSelected &&
+      trimmedOtherEquipment &&
+      !trimmedOtherEquipmentQuantity
+    ) {
+      setOtherEquipmentError('Specify how many items you need.');
+      return;
+    }
+
+    if (
+      otherEquipmentSelected &&
+      !trimmedOtherEquipment &&
+      trimmedOtherEquipmentQuantity
+    ) {
       setOtherEquipmentError('Specify the other equipment you need.');
+      return;
+    }
+
+    if (
+      otherEquipmentSelected &&
+      trimmedOtherEquipment &&
+      (parsedOtherEquipmentQuantity === undefined ||
+        !Number.isInteger(parsedOtherEquipmentQuantity) ||
+        parsedOtherEquipmentQuantity < 1)
+    ) {
+      setOtherEquipmentError('Quantity must be a positive whole number.');
       return;
     }
 
@@ -1311,7 +1340,10 @@ export default function ReserveRoomPage() {
           : {}),
         equipment,
         ...(otherEquipmentSelected && trimmedOtherEquipment
-          ? { otherEquipment: trimmedOtherEquipment }
+          ? {
+              otherEquipment: trimmedOtherEquipment,
+              otherEquipmentQuantity: parsedOtherEquipmentQuantity,
+            }
           : {}),
       };
 
@@ -2289,8 +2321,9 @@ export default function ReserveRoomPage() {
                         >
                           Specify other equipment
                         </label>
-                        <textarea
+                        <input
                           id="other-equipment"
+                          type="text"
                           value={otherEquipment}
                           onChange={(event) => {
                             setOtherEquipment(event.target.value);
@@ -2299,9 +2332,35 @@ export default function ReserveRoomPage() {
                             }
                           }}
                           maxLength={250}
-                          rows={3}
-                          className="glass-input w-full resize-none px-4 py-3"
+                          className="glass-input w-full px-4 py-3"
                           placeholder="e.g., HDMI adapter, extension cord"
+                          aria-invalid={Boolean(otherEquipmentError)}
+                          aria-describedby={
+                            otherEquipmentError ? 'other-equipment-error' : undefined
+                          }
+                        />
+                        <label
+                          htmlFor="other-equipment-quantity"
+                          className="mt-3 mb-2 block text-xs font-bold text-black"
+                        >
+                          Quantity
+                        </label>
+                        <input
+                          id="other-equipment-quantity"
+                          type="number"
+                          min={1}
+                          step={1}
+                          inputMode="numeric"
+                          value={otherEquipmentQuantity}
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            if (nextValue === '' || /^\d+$/.test(nextValue)) {
+                              setOtherEquipmentQuantity(nextValue);
+                              setOtherEquipmentError('');
+                            }
+                          }}
+                          className="glass-input w-full px-4 py-3"
+                          placeholder="e.g., 2"
                           aria-invalid={Boolean(otherEquipmentError)}
                           aria-describedby={
                             otherEquipmentError ? 'other-equipment-error' : undefined

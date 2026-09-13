@@ -20,6 +20,7 @@ import {
   rejectReservation,
   type Reservation,
 } from '@/lib/reservations/reservations';
+import { formatOtherEquipment } from '@/lib/reservations/equipment';
 
 interface StatusBadgeProps {
   status: string;
@@ -285,7 +286,10 @@ function ReservationApprovals({
                           <div className="bg-dark/3 rounded-xl p-3 border border-dark/5 sm:col-span-2">
                             <p className="text-[10px] text-black font-bold uppercase tracking-wider mb-1">Other Equipment</p>
                             <p className="text-sm text-black whitespace-pre-wrap break-words">
-                              {request.otherEquipment.trim()}
+                              {formatOtherEquipment(
+                                request.otherEquipment,
+                                request.otherEquipmentQuantity
+                              )}
                             </p>
                           </div>
                         )}

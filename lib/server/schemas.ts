@@ -162,12 +162,29 @@ const reservationCommonSchema = z.object({
   approvalDocumentSize: positiveInteger.optional(),
   equipment: equipmentSchema.optional(),
   otherEquipment: otherEquipmentSchema,
+  otherEquipmentQuantity: positiveInteger.optional(),
 });
 
 function withStudentApprovalDocumentRequirement<
   T extends z.ZodObject<z.core.$ZodShape>
 >(schema: T) {
   return schema.superRefine((value, context) => {
+    if (value.otherEquipment && value.otherEquipmentQuantity === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Specify the quantity for other equipment.",
+        path: ["otherEquipmentQuantity"],
+      });
+    }
+
+    if (!value.otherEquipment && value.otherEquipmentQuantity !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Specify the other equipment before entering a quantity.",
+        path: ["otherEquipment"],
+      });
+    }
+
     if (value.userRole !== "Student") {
       return;
     }

@@ -42,7 +42,8 @@ describe('server schemas', () => {
 
   function parseOtherEquipmentReservation(
     otherEquipment?: unknown,
-    equipment: Record<string, number> = {}
+    equipment: Record<string, number> = {},
+    otherEquipmentQuantity?: unknown
   ) {
     return createReservationSchema.safeParse({
       type: 'single',
@@ -50,6 +51,9 @@ describe('server schemas', () => {
         ...validFacultyReservation,
         equipment,
         ...(otherEquipment !== undefined ? { otherEquipment } : {}),
+        ...(otherEquipmentQuantity !== undefined
+          ? { otherEquipmentQuantity }
+          : {}),
       },
     });
   }
@@ -72,13 +76,28 @@ describe('server schemas', () => {
     expect(parseOtherEquipmentReservation(undefined, { fans: 1.5 }).success).toBe(false);
   });
 
-  it('trims valid other equipment text', () => {
-    const result = parseOtherEquipmentReservation('  HDMI adapter  ');
+  it('trims valid other equipment text with a positive quantity', () => {
+    const result = parseOtherEquipmentReservation('  HDMI adapter  ', {}, 2);
 
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.reservation.otherEquipment).toBe('HDMI adapter');
+      expect(result.data.reservation.otherEquipmentQuantity).toBe(2);
     }
+  });
+
+  it('rejects other equipment without a quantity in new reservation payloads', () => {
+    expect(parseOtherEquipmentReservation('HDMI adapter').success).toBe(false);
+  });
+
+  it('rejects a quantity without other equipment', () => {
+    expect(parseOtherEquipmentReservation(undefined, {}, 2).success).toBe(false);
+  });
+
+  it('rejects zero, negative, and fractional other equipment quantities', () => {
+    expect(parseOtherEquipmentReservation('HDMI adapter', {}, 0).success).toBe(false);
+    expect(parseOtherEquipmentReservation('HDMI adapter', {}, -1).success).toBe(false);
+    expect(parseOtherEquipmentReservation('HDMI adapter', {}, 1.5).success).toBe(false);
   });
 
   it('rejects whitespace-only and overlong other equipment text', () => {

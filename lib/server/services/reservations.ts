@@ -44,6 +44,10 @@ import {
   type AppNotificationInput,
 } from "@/lib/server/services/push-notifications";
 import { syncReservationStatuses } from "@/lib/server/services/reservation-status-sync";
+import {
+  formatOtherEquipment,
+  getOtherEquipmentFields,
+} from "@/lib/reservations/equipment";
 
 type ReservationStatus =
   | "pending"
@@ -84,6 +88,7 @@ interface ReservationRecord {
   approvalDocumentSize?: number;
   equipment?: Record<string, number>;
   otherEquipment?: string;
+  otherEquipmentQuantity?: number;
   approvalFlow: ReservationApprovalStep[];
   currentStep: number;
   approvals: ReservationApprovalRecord[];
@@ -133,6 +138,7 @@ interface ReservationCreateBaseInput {
   approvalDocumentSize?: number;
   equipment?: Record<string, number>;
   otherEquipment?: string;
+  otherEquipmentQuantity?: number;
 }
 
 function formatReservationScheduleLabel(input: {
@@ -928,14 +934,24 @@ function addRoomHistory(
   });
 }
 
-function formatEquipmentSummary(equipment?: Record<string, number>) {
-  if (!equipment) {
-    return "";
-  }
-
-  return Object.entries(equipment)
+function formatEquipmentSummary(
+  equipment?: Record<string, number>,
+  otherEquipment?: string,
+  otherEquipmentQuantity?: number
+) {
+  const standardEquipmentSummary = equipment
+    ? Object.entries(equipment)
     .filter(([, quantity]) => quantity > 0)
     .map(([name, quantity]) => `${name} (x${quantity})`)
+    .join(", ")
+    : "";
+  const otherEquipmentSummary = formatOtherEquipment(
+    otherEquipment,
+    otherEquipmentQuantity
+  );
+
+  return [standardEquipmentSummary, otherEquipmentSummary]
+    .filter(Boolean)
     .join(", ");
 }
 
@@ -1056,9 +1072,10 @@ export async function createReservationRecord(data: ReservationCreateInput) {
         ? { approvalDocumentUrl: data.approvalDocumentUrl }
         : {}),
       ...(data.equipment ? { equipment: data.equipment } : {}),
-      ...(data.otherEquipment?.trim()
-        ? { otherEquipment: data.otherEquipment.trim() }
-        : {}),
+      ...getOtherEquipmentFields(
+        data.otherEquipment,
+        data.otherEquipmentQuantity
+      ),
       approvalFlow,
       currentStep: 0,
       approvals: [],
@@ -1158,9 +1175,10 @@ export async function createRecurringReservationRecord(
           ? { approvalDocumentUrl: data.approvalDocumentUrl }
           : {}),
         ...(data.equipment ? { equipment: data.equipment } : {}),
-        ...(data.otherEquipment?.trim()
-          ? { otherEquipment: data.otherEquipment.trim() }
-          : {}),
+        ...getOtherEquipmentFields(
+          data.otherEquipment,
+          data.otherEquipmentQuantity
+        ),
         approvalFlow,
         currentStep: 0,
         approvals: [],
@@ -2264,7 +2282,11 @@ export async function deleteReservationRecord(
 }
 
 export function buildReservationSummary(reservation: ReservationRecord) {
-  const equipmentSummary = formatEquipmentSummary(reservation.equipment);
+  const equipmentSummary = formatEquipmentSummary(
+    reservation.equipment,
+    reservation.otherEquipment,
+    reservation.otherEquipmentQuantity
+  );
   const details = [reservation.purpose, equipmentSummary].filter(Boolean);
 
   return details.join(" | ");

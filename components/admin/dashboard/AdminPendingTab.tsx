@@ -16,6 +16,7 @@ import { getRoomsByBuilding, type Room } from '@/lib/rooms/rooms';
 import { DAY_NAMES, getSchedulesByRoomId, type Schedule } from '@/lib/schedules/schedules';
 import { extractTimeString, formatTimeRange } from '@/lib/utils/dateTime';
 import { formatReservationDates, RoleBadge, getManagedBuildingOptionLabel } from './shared';
+import { formatOtherEquipment } from '@/lib/reservations/equipment';
 
 interface BuildingOption {
   id: string;
@@ -1134,7 +1135,10 @@ export default function AdminPendingTab({
                             fontWeight: 500,
                             whiteSpace: 'pre-wrap',
                             wordBreak: 'break-word'
-                          }}>{request.otherEquipment.trim()}</p>
+                          }}>{formatOtherEquipment(
+                            request.otherEquipment,
+                            request.otherEquipmentQuantity
+                          )}</p>
                         </div>
                       )}
                     </div>

@@ -50,6 +50,7 @@ export interface Reservation {
   approvalDocumentSize?: number;
   equipment?: Record<string, number>;
   otherEquipment?: string;
+  otherEquipmentQuantity?: number;
   approvalFlow: ReservationApprovalStep[];
   currentStep: number;
   approvals: ReservationApprovalRecord[];
