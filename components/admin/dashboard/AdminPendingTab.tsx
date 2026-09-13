@@ -929,7 +929,7 @@ export default function AdminPendingTab({
                          <span style={{ fontSize: '13px', color: '#555' }}>{dateLabel}</span>
                          <span style={{ fontSize: '13px', color: '#555' }}>{timeLabel}</span>
                          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>{badge.label}</span>
-                         {isExpanded && (
+                         {(!isExpired || isExpanded) && (
                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
                              {isExpired ? (
                                <button
