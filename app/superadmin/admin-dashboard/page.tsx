@@ -221,7 +221,7 @@ function SuperAdminCampusNavBar({
     }
 
     setShowNotifications(false);
-    onTabChange('inbox');
+    onTabChange(notification.type === 'feedback' ? 'feedback' : 'inbox');
   };
 
   const isStatusSchedulingActive =

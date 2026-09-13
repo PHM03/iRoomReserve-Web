@@ -361,6 +361,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
 
   const handleNotificationClick = async (notification: Notification) => {
     const isPending = notification.type === 'new_reservation';
+    const isFeedback = notification.type === 'feedback';
 
     try {
       if (isPending) {
@@ -400,8 +401,9 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     }
 
     if ((isAdmin || isBuildingAdmin) && onTabChange) {
-      onTabChange(isPending ? 'pending' : 'inbox');
-      router.push(`/dashboard?tab=${isPending ? 'pending' : 'inbox'}`);
+      const destinationTab = isPending ? 'pending' : isFeedback ? 'feedback' : 'inbox';
+      onTabChange(destinationTab);
+      router.push(`/dashboard?tab=${destinationTab}`);
       return;
     }
 

@@ -1771,7 +1771,25 @@ export async function cancelReservationRecord(
               groupedReservation.status === "pending"
           )
         : [reservation];
-    const managerIds = await getBuildingManagerIds(reservation.buildingId);
+    const cancellationRecipientIds =
+      reservation.status === "approved"
+        ? [
+            ...new Set([
+              ...(await getBuildingManagerIds(reservation.buildingId)),
+              ...(
+                await Promise.all(
+                  reservation.approvalFlow
+                    .filter(
+                      (approvalStep) =>
+                        approvalStep.role !== "building_admin" &&
+                        approvalStep.email.trim().length > 0
+                    )
+                    .map((approvalStep) => getUserIdsByEmail(approvalStep.email))
+                )
+              ).flat(),
+            ]),
+          ]
+        : [];
     const approvedReservations =
       reservation.status === "approved"
         ? await getApprovedReservationsForRoom(reservation.roomId)
@@ -1786,18 +1804,18 @@ export async function cancelReservationRecord(
       });
     });
 
-    managerIds.forEach((managerUid) => {
+    cancellationRecipientIds.forEach((recipientUid) => {
       addNotification(batch, queuedNotifications, {
-        recipientUid: managerUid,
-        type: "reservation_cancelled",
-        title: "Reservation Cancelled",
-        message: `${reservation.userName} cancelled their reservation for ${
+        recipientUid,
+        type: "system",
+        title: "Approved Reservation Cancelled",
+        message: `${reservation.userName} has cancelled their reservation for ${
           reservation.roomName
         } on ${
           reservationsToCancel.length > 1
             ? formatGroupedScheduleSummary(reservationsToCancel)
             : formatReservationScheduleLabel(reservation)
-        }`,
+        }.`,
         buildingId: reservation.buildingId,
         reservationId,
       });
