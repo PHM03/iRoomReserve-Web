@@ -4,6 +4,7 @@ import { resolveCampusAssignment } from "@/lib/buildings/campusAssignments";
 import { inferCampusFromBuilding } from "@/lib/buildings/campuses";
 import { db } from "@/lib/firebase/firebase-admin";
 import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
+import type { ReservationApprovalStep } from "@/lib/reservations/reservation-approval";
 
 export async function getAssignedManagerIds(buildingId: string) {
   const campus = inferCampusFromBuilding({ id: buildingId });
@@ -62,4 +63,30 @@ export async function getAssignedManagerIds(buildingId: string) {
     },
     []
   );
+}
+
+export async function getResponsibleBuildingAdminIds(
+  approvalFlow?: ReservationApprovalStep[]
+) {
+  const buildingAdminStep = approvalFlow?.find(
+    (approvalStep) => approvalStep.role === "building_admin"
+  );
+  const email = buildingAdminStep?.email.trim().toLowerCase();
+
+  if (!email) {
+    return [];
+  }
+
+  const usersSnapshot = await db
+    .collection("users")
+    .where("email", "==", email)
+    .where("status", "==", "approved")
+    .get();
+
+  return usersSnapshot.docs
+    .filter((userDoc) => {
+      const userData = userDoc.data() as { role?: string | null };
+      return normalizeRole(userData.role) === USER_ROLES.ADMIN;
+    })
+    .map((userDoc) => userDoc.id);
 }

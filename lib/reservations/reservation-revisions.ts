@@ -18,6 +18,24 @@ export const RESERVATION_REVISION_SCOPES = ["single", "series"] as const;
 export type ReservationRevisionScope =
   (typeof RESERVATION_REVISION_SCOPES)[number];
 
+export const RESERVATION_REVISION_NOTIFICATION_TYPES = [
+  "reservation_revision_requested",
+  "reservation_revision_accepted",
+] as const;
+
+export type ReservationRevisionNotificationType =
+  (typeof RESERVATION_REVISION_NOTIFICATION_TYPES)[number];
+
+export function getReservationRevisionNotificationId(
+  revisionId: string,
+  type: ReservationRevisionNotificationType,
+  recipientUid: string
+) {
+  return ["reservation-revision", type, revisionId, recipientUid]
+    .map((part) => encodeURIComponent(part))
+    .join("-");
+}
+
 export interface ReservationRevisionMarker {
   activeRevisionId?: string;
   activeRevisionStatus?: "requested";

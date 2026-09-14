@@ -14,6 +14,7 @@ import {
 } from "@/lib/reservations/reservation-approval";
 import {
   getBuildingAdminApprovalStepIndex,
+  getReservationRevisionNotificationId,
   getReservationRevisionScope,
   getRevisionRequestStateError,
   isCurrentRequestedRevision,
@@ -34,6 +35,8 @@ import {
   type ReservationAvailabilityInput,
 } from "@/lib/server/services/reservations";
 import { normalizeRoomStatus } from "@/lib/rooms/roomStatus";
+import { getResponsibleBuildingAdminIds } from "@/lib/server/services/building-managers";
+import { createNotificationAfterMutation } from "@/lib/server/services/push-notifications";
 
 export interface CreateReservationRevisionInput {
   requestedByUid: string;
@@ -299,10 +302,13 @@ async function getPendingRevisionOccurrences(
 
 async function getProposedRoom(
   proposedRoomId: string,
-  originalBuildingId: string
+  originalBuildingId: string,
+  transaction?: FirebaseFirestore.Transaction
 ) {
   const roomRef = db.collection("rooms").doc(proposedRoomId);
-  const roomSnapshot = await roomRef.get();
+  const roomSnapshot = transaction
+    ? await transaction.get(roomRef)
+    : await roomRef.get();
 
   if (!roomSnapshot.exists) {
     throw new ApiError(400, "invalid_room", "The proposed room does not exist.");
@@ -480,11 +486,13 @@ async function getRequesterRevisionOccurrences(
 async function validateRevisionRoomAvailability(
   reservation: ReservationRevisionReservation,
   revision: ReservationRevisionRecord,
-  occurrences: ReservationRevisionReservation[]
+  occurrences: ReservationRevisionReservation[],
+  transaction?: FirebaseFirestore.Transaction
 ) {
   const proposedRoom = await getProposedRoom(
     revision.proposedRoomId,
-    reservation.buildingId
+    reservation.buildingId,
+    transaction
   );
 
   if (
@@ -520,7 +528,10 @@ async function validateRevisionRoomAvailability(
       return assertReservationDatesAvailable(
         availabilityInput,
         [occurrence.date],
-        { excludeReservationIds: occurrenceIds }
+        {
+          excludeReservationIds: occurrenceIds,
+          transaction,
+        }
       );
     })
   );
@@ -641,12 +652,22 @@ export async function acceptReservationRevision(
       throw new ApiError(409, "stale_revision", "This reservation is no longer waiting for Building Admin review.");
     }
 
+    // Re-read every availability dependency inside the committing transaction.
+    // The preflight check above gives fast feedback; this check closes the
+    // validate-then-write window for schedules, unavailability, and conflicts.
+    const committedProposedRoom = await validateRevisionRoomAvailability(
+      anchor,
+      revision,
+      currentOccurrences,
+      transaction
+    );
+
     currentOccurrences.forEach((occurrence) => {
       transaction.update(db.collection("reservations").doc(occurrence.id), {
-        roomId: proposedRoom.ref.id,
-        roomName: proposedRoom.name,
-        buildingId: proposedRoom.buildingId,
-        buildingName: proposedRoom.buildingName,
+        roomId: committedProposedRoom.ref.id,
+        roomName: committedProposedRoom.name,
+        buildingId: committedProposedRoom.buildingId,
+        buildingName: committedProposedRoom.buildingName,
         currentStep: getBuildingAdminStepIndex(occurrence),
         ...getResolvedRevisionMetadata(),
         updatedAt: serverTimestamp(),
@@ -659,6 +680,33 @@ export async function acceptReservationRevision(
     });
   });
 
+  const responsibleAdminIds = await getResponsibleBuildingAdminIds(
+    context.reservation.approvalFlow
+  );
+  await Promise.all(
+    responsibleAdminIds.map((recipientUid) =>
+      createNotificationAfterMutation(
+        {
+          recipientUid,
+          type: "reservation_revision_accepted",
+          title: "Revision Accepted — Pending Review",
+          message: `${context.reservation.userName} accepted the room revision from ${context.revision.originalRoomName} to ${proposedRoom.name}. The reservation remains pending Building Admin review.`,
+          buildingId: context.reservation.buildingId,
+          reservationId,
+          revisionId,
+          originalRoomId: context.revision.originalRoomId,
+          proposedRoomId: context.revision.proposedRoomId,
+          route: "/dashboard/inbox",
+        },
+        getReservationRevisionNotificationId(
+          revisionId,
+          "reservation_revision_accepted",
+          recipientUid
+        )
+      )
+    )
+  );
+
   return {
     reservationId,
     revisionId,
@@ -670,8 +718,8 @@ export async function acceptReservationRevision(
 }
 
 /**
- * Validates and atomically creates a Building Admin revision request. This
- * operation intentionally does not create notifications or change the room.
+ * Validates and atomically creates a Building Admin revision request. The
+ * revision state is committed before its requester notification is attempted.
  */
 export async function requestReservationRevision(
   reservationId: string,
@@ -797,6 +845,26 @@ export async function requestReservationRevision(
     requestedByEmail: authContext.email,
     requestedByUid: authContext.uid!,
   });
+
+  await createNotificationAfterMutation(
+    {
+      recipientUid: reservation.userId,
+      type: "reservation_revision_requested",
+      title: "Reservation Revision Requested",
+      message: `A room revision was requested for your reservation from ${reservation.roomName} to ${proposedRoom.name}. Please review the revision.`,
+      buildingId: reservation.buildingId,
+      reservationId,
+      revisionId,
+      originalRoomId: reservation.roomId,
+      proposedRoomId: normalizedProposedRoomId,
+      route: "/dashboard/reservations",
+    },
+    getReservationRevisionNotificationId(
+      revisionId,
+      "reservation_revision_requested",
+      reservation.userId
+    )
+  );
 
   return {
     reservationId,

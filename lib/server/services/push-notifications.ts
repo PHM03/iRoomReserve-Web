@@ -7,6 +7,8 @@ export type AppNotificationType =
   | "reservation_cancelled"
   | "reservation_approved"
   | "reservation_rejected"
+  | "reservation_revision_requested"
+  | "reservation_revision_accepted"
   | "feedback"
   | "system";
 
@@ -18,6 +20,9 @@ export interface AppNotificationInput {
   buildingId: string;
   reservationId: string;
   route?: string;
+  revisionId?: string;
+  originalRoomId?: string;
+  proposedRoomId?: string;
 }
 
 const EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send";
@@ -61,6 +66,50 @@ export function queueNotificationWrite(
     createdAt: serverTimestamp(),
   });
   queuedNotifications.push(input);
+}
+
+export async function createNotificationAfterMutation(
+  input: AppNotificationInput,
+  dedupeKey: string
+) {
+  const notificationRef = db.collection("notifications").doc(dedupeKey);
+
+  try {
+    await notificationRef.create({
+      recipientUid: input.recipientUid,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      buildingId: input.buildingId,
+      reservationId: input.reservationId,
+      ...(input.route ? { route: input.route } : {}),
+      ...(input.revisionId ? { revisionId: input.revisionId } : {}),
+      ...(input.originalRoomId ? { originalRoomId: input.originalRoomId } : {}),
+      ...(input.proposedRoomId ? { proposedRoomId: input.proposedRoomId } : {}),
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+
+    await sendQueuedPushNotifications([input]);
+    return true;
+  } catch (error) {
+    const errorCode =
+      typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+
+    if (errorCode === 6 || errorCode === "6" || errorCode === "already-exists") {
+      return false;
+    }
+
+    console.warn("[notifications] unable to create post-mutation notification", {
+      error,
+      notificationId: dedupeKey,
+      type: input.type,
+      reservationId: input.reservationId,
+    });
+    return false;
+  }
 }
 
 export function queuePushNotification(

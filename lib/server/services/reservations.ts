@@ -36,7 +36,12 @@ import {
 } from "@/lib/schedules/scheduleConflicts";
 import { normalizeScheduleContext } from "@/lib/schedules/scheduleContext";
 import { ApiError } from "@/lib/server/api-error";
-import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
+import type { RequestAuthContext } from "@/lib/server/request-auth";
+import { assertVerifiedAuthentication } from "@/lib/server/route-guards";
+import {
+  getAssignedManagerIds,
+  getResponsibleBuildingAdminIds,
+} from "@/lib/server/services/building-managers";
 import {
   queuePushNotification,
   queueNotificationWrite,
@@ -357,12 +362,17 @@ async function getApprovedReservationsForRoom(roomId: string) {
     .sort(compareReservationSchedule);
 }
 
-async function getActiveReservationsForRoom(roomId: string) {
-  const reservationsSnapshot = await db
+async function getActiveReservationsForRoom(
+  roomId: string,
+  transaction?: FirebaseFirestore.Transaction
+) {
+  const reservationsQuery = db
     .collection("reservations")
     .where("roomId", "==", roomId)
-    .where("status", "in", ["pending", "approved"])
-    .get();
+    .where("status", "in", ["pending", "approved"]);
+  const reservationsSnapshot = transaction
+    ? await transaction.get(reservationsQuery)
+    : await reservationsQuery.get();
 
   return reservationsSnapshot.docs
     .map(
@@ -375,11 +385,16 @@ async function getActiveReservationsForRoom(roomId: string) {
     .sort(compareReservationSchedule);
 }
 
-async function getManualUnavailableSlotsForRoom(roomId: string) {
-  const snapshot = await db
+async function getManualUnavailableSlotsForRoom(
+  roomId: string,
+  transaction?: FirebaseFirestore.Transaction
+) {
+  const unavailabilityQuery = db
     .collection("roomUnavailability")
-    .where("roomId", "==", roomId)
-    .get();
+    .where("roomId", "==", roomId);
+  const snapshot = transaction
+    ? await transaction.get(unavailabilityQuery)
+    : await unavailabilityQuery.get();
 
   return snapshot.docs.map((document) => document.data() as {
     date?: string;
@@ -388,12 +403,17 @@ async function getManualUnavailableSlotsForRoom(roomId: string) {
   });
 }
 
-async function getActiveReservationsForUser(userId: string) {
-  const reservationsSnapshot = await db
+async function getActiveReservationsForUser(
+  userId: string,
+  transaction?: FirebaseFirestore.Transaction
+) {
+  const reservationsQuery = db
     .collection("reservations")
     .where("userId", "==", userId)
-    .where("status", "in", ["pending", "approved"])
-    .get();
+    .where("status", "in", ["pending", "approved"]);
+  const reservationsSnapshot = transaction
+    ? await transaction.get(reservationsQuery)
+    : await reservationsQuery.get();
 
   return reservationsSnapshot.docs
     .map(
@@ -413,9 +433,13 @@ interface ReservationRoomContext {
 
 async function getReservationRoomContext(
   roomId: string,
-  requestedBuildingId: string
+  requestedBuildingId: string,
+  transaction?: FirebaseFirestore.Transaction
 ): Promise<ReservationRoomContext> {
-  const roomSnapshot = await db.collection("rooms").doc(roomId).get();
+  const roomRef = db.collection("rooms").doc(roomId);
+  const roomSnapshot = transaction
+    ? await transaction.get(roomRef)
+    : await roomRef.get();
 
   if (!roomSnapshot.exists) {
     throw new ApiError(400, "invalid_room", "The selected room does not exist.");
@@ -443,7 +467,10 @@ async function getReservationRoomContext(
     );
   }
 
-  const buildingSnapshot = await db.collection("buildings").doc(buildingId).get();
+  const buildingRef = db.collection("buildings").doc(buildingId);
+  const buildingSnapshot = transaction
+    ? await transaction.get(buildingRef)
+    : await buildingRef.get();
   const scheduleContext = normalizeScheduleContext({
     academicYear: buildingSnapshot.data()?.activeScheduleAcademicYear,
     semester: buildingSnapshot.data()?.activeScheduleSemester,
@@ -460,12 +487,15 @@ async function getReservationRoomContext(
 
 async function getSchedulesForRoom(
   roomId: string,
-  activeScheduleContext: ScheduleAvailabilityContext
+  activeScheduleContext: ScheduleAvailabilityContext,
+  transaction?: FirebaseFirestore.Transaction
 ): Promise<Schedule[]> {
-  const schedulesSnapshot = await db
+  const schedulesQuery = db
     .collection("schedules")
-    .where("roomId", "==", roomId)
-    .get();
+    .where("roomId", "==", roomId);
+  const schedulesSnapshot = transaction
+    ? await transaction.get(schedulesQuery)
+    : await schedulesQuery.get();
 
   return schedulesSnapshot.docs
     .map(
@@ -490,6 +520,12 @@ export interface ReservationAvailabilityInput {
 
 export interface ReservationAvailabilityOptions {
   excludeReservationIds?: ReadonlySet<string>;
+  /**
+   * When supplied, every availability read participates in the caller's
+   * Firestore transaction so a conflicting room/schedule mutation causes a
+   * retry rather than being accepted between validation and the write.
+   */
+  transaction?: FirebaseFirestore.Transaction;
 }
 
 export async function assertReservationDatesAvailable(
@@ -511,13 +547,18 @@ export async function assertReservationDatesAvailable(
   };
   const roomContext = await getReservationRoomContext(
     input.roomId,
-    input.buildingId
+    input.buildingId,
+    options.transaction
   );
   const [roomSchedules, roomReservations, userReservations, manualUnavailableSlots] = await Promise.all([
-    getSchedulesForRoom(input.roomId, roomContext.activeScheduleContext),
-    getActiveReservationsForRoom(input.roomId),
-    getActiveReservationsForUser(input.userId),
-    getManualUnavailableSlotsForRoom(input.roomId),
+    getSchedulesForRoom(
+      input.roomId,
+      roomContext.activeScheduleContext,
+      options.transaction
+    ),
+    getActiveReservationsForRoom(input.roomId, options.transaction),
+    getActiveReservationsForUser(input.userId, options.transaction),
+    getManualUnavailableSlotsForRoom(input.roomId, options.transaction),
   ]);
 
   for (const dateKey of dateKeys) {
@@ -946,6 +987,9 @@ function addNotification(
     buildingId: string;
     reservationId: string;
     route?: string;
+    revisionId?: string;
+    originalRoomId?: string;
+    proposedRoomId?: string;
   }
 ) {
   queueNotificationWrite(batch, queuedNotifications, input);
@@ -1899,21 +1943,30 @@ async function cancelActiveRevisionReservationRecord(
       respondedAt: serverTimestamp(),
     });
 
-    return { reservation, reservationsToCancel };
+    return {
+      reservation,
+      reservationsToCancel,
+      revisionId: activeRevisionId,
+    };
   });
 }
 
 export async function cancelReservationRevisionRecord(
   reservationId: string,
-  userId: string,
+  authContext: RequestAuthContext,
   revisionId: string
 ) {
+  assertVerifiedAuthentication(authContext);
+
+  const userId = authContext.uid;
   const result = await cancelActiveRevisionReservationRecord(
     reservationId,
     userId,
     revisionId
   );
-  const managerIds = await getBuildingManagerIds(result.reservation.buildingId);
+  const managerIds = await getResponsibleBuildingAdminIds(
+    result.reservation.approvalFlow
+  );
   const batch = db.batch();
   const queuedNotifications: AppNotificationInput[] = [];
 
@@ -1931,6 +1984,7 @@ export async function cancelReservationRevisionRecord(
       }`,
       buildingId: result.reservation.buildingId,
       reservationId,
+      revisionId: result.revisionId,
     });
   });
 
@@ -1949,7 +2003,8 @@ export async function cancelReservationRevisionRecord(
 
 export async function cancelReservationRecord(
   reservationId: string,
-  userId: string
+  userId: string,
+  authContext?: RequestAuthContext
 ) {
   try {
     const reservationRef = db.collection("reservations").doc(reservationId);
@@ -1974,9 +2029,14 @@ export async function cancelReservationRecord(
       if (!activeRevisionId) {
         throw new ApiError(409, "stale_revision", "This revision request is no longer active.");
       }
+
+      if (!authContext || authContext.uid !== userId) {
+        throw new ApiError(401, "unauthenticated", "A verified authentication token is required.");
+      }
+
       await cancelReservationRevisionRecord(
         reservationId,
-        userId,
+        authContext,
         activeRevisionId
       );
       return;

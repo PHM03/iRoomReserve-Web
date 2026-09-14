@@ -26,13 +26,25 @@ import {
 export interface Notification {
   id: string;
   recipientUid: string;
-  type: "new_reservation" | "reservation_cancelled" | "reservation_approved" | "reservation_rejected" | "feedback" | "system";
+  type:
+    | "new_reservation"
+    | "reservation_cancelled"
+    | "reservation_approved"
+    | "reservation_rejected"
+    | "reservation_revision_requested"
+    | "reservation_revision_accepted"
+    | "feedback"
+    | "system";
   title: string;
   message: string;
   buildingId: string;
   reservationId: string;
   read: boolean;
   createdAt?: Timestamp;
+  route?: string;
+  revisionId?: string;
+  originalRoomId?: string;
+  proposedRoomId?: string;
 }
 
 function handleNotificationListenerError(

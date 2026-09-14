@@ -634,6 +634,8 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                 'reservation_approved',
                 'reservation_rejected',
                 'reservation_cancelled',
+                'reservation_revision_requested',
+                'reservation_revision_accepted',
                 'system',
               ].includes(notification.type)
           )
@@ -1153,6 +1155,9 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-black/50">
+                      {notification.title}
+                    </p>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-sm font-bold text-black">{roomName}</h3>
                       <StatusBadge status={status} />

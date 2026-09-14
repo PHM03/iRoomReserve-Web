@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { handleApiError, ApiError } from "@/lib/server/api-error";
 import { db } from "@/lib/firebase/firebase-admin";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
-import { assertAuthenticated, assertCanManageBuilding } from "@/lib/server/route-guards";
+import {
+  assertAuthenticated,
+  assertCanManageBuilding,
+  assertVerifiedAuthentication,
+} from "@/lib/server/route-guards";
 import { roomCheckInMethodSchema } from "@/lib/server/schemas";
 import {
   approveReservationRecord,
@@ -166,18 +170,16 @@ export async function PATCH(
         if (authContext.uid !== payload.userId) {
           throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
         }
-        await cancelReservationRecord(reservationId, payload.userId);
+        await cancelReservationRecord(reservationId, payload.userId, authContext);
         break;
       case "cancel-revision":
-        if (authContext.uid !== undefined && authContext.uid !== null) {
-          await cancelReservationRevisionRecord(
-            reservationId,
-            authContext.uid,
-            payload.revisionId
-          );
-          break;
-        }
-        throw new ApiError(401, "unauthenticated", "Authentication is required.");
+        assertVerifiedAuthentication(authContext);
+        await cancelReservationRevisionRecord(
+          reservationId,
+          authContext,
+          payload.revisionId
+        );
+        break;
       case "check-in":
         if (authContext.uid !== payload.userId) {
           throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");

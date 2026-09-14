@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getBuildingAdminApprovalStepIndex,
+  getReservationRevisionNotificationId,
   getReservationRevisionScope,
   getRevisionRequestStateError,
   hasActiveReservationRevision,
@@ -84,6 +85,36 @@ describe('reservation revision foundation', () => {
       ])
     ).toBe(0);
     expect(getBuildingAdminApprovalStepIndex(undefined)).toBe(-1);
+  });
+
+  it('builds deterministic notification identities per revision event and recipient', () => {
+    const requestedId = getReservationRevisionNotificationId(
+      'revision/1',
+      'reservation_revision_requested',
+      'requester-1'
+    );
+
+    expect(requestedId).toBe(
+      getReservationRevisionNotificationId(
+        'revision/1',
+        'reservation_revision_requested',
+        'requester-1'
+      )
+    );
+    expect(requestedId).not.toBe(
+      getReservationRevisionNotificationId(
+        'revision/1',
+        'reservation_revision_accepted',
+        'requester-1'
+      )
+    );
+    expect(requestedId).not.toBe(
+      getReservationRevisionNotificationId(
+        'revision/1',
+        'reservation_revision_requested',
+        'admin-1'
+      )
+    );
   });
 
   it('rejects duplicate active revisions and non-pending revision requests', () => {
