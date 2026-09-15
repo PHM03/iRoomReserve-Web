@@ -18,6 +18,8 @@ import {
   markNotificationRead,
 } from '@/lib/notifications/notifications';
 import {
+  acceptReservationRevision,
+  cancelReservationRevision,
   onReservationsByUser,
   type Reservation,
 } from '@/lib/reservations/reservations';
@@ -450,6 +452,12 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
   const [reservationCustomDateTo, setReservationCustomDateTo] = useState('');
   const [reservationCustomDateRange, setReservationCustomDateRange] =
     useState<CustomDateRange | null>(null);
+  const [reservationActionLoading, setReservationActionLoading] = useState<string | null>(null);
+  const [reservationActionErrors, setReservationActionErrors] = useState<Record<string, string>>({});
+  const [cancelRevisionConfirmation, setCancelRevisionConfirmation] = useState<{
+    reservationId: string;
+    revisionId: string;
+  } | null>(null);
 
   const scopedInbox = useMemo(
     () =>
@@ -623,6 +631,39 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
   );
 
   const currentUserId = firebaseUser?.uid ?? '';
+
+  const handleAcceptRevision = async (reservationId: string, revisionId: string) => {
+    setReservationActionLoading(`${reservationId}:accept-revision`);
+    setReservationActionErrors((current) => ({ ...current, [reservationId]: '' }));
+    try {
+      await acceptReservationRevision(reservationId, revisionId);
+    } catch (error) {
+      console.error('Failed to accept reservation revision:', error);
+      setReservationActionErrors((current) => ({
+        ...current,
+        [reservationId]: error instanceof Error ? error.message : 'Unable to accept the revision.',
+      }));
+    } finally {
+      setReservationActionLoading(null);
+    }
+  };
+
+  const handleCancelRevision = async (reservationId: string, revisionId: string) => {
+    setReservationActionLoading(`${reservationId}:cancel-revision`);
+    setReservationActionErrors((current) => ({ ...current, [reservationId]: '' }));
+    try {
+      await cancelReservationRevision(reservationId, revisionId);
+      setCancelRevisionConfirmation(null);
+    } catch (error) {
+      console.error('Failed to cancel reservation revision:', error);
+      setReservationActionErrors((current) => ({
+        ...current,
+        [reservationId]: error instanceof Error ? error.message : 'Unable to cancel the reservation.',
+      }));
+    } finally {
+      setReservationActionLoading(null);
+    }
+  };
 
   const reservationNotifications = useMemo(
     () =>
@@ -1138,6 +1179,14 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
             ? formatTimeRange(reservation.startTime, reservation.endTime)
             : 'Unavailable';
           const purpose = reservation?.purpose?.trim() || 'Unavailable';
+          const hasPendingRevision =
+            notification.type === 'reservation_revision_requested' &&
+            reservation?.activeRevisionStatus === 'requested' &&
+            Boolean(reservation.activeRevisionId);
+          const revisionId = reservation?.activeRevisionId;
+          const isReservationActionLoading =
+            reservationActionLoading === `${reservation?.id}:accept-revision` ||
+            reservationActionLoading === `${reservation?.id}:cancel-revision`;
 
           return (
             <div
@@ -1218,6 +1267,38 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                       {note}
                     </DetailField>
                   </div>
+
+                  {hasPendingRevision && reservation && revisionId ? (
+                    <div className="mt-4 flex flex-col items-end gap-3 border-t border-dark/5 pt-4">
+                      {reservationActionErrors[reservation.id] ? (
+                        <p className="w-full text-xs font-bold ui-text-red" role="alert">
+                          {reservationActionErrors[reservation.id]}
+                        </p>
+                      ) : null}
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCancelRevisionConfirmation({ reservationId: reservation.id, revisionId })}
+                          disabled={isReservationActionLoading}
+                          className="rounded-xl px-4 py-2 text-xs font-bold ui-button-red disabled:opacity-50"
+                        >
+                          {reservationActionLoading === `${reservation.id}:cancel-revision`
+                            ? 'Processing...'
+                            : 'Cancel Reservation'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleAcceptRevision(reservation.id, revisionId)}
+                          disabled={isReservationActionLoading}
+                          className="rounded-xl px-4 py-2 text-xs font-bold ui-button-green disabled:opacity-50"
+                        >
+                          {reservationActionLoading === `${reservation.id}:accept-revision`
+                            ? 'Processing...'
+                            : 'Accept Revision'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -1427,6 +1508,47 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
             renderReservationUpdates()}
         </div>
       </div>
+
+      {cancelRevisionConfirmation ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-reservation-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <h3 id="cancel-reservation-title" className="text-lg font-bold text-gray-900">
+              Cancel Reservation
+            </h3>
+            <p className="mt-3 text-sm text-gray-700">
+              Are you sure? You&apos;ll have to make a new reservation.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCancelRevisionConfirmation(null)}
+                disabled={reservationActionLoading === `${cancelRevisionConfirmation.reservationId}:cancel-revision`}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCancelRevision(
+                  cancelRevisionConfirmation.reservationId,
+                  cancelRevisionConfirmation.revisionId,
+                )}
+                disabled={reservationActionLoading === `${cancelRevisionConfirmation.reservationId}:cancel-revision`}
+                className="rounded-xl px-4 py-2 text-xs font-bold ui-button-red disabled:opacity-50"
+              >
+                {reservationActionLoading === `${cancelRevisionConfirmation.reservationId}:cancel-revision`
+                  ? 'Processing...'
+                  : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ComposeModal
         open={composeOpen}
