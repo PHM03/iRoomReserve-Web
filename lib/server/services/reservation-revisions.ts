@@ -773,6 +773,10 @@ export async function requestReservationRevision(
     );
   }
 
+  if (!authContext.email) {
+    throw new ApiError(401, "unauthenticated", "An authenticated email address is required.");
+  }
+
   const normalizedProposedRoomId = proposedRoomId.trim();
   if (!normalizedProposedRoomId) {
     throw new ApiError(400, "invalid_room", "A replacement room is required.");

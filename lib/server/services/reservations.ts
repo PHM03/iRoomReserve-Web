@@ -37,7 +37,10 @@ import {
 import { normalizeScheduleContext } from "@/lib/schedules/scheduleContext";
 import { ApiError } from "@/lib/server/api-error";
 import type { RequestAuthContext } from "@/lib/server/request-auth";
-import { assertVerifiedAuthentication } from "@/lib/server/route-guards";
+import {
+  assertCanManageBuilding,
+  assertVerifiedAuthentication,
+} from "@/lib/server/route-guards";
 import {
   getAssignedBuildingAdminIds,
   getAssignedManagerIds,
@@ -2006,7 +2009,7 @@ export async function cancelReservationRevisionRecord(
 ) {
   assertVerifiedAuthentication(authContext);
 
-  const userId = authContext.uid;
+  const userId = authContext.uid!;
   const result = await cancelActiveRevisionReservationRecord(
     reservationId,
     userId,

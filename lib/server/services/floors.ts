@@ -76,7 +76,7 @@ export async function createFloor(
   const buildingRef = getBuildingRef(buildingId);
   const floorRef = buildingRef.collection("floors").doc(floorId);
   let createdSortOrder = 0;
-  let restoredFloor: FloorRecord | null = null;
+  let restoredFloorReplacesName: string | null = null;
 
   await db.runTransaction(async (transaction) => {
     const buildingSnapshot = await transaction.get(buildingRef);
@@ -98,7 +98,7 @@ export async function createFloor(
       // Floors are soft-deleted so legacy floor labels can remain hidden. Reuse
       // the deterministic document when the same floor is added again.
       createdSortOrder = existingFloor.sortOrder;
-      restoredFloor = existingFloor;
+      restoredFloorReplacesName = existingFloor.replacesName;
       transaction.update(floorRef, {
         name: trimmedName,
         normalizedName,
@@ -130,7 +130,7 @@ export async function createFloor(
     normalizedName,
     sortOrder: createdSortOrder,
     hidden: false,
-    replacesName: restoredFloor?.replacesName ?? null,
+    replacesName: restoredFloorReplacesName,
   };
 }
 
