@@ -641,6 +641,21 @@ export default function SuperAdminDashboard() {
             ))}
           </div>
         )}
+
+        {activeTab === 'admins' && (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => router.push('/register?role=admin')}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-hover"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Administrator
+            </button>
+          </div>
+        )}
       </main>
       </div>
 
