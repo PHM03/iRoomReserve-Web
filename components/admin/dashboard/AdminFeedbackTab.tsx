@@ -618,6 +618,7 @@ export default function AdminFeedbackTab({
                   Existing feedback analytics for the selected reporting period.
                 </p>
               </div>
+              <div className="flex flex-wrap items-center gap-3 sm:ml-auto sm:justify-end">
               <label className="flex items-center gap-2 text-xs font-bold text-black/60">
                 <span className="whitespace-nowrap">Period:</span>
                 <select
@@ -667,7 +668,7 @@ export default function AdminFeedbackTab({
                   </label>
                 </>
               ) : null}
-              <div ref={reportMenuRef} className="relative sm:ml-auto">
+              <div ref={reportMenuRef} className="relative">
                 <button
                   type="button"
                   aria-haspopup="menu"
@@ -714,6 +715,7 @@ export default function AdminFeedbackTab({
                     </button>
                   </div>
                 ) : null}
+              </div>
               </div>
             </div>
             {reportError ? (

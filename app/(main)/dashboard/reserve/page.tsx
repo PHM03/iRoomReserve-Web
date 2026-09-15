@@ -134,6 +134,7 @@ const INITIAL_EQUIPMENT = {
   monoblockChairs: 0,
   tables: 0,
 };
+const MAX_EQUIPMENT_QUANTITY = 999;
 const TIME_CONFLICT_MESSAGE =
   'This room is already reserved for the selected time. Please choose a different time or date.';
 const USER_CONFLICT_MESSAGE =
@@ -998,14 +999,26 @@ export default function ReserveRoomPage() {
   function updateEquipment(key: string, delta: number) {
     setEquipment((prev) => ({
       ...prev,
-      [key]: Math.max(0, (prev[key] || 0) + delta),
+      [key]: Math.min(MAX_EQUIPMENT_QUANTITY, Math.max(0, (prev[key] || 0) + delta)),
     }));
+  }
+
+  function setEquipmentQuantity(key: string, value: string) {
+    if (!/^\d*$/.test(value)) return;
+    const quantity = Math.min(MAX_EQUIPMENT_QUANTITY, Number(value) || 0);
+    setEquipment((prev) => ({ ...prev, [key]: quantity }));
   }
 
   function updateOtherEquipmentQuantity(delta: number) {
     setOtherEquipmentQuantity((current) =>
-      String(Math.max(0, (Number(current) || 0) + delta))
+      String(Math.min(MAX_EQUIPMENT_QUANTITY, Math.max(0, (Number(current) || 0) + delta)))
     );
+    setOtherEquipmentError('');
+  }
+
+  function setOtherEquipmentQuantityValue(value: string) {
+    if (!/^\d*$/.test(value)) return;
+    setOtherEquipmentQuantity(value === '' ? '' : String(Math.min(MAX_EQUIPMENT_QUANTITY, Number(value))));
     setOtherEquipmentError('');
   }
 
@@ -2285,9 +2298,15 @@ export default function ReserveRoomPage() {
                           >
                             -
                           </button>
-                          <span className="w-8 text-center text-sm font-bold text-black">
-                            {equipment[item.key]}
-                          </span>
+                          <input
+                            type="text"
+                            pattern="[0-9]*"
+                            inputMode="numeric"
+                            value={equipment[item.key]}
+                            onChange={(event) => setEquipmentQuantity(item.key, event.target.value)}
+                            className="h-8 w-12 rounded-lg border border-dark/10 bg-white/80 px-1 text-center text-sm font-bold text-black outline-none transition-colors focus:border-primary"
+                            aria-label={`${item.label} quantity`}
+                          />
                           <button
                             type="button"
                             onClick={() => updateEquipment(item.key, 1)}
@@ -2298,12 +2317,11 @@ export default function ReserveRoomPage() {
                         </div>
                       </div>
                     ))}
-                  </div>
 
                   <div>
                     <div className="flex items-center gap-3 rounded-xl border border-dark/10 bg-dark/5 p-3">
-                      <label htmlFor="other-equipment" className="shrink-0 text-sm font-bold text-black">
-                        Others
+                      <label htmlFor="other-equipment" className="shrink-0 text-sm text-black" style={{ fontWeight: 400 }}>
+                        Others:
                       </label>
                       <input
                         id="other-equipment"
@@ -2315,7 +2333,7 @@ export default function ReserveRoomPage() {
                         }}
                         maxLength={250}
                         className="h-8 min-w-0 flex-1 rounded-lg border border-dark/10 bg-white/80 px-3 text-sm text-black outline-none transition-colors focus:border-primary"
-                        placeholder="Specify"
+                        placeholder="Please specify equipment"
                         aria-invalid={Boolean(otherEquipmentError)}
                         aria-describedby={otherEquipmentError ? 'other-equipment-error' : undefined}
                       />
@@ -2329,9 +2347,15 @@ export default function ReserveRoomPage() {
                         >
                           -
                         </button>
-                        <span className="w-8 text-center text-sm font-bold text-black">
-                          {Number(otherEquipmentQuantity) || 0}
-                        </span>
+                        <input
+                          type="text"
+                          pattern="[0-9]*"
+                          inputMode="numeric"
+                          value={otherEquipmentQuantity}
+                          onChange={(event) => setOtherEquipmentQuantityValue(event.target.value)}
+                          className="h-8 w-12 rounded-lg border border-dark/10 bg-white/80 px-1 text-center text-sm font-bold text-black outline-none transition-colors focus:border-primary"
+                          aria-label="Other equipment quantity"
+                        />
                         <button
                           type="button"
                           onClick={() => updateOtherEquipmentQuantity(1)}
@@ -2347,6 +2371,7 @@ export default function ReserveRoomPage() {
                         {otherEquipmentError}
                       </p>
                     ) : null}
+                  </div>
                   </div>
 
                   {isStudentReservation && (
