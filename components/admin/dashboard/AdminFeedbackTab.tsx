@@ -159,6 +159,34 @@ function applyFeedbackFilters(
   });
 }
 
+interface ReviewerFeedbackGroup {
+  id: string;
+  name: string;
+  feedback: Feedback[];
+  averageRating: number;
+}
+
+function groupFeedbackByReviewer(items: Feedback[]): ReviewerFeedbackGroup[] {
+  const groups = new Map<string, { id: string; name: string; feedback: Feedback[] }>();
+
+  items.forEach((feedback) => {
+    // `userId` is stable even when a reviewer updates their display name. Fall
+    // back to the name for legacy feedback records that predate user IDs.
+    const id = feedback.userId || feedback.userName || feedback.id;
+    const existing = groups.get(id);
+    if (existing) {
+      existing.feedback.push(feedback);
+      return;
+    }
+    groups.set(id, { id, name: feedback.userName || 'Unknown user', feedback: [feedback] });
+  });
+
+  return [...groups.values()].map((group) => ({
+    ...group,
+    averageRating: group.feedback.reduce((total, feedback) => total + feedback.overallRating, 0) / group.feedback.length,
+  }));
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AdminFeedbackTab({
@@ -178,6 +206,7 @@ export default function AdminFeedbackTab({
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
   const [expandedFeedbackId, setExpandedFeedbackId] = useState<string | null>(null);
+  const [expandedReviewerId, setExpandedReviewerId] = useState<string | null>(null);
   const [dashboardView, setDashboardView] = useState<FeedbackDashboardView>('analysis');
   const [reviewView, setReviewView] = useState<FeedbackReviewView>('reviews');
 
@@ -330,6 +359,11 @@ export default function AdminFeedbackTab({
       reportFilters.gender,
     );
   }, [analyticsNow, analyticsScheduleContext, reportFilters, scopedFeedback]);
+
+  const reviewerFeedbackGroups = useMemo(
+    () => groupFeedbackByReviewer(filteredFeedback),
+    [filteredFeedback],
+  );
 
   const selectedPeriodFeedback = useMemo(() => {
     const comparison = compareFeedbackPeriods(
@@ -1143,13 +1177,50 @@ export default function AdminFeedbackTab({
 
           {dashboardView === 'reviews' && reviewView === 'reviews' ? (
             <>
-              {/* ── Feedback cards — design unchanged, now uses filteredFeedback ── */}
+              {/* ── Reviews grouped by reviewer ── */}
               {filteredFeedback.length === 0 ? (
             <div className="glass-card p-10 text-center">
               <p className="text-sm font-bold text-black/60">No reviews match your filters.</p>
             </div>
           ) : (
-            filteredFeedback.map((feedback) => {
+            reviewerFeedbackGroups.map((reviewer) => {
+              const isReviewerExpanded = expandedReviewerId === reviewer.id;
+
+              return (
+                <section key={reviewer.id} className="glass-card overflow-hidden" aria-label={`Reviews from ${reviewer.name}`}>
+                  <button
+                    type="button"
+                    className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 p-4 text-left transition-colors hover:bg-white/45 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-inset sm:grid-cols-[minmax(0,1.4fr)_minmax(100px,.7fr)_minmax(140px,.8fr)_auto]"
+                    onClick={() => setExpandedReviewerId(isReviewerExpanded ? null : reviewer.id)}
+                    aria-expanded={isReviewerExpanded}
+                    aria-controls={`reviewer-reviews-${reviewer.id}`}
+                    aria-label={`${isReviewerExpanded ? 'Hide' : 'Show'} reviews from ${reviewer.name}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-black/45 sm:hidden">Reviewer</p>
+                      <h4 className="truncate text-sm font-bold text-black">{reviewer.name}</h4>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">Reviews</p>
+                      <p className="mt-1 text-sm font-bold text-black">{reviewer.feedback.length}</p>
+                    </div>
+                    <div className="flex items-center gap-2 sm:justify-self-end">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">Average rating</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <StarRating rating={reviewer.averageRating} />
+                          <span className="text-[10px] font-bold text-black/45">{reviewer.averageRating.toFixed(1)}/5</span>
+                        </div>
+                      </div>
+                    </div>
+                    <svg className={`h-4 w-4 text-black/50 transition-transform ${isReviewerExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m19 9-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {isReviewerExpanded ? (
+                    <div id={`reviewer-reviews-${reviewer.id}`} className="space-y-3 border-t border-dark/10 bg-dark/[0.03] p-3 sm:p-4">
+                      {reviewer.feedback.map((feedback) => {
               const sentimentLabel = resolveFeedbackSentimentLabel(feedback);
               const positiveAspects = getAspectEntries(feedback, 'positive');
               const negativeAspects = getAspectEntries(feedback, 'negative');
@@ -1159,7 +1230,7 @@ export default function AdminFeedbackTab({
               );
 
               return (
-              <div key={feedback.id} className="glass-card overflow-hidden">
+              <div key={feedback.id} className="overflow-hidden rounded-xl border border-dark/10 bg-white/70 shadow-sm">
                 {!isExpanded ? (
                   <button
                     type="button"
@@ -1386,6 +1457,11 @@ export default function AdminFeedbackTab({
                 )}
                 </div> : null}
               </div>
+              );
+            })}
+                    </div>
+                  ) : null}
+                </section>
               );
             })
               )}

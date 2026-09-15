@@ -2302,7 +2302,7 @@ export default function ReserveRoomPage() {
 
                   <div>
                     <div className="flex items-center gap-3 rounded-xl border border-dark/10 bg-dark/5 p-3">
-                      <label htmlFor="other-equipment" className="shrink-0 text-sm font-regular text-black">
+                      <label htmlFor="other-equipment" className="shrink-0 text-sm font-bold text-black">
                         Others
                       </label>
                       <input
