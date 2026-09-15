@@ -149,7 +149,7 @@ export async function PATCH(
         if (authContext.email !== payload.userEmail.trim().toLowerCase()) {
           throw new ApiError(403, "forbidden", "Approver email does not match the authenticated user.");
         }
-        await approveReservationRecord(reservationId, authContext.email);
+        await approveReservationRecord(reservationId, authContext.email, authContext);
         break;
       }
       case "reject": {
@@ -162,7 +162,8 @@ export async function PATCH(
         await rejectReservationRecord(
           reservationId,
           authContext.email,
-          payload.reason
+          payload.reason,
+          authContext
         );
         break;
       }

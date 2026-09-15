@@ -10,7 +10,6 @@ import {
 import { USER_ROLES } from "@/lib/auth/roles";
 import {
   getCurrentApprovalStep,
-  isCurrentApproverEmail,
 } from "@/lib/reservations/reservation-approval";
 import {
   getBuildingAdminApprovalStepIndex,
@@ -730,14 +729,6 @@ export async function requestReservationRevision(
   assertVerifiedAuthentication(authContext);
   assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
 
-  if (!authContext.email) {
-    throw new ApiError(
-      400,
-      "missing_email",
-      "Authenticated administrator email is required."
-    );
-  }
-
   const reservationSnapshot = await db
     .collection("reservations")
     .doc(reservationId)
@@ -763,14 +754,22 @@ export async function requestReservationRevision(
     reservation.approvalFlow,
     reservation.currentStep
   );
-  if (
-    currentApprovalStep?.role !== "building_admin" ||
-    !isCurrentApproverEmail(currentApprovalStep, authContext.email)
-  ) {
+  if (currentApprovalStep?.role !== "building_admin") {
     throw new ApiError(
       403,
       "forbidden",
       "You are not the current Building Admin for this reservation."
+    );
+  }
+
+  if (
+    authContext.role !== USER_ROLES.SUPER_ADMIN &&
+    authContext.status !== "approved"
+  ) {
+    throw new ApiError(
+      403,
+      "account_not_approved",
+      "Only approved Building Admin accounts can request a room revision."
     );
   }
 

@@ -940,6 +940,32 @@ function getReservationCurrentApprovalStep(reservation: ReservationRecord) {
   return currentApprovalStep;
 }
 
+function assertCurrentStepCanBeApprovedBy(
+  reservation: ReservationRecord,
+  approvalStep: ReservationApprovalStep,
+  userEmail: string,
+  authContext?: RequestAuthContext
+) {
+  if (approvalStep.role !== "building_admin") {
+    if (!isCurrentApproverEmail(approvalStep, userEmail)) {
+      throw new ApiError(403, "forbidden", "You are not the current approver for this reservation.");
+    }
+    return;
+  }
+
+  if (!authContext) {
+    throw new ApiError(403, "forbidden", "Building Admin authorization is required.");
+  }
+
+  assertCanManageBuilding(authContext, reservation.buildingId);
+  if (
+    authContext.role !== USER_ROLES.SUPER_ADMIN &&
+    (authContext.role !== USER_ROLES.ADMIN || authContext.status !== "approved")
+  ) {
+    throw new ApiError(403, "forbidden", "Only approved Building Admin accounts can approve this reservation.");
+  }
+}
+
 function getRoomStatusPayload(
   approvedReservations: ReservationRecord[],
   preferredReservationId?: string | null
@@ -1538,7 +1564,8 @@ export async function expireOpenReservationsForUser(userId: string) {
 
 export async function approveReservationRecord(
   reservationId: string,
-  userEmail: string
+  userEmail: string,
+  authContext?: RequestAuthContext
 ) {
   try {
     const reservationRef = db.collection("reservations").doc(reservationId);
@@ -1582,13 +1609,12 @@ export async function approveReservationRecord(
       }
 
       const currentApprovalStep = getReservationCurrentApprovalStep(reservation);
-      if (!isCurrentApproverEmail(currentApprovalStep, userEmail)) {
-        throw new ApiError(
-          403,
-          "forbidden",
-          "You are not the current approver for this reservation."
-        );
-      }
+      assertCurrentStepCanBeApprovedBy(
+        reservation,
+        currentApprovalStep,
+        userEmail,
+        authContext
+      );
 
       const nextStepIndex = reservation.currentStep + 1;
       const isFinalApproval = nextStepIndex >= reservation.approvalFlow.length;
@@ -1598,13 +1624,12 @@ export async function approveReservationRecord(
 
         const reservationApprovalStep =
           getReservationCurrentApprovalStep(pendingReservation);
-        if (!isCurrentApproverEmail(reservationApprovalStep, userEmail)) {
-          throw new ApiError(
-            403,
-            "forbidden",
-            "You are not the current approver for this reservation."
-          );
-        }
+        assertCurrentStepCanBeApprovedBy(
+          pendingReservation,
+          reservationApprovalStep,
+          userEmail,
+          authContext
+        );
 
         const approvalEntry: ReservationApprovalRecord = {
           role: reservationApprovalStep.role,
@@ -1737,7 +1762,8 @@ export async function approveReservationRecord(
 export async function rejectReservationRecord(
   reservationId: string,
   userEmail: string,
-  reason: string
+  reason: string,
+  authContext?: RequestAuthContext
 ) {
   try {
     const reservationRef = db.collection("reservations").doc(reservationId);
@@ -1781,26 +1807,24 @@ export async function rejectReservationRecord(
       }
 
       const currentApprovalStep = getReservationCurrentApprovalStep(reservation);
-      if (!isCurrentApproverEmail(currentApprovalStep, userEmail)) {
-        throw new ApiError(
-          403,
-          "forbidden",
-          "You are not the current approver for this reservation."
-        );
-      }
+      assertCurrentStepCanBeApprovedBy(
+        reservation,
+        currentApprovalStep,
+        userEmail,
+        authContext
+      );
 
       pendingReservations.forEach((pendingReservation) => {
         assertReservationPendingApproval(pendingReservation);
 
         const reservationApprovalStep =
           getReservationCurrentApprovalStep(pendingReservation);
-        if (!isCurrentApproverEmail(reservationApprovalStep, userEmail)) {
-          throw new ApiError(
-            403,
-            "forbidden",
-            "You are not the current approver for this reservation."
-          );
-        }
+        assertCurrentStepCanBeApprovedBy(
+          pendingReservation,
+          reservationApprovalStep,
+          userEmail,
+          authContext
+        );
 
         transaction.update(db.collection("reservations").doc(pendingReservation.id), {
           status: "rejected",

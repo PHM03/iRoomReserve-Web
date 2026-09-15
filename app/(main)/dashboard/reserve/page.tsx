@@ -331,9 +331,8 @@ export default function ReserveRoomPage() {
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
   const [equipment, setEquipment] = useState<Record<string, number>>({ ...INITIAL_EQUIPMENT });
-  const [otherEquipmentSelected, setOtherEquipmentSelected] = useState(false);
   const [otherEquipment, setOtherEquipment] = useState('');
-  const [otherEquipmentQuantity, setOtherEquipmentQuantity] = useState('');
+  const [otherEquipmentQuantity, setOtherEquipmentQuantity] = useState('0');
   const [otherEquipmentError, setOtherEquipmentError] = useState('');
   const [approvalDocument, setApprovalDocument] = useState<File | null>(null);
   const [uploadedApprovalDocument, setUploadedApprovalDocument] = useState<{
@@ -887,8 +886,8 @@ export default function ReserveRoomPage() {
     setSelectedDays([]);
     setRecurringEndDate('');
     setEquipment({ ...INITIAL_EQUIPMENT });
-    setOtherEquipmentSelected(false);
     setOtherEquipment('');
+    setOtherEquipmentQuantity('0');
     setOtherEquipmentError('');
     setApprovalDocument(null);
     setUploadedApprovalDocument(null);
@@ -1001,6 +1000,13 @@ export default function ReserveRoomPage() {
       ...prev,
       [key]: Math.max(0, (prev[key] || 0) + delta),
     }));
+  }
+
+  function updateOtherEquipmentQuantity(delta: number) {
+    setOtherEquipmentQuantity((current) =>
+      String(Math.max(0, (Number(current) || 0) + delta))
+    );
+    setOtherEquipmentError('');
   }
 
   async function handleApprovalDocumentChange(
@@ -1234,26 +1240,21 @@ export default function ReserveRoomPage() {
     const parsedOtherEquipmentQuantity = trimmedOtherEquipmentQuantity
       ? Number(trimmedOtherEquipmentQuantity)
       : undefined;
-    if (
-      otherEquipmentSelected &&
-      trimmedOtherEquipment &&
-      !trimmedOtherEquipmentQuantity
-    ) {
+    if (trimmedOtherEquipment && (!trimmedOtherEquipmentQuantity || parsedOtherEquipmentQuantity === 0)) {
       setOtherEquipmentError('Specify how many items you need.');
       return;
     }
 
     if (
-      otherEquipmentSelected &&
       !trimmedOtherEquipment &&
-      trimmedOtherEquipmentQuantity
+      parsedOtherEquipmentQuantity !== undefined &&
+      parsedOtherEquipmentQuantity > 0
     ) {
       setOtherEquipmentError('Specify the other equipment you need.');
       return;
     }
 
     if (
-      otherEquipmentSelected &&
       trimmedOtherEquipment &&
       (parsedOtherEquipmentQuantity === undefined ||
         !Number.isInteger(parsedOtherEquipmentQuantity) ||
@@ -1263,7 +1264,7 @@ export default function ReserveRoomPage() {
       return;
     }
 
-    if (otherEquipmentSelected && trimmedOtherEquipment.length > 250) {
+    if (trimmedOtherEquipment.length > 250) {
       setOtherEquipmentError('Other equipment must be 250 characters or fewer.');
       return;
     }
@@ -1339,7 +1340,7 @@ export default function ReserveRoomPage() {
             }
           : {}),
         equipment,
-        ...(otherEquipmentSelected && trimmedOtherEquipment
+        ...(trimmedOtherEquipment && parsedOtherEquipmentQuantity
           ? {
               otherEquipment: trimmedOtherEquipment,
               otherEquipmentQuantity: parsedOtherEquipmentQuantity,
@@ -2299,86 +2300,53 @@ export default function ReserveRoomPage() {
                     ))}
                   </div>
 
-                  <div className="rounded-xl border border-dark/10 bg-dark/5 p-3">
-                    <label className="flex items-center gap-3 text-sm font-bold text-black">
+                  <div>
+                    <div className="flex items-center gap-3 rounded-xl border border-dark/10 bg-dark/5 p-3">
+                      <label htmlFor="other-equipment" className="shrink-0 text-sm font-regular text-black">
+                        Others
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={otherEquipmentSelected}
+                        id="other-equipment"
+                        type="text"
+                        value={otherEquipment}
                         onChange={(event) => {
-                          setOtherEquipmentSelected(event.target.checked);
+                          setOtherEquipment(event.target.value);
                           setOtherEquipmentError('');
                         }}
-                        className="h-4 w-4 rounded border-dark/20 text-primary focus:ring-primary"
+                        maxLength={250}
+                        className="h-8 min-w-0 flex-1 rounded-lg border border-dark/10 bg-white/80 px-3 text-sm text-black outline-none transition-colors focus:border-primary"
+                        placeholder="Specify"
+                        aria-invalid={Boolean(otherEquipmentError)}
+                        aria-describedby={otherEquipmentError ? 'other-equipment-error' : undefined}
                       />
-                      <span>Others</span>
-                    </label>
-
-                    {otherEquipmentSelected && (
-                      <div className="mt-3">
-                        <label
-                          htmlFor="other-equipment"
-                          className="mb-2 block text-xs font-bold text-black"
+                      <div className="flex shrink-0 items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => updateOtherEquipmentQuantity(-1)}
+                          disabled={Number(otherEquipmentQuantity) === 0}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-dark/10 bg-dark/5 text-sm font-bold transition-all hover:bg-primary/10 hover:text-primary disabled:opacity-30"
+                          aria-label="Decrease other equipment quantity"
                         >
-                          Specify other equipment
-                        </label>
-                        <input
-                          id="other-equipment"
-                          type="text"
-                          value={otherEquipment}
-                          onChange={(event) => {
-                            setOtherEquipment(event.target.value);
-                            if (event.target.value.trim()) {
-                              setOtherEquipmentError('');
-                            }
-                          }}
-                          maxLength={250}
-                          className="glass-input w-full px-4 py-3"
-                          placeholder="e.g., HDMI adapter, extension cord"
-                          aria-invalid={Boolean(otherEquipmentError)}
-                          aria-describedby={
-                            otherEquipmentError ? 'other-equipment-error' : undefined
-                          }
-                        />
-                        <label
-                          htmlFor="other-equipment-quantity"
-                          className="mt-3 mb-2 block text-xs font-bold text-black"
+                          -
+                        </button>
+                        <span className="w-8 text-center text-sm font-bold text-black">
+                          {Number(otherEquipmentQuantity) || 0}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateOtherEquipmentQuantity(1)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-dark/10 bg-dark/5 text-sm font-bold transition-all hover:bg-primary/10 hover:text-primary"
+                          aria-label="Increase other equipment quantity"
                         >
-                          Quantity
-                        </label>
-                        <input
-                          id="other-equipment-quantity"
-                          type="number"
-                          min={1}
-                          step={1}
-                          inputMode="numeric"
-                          value={otherEquipmentQuantity}
-                          onChange={(event) => {
-                            const nextValue = event.target.value;
-                            if (nextValue === '' || /^\d+$/.test(nextValue)) {
-                              setOtherEquipmentQuantity(nextValue);
-                              setOtherEquipmentError('');
-                            }
-                          }}
-                          className="glass-input w-full px-4 py-3"
-                          placeholder="e.g., 2"
-                          aria-invalid={Boolean(otherEquipmentError)}
-                          aria-describedby={
-                            otherEquipmentError ? 'other-equipment-error' : undefined
-                          }
-                        />
-                        <div className="mt-1 flex items-center justify-between gap-3 text-xs">
-                          <p
-                            id="other-equipment-error"
-                            className={otherEquipmentError ? 'ui-text-red' : 'text-black/70'}
-                          >
-                            {otherEquipmentError || 'Describe any equipment not listed above.'}
-                          </p>
-                          <span className={otherEquipment.length >= 250 ? 'ui-text-red' : 'text-black/70'}>
-                            {250 - otherEquipment.length}/250 characters
-                          </span>
-                        </div>
+                          +
+                        </button>
                       </div>
-                    )}
+                    </div>
+                    {otherEquipmentError ? (
+                      <p id="other-equipment-error" className="mt-1 text-xs ui-text-red">
+                        {otherEquipmentError}
+                      </p>
+                    ) : null}
                   </div>
 
                   {isStudentReservation && (
