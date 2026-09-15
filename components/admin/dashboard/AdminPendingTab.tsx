@@ -370,10 +370,10 @@ export default function AdminPendingTab({
   };
 
   const handleReject = async (id: string) => {
-    if (!approverEmail) return;
+    if (!approverEmail) return false;
     if (!rejectReason.trim()) {
       setReservationActionError('Please enter a reason before rejecting this reservation.');
-      return;
+      return false;
     }
     setReservationActionError('');
     setActionLoading(id);
@@ -382,11 +382,13 @@ export default function AdminPendingTab({
       setRejectingReservationId(null);
       setRejectReason('');
       await onReload();
+      return true;
     } catch (error) {
       console.warn('Failed to reject:', error);
       setReservationActionError(
         error instanceof Error ? error.message : 'Failed to reject reservation.'
       );
+      return false;
     } finally {
       setActionLoading(null);
     }
@@ -835,11 +837,16 @@ export default function AdminPendingTab({
                     <label style={{ fontSize: '11px', fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '6px' }}>Reason for rejection</label>
                     <textarea
                       value={rejectReason}
-                      onChange={(e) => setRejectReason(e.target.value)}
+                      onChange={(e) => {
+                        setRejectReason(e.target.value);
+                        if (reservationActionError) setReservationActionError('');
+                      }}
                       placeholder="Explain why this request is being rejected."
+                      aria-invalid={Boolean(reservationActionError)}
+                      aria-describedby={reservationActionError ? 'reject-reason-error' : undefined}
                           style={{
                             width: '100%',
-                            border: '1px solid #e0e0e0',
+                            border: reservationActionError ? '1px solid #e53935' : '1px solid #e0e0e0',
                             borderRadius: '8px',
                             padding: '10px 12px',
                             fontSize: '13px',
@@ -849,7 +856,7 @@ export default function AdminPendingTab({
                             boxSizing: 'border-box'
                           }}
                     />
-                        {reservationActionError && <p style={{
+                        {reservationActionError && <p id="reject-reason-error" role="alert" style={{
                           fontSize: '12px',
                           color: '#e53935',
                           marginTop: '4px'
@@ -868,14 +875,15 @@ export default function AdminPendingTab({
                     </button>
                   ) : (
                   <button
-                    disabled={actionLoading === confirmModal.id || (confirmModal.type === 'reject' && !rejectReason.trim())}
+                    disabled={actionLoading === confirmModal.id}
                     onClick={async () => {
                       if (confirmModal.type === 'approve') {
                         await handleApprove(confirmModal.id);
+                        if (!reservationActionError) closeConfirm();
                       } else {
-                        await handleReject(confirmModal.id);
+                        const rejected = await handleReject(confirmModal.id);
+                        if (rejected) closeConfirm();
                       }
-                      if (!reservationActionError) closeConfirm();
                     }}
                     style={{
                       padding: '8px 20px',
