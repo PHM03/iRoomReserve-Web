@@ -65,6 +65,29 @@ export async function getAssignedManagerIds(buildingId: string) {
   );
 }
 
+export async function getAssignedBuildingAdminIds(buildingId: string) {
+  const managerIds = await getAssignedManagerIds(buildingId);
+  const managerSnapshots = await Promise.all(
+    managerIds.map((managerId) => db.collection("users").doc(managerId).get())
+  );
+
+  return managerSnapshots.flatMap((managerSnapshot) => {
+    if (!managerSnapshot.exists) {
+      return [];
+    }
+
+    const managerData = managerSnapshot.data() as {
+      role?: string | null;
+      status?: string | null;
+    };
+
+    return managerData.status === "approved" &&
+      normalizeRole(managerData.role) === USER_ROLES.ADMIN
+      ? [managerSnapshot.id]
+      : [];
+  });
+}
+
 export async function getResponsibleBuildingAdminIds(
   approvalFlow?: ReservationApprovalStep[]
 ) {

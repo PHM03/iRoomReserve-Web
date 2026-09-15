@@ -39,6 +39,7 @@ import { ApiError } from "@/lib/server/api-error";
 import type { RequestAuthContext } from "@/lib/server/request-auth";
 import { assertVerifiedAuthentication } from "@/lib/server/route-guards";
 import {
+  getAssignedBuildingAdminIds,
   getAssignedManagerIds,
   getResponsibleBuildingAdminIds,
 } from "@/lib/server/services/building-managers";
@@ -864,7 +865,8 @@ async function getReservationApproverInput(
 
 async function getInitialApproverIdsOrThrow(
   approvalFlow: ReservationApprovalStep[],
-  campus: ReservationCampus
+  campus: ReservationCampus,
+  buildingId: string
 ) {
   const firstApprovalStep = getCurrentApprovalStep(approvalFlow, 0);
   if (!firstApprovalStep) {
@@ -873,6 +875,22 @@ async function getInitialApproverIdsOrThrow(
       "invalid_approval_flow",
       "Reservation approval flow is incomplete."
     );
+  }
+
+  if (firstApprovalStep.role === "building_admin") {
+    const buildingAdminIds = await getAssignedBuildingAdminIds(buildingId);
+    if (buildingAdminIds.length === 0) {
+      throw new ApiError(
+        400,
+        "missing_building_admin",
+        "No approved building administrator is assigned to the selected building."
+      );
+    }
+
+    return {
+      firstApprovalStep,
+      firstApproverIds: buildingAdminIds,
+    };
   }
 
   const validation = await validateReservationApprover({
@@ -1189,7 +1207,8 @@ export async function createReservationRecord(data: ReservationCreateInput) {
     );
     const { firstApproverIds } = await getInitialApproverIdsOrThrow(
       approvalFlow,
-      campus
+      campus,
+      data.buildingId
     );
     const reservationRef = db.collection("reservations").doc();
     const batch = db.batch();
@@ -1289,7 +1308,8 @@ export async function createRecurringReservationRecord(
     );
     const { firstApproverIds } = await getInitialApproverIdsOrThrow(
       approvalFlow,
-      campus
+      campus,
+      data.buildingId
     );
     const recurringGroupId = `recurring_${Date.now()}_${Math.random()
       .toString(36)
@@ -1616,9 +1636,13 @@ export async function approveReservationRecord(
     });
 
     if (!approvalResult.isFinalApproval) {
-      const nextApproverIds = approvalResult.nextApprovalStep
-        ? await getUserIdsByEmail(approvalResult.nextApprovalStep.email)
-        : [];
+      const nextApproverIds = !approvalResult.nextApprovalStep
+        ? []
+        : approvalResult.nextApprovalStep.role === "building_admin"
+          ? await getAssignedBuildingAdminIds(
+              approvalResult.groupedReservations[0].buildingId
+            )
+          : await getUserIdsByEmail(approvalResult.nextApprovalStep.email);
 
       const batch = db.batch();
       const queuedNotifications: AppNotificationInput[] = [];

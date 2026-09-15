@@ -29,11 +29,7 @@ import {
   resolveCampusAssignment,
   type CampusName,
 } from "@/lib/buildings/campusAssignments";
-import {
-  ALLOWED_EMAIL_DOMAIN,
-  SUPERADMIN_EMAIL,
-  SUPERADMIN_PASSWORD,
-} from "@/lib/auth/auth-constants";
+import { ALLOWED_EMAIL_DOMAIN } from "@/lib/auth/auth-constants";
 import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
 import { auth, db } from "@/lib/firebase/firebase";
 import { type ReservationCampus } from "@/lib/buildings/campuses";
@@ -72,18 +68,6 @@ export async function loginWithEmail(email: string, password: string) {
   if (!credential.user.emailVerified) {
     await signOut(auth);
     throw { code: "auth/email-not-verified" };
-  }
-
-  if (credential.user.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase()) {
-    await saveUserProfile(credential.user.uid, {
-      firstName: credential.user.displayName?.split(" ")[0] || "Super",
-      lastName:
-        credential.user.displayName?.split(" ").slice(1).join(" ") || "Admin",
-      email: credential.user.email,
-      role: USER_ROLES.SUPER_ADMIN,
-      status: "approved",
-    });
-    return credential;
   }
 
   const profile = await getUserProfile(credential.user.uid);
@@ -227,17 +211,6 @@ export async function loginWithGoogle() {
 export async function loginSuperAdmin(email: string, password: string) {
   const credential = await signInWithEmailAndPassword(auth, email, password);
 
-  if (credential.user.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase()) {
-    await saveUserProfile(credential.user.uid, {
-      firstName: "Super",
-      lastName: "Admin",
-      email: credential.user.email,
-      role: USER_ROLES.SUPER_ADMIN,
-      status: "approved",
-    });
-    return credential;
-  }
-
   const profile = await getUserProfile(credential.user.uid);
   if (!profile || normalizeRole(profile.role) !== USER_ROLES.SUPER_ADMIN) {
     await signOut(auth);
@@ -245,69 +218,6 @@ export async function loginSuperAdmin(email: string, password: string) {
   }
 
   return credential;
-}
-
-export async function seedSuperAdmin() {
-  try {
-    const credential = await createUserWithEmailAndPassword(
-      auth,
-      SUPERADMIN_EMAIL,
-      SUPERADMIN_PASSWORD
-    );
-
-    await updateProfile(credential.user, { displayName: "Super Admin" });
-
-    await saveUserProfile(credential.user.uid, {
-      firstName: "Super",
-      lastName: "Admin",
-      email: SUPERADMIN_EMAIL,
-      role: USER_ROLES.SUPER_ADMIN,
-      status: "approved",
-    });
-
-    await sendEmailVerification(credential.user);
-    await signOut(auth);
-
-    return {
-      success: true,
-      message: "Super Admin account created. Please verify the email.",
-    };
-  } catch (error: unknown) {
-    const firebaseError = error as { code?: string };
-
-    if (firebaseError.code === "auth/email-already-in-use") {
-      try {
-        const credential = await signInWithEmailAndPassword(
-          auth,
-          SUPERADMIN_EMAIL,
-          SUPERADMIN_PASSWORD
-        );
-        await saveUserProfile(credential.user.uid, {
-          firstName: "Super",
-          lastName: "Admin",
-          email: SUPERADMIN_EMAIL,
-          role: USER_ROLES.SUPER_ADMIN,
-          status: "approved",
-        });
-        await signOut(auth);
-        return {
-          success: true,
-          message: "Super Admin profile updated."
-        };
-      } catch {
-        return {
-          success: false,
-          message:
-            "Super Admin account exists but the profile could not be updated.",
-        };
-      }
-    }
-
-    return {
-      success: false,
-      message: `Failed to create Super Admin: ${firebaseError.code}`,
-    };
-  }
 }
 
 export async function getUserProfile(uid: string) {
