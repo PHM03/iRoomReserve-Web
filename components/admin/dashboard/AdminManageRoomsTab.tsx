@@ -164,7 +164,21 @@ export default function AdminManageRoomsTab({
     const [newRoomAcStatus, setNewRoomAcStatus] = useState('');
     const [newRoomTvStatus, setNewRoomTvStatus] = useState('');
     const [newRoomBeaconId, setNewRoomBeaconId] = useState('');
+    const [newRoomId, setNewRoomId] = useState('');
     const [addingRoom, setAddingRoom] = useState(false);
+
+    // Generate room ID based on building, floor, and name when available
+    const computedRoomId = useMemo(() => {
+        if (buildingId && newRoomFloor && newRoomName) {
+            // Create a simple ID based on the inputs
+            // Format: buildingCode-floorName-roomName (simplified)
+            const buildingCode = buildingId.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const floorCode = newRoomFloor.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            const nameCode = newRoomName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            return `${buildingCode}-${floorCode}-${nameCode}`.replace(/-+/g, '-').replace(/^-|-$/g, '');
+        }
+        return '';
+    }, [buildingId, newRoomFloor, newRoomName]);
 
     const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
@@ -865,20 +879,23 @@ export default function AdminManageRoomsTab({
                                     ))}
                                 </select>
                             </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-black mb-1.5">Beacon ID (building-room-beacon)</label>
-                            <input
-                                type="text"
-                                value={newRoomBeaconId}
-                                onChange={(event) => setNewRoomBeaconId(event.target.value)}
-                                placeholder="e.g. dc-312-beacon or gd3-506-beacon"
-                                className="glass-input w-full px-4 py-2.5 text-sm"
-                            />
-                            <p className="mt-1.5 text-xs text-black">
-                                Use the exact ESP32 BLE device name for Bluetooth room check-in. Not required for all rooms.
-                            </p>
+                            <div className="sm:col-span-2">
+                                <div className="flex w-full gap-4">
+                                    <div className="flex-1 min-w-0">
+                                        <label className="block text-xs font-bold text-black mb-1.5">Beacon ID (building-room-beacon)</label>
+                                        <input
+                                            type="text"
+                                            value={newRoomBeaconId}
+                                            onChange={(event) => setNewRoomBeaconId(event.target.value)}
+                                            placeholder="e.g. dc-312-beacon or gd3-506-beacon"
+                                            className="glass-input w-full px-4 py-2.5 text-sm"
+                                        />
+                                        <p className="mt-1.5 text-xs text-black">
+                                            This will be used by the ESP32 BLE device for Bluetooth room check-in. Not required for all rooms.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div>
@@ -1020,14 +1037,59 @@ export default function AdminManageRoomsTab({
                                             </select>
                                         </div>
                                         <div className="sm:col-span-2">
-                                            <label className="mb-1.5 block text-xs font-bold text-black">Beacon ID (bld-roomname-beacon)</label>
-                                            <input
-                                                type="text"
-                                                value={editBeaconId}
-                                                onChange={(event) => setEditBeaconId(event.target.value)}
-                                                className="glass-input w-full px-4 py-2.5 text-sm !border-gray-400 focus:!border-primary"
-                                                placeholder="e.g. gd3-506-beacon"
-                                            />
+                                            <div className="flex w-full gap-4">
+                                                <div className="flex-1 min-w-0">
+                                                    <label className="mb-1.5 block text-xs font-bold text-black">Beacon ID (bld-roomname-beacon)</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="text"
+                                                            value={editBeaconId}
+                                                            onChange={(event) => setEditBeaconId(event.target.value)}
+                                                            className="glass-input w-full px-4 py-2.5 text-sm !border-gray-400 focus:!border-primary"
+                                                            placeholder="e.g. gd3-506-beacon"
+                                                        />
+                                                        <button
+                                                            onClick={() => navigator.clipboard.writeText(editBeaconId)}
+                                                            className="p-1 rounded hover:bg-primary/10 transition-all"
+                                                            title="Copy Beacon ID"
+                                                            disabled={!editBeaconId}
+                                                        >
+                                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" stroke="currentColor" strokeWidth="2"/>
+                                                                <path d="M5 15H4a2 2 0 01-2-2V6a2 2 0 012-2h3a2 2 0 012 2v1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                    <p className="mt-1.5 text-xs text-black">
+                                                        This will be used by the ESP32 BLE device for Bluetooth room check-in. Not required for all rooms.
+                                                    </p>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <label className="mb-1.5 block text-xs font-bold text-black">Room ID</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="text"
+                                                            value={editingRoomId || ''}
+                                                            readOnly
+                                                            className="glass-input w-full px-4 py-2.5 text-sm !border-gray-400 focus:!border-primary"
+                                                        />
+                                                        <button
+                                                            onClick={() => navigator.clipboard.writeText(editingRoomId || '')}
+                                                            className="p-1 rounded hover:bg-primary/10 transition-all"
+                                                            title="Copy Room ID"
+                                                            disabled={!editingRoomId}
+                                                        >
+                                                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" stroke="currentColor" strokeWidth="2"/>
+                                                                <path d="M5 15H4a2 2 0 01-2-2V6a2 2 0 012-2h3a2 2 0 012 2v1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                    <p className="mt-1.5 text-xs text-black">
+                                                        Unique identifier for this room. This is retrieved from the database.
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
