@@ -20,6 +20,7 @@ import {
   deleteReservationRecord,
   disconnectReservationBeaconRecord,
   rejectReservationRecord,
+  sendExpirationMessageRecord,
   sendReservationPresenceHeartbeatRecord,
   startReservationPresenceMonitorRecord,
   stopReservationPresenceMonitorRecord,
@@ -85,6 +86,10 @@ const reservationActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("delete"),
     userId: z.string().trim().min(1),
+  }),
+  z.object({
+    action: z.literal("send-expiration-message"),
+    message: z.string().trim().min(1).max(500),
   }),
   z.object({
     action: z.literal("request-revision"),
@@ -269,6 +274,7 @@ export async function PATCH(
         const reservation = reservationSnapshot.data() as {
           buildingId?: string;
           date?: string;
+          expirationReason?: string;
           status?: string;
           userId?: string;
         };
@@ -284,9 +290,11 @@ export async function PATCH(
 
         const todayDateKey = getTodayDateKeyInReservationTimeZone();
         const isExpiredPendingReservation =
-          reservation.status === "pending" &&
-          typeof reservation.date === "string" &&
-          reservation.date < todayDateKey;
+          (reservation.status === "pending" &&
+            typeof reservation.date === "string" &&
+            reservation.date < todayDateKey) ||
+          (reservation.status === "expired" &&
+            reservation.expirationReason === "pending_approval_deadline");
 
         if (!reservation.buildingId || !isExpiredPendingReservation) {
           throw new ApiError(403, "forbidden", "You cannot delete this reservation.");
@@ -294,6 +302,13 @@ export async function PATCH(
 
         assertCanManageBuilding(authContext, reservation.buildingId);
         await deleteReservationRecord(reservationId, reservation.userId);
+        break;
+      case "send-expiration-message":
+        await sendExpirationMessageRecord(
+          reservationId,
+          authContext,
+          payload.message
+        );
         break;
       case "request-revision": {
         const result = await requestReservationRevision(

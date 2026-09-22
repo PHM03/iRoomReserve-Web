@@ -24,6 +24,7 @@ import { type RoomCheckInMethod } from "@/lib/rooms/roomStatus";
 import { groupReservationsForDisplay } from "@/lib/reservations/reservation-groups";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
 import type { ReservationRevisionRecord } from "@/lib/reservations/reservation-revisions";
+import type { ReservationTimestampLike } from "@/lib/reservations/reservation-monitoring";
 
 export type EventReservationValue = "Yes" | "No";
 
@@ -68,6 +69,13 @@ export interface Reservation {
   isRecurringRequest?: boolean;
   occurrenceCount?: number;
   checkedInAt?: Timestamp | null;
+  expiredAt?: ReservationTimestampLike;
+  expirationReason?: string | null;
+  expirationMessage?: {
+    message: string;
+    sentBy: string;
+    sentAt?: ReservationTimestampLike;
+  } | null;
   occupancyReleasedAt?: Timestamp | null;
   checkInMethod?: RoomCheckInMethod | null;
   createdAt?: Timestamp;
@@ -88,6 +96,9 @@ export type ReservationInput = Omit<
   | "activeRevisionStatus"
   | "revisionScope"
   | "checkedInAt"
+  | "expiredAt"
+  | "expirationReason"
+  | "expirationMessage"
   | "checkInMethod"
   | "createdAt"
   | "updatedAt"
@@ -711,5 +722,19 @@ export async function deleteReservation(
     },
     method: "PATCH",
     userId,
+  });
+}
+
+export async function sendExpirationMessage(
+  reservationId: string,
+  message: string
+): Promise<void> {
+  await apiRequest(`/api/reservations/${reservationId}`, {
+    body: {
+      action: "send-expiration-message",
+      message,
+    },
+    method: "PATCH",
+    userId: auth.currentUser?.uid,
   });
 }

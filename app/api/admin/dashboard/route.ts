@@ -359,6 +359,10 @@ export async function GET(request: NextRequest) {
       .collection("reservations")
       .where("buildingId", "==", buildingId)
       .where("status", "==", "pending");
+    const expiredReservationsQuery = adminDb
+      .collection("reservations")
+      .where("buildingId", "==", buildingId)
+      .where("status", "==", "expired");
     const schedulesBaseQuery = adminDb
       .collection("schedules")
       .where("buildingId", "==", buildingId);
@@ -372,6 +376,7 @@ export async function GET(request: NextRequest) {
       roomsSnapshot,
       approvedReservationsSnapshot,
       pendingReservationsSnapshot,
+      expiredReservationsSnapshot,
       schedulesSnapshot,
       roomHistorySnapshot,
     ] = await Promise.all([
@@ -385,6 +390,9 @@ export async function GET(request: NextRequest) {
         : Promise.resolve(null),
       includePendingRequests || includeSummary
         ? pendingReservationsQuery.get()
+        : Promise.resolve(null),
+      includePendingRequests
+        ? expiredReservationsQuery.get()
         : Promise.resolve(null),
       includeSchedules
         ? schedulesQuery.get()
@@ -477,6 +485,18 @@ export async function GET(request: NextRequest) {
     const allPendingRequests = groupReservationsForDisplay(
       pendingRequests.sort(sortReservations)
     );
+    const expiredPendingRequests = groupReservationsForDisplay(
+      (expiredReservationsSnapshot?.docs ?? [])
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }) as DashboardReservation)
+        .filter(
+          (reservation) =>
+            reservation.expirationReason === "pending_approval_deadline"
+        )
+        .sort(sortReservations)
+    );
     const allRequests = includePendingRequests ? allPendingRequests : [];
     const requests = await Promise.all(
       (pendingLimit ? allRequests.slice(0, pendingLimit) : allRequests).map(
@@ -485,6 +505,12 @@ export async function GET(request: NextRequest) {
           approvalDocumentUrl: await getApprovalDocumentUrl(reservation),
         })
       )
+    );
+    const expiredRequests = await Promise.all(
+      expiredPendingRequests.map(async (reservation) => ({
+        ...reservation,
+        approvalDocumentUrl: await getApprovalDocumentUrl(reservation),
+      }))
     );
     const schedules = (schedulesSnapshot?.docs ?? [])
       .map((doc) => ({
@@ -526,6 +552,7 @@ export async function GET(request: NextRequest) {
       allReservations,
       notifications: [] as DashboardNotification[],
       requests,
+      expiredRequests,
       roomHistory,
       rooms,
       schedules,

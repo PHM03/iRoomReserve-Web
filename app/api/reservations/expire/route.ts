@@ -7,7 +7,7 @@ import { expireOpenReservationsForUser } from "@/lib/server/services/reservation
 
 export const runtime = "nodejs";
 
-/** Marks the signed-in user's unfinished reservations as expired once ended. */
+/** Refreshes legacy approved cleanup and the server-side pending monitor. */
 export async function POST(request: NextRequest) {
   try {
     const authContext = await getRequestAuthContext(request);

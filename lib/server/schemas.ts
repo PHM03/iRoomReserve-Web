@@ -349,6 +349,7 @@ export const feedbackCreateSchema = z.object({
   reservationId: nonEmptyString,
   userId: nonEmptyString,
   userName: nonEmptyString,
+  showSubmitterName: z.boolean().default(false),
   message: nonEmptyString,
   rating: z.number().int().min(1).max(5),
   categoryRatings: feedbackCategoryRatingsSchema,

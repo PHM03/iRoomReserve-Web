@@ -46,6 +46,7 @@ export interface FeedbackCreateInput {
   reservationId: string;
   userId: string;
   userName: string;
+  showSubmitterName?: boolean;
   message: string;
   rating: number;
   categoryRatings: FeedbackCategoryRatings;
@@ -86,6 +87,7 @@ export interface FeedbackRecord extends FeedbackSentimentFields {
   text: string;
   userId: string;
   userName: string;
+  showSubmitterName: boolean;
   vaderCompoundScore?: number;
   vader_compound_score?: number;
 }
@@ -234,6 +236,7 @@ function mapFeedbackDocument(
     text,
     userId: data.userId ?? "",
     userName: data.userName ?? "",
+    showSubmitterName: data.showSubmitterName === true,
     vaderCompoundScore,
     vader_compound_score: vaderCompoundScore,
   };
@@ -242,7 +245,14 @@ function mapFeedbackDocument(
 export async function createFeedbackRecord(
   data: FeedbackCreateInput,
   submitterRole: string | null,
+  submitterUid: string,
 ) {
+  const profileSnapshot = await db.collection("users").doc(submitterUid).get();
+  const profileData = profileSnapshot.exists ? profileSnapshot.data() ?? {} : {};
+  const trustedUserName = [profileData.firstName, profileData.lastName]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => value.trim())
+    .join(" ") || "User";
   const feedbackText = data.message.trim();
   const analytics = analyzeFeedbackText(feedbackText);
   const sentiment = analytics.sentiment;
@@ -252,6 +262,8 @@ export async function createFeedbackRecord(
   const feedbackRef = db.collection("feedback").doc();
   const feedbackData = {
     ...data,
+    userName: trustedUserName,
+    showSubmitterName: data.showSubmitterName === true,
     categoryRatings: data.categoryRatings,
     category_ratings: data.categoryRatings,
     detectedAspects: analytics.detectedAspects,
@@ -313,7 +325,7 @@ export async function createFeedbackRecord(
       recipientUid: adminUid,
       type: "feedback",
       title: "New Room Feedback",
-      message: `${data.userName} left feedback for ${data.roomName}: "${feedbackText.slice(
+      message: `${data.showSubmitterName ? trustedUserName : "Anonymous"} left feedback for ${data.roomName}: "${feedbackText.slice(
         0,
         60
       )}${feedbackText.length > 60 ? "..." : ""}"`,

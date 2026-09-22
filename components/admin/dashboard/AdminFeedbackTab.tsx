@@ -49,6 +49,10 @@ import {
 import { createFeedbackAnalyticsReportScope } from '@/lib/feedback/feedback-report-dashboard';
 import { apiRequestBlob } from '@/lib/api/client';
 import { respondToFeedback, type Feedback } from '@/lib/feedback/feedback';
+import {
+  getFeedbackDisplayName,
+  getFeedbackReviewerGroupId,
+} from '@/lib/feedback/feedback-privacy';
 import { FEEDBACK_ROLE_OPTIONS, matchesFeedbackRole } from '@/lib/feedback/feedback-role';
 import { USER_GENDER_LABELS, USER_GENDER_VALUES, normalizeUserGender } from '@/lib/auth/profile-types';
 import type { Room } from '@/lib/rooms/rooms';
@@ -170,15 +174,15 @@ function groupFeedbackByReviewer(items: Feedback[]): ReviewerFeedbackGroup[] {
   const groups = new Map<string, { id: string; name: string; feedback: Feedback[] }>();
 
   items.forEach((feedback) => {
-    // `userId` is stable even when a reviewer updates their display name. Fall
-    // back to the name for legacy feedback records that predate user IDs.
-    const id = feedback.userId || feedback.userName || feedback.id;
+    // Anonymous entries must remain separate so the UI cannot reveal that
+    // multiple anonymous reviews belong to the same account.
+    const id = getFeedbackReviewerGroupId(feedback);
     const existing = groups.get(id);
     if (existing) {
       existing.feedback.push(feedback);
       return;
     }
-    groups.set(id, { id, name: feedback.userName || 'Unknown user', feedback: [feedback] });
+    groups.set(id, { id, name: getFeedbackDisplayName(feedback), feedback: [feedback] });
   });
 
   return [...groups.values()].map((group) => ({
@@ -403,8 +407,6 @@ export default function AdminFeedbackTab({
 
   const hasActiveFilters =
     reportFilters.locationScope !== 'building' || reportFilters.star !== null || !!reportFilters.dateFrom || !!reportFilters.dateTo || !!reportFilters.role || !!reportFilters.gender;
-  const anonymizeFilteredFeedback = false;
-
   const insightPeriodFeedback = selectedPeriodFeedback;
 
   const feedbackInsights = useMemo(
@@ -1240,11 +1242,11 @@ export default function AdminFeedbackTab({
                     onClick={() => setExpandedFeedbackId(feedback.id)}
                     aria-expanded={false}
                     aria-controls={`feedback-details-${feedback.id}`}
-                    aria-label={`Expand feedback from ${anonymizeFilteredFeedback ? 'anonymous user' : feedback.userName}`}
+                    aria-label={`Expand feedback from ${getFeedbackDisplayName(feedback)}`}
                   >
                     <div className="min-w-0">
                       <h4 className="truncate text-sm font-bold text-black">
-                        {anonymizeFilteredFeedback ? 'Anonymous user' : feedback.userName}
+                        {getFeedbackDisplayName(feedback)}
                       </h4>
                       <p className="mt-1 line-clamp-2 text-sm italic leading-relaxed text-black/70">
                         “{feedback.message || feedback.text || 'No comment provided.'}”
@@ -1261,18 +1263,18 @@ export default function AdminFeedbackTab({
                     </div>
                   </button>
                 ) : null}
-                {isExpanded ? <div id={`feedback-details-${feedback.id}`} className="border-t border-dark/10 p-5" aria-label={`Expanded feedback from ${anonymizeFilteredFeedback ? 'anonymous user' : feedback.userName}`}>
+                {isExpanded ? <div id={`feedback-details-${feedback.id}`} className="border-t border-dark/10 p-5" aria-label={`Expanded feedback from ${getFeedbackDisplayName(feedback)}`}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-dark/5 border border-dark/10 flex items-center justify-center text-black font-bold text-sm">
-                      {anonymizeFilteredFeedback ? '?' : feedback.userName
+                      {!feedback.showSubmitterName ? '?' : feedback.userName
                         .split(' ')
                         .map((name) => name[0])
                         .join('')
                         .toUpperCase()}
                     </div>
                     <div>
-                      <h4 className="font-bold text-black text-sm">{anonymizeFilteredFeedback ? 'Anonymous user' : feedback.userName}</h4>
+                      <h4 className="font-bold text-black text-sm">{getFeedbackDisplayName(feedback)}</h4>
                       <p className="text-xs text-black">
                         {feedback.roomName} | {feedback.buildingName}
                       </p>

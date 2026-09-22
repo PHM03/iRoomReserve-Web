@@ -174,6 +174,10 @@ function getReservationUpdateStatus(
   notification: AppNotification,
   reservation?: Reservation,
 ): ReservationUpdateStatus {
+  if (reservation?.status === 'expired') {
+    return 'expired';
+  }
+
   const today = new Date();
   const todayDateKey = [
     today.getFullYear(),

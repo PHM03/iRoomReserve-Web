@@ -47,6 +47,7 @@ export interface Feedback {
   reservationId: string;
   userId: string;
   userName: string;
+  showSubmitterName: boolean;
   gender?: unknown;
     role?: unknown;
     userRole?: unknown;
@@ -80,6 +81,7 @@ export interface FeedbackInput {
   reservationId: string;
   userId: string;
   userName: string;
+  showSubmitterName: boolean;
   message: string;
   rating: number;
   categoryRatings: FeedbackCategoryRatings;
@@ -215,6 +217,7 @@ function mapFeedbackData(id: string, data: FeedbackSnapshot): Feedback {
     reservationId: data.reservationId ?? "",
     userId: data.userId ?? "",
     userName: data.userName ?? "",
+    showSubmitterName: data.showSubmitterName === true,
     gender: data.gender,
     role: data.role ?? data.userRole,
     text,
@@ -291,6 +294,7 @@ export async function submitFeedback(
     roomId: normalizedRoomId,
     userId: currentUser.uid,
     userName: currentUser.displayName?.trim() ?? "",
+    showSubmitterName: false,
     text,
     message: text,
     feedbackText: text,

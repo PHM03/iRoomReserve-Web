@@ -26,6 +26,7 @@ export interface AdminDashboardSnapshot {
   allReservations: Reservation[];
   notifications: Notification[];
   requests: Reservation[];
+  expiredRequests: Reservation[];
   roomHistory: RoomHistoryEntry[];
   rooms: Room[];
   schedules: Schedule[];
@@ -154,6 +155,26 @@ export async function fetchAdminDashboardSnapshot(
         "updatedAt",
       ])
     ),
+    expiredRequests: (snapshot.expiredRequests ?? []).map((reservation) => {
+      const nextReservation = reviveRecordTimestamps(reservation, [
+        "checkedInAt",
+        "createdAt",
+        "expiredAt",
+        "updatedAt",
+      ]);
+      const expirationMessage = nextReservation.expirationMessage;
+      if (!expirationMessage) {
+        return nextReservation;
+      }
+
+      return {
+        ...nextReservation,
+        expirationMessage: {
+          ...expirationMessage,
+          sentAt: reviveTimestamp(expirationMessage.sentAt as TimestampLike),
+        },
+      };
+    }),
     roomHistory: (snapshot.roomHistory ?? []).map((entry) =>
       reviveRecordTimestamps(entry, ["createdAt"])
     ),

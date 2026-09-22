@@ -62,6 +62,15 @@ import {
   isCurrentRequestedRevision,
   type ReservationRevisionRecord,
 } from "@/lib/reservations/reservation-revisions";
+import {
+  getManilaDateKey,
+  getMonitoringDayOffset,
+  isPendingReservationDueForExpiration,
+} from "@/lib/reservations/reservation-monitoring";
+import {
+  MAX_EXPIRATION_MESSAGE_LENGTH,
+  normalizeExpirationMessage,
+} from "@/lib/reservations/expiration-message";
 
 type ReservationStatus =
   | "pending"
@@ -78,6 +87,11 @@ type ReservationPresenceStatus =
   | "warning";
 
 const PRESENCE_HEARTBEAT_TIMEOUT_MS = 2 * 60 * 1000;
+interface ReservationExpirationMessage {
+  message: string;
+  sentBy: string;
+  sentAt?: FirestoreTimestampLike | null;
+}
 
 interface ReservationRecord {
   id: string;
@@ -118,6 +132,8 @@ interface ReservationRecord {
   checkedInAt?: FirestoreTimestampLike | null;
   completedAt?: FirestoreTimestampLike | null;
   expiredAt?: FirestoreTimestampLike | null;
+  expirationReason?: string | null;
+  expirationMessage?: ReservationExpirationMessage | null;
   occupancyReleasedAt?: FirestoreTimestampLike | null;
   occupancyReleasedByUid?: string | null;
   checkInMethod?: RoomCheckInMethod | null;
@@ -708,6 +724,18 @@ async function getUserIdsByEmail(email: string) {
     .get();
 
   return usersSnapshot.docs.map((userDoc) => userDoc.id);
+}
+
+async function getReservationMonitoringAdminIds(reservation: ReservationRecord) {
+  const responsibleAdminIds = await getResponsibleBuildingAdminIds(
+    reservation.approvalFlow
+  );
+
+  if (responsibleAdminIds.length > 0) {
+    return responsibleAdminIds;
+  }
+
+  return getAssignedBuildingAdminIds(reservation.buildingId);
 }
 
 async function getApprovedUsersByEmail(email: string) {
@@ -1438,17 +1466,176 @@ export async function createRecurringReservationRecord(
 }
 
 /**
- * Converts a user's past, unfinished requests to expired records. Each
- * reservation uses a deterministic notification id, so repeated page loads
- * cannot create duplicate in-app expiry notices.
+ * Applies the server-authoritative pending approval deadline and sends the
+ * three-day monitoring reminders. Deterministic notification document IDs
+ * make repeated cron/app-heartbeat runs idempotent.
+ */
+export async function monitorPendingReservations(now: Date = new Date()) {
+  const pendingSnapshot = await db
+    .collection("reservations")
+    .where("status", "==", "pending")
+    .get();
+  const queuedNotifications: AppNotificationInput[] = [];
+  let expiredCount = 0;
+
+  await Promise.all(
+    pendingSnapshot.docs.map(async (reservationDoc) => {
+      const initialReservation = {
+        id: reservationDoc.id,
+        ...reservationDoc.data(),
+      } as ReservationRecord;
+      const adminIds = await getReservationMonitoringAdminIds(initialReservation);
+      const recipientIds = [
+        ...new Set([initialReservation.userId, ...adminIds]),
+      ].filter(Boolean);
+
+      const result = await db.runTransaction(async (transaction) => {
+        const currentSnapshot = await transaction.get(reservationDoc.ref);
+        if (!currentSnapshot.exists) {
+          return { expired: false, notifications: [] as AppNotificationInput[] };
+        }
+
+        const reservation = {
+          id: currentSnapshot.id,
+          ...currentSnapshot.data(),
+        } as ReservationRecord;
+        if (
+          reservation.status !== "pending" ||
+          !reservation.date ||
+          recipientIds.length === 0
+        ) {
+          return { expired: false, notifications: [] as AppNotificationInput[] };
+        }
+
+        const dayOffset = getMonitoringDayOffset(reservation.date, now);
+        const isDue = isPendingReservationDueForExpiration(reservation.date, now);
+        const notificationInputs: AppNotificationInput[] = [];
+        const notificationRefs = recipientIds.map((recipientUid) => {
+          const suffix = isDue ? "expired" : `approaching-${dayOffset}d`;
+          return db
+            .collection("notifications")
+            .doc(`reservation-monitor-${reservation.id}-${suffix}-${recipientUid}`);
+        });
+        const existingNotifications = await Promise.all(
+          notificationRefs.map((notificationRef) => transaction.get(notificationRef))
+        );
+
+        if (isDue) {
+          const expirationDateLabel = formatNotificationDate(reservation.date);
+          const requesterMessage = `Your reservation request for ${reservation.roomName} on ${formatReservationScheduleLabel(
+            reservation
+          )} expired on ${expirationDateLabel} because it was not processed before the reservation date.`;
+          const adminMessage = `The reservation request for ${reservation.roomName} on ${formatReservationScheduleLabel(
+            reservation
+          )} expired on ${expirationDateLabel} because it was still pending when the reservation date arrived.`;
+
+          transaction.update(reservationDoc.ref, {
+            expiredAt: serverTimestamp(),
+            expirationReason: "pending_approval_deadline",
+            status: "expired",
+            updatedAt: serverTimestamp(),
+          });
+          recipientIds.forEach((recipientUid, index) => {
+            if (existingNotifications[index].exists) {
+              return;
+            }
+
+            const isRequester = recipientUid === reservation.userId;
+            const notificationInput: AppNotificationInput = {
+              recipientUid,
+              type: "system",
+              title: "Reservation Request Expired",
+              message: isRequester ? requesterMessage : adminMessage,
+              buildingId: reservation.buildingId,
+              reservationId: reservation.id,
+              route: isRequester
+                ? "/dashboard/reservations"
+                : "/admin/dashboard?tab=pending",
+            };
+            transaction.set(notificationRefs[index], {
+              ...notificationInput,
+              read: false,
+              createdAt: serverTimestamp(),
+            });
+            notificationInputs.push(notificationInput);
+          });
+        } else if (dayOffset !== null) {
+          const requesterMessage =
+            dayOffset === 1
+              ? `Your reservation for ${reservation.roomName} on ${formatReservationScheduleLabel(
+                  reservation
+                )} has still not been approved and will expire when the reservation date arrives if it remains pending.`
+              : `Your reservation for ${reservation.roomName} on ${formatReservationScheduleLabel(
+                  reservation
+                )} is approaching and is still pending approval. Please monitor the request.`;
+          const adminMessage =
+            dayOffset === 1
+              ? `This reservation for ${reservation.roomName} on ${formatReservationScheduleLabel(
+                  reservation
+                )} has still not been approved and will expire when the reservation date arrives if it remains pending. Please review the request.`
+              : `Reservation approaching — ${reservation.roomName} on ${formatReservationScheduleLabel(
+                  reservation
+                )} is ${dayOffset} days away and still pending approval. Approval may be required.`;
+
+          recipientIds.forEach((recipientUid, index) => {
+            if (existingNotifications[index].exists) {
+              return;
+            }
+
+            const isRequester = recipientUid === reservation.userId;
+            const notificationInput: AppNotificationInput = {
+              recipientUid,
+              type: "system",
+              title: isRequester
+                ? "Reservation Approaching"
+                : "Reservation Approval Reminder",
+              message: isRequester ? requesterMessage : adminMessage,
+              buildingId: reservation.buildingId,
+              reservationId: reservation.id,
+              route: isRequester
+                ? "/dashboard/reservations"
+                : "/admin/dashboard?tab=pending",
+            };
+            transaction.set(notificationRefs[index], {
+              ...notificationInput,
+              read: false,
+              createdAt: serverTimestamp(),
+            });
+            notificationInputs.push(notificationInput);
+          });
+        }
+
+        return { expired: isDue, notifications: notificationInputs };
+      });
+
+      if (result.expired) {
+        expiredCount += 1;
+      }
+      queuedNotifications.push(...result.notifications);
+    })
+  );
+
+  await sendQueuedPushNotifications(queuedNotifications);
+  return {
+    expiredCount,
+    notificationCount: queuedNotifications.length,
+    manilaDate: getManilaDateKey(now),
+  };
+}
+
+/**
+ * Keeps the existing requester-triggered approved-reservation completion
+ * cleanup, while also invoking the global pending monitor as a compatibility
+ * fallback when the scheduled server route is not running.
  */
 export async function expireOpenReservationsForUser(userId: string) {
   const openSnapshot = await db
     .collection("reservations")
     .where("userId", "==", userId)
-    .where("status", "in", ["pending", "approved"])
+    .where("status", "==", "approved")
     .get();
   const queuedNotifications: AppNotificationInput[] = [];
+  let expiredCount = 0;
 
   await Promise.all(
     openSnapshot.docs.map(async (reservationDoc) => {
@@ -1464,25 +1651,19 @@ export async function expireOpenReservationsForUser(userId: string) {
         } as ReservationRecord;
         if (
           reservation.userId !== userId ||
-          (reservation.status !== "pending" && reservation.status !== "approved") ||
+          reservation.status !== "approved" ||
           !hasReservationEnded(reservation)
         ) {
           return null;
         }
 
-        const message =
-          reservation.status === "approved"
-            ? `Your approved reservation request for ${reservation.roomName} on ${formatReservationScheduleLabel(
-                reservation
-              )} has expired and was not completed.`
-            : `Your reservation request for ${reservation.roomName} on ${formatReservationScheduleLabel(
-                reservation
-              )} has expired and was not approved.`;
         const notificationInput: AppNotificationInput = {
           recipientUid: userId,
           type: "system",
           title: "Reservation Expired",
-          message,
+          message: `Your approved reservation request for ${reservation.roomName} on ${formatReservationScheduleLabel(
+            reservation
+          )} has expired and was not completed.`,
           buildingId: reservation.buildingId,
           reservationId: reservation.id,
           route: "/dashboard/reservations",
@@ -1504,6 +1685,7 @@ export async function expireOpenReservationsForUser(userId: string) {
       });
 
       if (notification) {
+        expiredCount += 1;
         queuedNotifications.push(notification);
       }
     })
@@ -1561,8 +1743,104 @@ export async function expireOpenReservationsForUser(userId: string) {
     })
   );
 
+  const pendingMonitorResult = await monitorPendingReservations();
   await sendQueuedPushNotifications(queuedNotifications);
-  return { expiredCount: queuedNotifications.length };
+  return {
+    expiredCount: expiredCount + pendingMonitorResult.expiredCount,
+    notificationCount:
+      queuedNotifications.length + pendingMonitorResult.notificationCount,
+  };
+}
+
+export async function sendExpirationMessageRecord(
+  reservationId: string,
+  authContext: RequestAuthContext,
+  message: string
+) {
+  assertVerifiedAuthentication(authContext);
+
+  const normalizedMessage = normalizeExpirationMessage(message);
+  if (!normalizedMessage) {
+    if (message.trim().length > MAX_EXPIRATION_MESSAGE_LENGTH) {
+      throw new ApiError(
+        400,
+        "message_too_long",
+        `Message must be ${MAX_EXPIRATION_MESSAGE_LENGTH} characters or fewer.`
+      );
+    }
+    throw new ApiError(400, "invalid_message", "Message cannot be empty.");
+  }
+
+  const reservationRef = db.collection("reservations").doc(reservationId);
+  const initialSnapshot = await reservationRef.get();
+  if (!initialSnapshot.exists) {
+    throw new ApiError(404, "not_found", "Reservation not found.");
+  }
+
+  const initialReservation = {
+    id: initialSnapshot.id,
+    ...initialSnapshot.data(),
+  } as ReservationRecord;
+  if (!initialReservation.buildingId) {
+    throw new ApiError(400, "invalid_reservation", "Reservation building is missing.");
+  }
+
+  assertCanManageBuilding(authContext, initialReservation.buildingId);
+  if (
+    authContext.role !== USER_ROLES.ADMIN &&
+    authContext.role !== USER_ROLES.SUPER_ADMIN
+  ) {
+    throw new ApiError(403, "forbidden", "Only building administrators can send this message.");
+  }
+
+  if (authContext.role !== USER_ROLES.SUPER_ADMIN) {
+    const responsibleAdminIds = await getReservationMonitoringAdminIds(initialReservation);
+    if (!responsibleAdminIds.includes(authContext.uid!)) {
+      throw new ApiError(
+        403,
+        "forbidden",
+        "Only the responsible building administrator can send this message."
+      );
+    }
+  }
+
+  await db.runTransaction(async (transaction) => {
+    const currentSnapshot = await transaction.get(reservationRef);
+    if (!currentSnapshot.exists) {
+      throw new ApiError(404, "not_found", "Reservation not found.");
+    }
+
+    const reservation = {
+      id: currentSnapshot.id,
+      ...currentSnapshot.data(),
+    } as ReservationRecord;
+    if (
+      reservation.status !== "expired" ||
+      reservation.expirationReason !== "pending_approval_deadline"
+    ) {
+      throw new ApiError(
+        400,
+        "ineligible_reservation",
+        "Only pending reservations expired at the approval deadline can receive this message."
+      );
+    }
+    if (reservation.expirationMessage?.message?.trim()) {
+      throw new ApiError(
+        409,
+        "message_already_sent",
+        "An expiration message has already been sent for this reservation."
+      );
+    }
+
+    transaction.update(reservationRef, {
+      expirationMessage: {
+        message: normalizedMessage,
+        sentBy: "building_admin",
+        sentAt: serverTimestamp(),
+      },
+      updatedAt: serverTimestamp(),
+    });
+  });
 }
 
 export async function approveReservationRecord(

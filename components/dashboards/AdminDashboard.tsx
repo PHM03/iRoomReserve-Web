@@ -113,6 +113,7 @@ export default function AdminDashboard({
   }, [managedBuildings, setSelectedBuildingId]);
 
   const [requests, setRequests] = useState<Reservation[]>([]);
+  const [expiredRequests, setExpiredRequests] = useState<Reservation[]>([]);
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
@@ -188,6 +189,7 @@ export default function AdminDashboard({
       setAllReservations(snapshot.allReservations);
       setDashboardSummary(snapshot.summary);
       setRequests(snapshot.requests);
+      setExpiredRequests(snapshot.expiredRequests ?? []);
       setRoomHistory(snapshot.roomHistory);
       setRooms(snapshot.rooms);
       setSchedules(snapshot.schedules);
@@ -195,6 +197,7 @@ export default function AdminDashboard({
       console.warn('Failed to load admin dashboard snapshot:', error);
       setAllReservations([]);
       setRequests([]);
+      setExpiredRequests([]);
       setRoomHistory([]);
       setRooms([]);
       setSchedules([]);
@@ -465,6 +468,7 @@ export default function AdminDashboard({
           buildingId={buildingId}
           currentUserId={firebaseUser?.uid}
           requests={requests}
+          expiredRequests={expiredRequests}
           onReload={reloadDashboard}
           managedBuildings={managedBuildings}
           onBuildingChange={setSelectedBuildingId}

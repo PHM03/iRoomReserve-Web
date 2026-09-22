@@ -11,6 +11,7 @@ import {
   deleteReservation,
   requestReservationRevision,
   rejectReservation,
+  sendExpirationMessage,
   type Reservation,
 } from '@/lib/reservations/reservations';
 import { isBuildingAdminActionableReservation } from '@/lib/reservations/reservation-revisions';
@@ -19,6 +20,7 @@ import { DAY_NAMES, getSchedulesByRoomId, type Schedule } from '@/lib/schedules/
 import { extractTimeString, formatTimeRange } from '@/lib/utils/dateTime';
 import { formatReservationDates, RoleBadge, getManagedBuildingOptionLabel } from './shared';
 import { formatOtherEquipment } from '@/lib/reservations/equipment';
+import { getMonitoringDayOffset } from '@/lib/reservations/reservation-monitoring';
 
 interface BuildingOption {
   id: string;
@@ -30,6 +32,7 @@ interface AdminPendingTabProps {
   approverEmail?: string | null;
   buildingId: string;
   currentUserId?: string | null;
+  expiredRequests: Reservation[];
   requests: Reservation[];
   managedBuildings: BuildingOption[];
   onBuildingChange: (buildingId: string) => void;
@@ -83,31 +86,12 @@ function getDayOfWeekFromDate(dateString: string) {
   return Number.isNaN(parsedDate.getTime()) ? null : parsedDate.getDay();
 }
 
-function getTodayDateKey() {
-  const today = new Date();
-  return [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, '0'),
-    String(today.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
 function getRequestedEquipmentEntries(equipment?: Record<string, number>) {
   if (!equipment) {
     return [];
   }
 
   return Object.entries(equipment).filter(([, quantity]) => quantity > 0);
-}
-
-function isExpiredReservation(request: Reservation) {
-  const reservationDates = getReservationDates(request);
-  if (reservationDates.length === 0) {
-    return false;
-  }
-
-  const todayDateKey = getTodayDateKey();
-  return reservationDates.every((date) => date < todayDateKey);
 }
 
 function getMinutesFromTime(value: string) {
@@ -174,6 +158,7 @@ export default function AdminPendingTab({
   approverEmail,
   buildingId,
   currentUserId,
+  expiredRequests,
   requests,
   managedBuildings,
   onBuildingChange,
@@ -197,11 +182,21 @@ export default function AdminPendingTab({
   const [revisionRoomId, setRevisionRoomId] = useState('');
   const [revisionError, setRevisionError] = useState('');
   const [revisionSubmitting, setRevisionSubmitting] = useState(false);
+  const [expirationMessageReservationId, setExpirationMessageReservationId] = useState<string | null>(null);
+  const [expirationMessage, setExpirationMessage] = useState('');
+  const [expirationMessageError, setExpirationMessageError] = useState('');
+  const [expirationMessageSubmitting, setExpirationMessageSubmitting] = useState(false);
 
   const isAnyFilterActive =
     userTypeFilter.length > 0 ||
     floorFilter !== '' ||
     roomFilter !== '';
+
+  const displayedRequests = useMemo(() => {
+    const byId = new Map<string, Reservation>();
+    [...requests, ...expiredRequests].forEach((request) => byId.set(request.id, request));
+    return [...byId.values()];
+  }, [expiredRequests, requests]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,7 +261,7 @@ export default function AdminPendingTab({
     );
     const seen = new Set<string>();
 
-    return requests
+    return displayedRequests
       .filter((request) => matchingRoomIds.size === 0 || matchingRoomIds.has(request.roomId))
       .map((request) => request.roomName)
       .filter((name) => {
@@ -275,7 +270,7 @@ export default function AdminPendingTab({
         return true;
       })
       .sort();
-  }, [buildingRooms, floorFilter, requests]);
+  }, [buildingRooms, displayedRequests, floorFilter]);
 
   useEffect(() => {
     if (roomOptions.length === 0) {
@@ -411,8 +406,47 @@ export default function AdminPendingTab({
     }
   };
 
+  const openExpirationMessage = (request: Reservation) => {
+    setExpirationMessageReservationId(request.id);
+    setExpirationMessage('');
+    setExpirationMessageError('');
+    setExpandedReservationIds((current) =>
+      current.includes(request.id) ? current : [...current, request.id]
+    );
+  };
+
+  const closeExpirationMessage = () => {
+    if (expirationMessageSubmitting) return;
+    setExpirationMessageReservationId(null);
+    setExpirationMessage('');
+    setExpirationMessageError('');
+  };
+
+  const handleSendExpirationMessage = async (request: Reservation) => {
+    const trimmedMessage = expirationMessage.trim();
+    if (!trimmedMessage) {
+      setExpirationMessageError('Enter a message first.');
+      return;
+    }
+
+    setExpirationMessageSubmitting(true);
+    setExpirationMessageError('');
+    try {
+      await sendExpirationMessage(request.id, trimmedMessage);
+      setExpirationMessageReservationId(null);
+      setExpirationMessage('');
+      await onReload();
+    } catch (error) {
+      setExpirationMessageError(
+        error instanceof Error ? error.message : 'Failed to send the message.'
+      );
+    } finally {
+      setExpirationMessageSubmitting(false);
+    }
+  };
+
   const openRevisionDialog = (request: Reservation) => {
-    if (!isBuildingAdminActionableReservation(request) || isExpiredReservation(request)) {
+    if (!isBuildingAdminActionableReservation(request) || request.status === 'expired') {
       return;
     }
 
@@ -433,7 +467,7 @@ export default function AdminPendingTab({
   };
 
   const handleRequestRevision = async () => {
-    const request = requests.find((candidate) => candidate.id === revisionReservationId);
+    const request = displayedRequests.find((candidate) => candidate.id === revisionReservationId);
     if (!request || !revisionRoomId) {
       setRevisionError('Select a replacement room before sending the request.');
       return;
@@ -462,7 +496,7 @@ export default function AdminPendingTab({
 
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Filtered list Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   const q = searchQuery.trim().toLowerCase();
-  const filteredRequests = requests.filter((r) => {
+  const filteredRequests = displayedRequests.filter((r) => {
     if (q && !(
       r.userName.toLowerCase().includes(q) ||
       r.roomName.toLowerCase().includes(q) ||
@@ -484,7 +518,7 @@ export default function AdminPendingTab({
   });
 
   const revisionReservation = revisionReservationId
-    ? requests.find((request) => request.id === revisionReservationId) ?? null
+    ? displayedRequests.find((request) => request.id === revisionReservationId) ?? null
     : null;
   const replacementRooms = useMemo(
     () =>
@@ -546,7 +580,7 @@ export default function AdminPendingTab({
                 border: '1px solid #fde68a'
               }}
             >
-              {requests.length} pending
+              {requests.length} pending{expiredRequests.length > 0 ? ` · ${expiredRequests.length} expired` : ''}
             </span>
           </div>
         </div>
@@ -708,7 +742,7 @@ export default function AdminPendingTab({
       </div>
 
       {/* Ã¢â€â‚¬Ã¢â€â‚¬ Empty states Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
-      {requests.length === 0 ? (
+      {displayedRequests.length === 0 ? (
         <div style={{
           background: 'rgba(255,255,255,0.82)',
           border: '1px dashed rgba(52,52,52,0.22)',
@@ -1057,11 +1091,17 @@ export default function AdminPendingTab({
               )}
 
               {filteredRequests.map((request) => {
-                const isExpired = request.status === 'pending' && isExpiredReservation(request);
+                const isExpired = request.status === 'expired';
+                const canSendExpirationMessage =
+                  isExpired && request.expirationReason === 'pending_approval_deadline';
+                const monitoringDayOffset = request.status === 'pending'
+                  ? getMonitoringDayOffset(request.date)
+                  : null;
                 const badge = statusBadge(isExpired ? 'expired' : request.status);
                 const initials = request.userName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
                 const avatarBg = avatarColor(request.userName);
                 const isExpanded = expandedReservationIds.includes(request.id);
+                const isEditingExpirationMessage = expirationMessageReservationId === request.id;
                 const dateLabel = formatReservationDates(request.dates, request.date);
                 const timeLabel = formatTimeRange(request.startTime, request.endTime);
                 return (
@@ -1082,7 +1122,7 @@ export default function AdminPendingTab({
                     onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 30px rgba(15,23,42,0.12)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.74)'; }}
                   >
                     {/* Top row */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isExpanded ? '16px' : 0, gap: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isExpanded ? '16px' : 0, gap: '16px', rowGap: '14px', flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
                         <div style={{ width: isExpanded ? '44px' : '36px', height: isExpanded ? '44px' : '36px', borderRadius: '50%', background: avatarBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: isExpanded ? '14px' : '12px', flexShrink: 0 }}>{initials}</div>
                         <div>
@@ -1102,44 +1142,49 @@ export default function AdminPendingTab({
                           {isExpanded && <p style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>Reservation Request</p>}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap', minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '14px', rowGap: '10px', flexWrap: 'wrap', minWidth: 0 }}>
                         <span style={{ fontSize: '13px', color: '#222', fontWeight: 600 }}>{request.roomName}</span>
                          <span style={{ fontSize: '13px', color: '#555' }}>{dateLabel}</span>
                          <span style={{ fontSize: '13px', color: '#555' }}>{timeLabel}</span>
+                         {monitoringDayOffset !== null && (
+                           <span style={{ fontSize: '12px', color: '#92400e', fontWeight: 700 }}>
+                             Reservation approaching — approval required
+                           </span>
+                         )}
                          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>{badge.label}</span>
                          {(!isExpired || isExpanded) && (
-                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', rowGap: '8px', flexWrap: 'wrap' }}>
                              {isExpired ? (
-                               <button
-                                 onClick={async (e) => {
-                                   e.stopPropagation();
-                                   if (!window.confirm('Delete this expired reservation request?')) {
-                                     return;
-                                   }
-                                   await handleDelete(request.id);
-                                 }}
-                                 disabled={actionLoading === request.id}
-                                 style={{
-                                   display: 'inline-flex',
-                                   alignItems: 'center',
-                                   gap: '6px',
-                                   padding: '8px 20px',
-                                   borderRadius: '8px',
-                                   border: '1px solid #e53935',
-                                   background: 'transparent',
-                                   color: '#e53935',
-                                   fontSize: '13px',
-                                   fontWeight: 700,
-                                   cursor: 'pointer',
-                                   opacity: actionLoading === request.id ? 0.6 : 1,
-                                   transition: 'background 0.15s'
-                                 }}
-                                 onMouseEnter={(e) => { if (!actionLoading) (e.currentTarget as HTMLButtonElement).style.background = '#fff0f0'; }}
-                                 onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-                               >
-                                 <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
-                                 {actionLoading === request.id ? 'Deleting...' : 'Delete'}
-                               </button>
+                               <>
+                                 {canSendExpirationMessage && !request.expirationMessage?.message && (
+                                   <button
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       openExpirationMessage(request);
+                                     }}
+                                     disabled={expirationMessageSubmitting}
+                                     style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.25)', background: 'rgba(59, 130, 246, 0.08)', color: '#1d4ed8', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                                   >
+                                     Add optional message
+                                   </button>
+                                 )}
+                                 <button
+                                   onClick={async (e) => {
+                                     e.stopPropagation();
+                                     if (!window.confirm('Delete this expired reservation request?')) {
+                                       return;
+                                     }
+                                     await handleDelete(request.id);
+                                   }}
+                                   disabled={actionLoading === request.id}
+                                   style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px', border: '1px solid #e53935', background: 'transparent', color: '#e53935', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: actionLoading === request.id ? 0.6 : 1, transition: 'background 0.15s' }}
+                                   onMouseEnter={(e) => { if (!actionLoading) (e.currentTarget as HTMLButtonElement).style.background = '#fff0f0'; }}
+                                   onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                                 >
+                                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
+                                   {actionLoading === request.id ? 'Deleting...' : 'Delete'}
+                                 </button>
+                               </>
                              ) : (
                                <>
                                  <button
@@ -1256,6 +1301,38 @@ export default function AdminPendingTab({
                         </div>
                       ))}
                     </div>
+
+                    {request.expirationMessage?.message && (
+                      <div style={{ marginBottom: '12px', borderRadius: '10px', border: '1px solid #bfdbfe', background: '#eff6ff', padding: '10px 14px' }}>
+                        <p style={{ fontSize: '11px', fontWeight: 700, color: '#1e3a8a', marginBottom: '4px' }}>Admin message</p>
+                        <p style={{ fontSize: '13px', color: '#1e293b', whiteSpace: 'pre-wrap' }}>{request.expirationMessage.message}</p>
+                      </div>
+                    )}
+
+                    {canSendExpirationMessage && isEditingExpirationMessage && !request.expirationMessage?.message && (
+                      <div style={{ marginBottom: '12px', borderRadius: '10px', border: '1px solid #bfdbfe', background: '#eff6ff', padding: '12px 14px' }} onClick={(event) => event.stopPropagation()}>
+                        <label htmlFor={`expiration-message-${request.id}`} style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a', marginBottom: '6px' }}>
+                          Optional message to the requester
+                        </label>
+                        <textarea
+                          id={`expiration-message-${request.id}`}
+                          value={expirationMessage}
+                          onChange={(event) => {
+                            setExpirationMessage(event.target.value);
+                            setExpirationMessageError('');
+                          }}
+                          maxLength={500}
+                          placeholder="Optional message to the requester..."
+                          disabled={expirationMessageSubmitting}
+                          style={{ width: '100%', minHeight: '76px', resize: 'vertical', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1e293b', boxSizing: 'border-box' }}
+                        />
+                        {expirationMessageError && <p style={{ marginTop: '5px', fontSize: '12px', color: '#b91c1c' }}>{expirationMessageError}</p>}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                          <button type="button" onClick={closeExpirationMessage} disabled={expirationMessageSubmitting} style={{ padding: '7px 12px', borderRadius: '7px', border: '1px solid #d1d5db', background: '#fff', color: '#4b5563', fontSize: '12px', fontWeight: 700 }}>Cancel</button>
+                          <button type="button" onClick={() => void handleSendExpirationMessage(request)} disabled={expirationMessageSubmitting} style={{ padding: '7px 12px', borderRadius: '7px', border: 'none', background: '#1d4ed8', color: '#fff', fontSize: '12px', fontWeight: 700, opacity: expirationMessageSubmitting ? 0.6 : 1 }}>{expirationMessageSubmitting ? 'Sending...' : 'Send'}</button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Requested Equipment */}
                     <div style={{

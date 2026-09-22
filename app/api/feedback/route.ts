@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     const payload = feedbackCreateSchema.parse(await request.json());
     assertOwnsResource(authContext, payload.userId);
 
-    const id = await createFeedbackRecord(payload, authContext.role);
+    const id = await createFeedbackRecord(payload, authContext.role, authContext.uid!);
     return NextResponse.json({ id });
   } catch (error) {
     return handleApiError(error);

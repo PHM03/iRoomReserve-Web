@@ -106,6 +106,7 @@ export default function FeedbackPage() {
   const [hoverCategoryRatings, setHoverCategoryRatings] =
     useState<Record<FeedbackCategoryRatingKey, number>>(EMPTY_CATEGORY_RATINGS);
   const [comment, setComment] = useState('');
+  const [postAnonymously, setPostAnonymously] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [roomAverageSentiment, setRoomAverageSentiment] = useState<number | null>(null);
@@ -251,6 +252,7 @@ export default function FeedbackPage() {
     setCategoryRatings(EMPTY_CATEGORY_RATINGS);
     setHoverCategoryRatings(EMPTY_CATEGORY_RATINGS);
     setComment('');
+    setPostAnonymously(true);
     setSubmitSuccess(false);
     setRoomAverageSentiment(null);
     setLoadingRoomAverage(false);
@@ -264,6 +266,7 @@ export default function FeedbackPage() {
     setCategoryRatings(EMPTY_CATEGORY_RATINGS);
     setHoverCategoryRatings(EMPTY_CATEGORY_RATINGS);
     setComment('');
+    setPostAnonymously(true);
     setSubmitSuccess(false);
     setRoomAverageSentiment(null);
   };
@@ -288,6 +291,7 @@ export default function FeedbackPage() {
         reservationId: selectedReservation.id,
         userId: firebaseUser.uid,
         userName: displayName,
+        showSubmitterName: !postAnonymously,
         message: trimmedComment,
         rating,
         categoryRatings: selectedCategoryRatings,
@@ -469,6 +473,21 @@ export default function FeedbackPage() {
                     required
                   />
                 </div>
+
+                <label className="flex items-start gap-3 rounded-xl border border-dark/10 bg-dark/5 p-4 text-sm text-black">
+                  <input
+                    type="checkbox"
+                    checked={postAnonymously}
+                    onChange={(event) => setPostAnonymously(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  <span>
+                    <span className="block font-bold">Post anonymously</span>
+                    <span className="mt-1 block text-xs text-black/60">
+                      Your name will be hidden from administrators unless you clear this option.
+                    </span>
+                  </span>
+                </label>
 
                 <div className="rounded-xl border border-dark/10 bg-dark/5 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
