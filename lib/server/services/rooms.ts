@@ -2,6 +2,7 @@ import "server-only";
 
 import { db, serverTimestamp } from "@/lib/firebase/firebase-admin";
 import {
+  buildAdministrativeRoomConditionUpdate,
   normalizeRoomCheckInMethod,
   normalizeRoomStatus,
   type RoomCheckInMethod,
@@ -24,6 +25,7 @@ export interface RoomCreateInput {
 
 export interface RoomStatusUpdateInput {
   status: RoomStatusValue;
+  unavailableReason?: string | null;
   reservedBy?: string | null;
   activeReservationId?: string | null;
   checkedInAt?: Date | string | null;
@@ -177,19 +179,12 @@ export async function updateRoomStatusRecord(
     data.checkInMethod === undefined
       ? undefined
       : normalizeRoomCheckInMethod(data.checkInMethod);
-
   await db.collection("rooms").doc(roomId).update({
     ...data,
     ...(normalizedCheckInMethod !== undefined
       ? { checkInMethod: normalizedCheckInMethod }
       : {}),
-    status: normalizeRoomStatus(data.status),
-    ...(data.status !== "Occupied" && data.beaconConnected === undefined
-      ? {
-          beaconConnected: false,
-          beaconDeviceName: null,
-        }
-      : {}),
+    ...buildAdministrativeRoomConditionUpdate(data.status, data.unavailableReason),
     updatedAt: serverTimestamp(),
   });
 }

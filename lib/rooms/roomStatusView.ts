@@ -3,13 +3,31 @@ import { getCampusName } from "@/lib/buildings/campusAssignments";
 import type { ReservationCampus } from "@/lib/buildings/campuses";
 import { getFloorDisplayLabel } from "@/lib/buildings/floorLabels";
 import type { Room } from "@/lib/rooms/rooms";
-import type { ResolvedRoomStatus, RoomStatusValue } from "@/lib/rooms/roomStatus";
+import type {
+  ResolvedRoomOperationalState,
+  ResolvedRoomStatus,
+  RoomOperationalActivity,
+  RoomStatusReservationLike,
+  RoomStatusScheduleLike,
+  RoomStatusUnavailabilityLike,
+  RoomStatusValue,
+} from "@/lib/rooms/roomStatus";
 
 export type RoomStatusFilter = "all" | RoomStatusValue;
 
 export interface RoomStatusViewItem {
   room: Room;
   resolved: ResolvedRoomStatus;
+}
+
+export interface OperationalRoomStatusViewItem {
+  room: Room;
+  state: ResolvedRoomOperationalState;
+  activity: RoomOperationalActivity;
+  reservation: RoomStatusReservationLike | null;
+  activeSchedule: RoomStatusScheduleLike | null;
+  activeUnavailability: RoomStatusUnavailabilityLike | null;
+  finishReservation: RoomStatusReservationLike | null;
 }
 
 export interface BuildingOption {
@@ -24,6 +42,12 @@ export interface FloorGroup {
   id: string;
   label: string;
   rooms: RoomStatusViewItem[];
+}
+
+export interface OperationalFloorGroup {
+  id: string;
+  label: string;
+  rooms: OperationalRoomStatusViewItem[];
 }
 
 export interface CampusOption {
@@ -178,6 +202,29 @@ export function groupRoomStatusesByFloor(
   items: RoomStatusViewItem[]
 ): FloorGroup[] {
   const groupedRooms = new Map<string, RoomStatusViewItem[]>();
+
+  for (const item of items) {
+    const floorRooms = groupedRooms.get(item.room.floor) ?? [];
+    floorRooms.push(item);
+    groupedRooms.set(item.room.floor, floorRooms);
+  }
+
+  return [...groupedRooms.entries()]
+    .sort(([leftFloor], [rightFloor]) => compareFloors(leftFloor, rightFloor))
+    .map(([floor, floorRooms]) => ({
+      id: floor,
+      label: getFloorDisplayLabel(floor, {
+        id: floorRooms[0]?.room.buildingId,
+        name: floorRooms[0]?.room.buildingName,
+      }),
+      rooms: floorRooms,
+    }));
+}
+
+export function groupOperationalRoomStatusesByFloor(
+  items: OperationalRoomStatusViewItem[]
+): OperationalFloorGroup[] {
+  const groupedRooms = new Map<string, OperationalRoomStatusViewItem[]>();
 
   for (const item of items) {
     const floorRooms = groupedRooms.get(item.room.floor) ?? [];

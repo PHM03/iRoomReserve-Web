@@ -31,6 +31,7 @@ export interface Room {
   tvProjectorStatus: string;
   capacity: number;
   status: RoomStatusValue;
+  unavailableReason?: string | null;
   buildingId: string;
   buildingName: string;
   beaconId?: string | null;
@@ -74,6 +75,7 @@ export interface RoomCountSummary {
 
 export interface RoomStatusUpdate {
   status: RoomStatusValue;
+  unavailableReason?: string | null;
   reservedBy?: string | null;
   activeReservationId?: string | null;
   checkedInAt?: Timestamp | FieldValue | null;

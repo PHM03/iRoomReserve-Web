@@ -24,10 +24,12 @@ export default function AdminRoomStatusPage() {
     rooms,
     statusMonitorFloorGroups,
     handleStatusChange,
-    computeEffectiveStatus,
+    allReservations,
+    schedules,
+    roomUnavailability,
     pendingFinishReservationsByRoomId,
     handleConfirmFinishedReservation,
-  } = useAdminStatusPages({ campusOverride });
+  } = useAdminStatusPages({ campusOverride, includeRoomUnavailability: true });
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10">
@@ -55,7 +57,9 @@ export default function AdminRoomStatusPage() {
             buildingId={buildingId}
             rooms={rooms}
             statusMonitorFloorGroups={statusMonitorFloorGroups}
-            computeEffectiveStatus={computeEffectiveStatus}
+            reservations={allReservations}
+            schedules={schedules}
+            roomUnavailability={roomUnavailability}
             onStatusChange={handleStatusChange}
             pendingFinishReservationsByRoomId={pendingFinishReservationsByRoomId}
             onConfirmFinishedReservation={handleConfirmFinishedReservation}

@@ -3,279 +3,175 @@
 import { useEffect, useMemo, useState } from 'react';
 import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import type { Reservation } from '@/lib/reservations/reservations';
+import type { RoomUnavailability } from '@/lib/reservations/roomAvailability';
 import {
-  getPreferredDefaultFloorValue,
-  sortFloorOptions,
-} from '@/lib/buildings/floorLabels';
+  isRoomScheduleActive,
+  isRoomUnavailabilityActive,
+  resolveRoomOperationalState,
+} from '@/lib/rooms/roomStatus';
+import { formatTime12h, getScheduleDisplayTitle, type Schedule } from '@/lib/schedules/schedules';
+import { getPreferredDefaultFloorValue, sortFloorOptions } from '@/lib/buildings/floorLabels';
 import type { Room } from '@/lib/rooms/rooms';
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface AdminRoomStatusSectionProps {
   buildingId: string;
   rooms: Room[];
   statusMonitorFloorGroups: Array<{ floor: string; label: string; rooms: Room[] }>;
-  computeEffectiveStatus: (room: Room) => { status: string; detail: string };
-  onStatusChange: (roomId: string, status: Room['status']) => void;
+  reservations: Reservation[];
+  schedules: Schedule[];
+  roomUnavailability: RoomUnavailability[];
+  onStatusChange: (roomId: string, status: Room['status'], reason?: string | null) => void;
   pendingFinishReservationsByRoomId?: Map<string, Reservation>;
   onConfirmFinishedReservation?: (reservationId: string) => void;
   className?: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+type ActivityFilter = 'All' | 'Available' | 'Unavailable' | 'Reserved' | 'Occupied';
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function EffectiveStatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    Available: 'ui-badge-green',
-    Reserved: 'ui-badge-blue',
-    Occupied: 'ui-badge-red',
-    Unavailable: 'ui-badge-red',
-  };
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${styles[status] ?? 'ui-badge-gray'}`}>
-      {status}
-    </span>
-  );
+function timestampLabel(value: Room['beaconLastConnectedAt'] | Room['beaconLastDisconnectedAt']) {
+  const date = value?.toDate?.();
+  return date ? date.toLocaleString() : null;
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+function bleLabel(room: Room) {
+  const beaconId = room.bleBeaconId ?? room.beaconId;
+  if (!beaconId) return 'No beacon configured';
+  const connected = room.beaconConnected === true;
+  const lastSeen = connected ? timestampLabel(room.beaconLastConnectedAt) : timestampLabel(room.beaconLastDisconnectedAt);
+  return `${connected ? 'Connected' : 'Disconnected'}${lastSeen ? ` · Last ${connected ? 'connected' : 'disconnected'} ${lastSeen}` : ''}`;
+}
+
+function activityTone(activity: string) {
+  if (activity === 'Occupied') return 'ui-badge-red';
+  if (activity === 'Reserved' || activity === 'Class in progress') return 'ui-badge-blue';
+  if (activity === 'Administratively unavailable' || activity === 'Time block') return 'ui-badge-red';
+  return 'ui-badge-green';
+}
+
+function field(label: string, value: string) {
+  return <div><dt className="text-[10px] font-extrabold uppercase tracking-wide text-black/45">{label}</dt><dd className="mt-0.5 text-xs font-bold text-black/75">{value}</dd></div>;
+}
 
 export default function AdminRoomStatusSection({
   buildingId,
   rooms,
   statusMonitorFloorGroups,
-  computeEffectiveStatus,
+  reservations,
+  schedules,
+  roomUnavailability,
   onStatusChange,
   pendingFinishReservationsByRoomId,
   onConfirmFinishedReservation,
   className = '',
 }: Readonly<AdminRoomStatusSectionProps>) {
   const [search, setSearch] = useState('');
-  const [floorFilter, setFloorFilter] = useState<string>('');
-
-  const buildingRooms = useMemo(
-    () => rooms.filter((room) => room.buildingId === buildingId),
-    [buildingId, rooms]
-  );
-
-  // Unique floors for filter
-  const floorOptions = useMemo(
-    () =>
-      sortFloorOptions(
-        statusMonitorFloorGroups.map((group) => ({
-          value: group.floor,
-          label: group.label,
-        }))
-      ),
-    [statusMonitorFloorGroups]
-  );
-
-  const floorOptionsWithAll = useMemo(
-    () => [...floorOptions, { value: 'All', label: 'All Floors' }],
-    [floorOptions]
-  );
+  const [floorFilter, setFloorFilter] = useState('');
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>('All');
+  const [now, setNow] = useState(() => new Date());
+  const buildingRooms = useMemo(() => rooms.filter((room) => room.buildingId === buildingId), [buildingId, rooms]);
+  const floorOptions = useMemo(() => sortFloorOptions(statusMonitorFloorGroups.map(({ floor, label }) => ({ value: floor, label }))), [statusMonitorFloorGroups]);
+  const floorsWithAll = useMemo(() => [...floorOptions, { value: 'All', label: 'All Floors' }], [floorOptions]);
 
   useEffect(() => {
-    if (floorOptions.length === 0) {
-      return;
+    const timerId = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timerId);
+  }, []);
+
+  useEffect(() => {
+    if (!floorOptions.length) return;
+    if (!floorFilter || (floorFilter !== 'All' && !floorsWithAll.some((option) => option.value === floorFilter))) {
+      const timeoutId = window.setTimeout(() => setFloorFilter(getPreferredDefaultFloorValue(floorOptions)), 0);
+      return () => window.clearTimeout(timeoutId);
     }
+  }, [floorFilter, floorOptions, floorsWithAll]);
 
-    let nextFloorFilter: string | null = null;
-
-    if (!floorFilter) {
-      nextFloorFilter = getPreferredDefaultFloorValue(floorOptions);
-    } else if (floorFilter !== 'All') {
-      const hasMatchingFloor = floorOptionsWithAll.some(
-        (option) => option.value === floorFilter
-      );
-
-      if (!hasMatchingFloor) {
-        nextFloorFilter = getPreferredDefaultFloorValue(floorOptions);
-      }
-    }
-
-    if (!nextFloorFilter) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setFloorFilter(nextFloorFilter);
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [floorFilter, floorOptions, floorOptionsWithAll]);
-
-  // Filtered rooms
-  const filteredRooms = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return buildingRooms.filter((room) => {
-      if (q && !room.name.toLowerCase().includes(q)) return false;
-      if (floorFilter !== 'All' && room.floor !== floorFilter) return false;
-      return true;
+  const roomViews = useMemo(() => buildingRooms.map((room) => {
+    const schedule = schedules.find((candidate) => candidate.roomId === room.id && isRoomScheduleActive(candidate, now));
+    const block = roomUnavailability.find((candidate) => candidate.roomId === room.id && isRoomUnavailabilityActive(candidate, now));
+    const state = resolveRoomOperationalState(room, reservations, {
+      activeSchedule: schedule,
+      activeUnavailability: block,
+      now,
     });
-  }, [buildingRooms, search, floorFilter]);
+    const reservation = state.reservation;
+    const pendingFinish = pendingFinishReservationsByRoomId?.get(room.id) ?? null;
+    const activity = pendingFinish && state.condition === 'Available' ? 'Occupied' : state.activity;
+    return { room, state, reservation, schedule, block, pendingFinish, activity };
+  }), [buildingRooms, schedules, roomUnavailability, reservations, pendingFinishReservationsByRoomId, now]);
 
-  const desktopGridTemplateColumns = useMemo(() => {
-    const longestRoomNameLength = rooms.reduce(
-      (maxLength, room) => Math.max(maxLength, room.name.trim().length),
-      'Room'.length
-    );
-    const roomColumnWidth = `${Math.max(longestRoomNameLength + 2, 10)}ch`;
+  const counts = useMemo(() => ({
+    total: roomViews.length,
+    available: roomViews.filter(({ state }) => state.condition === 'Available').length,
+    unavailable: roomViews.filter(({ state }) => state.condition === 'Unavailable').length,
+    inUse: roomViews.filter(({ activity }) => activity === 'Occupied' || activity === 'Reserved').length,
+  }), [roomViews]);
 
-    return `${roomColumnWidth} minmax(0, 1fr) 110px 112px 120px 160px`;
-  }, [rooms]);
+  const filtered = roomViews.filter(({ room, activity, state }) => {
+    const query = search.trim().toLowerCase();
+    if (query && !room.name.toLowerCase().includes(query)) return false;
+    if (floorFilter !== 'All' && room.floor !== floorFilter) return false;
+    const filterActivity = state.condition === 'Unavailable' ? 'Unavailable' : activity;
+    return activityFilter === 'All' || filterActivity === activityFilter;
+  });
 
-  if (rooms.length === 0) {
-    return (
-      <section className={className}>
-        <div className="glass-card p-4">
-          <div className="dashboard-empty-state rounded-2xl p-12 text-center">
-            <p className="text-sm text-black">No rooms configured. Add rooms first.</p>
-          </div>
-        </div>
-      </section>
-    );
-  }
+  if (!rooms.length) return <section className={className}><div className="glass-card p-4"><div className="dashboard-empty-state rounded-2xl p-12 text-center"><p className="text-sm text-black">No rooms configured. Add rooms first.</p></div></div></section>;
 
   return (
     <section className={className}>
-      {/* ── Controls ── */}
-      <div className="glass-card p-4 mb-4">
+      <div className="glass-card p-4 mb-4 space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
-          {/* Search */}
-          <label className="relative flex-1 min-w-[160px]">
-            <span className="sr-only">Search rooms</span>
-            <svg
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-black/35"
-              fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="7" strokeWidth="2" />
-              <path d="M20 20l-3.5-3.5" strokeLinecap="round" strokeWidth="2" />
-            </svg>
-            <input
-              id="room-status-search"
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search rooms…"
-              className="glass-input h-9 w-full pl-8 pr-3 text-xs font-bold text-black placeholder:text-black/35"
-            />
+          <label className="flex-1 min-w-[160px]"><span className="sr-only">Search rooms</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search rooms…" className="glass-input h-9 w-full px-3 text-xs font-bold text-black placeholder:text-black/35" /></label>
+          <AdminFloorFilter label="Filter by Floor:" options={floorsWithAll} value={floorFilter} onChange={setFloorFilter} />
+          <label className="flex items-center gap-2 text-xs font-bold text-black/65">Activity
+            <select value={activityFilter} onChange={(event) => setActivityFilter(event.target.value as ActivityFilter)} className="glass-input h-9 px-2 text-xs font-bold text-black">
+              {(['All', 'Available', 'Unavailable', 'Reserved', 'Occupied'] as ActivityFilter[]).map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
           </label>
-
-          <AdminFloorFilter
-            label="Filter by Floor:"
-            options={floorOptionsWithAll}
-            value={floorFilter}
-            onChange={setFloorFilter}
-          />
-
-          <span className="text-[11px] font-bold text-black/40 ml-auto whitespace-nowrap">
-            {filteredRooms.length} of {rooms.length} rooms
-          </span>
+          <span className="text-[11px] font-bold text-black/45 sm:ml-auto">{filtered.length} of {buildingRooms.length} rooms</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[['Total rooms', counts.total], ['Available', counts.available], ['Unavailable', counts.unavailable], ['Reserved / occupied', counts.inUse]].map(([label, value]) => <div key={label} className="rounded-xl border border-dark/10 bg-white/50 px-3 py-2"><p className="text-[10px] font-extrabold uppercase tracking-wide text-black/45">{label}</p><p className="text-lg font-extrabold text-black">{value}</p></div>)}
         </div>
       </div>
 
-      {/* ── Room list ── */}
-      {filteredRooms.length === 0 ? (
-        <div className="glass-card p-4">
-          <div className="dashboard-empty-state rounded-2xl p-10 text-center">
-            <p className="text-sm font-bold text-black/60">No rooms match your filters.</p>
-          </div>
-        </div>
-      ) : (
-        <div className="glass-card overflow-hidden">
-          {/* Header row */}
-          <div
-            className="hidden md:grid items-center gap-3 px-4 py-2.5 border-b border-dark/10 bg-dark/5"
-            style={{ gridTemplateColumns: desktopGridTemplateColumns }}
-          >
-            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Room</span>
-            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Floor</span>
-            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Max. Capacity</span>
-            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Room Status</span>
-            <span className="text-[10px] font-extrabold text-black/50 uppercase tracking-widest">Manual Override</span>
-          </div>
-
-          <ul className="divide-y divide-dark/10">
-            {filteredRooms.map((room) => {
-              const effective = computeEffectiveStatus(room);
-              const pendingFinishReservation =
-                pendingFinishReservationsByRoomId?.get(room.id) ?? null;
-              const floorLabel =
-                floorOptions.find((option) => option.value === room.floor)?.label ??
-                room.floor;
-
-              return (
-                <li key={room.id}>
-                  {/* ── Main row ── */}
-                  <div
-                    className="grid items-center gap-3 px-4 py-3 hover:bg-primary/5 transition-colors md:grid"
-                    style={{ gridTemplateColumns: desktopGridTemplateColumns }}
-                  >
-                    {/* Name + detail */}
-                    <div className="min-w-0">
-                      <p className="text-sm font-extrabold text-black truncate">{room.name}</p>
-                      {effective.detail ? (
-                        <p className="text-[10px] text-black/50 font-bold truncate">{effective.detail}</p>
-                      ) : null}
-                      {/* Mobile: floor + cap below name */}
-                      <p className="md:hidden text-[10px] text-black/40 font-bold mt-0.5">
-                        {floorLabel} · Cap {room.capacity}
-                      </p>
-                    </div>
-
-                    {/* Floor */}
-                    <p className="hidden md:block text-xs font-bold text-black/70 truncate">{floorLabel}</p>
-
-                    {/* Capacity */}
-                    <p className="hidden md:block text-xs font-bold text-black/70">{room.capacity}</p>
-
-                    {/* Status badge */}
-                    <div className="hidden md:flex">
-                      <EffectiveStatusBadge status={effective.status} />
-                    </div>
-
-                    {/* Toggle buttons */}
-                    <div className="flex gap-1.5">
-                      {pendingFinishReservation && onConfirmFinishedReservation ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onConfirmFinishedReservation(pendingFinishReservation.id)
-                          }
-                          className="flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ui-button-blue"
-                        >
-                          Finish Reservation
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => onStatusChange(room.id, 'Available')}
-                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
-                          room.status === 'Available' ? 'ui-button-green' : 'ui-button-gray'
-                        }`}
-                      >
-                        Available
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onStatusChange(room.id, 'Unavailable')}
-                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
-                          room.status === 'Unavailable' ? 'ui-button-red' : 'ui-button-gray'
-                        }`}
-                      >
-                        Unavailable
-                      </button>
-                    </div>
-
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+      {!filtered.length ? <div className="glass-card p-4"><div className="dashboard-empty-state rounded-2xl p-10 text-center"><p className="text-sm font-bold text-black/60">No rooms match your filters.</p></div></div> : (
+        <ul className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          {filtered.map(({ room, state, reservation, schedule, block, pendingFinish, activity }) => {
+            const finishReservation = pendingFinish && onConfirmFinishedReservation ? pendingFinish : null;
+            const floorLabel = floorOptions.find((option) => option.value === room.floor)?.label ?? room.floor;
+            const relevantReservation = reservation?.status === 'approved' ? reservation : null;
+            const displayedReservation = relevantReservation ?? pendingFinish;
+            const activityLabel = state.condition === 'Unavailable' ? 'Administratively unavailable' : activity;
+            const reservationWindow = displayedReservation ? `${displayedReservation.date} · ${formatTime12h(displayedReservation.startTime)}–${formatTime12h(displayedReservation.endTime)}` : 'No active reservation';
+            const reservationLabel = relevantReservation
+              ? `${relevantReservation.status} · ${reservationWindow}`
+              : pendingFinish
+                ? `Completed · ${reservationWindow} · awaiting finish`
+                : 'No active reservation';
+            const scheduleWindow = schedule ? `Class Schedule — ${formatTime12h(schedule.startTime)}–${formatTime12h(schedule.endTime)}` : null;
+            const blockWindow = block ? `${block.date} · ${formatTime12h(block.startTime)}–${formatTime12h(block.endTime)}${block.reason ? ` · ${block.reason}` : ''}` : null;
+            return <li key={room.id} className="glass-card min-w-0 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0"><h3 className="truncate text-base font-extrabold text-black">{room.name}</h3><p className="mt-0.5 text-xs font-bold text-black/50">{floorLabel} · {room.roomType || 'Room'} · Capacity {room.capacity}</p></div>
+                <div className="flex flex-wrap gap-1.5"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${room.status === 'Unavailable' ? 'ui-badge-red' : 'ui-badge-green'}`}>Condition: {room.status === 'Unavailable' ? 'Unavailable' : 'Available'}</span><span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${activityTone(activityLabel)}`}>{activityLabel}</span></div>
+              </div>
+              {room.status === 'Unavailable' && room.unavailableReason ? <p className="mt-2 text-xs font-bold text-red-700">Reason: {room.unavailableReason}</p> : null}
+              <dl className="mt-4 grid grid-cols-1 gap-3 border-t border-dark/10 pt-3 sm:grid-cols-2">
+                {field('Reservation', reservationLabel)}
+                {field('Requester', displayedReservation?.userName ?? '—')}
+                {field('Occupancy / check-in', displayedReservation?.checkedInAt ? 'Checked in' : 'Not checked in')}
+                {field('BLE beacon health', bleLabel(room))}
+                {field('Active class', schedule ? `${getScheduleDisplayTitle(schedule)} · ${scheduleWindow}` : 'No active class')}
+                {field('Active time block', blockWindow ?? 'None')}
+              </dl>
+              {finishReservation ? <p className="mt-3 text-[11px] font-bold text-black/55">Completed reservation is awaiting staff confirmation.</p> : null}
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-dark/10 pt-3">
+                {finishReservation ? <button type="button" onClick={() => onConfirmFinishedReservation?.(finishReservation.id)} className="ui-button-blue rounded-lg px-3 py-2 text-[11px] font-bold">Finish Reservation</button> : null}
+                {room.status === 'Unavailable' ? <button type="button" onClick={() => onStatusChange(room.id, 'Available')} className="ui-button-green rounded-lg px-3 py-2 text-[11px] font-bold">Make available</button> : <button type="button" onClick={() => { const reason = window.prompt(`Reason for marking ${room.name} unavailable (optional):`); if (reason !== null) onStatusChange(room.id, 'Unavailable', reason.trim() || null); }} className="ui-button-red rounded-lg px-3 py-2 text-[11px] font-bold">Mark unavailable</button>}
+              </div>
+            </li>;
+          })}
+        </ul>
       )}
     </section>
   );

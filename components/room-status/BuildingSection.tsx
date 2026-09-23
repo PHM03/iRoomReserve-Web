@@ -2,16 +2,20 @@
 
 import FloorAccordion from '@/components/room-status/FloorAccordion';
 import RoomList from '@/components/room-status/RoomList';
-import type { BuildingOption, FloorGroup } from '@/lib/rooms/roomStatusView';
+import type { BuildingOption, OperationalFloorGroup } from '@/lib/rooms/roomStatusView';
 
 interface BuildingSectionProps {
   building: BuildingOption;
-  floors: FloorGroup[];
+  floors: OperationalFloorGroup[];
+  onFinishReservation?: (reservationId: string) => void;
+  finishingReservationId?: string | null;
 }
 
 export default function BuildingSection({
   building,
   floors,
+  onFinishReservation,
+  finishingReservationId,
 }: Readonly<BuildingSectionProps>) {
   return (
     <section className="glass-card p-4 sm:p-5">
@@ -35,7 +39,13 @@ export default function BuildingSection({
                 key={`${building.buildingId}:${floorGroup.id}`}
                 floor={floorGroup.label}
                 roomCount={floorGroup.rooms.length}
-                renderContent={() => <RoomList items={floorGroup.rooms} />}
+                renderContent={() => (
+                  <RoomList
+                    items={floorGroup.rooms}
+                    onFinishReservation={onFinishReservation}
+                    finishingReservationId={finishingReservationId}
+                  />
+                )}
               />
             );
           })}

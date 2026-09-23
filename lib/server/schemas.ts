@@ -30,6 +30,17 @@ const nullableBeaconIdSchema = z.preprocess(
   },
   z.string().trim().min(1).nullable().optional()
 );
+const nullableReasonSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return value ?? null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  },
+  z.string().trim().max(250).nullable().optional()
+);
 const userRoleSchema = z.preprocess(
   (value) =>
     typeof value === "string"
@@ -386,6 +397,7 @@ export const floorUpdateSchema = floorCreateSchema;
 
 export const roomStatusUpdateSchema = z.object({
   status: roomStatusSchema,
+  unavailableReason: nullableReasonSchema,
   reservedBy: z.string().trim().nullable().optional(),
   activeReservationId: z.string().trim().nullable().optional(),
   checkedInAt: z.union([z.literal(null), z.string(), z.undefined()]).optional(),

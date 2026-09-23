@@ -1,5 +1,5 @@
 import type { FirestoreTimestampLike } from "@/lib/types/firestore-types";
-import { formatDate, formatTimeRange } from "@/lib/utils/dateTime";
+import { formatDate, formatTimeRange } from "../utils/dateTime";
 
 export const ROOM_STATUS_VALUES = ["Available", "Reserved", "Occupied"] as const;
 export const ROOM_CHECK_IN_METHODS = ["manual", "bluetooth"] as const;
@@ -15,6 +15,7 @@ export interface RoomStatusRoomLike {
   id: string;
   status?: string | null;
   activeReservationId?: string | null;
+  unavailableReason?: string | null;
   beaconConnected?: boolean | null;
   beaconLastConnectedAt?: FirestoreTimestampLike | Date | null;
   beaconLastDisconnectedAt?: FirestoreTimestampLike | Date | null;
@@ -31,14 +32,26 @@ export interface RoomStatusReservationLike {
   endTime: string;
   status: string;
   checkedInAt?: FirestoreTimestampLike | null;
+  occupancyReleasedAt?: FirestoreTimestampLike | null;
   checkInMethod?: RoomCheckInMethod | null;
 }
 
 export interface RoomStatusScheduleLike {
   roomId: string;
+  dayOfWeek?: number;
   subjectName?: string;
   courseCode?: string;
   section?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface RoomStatusUnavailabilityLike {
+  roomId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  reason?: string | null;
 }
 
 function getScheduleStatusLabel(schedule: RoomStatusScheduleLike) {
@@ -130,6 +143,53 @@ export function normalizeRoomStatus(status?: string | null): RoomStatusValue {
   }
 }
 
+export function isRoomAdministrativelyUnavailable(
+  status?: string | null
+): boolean {
+  return normalizeRoomStatus(status) === "Unavailable";
+}
+
+export function getAdministrativeRoomCondition(
+  status?: string | null
+): Extract<RoomStatusValue, "Available" | "Unavailable"> {
+  return isRoomAdministrativelyUnavailable(status) ? "Unavailable" : "Available";
+}
+
+export function buildAdministrativeRoomConditionUpdate(
+  status: string | null | undefined,
+  unavailableReason?: string | null
+): {
+  status: RoomStatusValue;
+  unavailableReason: string | null;
+} {
+  const normalizedStatus = normalizeRoomStatus(status);
+  const normalizedReason =
+    typeof unavailableReason === "string" && unavailableReason.trim().length > 0
+      ? unavailableReason.trim()
+      : null;
+
+  return {
+    status: normalizedStatus,
+    unavailableReason:
+      normalizedStatus === "Unavailable" ? normalizedReason : null,
+  };
+}
+
+export function preserveAdministrativeUnavailableStatus<
+  T extends { status: RoomStatusValue }
+>(
+  currentStatus: string | null | undefined,
+  nextPayload: T
+): T | Omit<T, "status"> {
+  if (!isRoomAdministrativelyUnavailable(currentStatus)) {
+    return nextPayload;
+  }
+
+  const rest: Partial<T> = { ...nextPayload };
+  delete rest.status;
+  return rest as Omit<T, "status">;
+}
+
 export function getLocalDateString(date: Date = new Date()): string {
   const year = date.getFullYear();
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
@@ -185,6 +245,49 @@ export function isReservationActiveTimeSlot(
     reservation.date === currentDateTime.date &&
     reservation.startTime <= currentDateTime.time &&
     reservation.endTime > currentDateTime.time
+  );
+}
+
+export function isRoomUnavailabilityActive(
+  block: Pick<RoomStatusUnavailabilityLike, "date" | "startTime" | "endTime">,
+  now: Date = new Date(),
+  timeZone: string = DEFAULT_RESERVATION_TIME_ZONE
+): boolean {
+  const currentDateTime = getCurrentDateTimeStringInTimeZone(now, timeZone);
+
+  return (
+    block.date === currentDateTime.date &&
+    block.startTime <= currentDateTime.time &&
+    block.endTime > currentDateTime.time
+  );
+}
+
+export function isRoomScheduleActive(
+  schedule: Pick<RoomStatusScheduleLike, "dayOfWeek" | "startTime" | "endTime">,
+  now: Date = new Date(),
+  timeZone: string = DEFAULT_RESERVATION_TIME_ZONE
+): boolean {
+  if (
+    typeof schedule.dayOfWeek !== "number" ||
+    !schedule.startTime ||
+    !schedule.endTime
+  ) {
+    return false;
+  }
+
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+  }).format(now);
+  const dayOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(
+    weekday
+  );
+  const { time } = getCurrentDateTimeStringInTimeZone(now, timeZone);
+
+  return (
+    schedule.dayOfWeek === dayOfWeek &&
+    schedule.startTime <= time &&
+    schedule.endTime > time
   );
 }
 
@@ -271,6 +374,133 @@ export function getPrimaryRoomReservation(
   );
 
   return currentReservation ?? approvedReservations[0] ?? null;
+}
+
+export function getCurrentRoomReservation(
+  room: RoomStatusRoomLike,
+  reservations: RoomStatusReservationLike[],
+  now: Date = new Date(),
+  timeZone: string = DEFAULT_RESERVATION_TIME_ZONE
+): RoomStatusReservationLike | null {
+  const roomReservations = reservations
+    .filter((reservation) => reservation.roomId === room.id)
+    .sort(compareReservationSchedule);
+
+  const eligibleReservations = roomReservations.filter(
+    (reservation) =>
+      reservation.status === "approved" &&
+      ((Boolean(reservation.checkedInAt) && !reservation.occupancyReleasedAt) ||
+        isReservationActiveTimeSlot(reservation, now, timeZone))
+  );
+  const checkedInReservation = eligibleReservations.find(
+    (reservation) => Boolean(reservation.checkedInAt) && !reservation.occupancyReleasedAt
+  );
+
+  if (checkedInReservation) {
+    return checkedInReservation;
+  }
+
+  if (room.activeReservationId) {
+    const activeReservation = eligibleReservations.find(
+      (reservation) => reservation.id === room.activeReservationId
+    );
+
+    if (activeReservation) {
+      return activeReservation;
+    }
+  }
+
+  return eligibleReservations.find((reservation) =>
+    isReservationActiveTimeSlot(reservation, now, timeZone)
+  ) ?? null;
+}
+
+export type RoomOperationalActivity =
+  | "Administratively unavailable"
+  | "Occupied"
+  | "Reserved"
+  | "Class in progress"
+  | "Time block"
+  | "Available";
+
+export interface ResolvedRoomOperationalState {
+  condition: Extract<RoomStatusValue, "Available" | "Unavailable">;
+  activity: RoomOperationalActivity;
+  reservation: RoomStatusReservationLike | null;
+  checkedIn: boolean;
+}
+
+export function resolveRoomOperationalState(
+  room: RoomStatusRoomLike,
+  reservations: RoomStatusReservationLike[],
+  options: {
+    activeSchedule?: RoomStatusScheduleLike | null;
+    activeUnavailability?: RoomStatusUnavailabilityLike | null;
+    now?: Date;
+    timeZone?: string;
+  } = {}
+): ResolvedRoomOperationalState {
+  const {
+    activeSchedule = null,
+    activeUnavailability = null,
+    now = new Date(),
+    timeZone = DEFAULT_RESERVATION_TIME_ZONE,
+  } = options;
+  const condition = getAdministrativeRoomCondition(room.status);
+  const reservation = getCurrentRoomReservation(room, reservations, now, timeZone);
+  const checkedIn = Boolean(reservation?.checkedInAt);
+
+  if (condition === "Unavailable") {
+    return {
+      condition,
+      activity: "Administratively unavailable",
+      reservation,
+      checkedIn,
+    };
+  }
+
+  if (checkedIn) {
+    return {
+      condition,
+      activity: "Occupied",
+      reservation,
+      checkedIn,
+    };
+  }
+
+  if (reservation) {
+    return {
+      condition,
+      activity: "Reserved",
+      reservation,
+      checkedIn,
+    };
+  }
+
+  if (activeSchedule) {
+    return {
+      condition,
+      activity: "Class in progress",
+      reservation,
+      checkedIn,
+    };
+  }
+
+  if (activeUnavailability) {
+    return {
+      condition,
+      activity: "Time block",
+      reservation,
+      checkedIn,
+    };
+  }
+
+  return {
+    condition,
+    activity: "Available",
+    reservation,
+    checkedIn,
+  };
 }
 
 export function getReservationRoomStatus(

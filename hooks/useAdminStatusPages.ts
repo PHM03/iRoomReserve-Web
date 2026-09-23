@@ -38,6 +38,7 @@ import {
   type ScheduleSemester,
 } from '@/lib/schedules/scheduleContext';
 import { validateScheduleTimes } from '@/lib/schedules/scheduleTimeRules';
+import { onRoomUnavailabilityByBuilding, type RoomUnavailability } from '@/lib/reservations/roomAvailability';
 import {
   confirmFinishedReservation,
   onReservationsByBuilding,
@@ -85,6 +86,7 @@ export function getManagedBuildingOptionLabel(building: {
 
 interface UseAdminStatusPagesOptions {
   campusOverride?: 'main' | 'digi';
+  includeRoomUnavailability?: boolean;
   scheduleSelectionRequired?: boolean;
   selectedScheduleFloor?: string;
   selectedScheduleRoom?: string;
@@ -101,6 +103,7 @@ function getStoredRoomFloor(room: Room) {
 export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
   const {
     campusOverride,
+    includeRoomUnavailability = false,
     scheduleSelectionRequired = false,
     selectedScheduleFloor = '',
     selectedScheduleRoom = '',
@@ -139,6 +142,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
 
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomUnavailability, setRoomUnavailability] = useState<RoomUnavailability[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [schedRoomId, setSchedRoomId] = useState('');
@@ -224,6 +228,15 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       unsubRooms();
     };
   }, [buildingId, firebaseUser?.uid]);
+
+  useEffect(() => {
+    if (!includeRoomUnavailability || !buildingId || !firebaseUser?.uid) {
+      setRoomUnavailability([]);
+      return;
+    }
+
+    return onRoomUnavailabilityByBuilding(buildingId, setRoomUnavailability);
+  }, [buildingId, firebaseUser?.uid, includeRoomUnavailability]);
 
   useEffect(() => {
     if (!buildingId || !firebaseUser?.uid) {
@@ -363,9 +376,16 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     setShowScheduleForm(true);
   };
 
-  const handleStatusChange = async (roomId: string, status: Room['status']) => {
+  const handleStatusChange = async (
+    roomId: string,
+    status: Room['status'],
+    unavailableReason?: string | null
+  ) => {
     try {
-      await updateRoomStatus(roomId, status);
+      await updateRoomStatus(roomId, {
+        status,
+        unavailableReason: status === 'Unavailable' ? unavailableReason ?? null : null,
+      });
     } catch (error) {
       console.warn('Failed to update status:', error);
       alert('Failed to update room status. Check the console for details.');
@@ -750,6 +770,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
     editingScheduleId,
     scheduleSaveError,
     statusMonitorFloorGroups,
+    roomUnavailability,
     scheduleCountsByDay,
     toggleScheduleForm,
     resetScheduleForm,

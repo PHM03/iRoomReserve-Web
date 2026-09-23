@@ -24,8 +24,9 @@ import {
 import {
   canReservationCheckIn,
   compareReservationSchedule,
+  isRoomAdministrativelyUnavailable,
   normalizeRoomCheckInMethod,
-  normalizeRoomStatus,
+  preserveAdministrativeUnavailableStatus,
   type RoomCheckInMethod,
 } from "@/lib/rooms/roomStatus";
 import type { Schedule } from "@/lib/schedules/schedules";
@@ -364,12 +365,17 @@ function getDatesForDays(
   return dates;
 }
 
-async function getApprovedReservationsForRoom(roomId: string) {
-  const reservationsSnapshot = await db
+async function getApprovedReservationsForRoom(
+  roomId: string,
+  transaction?: FirebaseFirestore.Transaction
+) {
+  const reservationsQuery = db
     .collection("reservations")
     .where("roomId", "==", roomId)
-    .where("status", "==", "approved")
-    .get();
+    .where("status", "==", "approved");
+  const reservationsSnapshot = transaction
+    ? await transaction.get(reservationsQuery)
+    : await reservationsQuery.get();
 
   return reservationsSnapshot.docs
     .map(
@@ -449,6 +455,7 @@ async function getActiveReservationsForUser(
 interface ReservationRoomContext {
   activeScheduleContext: ScheduleAvailabilityContext;
   buildingId: string;
+  roomStatus: string | null;
 }
 
 async function getReservationRoomContext(
@@ -467,9 +474,12 @@ async function getReservationRoomContext(
 
   const roomData = roomSnapshot.data() as {
     buildingId?: unknown;
+    status?: unknown;
   };
   const buildingId =
     typeof roomData.buildingId === "string" ? roomData.buildingId.trim() : "";
+  const roomStatus =
+    typeof roomData.status === "string" ? roomData.status : null;
 
   if (!buildingId) {
     throw new ApiError(
@@ -502,6 +512,7 @@ async function getReservationRoomContext(
       buildingId,
     },
     buildingId,
+    roomStatus,
   };
 }
 
@@ -570,6 +581,18 @@ export async function assertReservationDatesAvailable(
     input.buildingId,
     options.transaction
   );
+
+  if (isRoomAdministrativelyUnavailable(roomContext.roomStatus)) {
+    throw new ApiError(
+      409,
+      "room_administratively_unavailable",
+      "This room is currently unavailable for reservations.",
+      {
+        reason: "administrative_unavailable",
+      }
+    );
+  }
+
   const [roomSchedules, roomReservations, userReservations, manualUnavailableSlots] = await Promise.all([
     getSchedulesForRoom(
       input.roomId,
@@ -1043,6 +1066,30 @@ function getRoomStatusPayload(
     checkedInAt: selectedReservation.checkedInAt ?? null,
     checkInMethod: selectedCheckInMethod ?? null,
   } as const;
+}
+
+async function updateRoomLifecycleStatus(roomId: string) {
+  const roomRef = db.collection("rooms").doc(roomId);
+
+  await db.runTransaction(async (transaction) => {
+    const roomSnapshot = await transaction.get(roomRef);
+    if (!roomSnapshot.exists) {
+      return;
+    }
+
+    const approvedReservations = await getApprovedReservationsForRoom(
+      roomId,
+      transaction
+    );
+    const currentStatus = (roomSnapshot.data() as { status?: string | null }).status;
+    transaction.update(roomRef, {
+      ...preserveAdministrativeUnavailableStatus(
+        currentStatus,
+        getRoomStatusPayload(approvedReservations)
+      ),
+      updatedAt: serverTimestamp(),
+    });
+  });
 }
 
 function addNotification(
@@ -2008,19 +2055,13 @@ export async function approveReservationRecord(
     });
 
     const roomIds = [...new Set(approvalResult.groupedReservations.map((reservation) => reservation.roomId))];
-    for (const roomId of roomIds) {
-      const approvedReservations = await getApprovedReservationsForRoom(roomId);
-      batch.update(db.collection("rooms").doc(roomId), {
-        ...getRoomStatusPayload(approvedReservations),
-        updatedAt: serverTimestamp(),
-      });
-    }
 
     approvalResult.groupedReservations.forEach((reservation) => {
       addRoomHistory(batch, reservation, "approved");
     });
 
     await batch.commit();
+    await Promise.all(roomIds.map((roomId) => updateRoomLifecycleStatus(roomId)));
     await sendQueuedPushNotifications(queuedNotifications);
     await syncReservationStatuses(
       approvalResult.groupedReservations.map((reservation) => ({
@@ -2406,10 +2447,6 @@ export async function cancelReservationRecord(
             ]),
           ]
         : [];
-    const approvedReservations =
-      reservation.status === "approved"
-        ? await getApprovedReservationsForRoom(reservation.roomId)
-        : [];
     const batch = db.batch();
     const queuedNotifications: AppNotificationInput[] = [];
 
@@ -2437,18 +2474,10 @@ export async function cancelReservationRecord(
       });
     });
 
-    if (reservation.status === "approved") {
-      batch.update(db.collection("rooms").doc(reservation.roomId), {
-        ...getRoomStatusPayload(
-          approvedReservations.filter(
-            (approvedReservation) => approvedReservation.id !== reservationId
-          )
-        ),
-        updatedAt: serverTimestamp(),
-      });
-    }
-
     await batch.commit();
+    if (reservation.status === "approved") {
+      await updateRoomLifecycleStatus(reservation.roomId);
+    }
     await sendQueuedPushNotifications(queuedNotifications);
     await syncReservationStatuses(
       reservationsToCancel.map((reservationToCancel) => ({
@@ -2488,80 +2517,91 @@ export async function checkInReservationRecord(
     if (reservation.userId !== userId) {
       throw new ApiError(403, "forbidden", "You cannot check in for this reservation.");
     }
-    if (
-      !canReservationCheckIn({
-        status: reservation.status,
-        date: reservation.date,
-        checkedInAt:
-          reservation.checkedInAt as Parameters<
-            typeof canReservationCheckIn
-          >[0]["checkedInAt"],
-      })
-    ) {
-      throw new ApiError(
-        400,
-        "invalid_check_in",
-        "Check-in is only available for today's approved reservations."
-      );
-    }
-
     const roomRef = db.collection("rooms").doc(reservation.roomId);
-    const roomSnapshot = await roomRef.get();
-    if (!roomSnapshot.exists) {
-      throw new ApiError(404, "not_found", "Room not found.");
-    }
-
-    const roomStatus = normalizeRoomStatus(
-      (roomSnapshot.data() as { status?: string | null }).status
-    );
-    const roomData = roomSnapshot.data() as {
-      beaconId?: string | null;
-      bleBeaconId?: string | null;
-    };
-    const roomBeaconId =
-      typeof roomData.bleBeaconId === "string" && roomData.bleBeaconId.trim().length > 0
-        ? roomData.bleBeaconId.trim()
-        : typeof roomData.beaconId === "string" && roomData.beaconId.trim().length > 0
-          ? roomData.beaconId.trim()
-          : "";
-    if (roomStatus === "Unavailable") {
-      throw new ApiError(
-        400,
-        "room_unavailable",
-        "This room is currently unavailable for check-in."
-      );
-    }
-    if (normalizedMethod === "bluetooth" && roomBeaconId.length === 0) {
-      throw new ApiError(
-        400,
-        "missing_beacon",
-        "This room does not have a Bluetooth beacon configured yet."
-      );
-    }
-
     const managerIds = await getBuildingManagerIds(reservation.buildingId);
-    const batch = db.batch();
     const queuedNotifications: AppNotificationInput[] = [];
 
-    batch.update(reservationRef, {
-      checkedInAt: serverTimestamp(),
-      checkInMethod: normalizedMethod,
-      updatedAt: serverTimestamp(),
-    });
+    await db.runTransaction(async (transaction) => {
+      const [latestReservationSnapshot, roomSnapshot] = await Promise.all([
+        transaction.get(reservationRef),
+        transaction.get(roomRef),
+      ]);
+      if (!latestReservationSnapshot.exists) {
+        throw new ApiError(404, "not_found", "Reservation not found.");
+      }
+      if (!roomSnapshot.exists) {
+        throw new ApiError(404, "not_found", "Room not found.");
+      }
 
-    batch.update(roomRef, {
-      status: "Occupied",
-      beaconConnected: normalizedMethod === "bluetooth",
-      beaconDeviceName:
-        normalizedMethod === "bluetooth" ? roomBeaconId : null,
-      beaconLastConnectedAt:
-        normalizedMethod === "bluetooth" ? serverTimestamp() : null,
-      beaconLastDisconnectedAt: null,
-      reservedBy: reservation.userId,
-      activeReservationId: reservationId,
-      checkedInAt: serverTimestamp(),
-      checkInMethod: normalizedMethod,
-      updatedAt: serverTimestamp(),
+      const latestReservation = {
+        id: latestReservationSnapshot.id,
+        ...latestReservationSnapshot.data(),
+      } as ReservationRecord;
+      if (latestReservation.userId !== userId) {
+        throw new ApiError(403, "forbidden", "You cannot check in for this reservation.");
+      }
+      if (
+        !canReservationCheckIn({
+          status: latestReservation.status,
+          date: latestReservation.date,
+          checkedInAt:
+            latestReservation.checkedInAt as Parameters<
+              typeof canReservationCheckIn
+            >[0]["checkedInAt"],
+        })
+      ) {
+        throw new ApiError(
+          400,
+          "invalid_check_in",
+          "Check-in is only available for today's approved reservations."
+        );
+      }
+
+      const roomData = roomSnapshot.data() as {
+        beaconId?: string | null;
+        bleBeaconId?: string | null;
+        status?: string | null;
+      };
+      if (isRoomAdministrativelyUnavailable(roomData.status)) {
+        throw new ApiError(
+          400,
+          "room_unavailable",
+          "This room is currently unavailable for check-in."
+        );
+      }
+      const roomBeaconId =
+        typeof roomData.bleBeaconId === "string" && roomData.bleBeaconId.trim().length > 0
+          ? roomData.bleBeaconId.trim()
+          : typeof roomData.beaconId === "string" && roomData.beaconId.trim().length > 0
+            ? roomData.beaconId.trim()
+            : "";
+      if (normalizedMethod === "bluetooth" && roomBeaconId.length === 0) {
+        throw new ApiError(
+          400,
+          "missing_beacon",
+          "This room does not have a Bluetooth beacon configured yet."
+        );
+      }
+
+      transaction.update(reservationRef, {
+        checkedInAt: serverTimestamp(),
+        checkInMethod: normalizedMethod,
+        updatedAt: serverTimestamp(),
+      });
+      transaction.update(roomRef, {
+        status: "Occupied",
+        beaconConnected: normalizedMethod === "bluetooth",
+        beaconDeviceName:
+          normalizedMethod === "bluetooth" ? roomBeaconId : null,
+        beaconLastConnectedAt:
+          normalizedMethod === "bluetooth" ? serverTimestamp() : null,
+        beaconLastDisconnectedAt: null,
+        reservedBy: latestReservation.userId,
+        activeReservationId: reservationId,
+        checkedInAt: serverTimestamp(),
+        checkInMethod: normalizedMethod,
+        updatedAt: serverTimestamp(),
+      });
     });
 
     managerIds.forEach((managerUid) => {
@@ -2578,7 +2618,6 @@ export async function checkInReservationRecord(
       });
     });
 
-    await batch.commit();
     await sendQueuedPushNotifications(queuedNotifications);
   } catch (error) {
     logReservationServiceError("checkInReservationRecord", error, {
@@ -2626,6 +2665,7 @@ export async function disconnectReservationBeaconRecord(
       activeReservationId?: string | null;
       beaconConnected?: boolean | null;
       checkInMethod?: string | null;
+      status?: string | null;
     };
     const roomCheckInMethod = normalizeRoomCheckInMethod(roomData.checkInMethod);
     const shouldResetRoom =
@@ -2643,7 +2683,9 @@ export async function disconnectReservationBeaconRecord(
 
     if (shouldResetRoom) {
       batch.update(roomRef, {
-        status: "Available",
+        ...preserveAdministrativeUnavailableStatus(roomData.status, {
+          status: "Available",
+        }),
         beaconConnected: false,
         beaconDeviceName: null,
         beaconLastDisconnectedAt: serverTimestamp(),
@@ -2999,9 +3041,6 @@ export async function confirmFinishedReservationRecord(
       );
     }
 
-    const approvedReservations = await getApprovedReservationsForRoom(
-      reservation.roomId
-    );
     const batch = db.batch();
 
     batch.update(reservationRef, {
@@ -3020,16 +3059,8 @@ export async function confirmFinishedReservationRecord(
       updatedAt: serverTimestamp(),
     });
 
-    batch.update(db.collection("rooms").doc(reservation.roomId), {
-      ...getRoomStatusPayload(
-        approvedReservations.filter(
-          (approvedReservation) => approvedReservation.id !== reservationId
-        )
-      ),
-      updatedAt: serverTimestamp(),
-    });
-
     await batch.commit();
+    await updateRoomLifecycleStatus(reservation.roomId);
     await syncReservationStatuses([
       {
         dcSpaceEventId: reservation.dcSpaceEventId,
@@ -3078,28 +3109,16 @@ export async function deleteReservationRecord(
               groupedReservation.status === reservation.status
           )
         : [reservation];
-    const approvedReservations =
-      reservation.status === "approved"
-        ? await getApprovedReservationsForRoom(reservation.roomId)
-        : [];
     const batch = db.batch();
 
     reservationsToDelete.forEach((reservationToDelete) => {
       batch.delete(db.collection("reservations").doc(reservationToDelete.id));
     });
 
-    if (reservation.status === "approved") {
-      batch.update(db.collection("rooms").doc(reservation.roomId), {
-        ...getRoomStatusPayload(
-          approvedReservations.filter(
-            (approvedReservation) => approvedReservation.id !== reservationId
-          )
-        ),
-        updatedAt: serverTimestamp(),
-      });
-    }
-
     await batch.commit();
+    if (reservation.status === "approved") {
+      await updateRoomLifecycleStatus(reservation.roomId);
+    }
   } catch (error) {
     logReservationServiceError("deleteReservationRecord", error, {
       reservationId,

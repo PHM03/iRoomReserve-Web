@@ -22,6 +22,84 @@ export interface BookingSlot {
   endTime: string;
 }
 
+export interface RoomUnavailability {
+  id: string;
+  roomId: string;
+  buildingId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  reason?: string | null;
+}
+
+/** One building-scoped listener for the Admin Room Status Monitor. */
+export function onRoomUnavailabilityByBuilding(
+  buildingId: string,
+  callback: (blocks: RoomUnavailability[]) => void
+): Unsubscribe {
+  if (!buildingId) return () => {};
+
+  const blocksQuery = query(
+    collection(db, "roomUnavailability"),
+    where("buildingId", "==", buildingId)
+  );
+  return onSnapshot(
+    blocksQuery,
+    (snapshot) => {
+      callback(snapshot.docs.flatMap((blockDoc) => {
+        const data = blockDoc.data() as Omit<RoomUnavailability, "id">;
+        return data.roomId && data.date && data.startTime && data.endTime
+          ? [{ ...data, id: blockDoc.id }]
+          : [];
+      }));
+    },
+    (error) => console.warn("Firestore listener error (room unavailability by building):", error)
+  );
+}
+
+/** One campus-scoped listener set for monitors covering multiple buildings. */
+export function onRoomUnavailabilityByBuildingIds(
+  buildingIds: string[],
+  callback: (blocks: RoomUnavailability[]) => void,
+  onError?: (error: unknown) => void
+): Unsubscribe {
+  const uniqueBuildingIds = [...new Set(buildingIds.filter(Boolean))];
+  if (uniqueBuildingIds.length === 0) return () => {};
+
+  const chunks: string[][] = [];
+  for (let index = 0; index < uniqueBuildingIds.length; index += 10) {
+    chunks.push(uniqueBuildingIds.slice(index, index + 10));
+  }
+
+  const blocksByChunk = new Map<number, RoomUnavailability[]>();
+  const unsubscribers = chunks.map((buildingChunk, chunkIndex) =>
+    onSnapshot(
+      query(
+        collection(db, "roomUnavailability"),
+        where("buildingId", "in", buildingChunk)
+      ),
+      (snapshot) => {
+        blocksByChunk.set(
+          chunkIndex,
+          snapshot.docs.flatMap((blockDoc) => {
+            const data = blockDoc.data() as Omit<RoomUnavailability, "id">;
+            return data.roomId && data.buildingId && data.date && data.startTime && data.endTime
+              ? [{ ...data, id: blockDoc.id }]
+              : [];
+          })
+        );
+        callback([...blocksByChunk.values()].flat());
+      },
+      (error) => {
+        console.warn("Firestore listener error (room unavailability by building ids):", error);
+        onError?.(error);
+      }
+    )
+  );
+
+  return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+}
+
 interface ReservationSlotRecord {
   date?: string;
   startTime?: string;
