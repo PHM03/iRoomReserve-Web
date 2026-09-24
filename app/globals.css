@@ -107,6 +107,14 @@ textarea {
   transform: translateY(-2px);
 }
 
+.glass-card.room-status-monitor-card {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.glass-card.room-status-monitor-card:hover {
+  background: rgba(255, 255, 255, 0.92);
+}
+
 .glass-input {
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(20px) saturate(150%);

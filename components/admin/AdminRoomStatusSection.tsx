@@ -150,7 +150,7 @@ export default function AdminRoomStatusSection({
                 : 'No active reservation';
             const scheduleWindow = schedule ? `Class Schedule — ${formatTime12h(schedule.startTime)}–${formatTime12h(schedule.endTime)}` : null;
             const blockWindow = block ? `${block.date} · ${formatTime12h(block.startTime)}–${formatTime12h(block.endTime)}${block.reason ? ` · ${block.reason}` : ''}` : null;
-            return <li key={room.id} className="glass-card min-w-0 p-4">
+            return <li key={room.id} className="glass-card room-status-monitor-card min-w-0 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0"><h3 className="truncate text-base font-extrabold text-black">{room.name}</h3><p className="mt-0.5 text-xs font-bold text-black/50">{floorLabel} · {room.roomType || 'Room'} · Capacity {room.capacity}</p></div>
                 <div className="flex flex-wrap gap-1.5"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${room.status === 'Unavailable' ? 'ui-badge-red' : 'ui-badge-green'}`}>Condition: {room.status === 'Unavailable' ? 'Unavailable' : 'Available'}</span><span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${activityTone(activityLabel)}`}>{activityLabel}</span></div>

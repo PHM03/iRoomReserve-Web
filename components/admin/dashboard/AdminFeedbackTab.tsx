@@ -1189,6 +1189,7 @@ export default function AdminFeedbackTab({
           ) : (
             reviewerFeedbackGroups.map((reviewer) => {
               const isReviewerExpanded = expandedReviewerId === reviewer.id;
+              const previewFeedback = reviewer.feedback[0];
 
               return (
                 <section key={reviewer.id} className="glass-card overflow-hidden" aria-label={`Reviews from ${reviewer.name}`}>
@@ -1203,6 +1204,17 @@ export default function AdminFeedbackTab({
                     <div className="min-w-0">
                       <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-black/45 sm:hidden">Reviewer</p>
                       <h4 className="truncate text-sm font-bold text-black">{reviewer.name}</h4>
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2">
+                          <StarRating rating={previewFeedback.overallRating} />
+                          <span className="text-[10px] font-bold text-black/45">
+                            {previewFeedback.overallRating}/5
+                          </span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm italic leading-relaxed text-black/70">
+                          “{previewFeedback.message || previewFeedback.text || 'No comment provided.'}”
+                        </p>
+                      </div>
                     </div>
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">Reviews</p>

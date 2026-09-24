@@ -1193,15 +1193,6 @@ export default function AdminManageRoomsTab({
                                     <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
                                         <button
                                             type="button"
-                                            onClick={() => setScheduleRoom(room)}
-                                            disabled={deletingRoomId === room.id}
-                                            className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 transition-all hover:border-[#a12124]/30 hover:bg-[#a12124]/5 hover:text-[#a12124] disabled:cursor-not-allowed disabled:opacity-60"
-                                            title={`View schedule for ${room.name}`}
-                                        >
-                                            View Schedule
-                                        </button>
-                                        <button
-                                            type="button"
                                             onClick={() => startEditingRoom(room)}
                                             disabled={deletingRoomId === room.id}
                                             className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 transition-all hover:border-[#a12124]/30 hover:bg-[#a12124]/5 hover:text-[#a12124] disabled:cursor-not-allowed disabled:opacity-60"
