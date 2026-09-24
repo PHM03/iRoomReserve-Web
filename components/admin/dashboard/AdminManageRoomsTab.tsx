@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import AdminRoomScheduleModal from '@/components/admin/dashboard/AdminRoomScheduleModal';
@@ -156,6 +156,7 @@ export default function AdminManageRoomsTab({
     onBuildingChange,
     schedules,
 }: Readonly<AdminManageRoomsTabProps>) {
+    const editingRoomContainerRef = useRef<HTMLDivElement>(null);
     const now = new Date();
     const today = getCurrentDateTimeStringInTimeZone(now, DEFAULT_RESERVATION_TIME_ZONE).date;
     const todayWeekday = new Intl.DateTimeFormat('en-US', {
@@ -233,6 +234,7 @@ export default function AdminManageRoomsTab({
     const [savingRoomId, setSavingRoomId] = useState<string | null>(null);
     const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
     const [scheduleRoom, setScheduleRoom] = useState<Room | null>(null);
+    const [copyToast, setCopyToast] = useState('');
 
     const [roomSearch, setRoomSearch] = useState('');
     const [roomFloorFilter, setRoomFloorFilter] = useState('');
@@ -241,6 +243,20 @@ export default function AdminManageRoomsTab({
     const [roomsLoading, setRoomsLoading] = useState(true);
     const [roomLoadError, setRoomLoadError] = useState('');
     const [roomReloadKey, setRoomReloadKey] = useState(0);
+
+    useEffect(() => {
+        if (!copyToast) return;
+        const timeoutId = window.setTimeout(() => setCopyToast(''), 2400);
+        return () => window.clearTimeout(timeoutId);
+    }, [copyToast]);
+
+    useEffect(() => {
+        if (!editingRoomId) return;
+        const frameId = window.requestAnimationFrame(() => {
+            editingRoomContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        return () => window.cancelAnimationFrame(frameId);
+    }, [editingRoomId]);
 
     const legacyFloorOptions = useMemo(
         () =>
@@ -526,6 +542,16 @@ export default function AdminManageRoomsTab({
         setEditBeaconId(room.beaconId || '');
     };
 
+    const copyToClipboard = async (value: string, label: string) => {
+        try {
+            await navigator.clipboard.writeText(value);
+            setCopyToast(`${label} copied to clipboard`);
+        } catch (error) {
+            console.warn(`Failed to copy ${label}:`, error);
+            setCopyToast(`Could not copy ${label}`);
+        }
+    };
+
     const handleAddRoomBuildingChange = (nextBuildingId: string) => {
         if (!nextBuildingId || nextBuildingId === buildingId) {
             return;
@@ -578,7 +604,7 @@ export default function AdminManageRoomsTab({
         setSavingRoomId(roomId);
 
         try {
-            await updateRoom(roomId, {
+            const updatedFields = {
                 name: editName.trim(),
                 floor: editFloor.trim(),
                 roomType: editRoomType,
@@ -586,9 +612,14 @@ export default function AdminManageRoomsTab({
                 tvProjectorStatus: editTvStatus || 'No Television or Projector',
                 capacity: parseInt(editCapacity, 10) || 30,
                 beaconId: editBeaconId.trim() || null,
-            });
-            resetEditRoomForm();
-            reloadRoomData();
+            };
+            await updateRoom(roomId, updatedFields);
+            setRooms((currentRooms) => currentRooms.map((room) =>
+                room.id === roomId ? { ...room, ...updatedFields } : room
+            ));
+            void getRoomCountsByBuilding(buildingId, roomFloorOptions)
+                .then(setRoomCounts)
+                .catch((error) => console.warn('Failed to refresh room counts:', error));
         } catch (error) {
             console.warn('Failed to update room:', error);
             alert('Failed to update room. Please try again.');
@@ -620,6 +651,7 @@ export default function AdminManageRoomsTab({
 
     return (
         <div className="space-y-5">
+            {copyToast ? <div role="status" className={`fixed right-6 top-24 z-[120] rounded-xl border px-4 py-3 text-sm font-bold shadow-lg ${copyToast.startsWith('Could not') ? 'border-red-200 bg-red-50 text-red-800' : 'border-green-200 bg-green-50 text-green-800'}`}>{copyToast}</div> : null}
             <div className="relative z-[60] flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
                     <h3 className="text-xl font-bold text-gray-800">Manage Facilities</h3>
@@ -1032,8 +1064,8 @@ export default function AdminManageRoomsTab({
                     {filteredRooms.map((room) => (
                         <div
                             key={room.id}
-                            className={`rounded-2xl border border-white/70 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg sm:p-5 ${editingRoomId === room.id ? 'md:col-span-2 xl:col-span-3' : ''
-                                }`}
+                            ref={editingRoomId === room.id ? editingRoomContainerRef : null}
+                            className={`scroll-mt-24 rounded-2xl border border-white/70 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg sm:p-5 ${editingRoomId === room.id ? 'md:col-span-2 xl:col-span-3' : ''}`}
                         >
                             {editingRoomId === room.id ? (
                                 <div className="space-y-5">
@@ -1091,7 +1123,7 @@ export default function AdminManageRoomsTab({
                                                             placeholder="e.g. dc-312-beacon or gd3-506-beacon"
                                                         />
                                                         <button
-                                                            onClick={() => navigator.clipboard.writeText(editBeaconId)}
+                                                            onClick={() => void copyToClipboard(editBeaconId, 'Beacon ID')}
                                                             className="p-1 rounded hover:bg-primary/10 transition-all"
                                                             title="Copy Beacon ID"
                                                             disabled={!editBeaconId}
@@ -1116,7 +1148,7 @@ export default function AdminManageRoomsTab({
                                                             className="glass-input w-full px-4 py-2.5 text-sm !border-gray-400 focus:!border-primary"
                                                         />
                                                         <button
-                                                            onClick={() => navigator.clipboard.writeText(editingRoomId || '')}
+                                                            onClick={() => void copyToClipboard(editingRoomId || '', 'Room ID')}
                                                             className="p-1 rounded hover:bg-primary/10 transition-all"
                                                             title="Copy Room ID"
                                                             disabled={!editingRoomId}
