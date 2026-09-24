@@ -1617,22 +1617,14 @@ export async function monitorPendingReservations(now: Date = new Date()) {
             notificationInputs.push(notificationInput);
           });
         } else if (dayOffset !== null) {
-          const requesterMessage =
-            dayOffset === 1
-              ? `Your reservation for ${reservation.roomName} on ${formatReservationScheduleLabel(
-                  reservation
-                )} has still not been approved and will expire when the reservation date arrives if it remains pending.`
-              : `Your reservation for ${reservation.roomName} on ${formatReservationScheduleLabel(
-                  reservation
-                )} is approaching and is still pending approval. Please monitor the request.`;
           const adminMessage =
             dayOffset === 1
-              ? `This reservation for ${reservation.roomName} on ${formatReservationScheduleLabel(
+              ? `Reservation for ${reservation.roomName} on ${formatReservationScheduleLabel(
                   reservation
-                )} has still not been approved and will expire when the reservation date arrives if it remains pending. Please review the request.`
-              : `Reservation approaching — ${reservation.roomName} on ${formatReservationScheduleLabel(
+                )} still needs approval and will expire in 24 hours if it remains pending. Please review the request.`
+              : `Reservation for ${reservation.roomName} on ${formatReservationScheduleLabel(
                   reservation
-                )} is ${dayOffset} days away and still pending approval. Approval may be required.`;
+                )} needs approval and is ${dayOffset} days away. Please review the request before it expires when the reservation date arrives.`;
 
           recipientIds.forEach((recipientUid, index) => {
             if (existingNotifications[index].exists) {
@@ -1640,18 +1632,17 @@ export async function monitorPendingReservations(now: Date = new Date()) {
             }
 
             const isRequester = recipientUid === reservation.userId;
+            if (isRequester) {
+              return;
+            }
             const notificationInput: AppNotificationInput = {
               recipientUid,
               type: "system",
-              title: isRequester
-                ? "Reservation Approaching"
-                : "Reservation Approval Reminder",
-              message: isRequester ? requesterMessage : adminMessage,
+              title: "Reservation Needs Approval",
+              message: adminMessage,
               buildingId: reservation.buildingId,
               reservationId: reservation.id,
-              route: isRequester
-                ? "/dashboard/reservations"
-                : "/admin/dashboard?tab=pending",
+              route: "/admin/dashboard?tab=pending",
             };
             transaction.set(notificationRefs[index], {
               ...notificationInput,

@@ -1148,7 +1148,7 @@ export default function AdminPendingTab({
                          <span style={{ fontSize: '13px', color: '#555' }}>{timeLabel}</span>
                          {monitoringDayOffset !== null && (
                            <span style={{ fontSize: '12px', color: '#92400e', fontWeight: 700 }}>
-                             Reservation approaching — approval required
+                             Reservation Needs Approval
                            </span>
                          )}
                          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>{badge.label}</span>
