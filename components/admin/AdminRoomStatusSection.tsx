@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
+import AdminRoomScheduleModal from '@/components/admin/dashboard/AdminRoomScheduleModal';
 import type { Reservation } from '@/lib/reservations/reservations';
 import type { RoomUnavailability } from '@/lib/reservations/roomAvailability';
 import {
@@ -68,6 +69,7 @@ export default function AdminRoomStatusSection({
   const [floorFilter, setFloorFilter] = useState('');
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('All');
   const [now, setNow] = useState(() => new Date());
+  const [scheduleRoom, setScheduleRoom] = useState<Room | null>(null);
   const buildingRooms = useMemo(() => rooms.filter((room) => room.buildingId === buildingId), [buildingId, rooms]);
   const floorOptions = useMemo(() => sortFloorOptions(statusMonitorFloorGroups.map(({ floor, label }) => ({ value: floor, label }))), [statusMonitorFloorGroups]);
   const floorsWithAll = useMemo(() => [...floorOptions, { value: 'All', label: 'All Floors' }], [floorOptions]);
@@ -165,14 +167,16 @@ export default function AdminRoomStatusSection({
                 {field('Active time block', blockWindow ?? 'None')}
               </dl>
               {finishReservation ? <p className="mt-3 text-[11px] font-bold text-black/55">Completed reservation is awaiting staff confirmation.</p> : null}
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-dark/10 pt-3">
-                {finishReservation ? <button type="button" onClick={() => onConfirmFinishedReservation?.(finishReservation.id)} className="ui-button-blue rounded-lg px-3 py-2 text-[11px] font-bold">Finish Reservation</button> : null}
+              <div className="mt-4 flex items-center gap-2 border-t border-dark/10 pt-3">
+                <button type="button" onClick={() => setScheduleRoom(room)} className="rounded-lg border border-dark/15 bg-white px-3 py-2 text-[11px] font-bold text-black/75 transition-colors hover:bg-dark/5">View Schedules</button>
                 {room.status === 'Unavailable' ? <button type="button" onClick={() => onStatusChange(room.id, 'Available')} className="ui-button-green rounded-lg px-3 py-2 text-[11px] font-bold">Make available</button> : <button type="button" onClick={() => { const reason = window.prompt(`Reason for marking ${room.name} unavailable (optional):`); if (reason !== null) onStatusChange(room.id, 'Unavailable', reason.trim() || null); }} className="ui-button-red rounded-lg px-3 py-2 text-[11px] font-bold">Mark unavailable</button>}
+                {finishReservation ? <button type="button" onClick={() => onConfirmFinishedReservation?.(finishReservation.id)} className="ui-button-blue rounded-lg px-3 py-2 text-[11px] font-bold">Finish Reservation</button> : null}
               </div>
             </li>;
           })}
         </ul>
       )}
+      {scheduleRoom ? <AdminRoomScheduleModal room={scheduleRoom} schedules={schedules.filter((schedule) => schedule.roomId === scheduleRoom.id)} onClose={() => setScheduleRoom(null)} /> : null}
     </section>
   );
 }

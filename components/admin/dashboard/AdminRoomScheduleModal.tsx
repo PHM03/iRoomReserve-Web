@@ -19,6 +19,8 @@ import {
   getReservationTimeSlots,
   reservationTimeToMinutes,
 } from '@/lib/reservations/timeSlots';
+import { scheduleConflictsWithReservationSlot } from '@/lib/schedules/scheduleConflicts';
+import { getScheduleDisplayTitle, type Schedule } from '@/lib/schedules/schedules';
 import type { Room } from '@/lib/rooms/rooms';
 
 const TIME_RANGES = {
@@ -34,13 +36,15 @@ function localDate() {
 interface ScheduleSlot {
   endTime: string;
   startTime: string;
-  status: 'available' | 'approved' | 'pending' | 'manual-unavailable' | 'past';
+  status: 'available' | 'approved' | 'pending' | 'manual-unavailable' | 'class-scheduled' | 'past';
+  classSchedule?: Schedule;
 }
 
 export default function AdminRoomScheduleModal({
   room,
+  schedules = [],
   onClose,
-}: Readonly<{ room: Room; onClose: () => void }>) {
+}: Readonly<{ room: Room; schedules?: readonly Schedule[]; onClose: () => void }>) {
   const [date, setDate] = useState(localDate);
   const [bookedSlots, setBookedSlots] = useState<BookingSlot[]>([]);
   const [slots, setSlots] = useState<EnrichedBookingSlot[]>([]);
@@ -54,14 +58,29 @@ export default function AdminRoomScheduleModal({
   useEffect(() => onEnrichedSlotsByRoom(room.id, setSlots), [room.id]);
   useEffect(() => setSelectedSlots([]), [date, room.id]);
 
-  const daySlots = useMemo<ScheduleSlot[]>(
-    () => getReservationTimeSlots(timeRange).map((slot) => {
-      const matching = slots.find((item) => item.date === date && item.startTime < slot.endTime && item.endTime > slot.startTime);
+  const daySlots = useMemo<ScheduleSlot[]>(() => {
+    const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
+    return getReservationTimeSlots(timeRange).map((slot) => {
       const past = date < localDate() || (date === localDate() && reservationTimeToMinutes(slot.startTime) <= new Date().getHours() * 60 + new Date().getMinutes());
-      return { ...slot, status: matching?.status ?? (past ? 'past' : 'available') };
-    }),
-    [date, slots, timeRange]
-  );
+      if (past) return { ...slot, status: 'past' };
+
+      const approved = slots.find((item) => item.date === date && item.status === 'approved' && item.startTime < slot.endTime && item.endTime > slot.startTime);
+      if (approved) return { ...slot, status: 'approved' };
+      const manual = slots.find((item) => item.date === date && item.status === 'manual-unavailable' && item.startTime < slot.endTime && item.endTime > slot.startTime);
+      if (manual) return { ...slot, status: 'manual-unavailable' };
+
+      const classSchedule = schedules.find((schedule) => scheduleConflictsWithReservationSlot(schedule, {
+        dayOfWeek,
+        endTime: slot.endTime,
+        roomId: room.id,
+        startTime: slot.startTime,
+      }));
+      if (classSchedule) return { ...slot, status: 'class-scheduled', classSchedule };
+
+      const pending = slots.find((item) => item.date === date && item.status === 'pending' && item.startTime < slot.endTime && item.endTime > slot.startTime);
+      return { ...slot, status: pending ? 'pending' : 'available' };
+    });
+  }, [date, room.id, schedules, slots, timeRange]);
 
   function selectSlot(slot: ScheduleSlot) {
     if (
@@ -112,8 +131,27 @@ export default function AdminRoomScheduleModal({
         <div className="mb-5 flex items-start justify-between gap-4"><div><h3 className="text-xl font-bold text-black">{room.name} schedule</h3><p className="text-sm text-black/60">View bookings and select any number of slots to update availability.</p></div><button type="button" onClick={onClose} className="rounded-lg border border-dark/10 px-3 py-1.5 text-sm font-bold hover:bg-dark/5">Close</button></div>
         <div className="grid gap-5 lg:grid-cols-2">
           <div><p className="mb-2 text-sm font-bold text-black">Date</p><RoomAvailabilityPicker bookedSlots={bookedSlots} value={date} onChange={setDate} hideLegend /></div>
-          <section className="rounded-2xl border border-dark/10 bg-white p-4"><div className="mb-3"><h4 className="text-sm font-bold text-black">Day Schedule</h4><p className="text-xs text-black/60">Select available slots to make them unavailable, or unavailable slots to restore them. Reserved and pending slots cannot be changed.</p></div>
-            <div className="max-h-[24rem] space-y-2 overflow-y-auto pr-1">{daySlots.map((slot) => { const selected = selectedSlots.some((item) => item.startTime === slot.startTime); const disabled = slot.status === 'approved' || slot.status === 'pending' || slot.status === 'past'; const label = slot.status === 'approved' ? 'Reserved' : slot.status === 'pending' ? 'Pending' : slot.status === 'manual-unavailable' ? 'Unavailable' : 'Available'; const tone = slot.status === 'approved' ? 'border-red-200 bg-red-50 text-red-700' : slot.status === 'pending' ? 'border-amber-200 bg-amber-50 text-amber-700' : slot.status === 'manual-unavailable' ? selected ? 'border-red-700 bg-red-200 text-red-900 ring-1 ring-red-500' : 'border-red-300 bg-red-100 text-red-800' : slot.status === 'past' ? 'border-gray-200 bg-gray-50 text-gray-500' : selected ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary/25' : 'border-green-200 bg-green-50 text-green-700'; return <button key={slot.startTime} type="button" disabled={disabled || saving} onClick={() => selectSlot(slot)} className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-xs font-bold transition-colors ${tone} ${disabled ? 'cursor-not-allowed opacity-75' : 'hover:brightness-95'}`}><span>{formatReservationTimeSlot(slot)}</span><span className="ml-auto text-[10px]">{label}</span></button>; })}</div>
+          <section className="rounded-2xl border border-dark/10 bg-white p-4"><div className="mb-3"><h4 className="text-sm font-bold text-black">Day Schedule</h4><p className="text-xs text-black/60">Select available slots to make them unavailable, or unavailable slots to restore them. Reserved, pending, class, and past slots cannot be changed.</p></div>
+            <div className="mb-3 flex flex-wrap gap-2 text-[10px] font-bold">
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-green-400/60 bg-white" />Available</span>
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-red-300/60 bg-red-100" />Reserved</span>
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-gray-300/70 bg-gray-100" />Past / unavailable</span>
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-amber-300/60 bg-amber-100" />Pending</span>
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm border border-blue-300/60 bg-blue-100" />Class scheduled</span>
+            </div>
+            <div className="schedule-panel-scroll max-h-[24rem] space-y-2 overflow-y-auto pr-1">{daySlots.map((slot) => {
+              const selected = selectedSlots.some((item) => item.startTime === slot.startTime);
+              const disabled = slot.status === 'approved' || slot.status === 'pending' || slot.status === 'past' || slot.status === 'class-scheduled';
+              const statusLabel = slot.status === 'approved' ? 'Reserved' : slot.status === 'pending' ? 'Pending' : slot.status === 'manual-unavailable' ? 'Unavailable' : slot.status === 'class-scheduled' ? (slot.classSchedule ? getScheduleDisplayTitle(slot.classSchedule) : 'Class scheduled') : slot.status === 'past' ? 'Past' : 'Available';
+              const slotClass = slot.status === 'approved' ? 'schedule-slot-reserved' : slot.status === 'pending' ? 'schedule-slot-pending' : slot.status === 'available' ? 'schedule-slot-available' : 'schedule-slot-unavailable';
+              const selectedClass = selected ? 'schedule-slot-selected' : '';
+              const labelClass = slot.status === 'approved' ? 'border border-red-200/90 bg-red-50/95 text-red-700' : slot.status === 'pending' ? 'border border-amber-200/90 bg-amber-50/95 text-amber-700' : slot.status === 'class-scheduled' ? 'border border-blue-200/90 bg-blue-50/95 text-blue-700' : slot.status === 'available' ? 'border border-green-200/80 bg-green-50/90 text-green-700' : 'border border-gray-200/90 bg-gray-100/95 text-gray-600';
+              const timeClass = slot.status === 'approved' || slot.status === 'class-scheduled' || slot.status === 'manual-unavailable' || slot.status === 'past' ? 'line-through opacity-70' : '';
+              return <button key={slot.startTime} type="button" disabled={disabled || saving} onClick={() => selectSlot(slot)} title={slot.classSchedule ? getScheduleDisplayTitle(slot.classSchedule) : undefined} className={`schedule-slot flex h-14 w-full items-center gap-3 rounded-xl px-3 text-xs font-bold transition-all ${slotClass} ${selectedClass} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                <span className={`min-w-[6.75rem] text-left ${timeClass}`}>{formatReservationTimeSlot(slot)}</span>
+                <span className={`ml-auto inline-flex min-w-[6.8rem] shrink-0 items-center justify-center rounded-full px-2 py-1 text-[10px] font-bold ${labelClass}`}>{statusLabel}</span>
+              </button>;
+            })}</div>
             <button type="button" disabled={selectedSlots.length === 0 || saving} onClick={markSelectionUnavailable} className="mt-4 w-full rounded-xl bg-[#a12124] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[#8f1c1f] disabled:cursor-not-allowed disabled:opacity-50">{saving ? 'Saving…' : restoringAvailability ? 'Mark as Available' : 'Mark as Unavailable'}</button>
           </section>
         </div>
