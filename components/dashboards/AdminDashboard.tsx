@@ -423,12 +423,14 @@ export default function AdminDashboard({
 
       {activeTab === 'manage-rooms' && (
         <AdminManageRoomsTab
+          allReservations={allReservations}
           activeBuildingLabel={activeBuildingLabel}
           buildingFloors={buildingFloors}
           buildingId={buildingId}
           buildingName={buildingName}
           managedBuildings={managedBuildings}
           onBuildingChange={setSelectedBuildingId}
+          schedules={schedules}
         />
       )}
 

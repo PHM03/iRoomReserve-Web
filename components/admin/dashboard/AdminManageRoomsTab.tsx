@@ -28,6 +28,12 @@ import {
     type RoomCountSummary,
     type RoomInput,
 } from '@/lib/rooms/rooms';
+import type { Reservation } from '@/lib/reservations/reservations';
+import {
+    DEFAULT_RESERVATION_TIME_ZONE,
+    getCurrentDateTimeStringInTimeZone,
+} from '@/lib/rooms/roomStatus';
+import type { Schedule } from '@/lib/schedules/schedules';
 import {
     getManagedBuildingOptionLabel,
     ROOM_AC_OPTIONS,
@@ -54,6 +60,8 @@ interface AdminManageRoomsTabProps {
     buildingName: string;
     managedBuildings: BuildingOption[];
     onBuildingChange: (buildingId: string) => void;
+    allReservations: Reservation[];
+    schedules: Schedule[];
 }
 
 interface IconProps {
@@ -139,13 +147,47 @@ function TrashIcon({ className }: Readonly<IconProps>) {
 }
 
 export default function AdminManageRoomsTab({
+    allReservations,
     activeBuildingLabel,
     buildingFloors,
     buildingId,
     buildingName,
     managedBuildings,
     onBuildingChange,
+    schedules,
 }: Readonly<AdminManageRoomsTabProps>) {
+    const now = new Date();
+    const today = getCurrentDateTimeStringInTimeZone(now, DEFAULT_RESERVATION_TIME_ZONE).date;
+    const todayWeekday = new Intl.DateTimeFormat('en-US', {
+        timeZone: DEFAULT_RESERVATION_TIME_ZONE,
+        weekday: 'short',
+    }).format(now);
+    const todayDayOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(todayWeekday);
+    const getRoomBadgeStatus = (room: Room) => {
+        if (room.status === 'Unavailable') return 'Unavailable';
+
+        const hasClassToday = schedules.some(
+            (schedule) =>
+                schedule.roomId === room.id &&
+                schedule.dayOfWeek === todayDayOfWeek &&
+                Boolean(schedule.startTime) &&
+                Boolean(schedule.endTime) &&
+                schedule.startTime < schedule.endTime
+        );
+        const hasApprovedReservationToday = allReservations.some(
+            (reservation) =>
+                reservation.roomId === room.id &&
+                reservation.status === 'approved' &&
+                reservation.date === today &&
+                Boolean(reservation.startTime) &&
+                Boolean(reservation.endTime) &&
+                reservation.startTime < reservation.endTime
+        );
+
+        if (hasClassToday || hasApprovedReservationToday) return 'Reserved';
+        return room.status === 'Occupied' ? 'Occupied' : 'Available';
+    };
+
     const [addingFloor, setAddingFloor] = useState(false);
     const [managingFloors, setManagingFloors] = useState(false);
     const [editingFloorName, setEditingFloorName] = useState<string | null>(null);
@@ -1186,7 +1228,7 @@ export default function AdminManageRoomsTab({
                                             </div>
                                         </div>
                                         <div className="shrink-0">
-                                            <StatusBadge status={room.status} />
+                                            <StatusBadge status={getRoomBadgeStatus(room)} />
                                         </div>
                                     </div>
 
