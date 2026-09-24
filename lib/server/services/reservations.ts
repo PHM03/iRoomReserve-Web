@@ -1518,6 +1518,16 @@ export async function createRecurringReservationRecord(
  * make repeated cron/app-heartbeat runs idempotent.
  */
 export async function monitorPendingReservations(now: Date = new Date()) {
+  // Temporary hardware-testing switch. Keep the monitor implementation intact
+  // so pending expiration and reminders resume when the flag is re-enabled.
+  if (process.env.RESERVATION_EXPIRATION_ENABLED?.trim().toLowerCase() === "false") {
+    return {
+      expiredCount: 0,
+      notificationCount: 0,
+      manilaDate: getManilaDateKey(now),
+    };
+  }
+
   const pendingSnapshot = await db
     .collection("reservations")
     .where("status", "==", "pending")
