@@ -1046,7 +1046,7 @@ export default function AdminManageRoomsTab({
                                                             value={editBeaconId}
                                                             onChange={(event) => setEditBeaconId(event.target.value)}
                                                             className="glass-input w-full px-4 py-2.5 text-sm !border-gray-400 focus:!border-primary"
-                                                            placeholder="e.g. gd3-506-beacon"
+                                                            placeholder="e.g. dc-312-beacon or gd3-506-beacon"
                                                         />
                                                         <button
                                                             onClick={() => navigator.clipboard.writeText(editBeaconId)}
@@ -1086,7 +1086,7 @@ export default function AdminManageRoomsTab({
                                                         </button>
                                                     </div>
                                                     <p className="mt-1.5 text-xs text-black">
-                                                        Unique identifier for this room. This is retrieved from the database.
+                                                        Unique identifier for this room. This is retrieved from the system's database.
                                                     </p>
                                                 </div>
                                             </div>

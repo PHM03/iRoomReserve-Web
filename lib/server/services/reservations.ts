@@ -2802,35 +2802,6 @@ export async function sendReservationPresenceHeartbeatRecord(
 ) {
   try {
     const reservationRef = db.collection("reservations").doc(reservationId);
-    const reservationSnapshot = await reservationRef.get();
-    if (!reservationSnapshot.exists) {
-      throw new ApiError(404, "not_found", "Reservation not found.");
-    }
-
-    const reservation = {
-      id: reservationSnapshot.id,
-      ...reservationSnapshot.data(),
-    } as ReservationRecord;
-    if (reservation.userId !== input.userId) {
-      throw new ApiError(
-        403,
-        "forbidden",
-        "You cannot send heartbeats for this reservation."
-      );
-    }
-    const monitoringActive =
-      !reservation.occupancyReleasedAt &&
-      (reservation.status === "approved" || reservation.status === "completed") &&
-      Boolean(reservation.checkedInAt);
-
-    if (!monitoringActive) {
-      return {
-        healthy: false,
-        status: "stopped" as const,
-        timedOut: false,
-      };
-    }
-
     const normalizedAppState = normalizePresenceAppState(input.appState);
     if (!normalizedAppState) {
       throw new ApiError(400, "invalid_app_state", "App state is invalid.");
@@ -2840,48 +2811,109 @@ export async function sendReservationPresenceHeartbeatRecord(
       typeof input.checkedAt === "string" && input.checkedAt.trim().length > 0
         ? input.checkedAt.trim()
         : new Date().toISOString();
-    const normalizedBeaconId =
-      typeof input.beaconId === "string" && input.beaconId.trim().length > 0
-        ? input.beaconId.trim()
-        : (reservation.presenceMonitorBeaconId ?? null);
-    const status = normalizePresenceStatus({
-      bluetoothOn: input.bluetoothOn,
-      checkedAt,
-      inRange: input.inRange,
-    });
+    return await db.runTransaction(async (transaction) => {
+      const reservationSnapshot = await transaction.get(reservationRef);
+      if (!reservationSnapshot.exists) {
+        throw new ApiError(404, "not_found", "Reservation not found.");
+      }
 
-    await reservationRef.update({
-      presenceMonitorBeaconId: normalizedBeaconId,
-      presenceLastHeartbeatAt: serverTimestamp(),
-      presenceLastHeartbeatClientAt: checkedAt,
-      presenceLastAppState: normalizedAppState,
-      presenceLastBluetoothOn: input.bluetoothOn,
-      presenceLastInRange: input.inRange,
-      presenceLastRssi:
-        typeof input.rssi === "number" && Number.isFinite(input.rssi)
-          ? input.rssi
-          : null,
-      presenceStatus: status,
-      updatedAt: serverTimestamp(),
-    });
+      const reservation = {
+        id: reservationSnapshot.id,
+        ...reservationSnapshot.data(),
+      } as ReservationRecord;
+      if (reservation.userId !== input.userId) {
+        throw new ApiError(
+          403,
+          "forbidden",
+          "You cannot send heartbeats for this reservation."
+        );
+      }
 
-    if (
-      shouldSyncRoomPresence(reservation, {
-        beaconConnected: status === "healthy",
-        beaconId: normalizedBeaconId,
-      })
-    ) {
-      await updateReservationRoomPresence(reservation.roomId, {
-        beaconConnected: status === "healthy",
-        beaconId: normalizedBeaconId,
+      const monitoringActive =
+        !reservation.occupancyReleasedAt &&
+        reservation.status === "approved" &&
+        Boolean(reservation.checkedInAt);
+
+      if (!monitoringActive) {
+        if (
+          reservation.status === "completed" &&
+          (reservation.presenceStatus !== "stopped" ||
+            reservation.presenceMonitorBeaconId != null ||
+            reservation.presenceMonitoringStartedAt != null)
+        ) {
+          transaction.update(reservationRef, {
+            presenceMonitorBeaconId: null,
+            presenceMonitoringStartedAt: null,
+            presenceStatus: "stopped",
+            updatedAt: serverTimestamp(),
+          });
+          transaction.update(db.collection("rooms").doc(reservation.roomId), {
+            beaconConnected: false,
+            beaconDeviceName: null,
+            beaconLastConnectedAt: null,
+            beaconLastDisconnectedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        return {
+          healthy: false,
+          status: "stopped" as const,
+          timedOut: false,
+        };
+      }
+
+      const normalizedBeaconId =
+        typeof input.beaconId === "string" && input.beaconId.trim().length > 0
+          ? input.beaconId.trim()
+          : (reservation.presenceMonitorBeaconId ?? null);
+      const status = normalizePresenceStatus({
+        bluetoothOn: input.bluetoothOn,
+        checkedAt,
+        inRange: input.inRange,
       });
-    }
+      const nextRoomPresence = {
+        beaconConnected: status === "healthy",
+        beaconId: normalizedBeaconId,
+      };
 
-    return {
-      healthy: status === "healthy",
-      status,
-      timedOut: status === "timed_out",
-    };
+      transaction.update(reservationRef, {
+        presenceMonitorBeaconId: normalizedBeaconId,
+        presenceLastHeartbeatAt: serverTimestamp(),
+        presenceLastHeartbeatClientAt: checkedAt,
+        presenceLastAppState: normalizedAppState,
+        presenceLastBluetoothOn: input.bluetoothOn,
+        presenceLastInRange: input.inRange,
+        presenceLastRssi:
+          typeof input.rssi === "number" && Number.isFinite(input.rssi)
+            ? input.rssi
+            : null,
+        presenceStatus: status,
+        updatedAt: serverTimestamp(),
+      });
+
+      if (shouldSyncRoomPresence(reservation, nextRoomPresence)) {
+        transaction.update(db.collection("rooms").doc(reservation.roomId), {
+          beaconConnected: nextRoomPresence.beaconConnected,
+          beaconDeviceName: nextRoomPresence.beaconConnected
+            ? nextRoomPresence.beaconId
+            : null,
+          beaconLastConnectedAt: nextRoomPresence.beaconConnected
+            ? serverTimestamp()
+            : null,
+          beaconLastDisconnectedAt: nextRoomPresence.beaconConnected
+            ? null
+            : serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      return {
+        healthy: status === "healthy",
+        status,
+        timedOut: status === "timed_out",
+      };
+    });
   } catch (error) {
     logReservationServiceError("sendReservationPresenceHeartbeatRecord", error, {
       reservationId,
@@ -2915,21 +2947,15 @@ export async function stopReservationPresenceMonitorRecord(
     }
 
     await reservationRef.update({
+      presenceMonitorBeaconId: null,
+      presenceMonitoringStartedAt: null,
       presenceStatus: "stopped",
       updatedAt: serverTimestamp(),
     });
-
-    if (
-      shouldSyncRoomPresence(reservation, {
-        beaconConnected: false,
-        beaconId: reservation.presenceMonitorBeaconId ?? null,
-      })
-    ) {
-      await updateReservationRoomPresence(reservation.roomId, {
-        beaconConnected: false,
-        beaconId: reservation.presenceMonitorBeaconId ?? null,
-      });
-    }
+    await updateReservationRoomPresence(reservation.roomId, {
+      beaconConnected: false,
+      beaconId: null,
+    });
   } catch (error) {
     logReservationServiceError("stopReservationPresenceMonitorRecord", error, {
       reservationId,
@@ -2958,6 +2984,16 @@ export async function completeReservationRecord(
       throw new ApiError(403, "forbidden", "You cannot complete this reservation.");
     }
     if (reservation.status === "completed") {
+      await reservationRef.update({
+        presenceMonitorBeaconId: null,
+        presenceMonitoringStartedAt: null,
+        presenceStatus: "stopped",
+        updatedAt: serverTimestamp(),
+      });
+      await updateReservationRoomPresence(reservation.roomId, {
+        beaconConnected: false,
+        beaconId: null,
+      });
       return;
     }
     if (reservation.status !== "approved") {
@@ -2977,6 +3013,17 @@ export async function completeReservationRecord(
       completedAt: serverTimestamp(),
       occupancyReleasedAt: null,
       occupancyReleasedByUid: null,
+      presenceMonitorBeaconId: null,
+      presenceMonitoringStartedAt: null,
+      presenceStatus: "stopped",
+      updatedAt: serverTimestamp(),
+    });
+
+    batch.update(db.collection("rooms").doc(reservation.roomId), {
+      beaconConnected: false,
+      beaconDeviceName: null,
+      beaconLastConnectedAt: null,
+      beaconLastDisconnectedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
