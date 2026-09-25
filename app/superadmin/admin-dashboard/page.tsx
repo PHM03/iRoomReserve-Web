@@ -249,9 +249,9 @@ function SuperAdminCampusNavBar({
 
   return (
     <nav ref={navRef} className="glass-nav fixed top-0 left-0 right-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between py-5">
-          <div className="flex items-center gap-2">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between gap-3 py-5">
+          <div className="flex shrink-0 items-center gap-2">
             <Image
               src="/images/eroomreserve-navbar-icon.png"
               alt="e-RoomReserve"
@@ -259,12 +259,12 @@ function SuperAdminCampusNavBar({
               height={36}
               className="h-9 w-9 rounded-lg object-contain"
             />
-            <h1 className="text-xl text-[#343434]" style={navbarBoldStyle}>
+            <h1 className="whitespace-nowrap text-xl text-[#343434]" style={navbarBoldStyle}>
               e-RoomReserve
             </h1>
           </div>
 
-          <div className="hidden md:flex flex-1 items-center justify-center gap-2 px-3">
+          <div className="hidden 2xl:flex flex-1 items-center justify-center gap-3 px-3">
             {adminLinks.map((link) => (
               <button
                 key={link.tab}
@@ -280,7 +280,11 @@ function SuperAdminCampusNavBar({
               </button>
             ))}
 
-            <div className="relative flex shrink-0 items-center">
+            <div
+              className={`relative flex shrink-0 items-center border border-[#d6d6d6] bg-[#f5f5f5] ${
+                isStatusMenuOpen ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => setIsStatusMenuOpen((current) => !current)}
@@ -298,14 +302,14 @@ function SuperAdminCampusNavBar({
               </button>
 
               {isStatusMenuOpen ? (
-                <div className="absolute left-0 top-full mt-2 w-56 glass-card !rounded-2xl p-2 shadow-xl">
+                <div className="absolute left-0 top-full z-10 w-full min-w-max border border-t-0 border-[#d6d6d6] bg-[#f5f5f5] !rounded-t-none !rounded-b-xl p-2 shadow-xl">
                   {renderStatusSchedulingLinks()}
                 </div>
               ) : null}
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex shrink-0 items-center gap-3">
             <button
               onClick={onBack}
               className={subtleBackButtonClasses}
@@ -489,7 +493,7 @@ function SuperAdminCampusNavBar({
 
             <button
               onClick={() => setIsMenuOpen((current) => !current)}
-              className={`md:hidden ${navIconButtonClasses}`}
+              className={`2xl:hidden ${navIconButtonClasses}`}
             >
               {isMenuOpen ? (
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -516,7 +520,7 @@ function SuperAdminCampusNavBar({
       </div>
 
       {isMenuOpen ? (
-        <div className="md:hidden border-t border-[#343434]/8 bg-[#f5f5f5]/80 backdrop-blur-xl">
+        <div className="2xl:hidden border-t border-[#343434]/8 bg-[#f5f5f5]/80 backdrop-blur-xl">
           <div className="px-3 py-2 space-y-1">
             {adminLinks.map((link) => (
               <button
@@ -531,7 +535,7 @@ function SuperAdminCampusNavBar({
               </button>
             ))}
 
-            <div className="rounded-xl border border-dark/5 bg-white/50">
+            <div className="rounded-xl border border-[#d6d6d6] bg-[#f5f5f5]">
               <button
                 type="button"
                 onClick={() =>
@@ -547,7 +551,7 @@ function SuperAdminCampusNavBar({
               </button>
 
               {isMobileStatusMenuOpen ? (
-                <div className="px-2 pb-2">
+                <div className="space-y-1 px-2 pb-2">
                   {renderStatusSchedulingLinks(true)}
                 </div>
               ) : null}
