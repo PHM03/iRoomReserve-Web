@@ -11,6 +11,7 @@ import {
 
 import { apiRequest } from "@/lib/api/client";
 import { type ReservationCampus } from "@/lib/buildings/campuses";
+import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
 import { buildUrl } from "@/lib/utils/buildUrl";
 import {
   type DigiReservationApproverInput,
@@ -363,6 +364,15 @@ export function onPendingReservationsByApprover(
               )
               .filter((reservation) => {
                 const currentStep = getCurrentApprovalStep(reservation);
+                if (currentStep?.role === "dsas") {
+                  return (
+                    reservation.status === "pending" &&
+                    reservation.campus === "main" &&
+                    normalizeRole(reservation.userRole) === USER_ROLES.STUDENT &&
+                    currentStep.approverUid === auth.currentUser?.uid &&
+                    currentStep.email === normalizedEmail
+                  );
+                }
                 return currentStep?.email === normalizedEmail;
               })
           )

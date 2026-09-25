@@ -21,6 +21,9 @@ import { extractTimeString, formatTimeRange } from '@/lib/utils/dateTime';
 import { formatReservationDates, RoleBadge, getManagedBuildingOptionLabel } from './shared';
 import { formatOtherEquipment } from '@/lib/reservations/equipment';
 import { getMonitoringDayOffset } from '@/lib/reservations/reservation-monitoring';
+import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
+import { getCompletedApprovalRecord } from '@/lib/reservations/reservation-approval';
+import { getApprovalApproverDisplayName } from '@/lib/auth/auth';
 
 interface BuildingOption {
   id: string;
@@ -186,6 +189,7 @@ export default function AdminPendingTab({
   const [expirationMessage, setExpirationMessage] = useState('');
   const [expirationMessageError, setExpirationMessageError] = useState('');
   const [expirationMessageSubmitting, setExpirationMessageSubmitting] = useState(false);
+  const [advisorDisplayNames, setAdvisorDisplayNames] = useState<Record<string, string | null>>({});
 
   const isAnyFilterActive =
     userTypeFilter.length > 0 ||
@@ -197,6 +201,49 @@ export default function AdminPendingTab({
     [...requests, ...expiredRequests].forEach((request) => byId.set(request.id, request));
     return [...byId.values()];
   }, [expiredRequests, requests]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const unresolvedAdvisorApprovals = displayedRequests.filter((request) => {
+      const advisorApproval = getCompletedApprovalRecord(request.approvals, 'advisor');
+      const dsasApproval = getCompletedApprovalRecord(request.approvals, 'dsas');
+
+      return (
+        request.status === 'pending' &&
+        request.campus === 'main' &&
+        normalizeRole(request.userRole) === USER_ROLES.STUDENT &&
+        request.approvalFlow[request.currentStep]?.role === 'building_admin' &&
+        dsasApproval &&
+        advisorApproval &&
+        !advisorApproval.approverName?.trim() &&
+        !Object.prototype.hasOwnProperty.call(advisorDisplayNames, request.id)
+      );
+    });
+
+    if (unresolvedAdvisorApprovals.length > 0) {
+      void Promise.all(
+        unresolvedAdvisorApprovals.map(async (request) => {
+          const advisorApproval = getCompletedApprovalRecord(request.approvals, 'advisor');
+          const displayName = await getApprovalApproverDisplayName({
+            uid: advisorApproval?.approverUid,
+            email: advisorApproval?.email,
+          }).catch(() => null);
+          return [request.id, displayName] as const;
+        })
+      ).then((resolvedNames) => {
+        if (!cancelled) {
+          setAdvisorDisplayNames((current) => ({
+            ...current,
+            ...Object.fromEntries(resolvedNames),
+          }));
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [advisorDisplayNames, displayedRequests]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1104,6 +1151,29 @@ export default function AdminPendingTab({
                 const isEditingExpirationMessage = expirationMessageReservationId === request.id;
                 const dateLabel = formatReservationDates(request.dates, request.date);
                 const timeLabel = formatTimeRange(request.startTime, request.endTime);
+                const completedAdvisorApproval = getCompletedApprovalRecord(
+                  request.approvals,
+                  'advisor'
+                );
+                const completedDsasApproval = getCompletedApprovalRecord(
+                  request.approvals,
+                  'dsas'
+                );
+                const advisorApproverLabel = completedAdvisorApproval
+                  ? completedAdvisorApproval.approverName?.trim() ||
+                    advisorDisplayNames[request.id] ||
+                    (Object.prototype.hasOwnProperty.call(advisorDisplayNames, request.id)
+                      ? completedAdvisorApproval.email
+                      : 'Resolving name…')
+                  : undefined;
+                const hasCompletedDsasApproval =
+                  request.status === 'pending' &&
+                  request.campus === 'main' &&
+                  normalizeRole(request.userRole) === USER_ROLES.STUDENT &&
+                  request.approvalFlow.some((step) => step.role === 'dsas') &&
+                  request.approvalFlow[request.currentStep]?.role === 'building_admin' &&
+                  Boolean(advisorApproverLabel) &&
+                  Boolean(completedDsasApproval);
                 return (
                   <div
                     key={request.id}
@@ -1300,6 +1370,42 @@ export default function AdminPendingTab({
                           }}>{sub}</p>}
                         </div>
                       ))}
+                      {hasCompletedDsasApproval && (
+                        <>
+                          <div style={{
+                            background: '#fafafa',
+                            borderRadius: '8px',
+                            border: '1px solid #f0f0f0',
+                            padding: '10px 14px'
+                          }}>
+                            <p style={{
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              letterSpacing: '0.08em',
+                              color: '#999',
+                              textTransform: 'uppercase',
+                              marginBottom: '4px'
+                            }}>PROFESSOR / ADVISER</p>
+                            <p style={{ fontSize: '14px', color: '#222', fontWeight: 500 }}>✓ Approved by {advisorApproverLabel}</p>
+                          </div>
+                          <div style={{
+                            background: '#fafafa',
+                            borderRadius: '8px',
+                            border: '1px solid #f0f0f0',
+                            padding: '10px 14px'
+                          }}>
+                            <p style={{
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              letterSpacing: '0.08em',
+                              color: '#999',
+                              textTransform: 'uppercase',
+                              marginBottom: '4px'
+                            }}>DSAS APPROVAL</p>
+                            <p style={{ fontSize: '14px', color: '#222', fontWeight: 500 }}>✓ DSAS Approved</p>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {request.expirationMessage?.message && (

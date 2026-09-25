@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { USER_ROLES } from "@/lib/auth/roles";
+import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
+import { ApiError } from "@/lib/server/api-error";
 import { handleApiError } from "@/lib/server/api-error";
 import { getManagedBuildingIdsForCampus } from "@/lib/buildings/campusAssignments";
 import { db } from "@/lib/firebase/firebase-admin";
@@ -195,6 +196,19 @@ export async function POST(request: NextRequest) {
     const payload = createReservationSchema.parse(await request.json());
 
     assertOwnsResource(authContext, payload.reservation.userId);
+
+    const authenticatedRole = authContext.role;
+    if (
+      !authenticatedRole ||
+      normalizeRole(payload.reservation.userRole) !== authenticatedRole
+    ) {
+      throw new ApiError(
+        403,
+        "forbidden",
+        "Reservation role does not match the authenticated account."
+      );
+    }
+    payload.reservation.userRole = authenticatedRole;
 
     if (payload.type === "single") {
       const id = await createReservationRecord(payload.reservation);

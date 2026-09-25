@@ -9,15 +9,19 @@ import { reservationCampusSchema } from "@/lib/server/schemas";
 import {
   approveManagedUserProfile,
   approveUserProfile,
+  assignMainCampusDsasDesignation,
   deleteUserProfile,
   disableUserProfile,
   enableUserProfile,
   rejectUserProfile,
+  removeMainCampusDsasDesignation,
   updateManagedUserCampus,
 } from "@/lib/server/services/admin-users";
 
 const managedApprovalSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("approve-user") }),
+  z.object({ action: z.literal("assign-dsas") }),
+  z.object({ action: z.literal("remove-dsas") }),
   z.object({
     action: z.literal("approve-managed"),
     campus: reservationCampusSchema,
@@ -50,6 +54,12 @@ export async function PATCH(
     switch (payload.action) {
       case "approve-user":
         await approveUserProfile(uid);
+        break;
+      case "assign-dsas":
+        await assignMainCampusDsasDesignation(uid);
+        break;
+      case "remove-dsas":
+        await removeMainCampusDsasDesignation(uid);
         break;
       case "approve-managed":
         await approveManagedUserProfile(uid, payload.role, payload.campus);

@@ -7,6 +7,8 @@ import { assertAuthenticated } from "@/lib/server/route-guards";
 import { createReservationDocumentSignedUrl } from "@/lib/server/supabase-storage";
 import { db } from "@/lib/firebase/firebase-admin";
 import { groupReservationsForDisplay } from "@/lib/reservations/reservation-groups";
+import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
+import { isMainCampusDsasProfile } from "@/lib/auth/dsas-designation";
 
 export const runtime = "nodejs";
 
@@ -84,7 +86,32 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (authContext.status !== "approved") {
+      throw new ApiError(403, "account_not_approved", "Only approved accounts can review reservations.");
+    }
+
     const normalizedEmail = authContext.email.trim().toLowerCase();
+    let isCurrentDsasApprover = false;
+    if (authContext.role === USER_ROLES.FACULTY && authContext.uid) {
+      const [assignmentSnapshot, userSnapshot] = await Promise.all([
+        db.collection("systemSettings").doc("main-campus-dsas").get(),
+        db.collection("users").doc(authContext.uid).get(),
+      ]);
+      const assignmentUid = assignmentSnapshot.data()?.mainCampusDsasUid;
+      const userData = userSnapshot.data() as {
+        role?: string | null;
+        status?: string | null;
+        designation?: string | null;
+        designationCampus?: string | null;
+      } | undefined;
+      isCurrentDsasApprover =
+        assignmentUid === authContext.uid &&
+        userSnapshot.exists &&
+        Boolean(userData && isMainCampusDsasProfile({
+          uid: authContext.uid,
+          ...userData,
+        }));
+    }
     const snapshot = await db
       .collection("reservations")
       .where("status", "==", "pending")
@@ -107,6 +134,16 @@ export async function GET(request: NextRequest) {
             ? reservation.currentStep
             : undefined
         );
+
+        if (currentStep?.role === "dsas") {
+          return (
+            isCurrentDsasApprover &&
+            reservation.campus === "main" &&
+            normalizeRole(String(reservation.userRole ?? "")) === USER_ROLES.STUDENT &&
+            currentStep.approverUid === authContext.uid &&
+            currentStep.email === normalizedEmail
+          );
+        }
 
         return currentStep?.email === normalizedEmail;
       })

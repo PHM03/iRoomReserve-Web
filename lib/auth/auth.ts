@@ -15,6 +15,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -262,6 +263,42 @@ export async function getUserProfile(uid: string) {
   };
 }
 
+export async function getApprovalApproverDisplayName(input: {
+  uid?: string | null;
+  email?: string | null;
+}) {
+  let profileData: Record<string, unknown> | undefined;
+
+  if (input.uid?.trim()) {
+    const profileSnapshot = await getDoc(doc(db, "users", input.uid.trim()));
+    if (profileSnapshot.exists()) {
+      profileData = profileSnapshot.data();
+    }
+  }
+
+  if (!profileData && input.email?.trim()) {
+    const matchingProfiles = await getDocs(
+      query(
+        collection(db, "users"),
+        where("email", "==", input.email.trim().toLowerCase())
+      )
+    );
+    profileData = matchingProfiles.docs[0]?.data();
+  }
+
+  if (!profileData) {
+    return null;
+  }
+
+  const firstName =
+    typeof profileData.firstName === "string" ? profileData.firstName.trim() : "";
+  const lastName =
+    typeof profileData.lastName === "string" ? profileData.lastName.trim() : "";
+  const fullName = [firstName, lastName].filter(Boolean).join(" ");
+
+  return fullName || null;
+}
+
 export async function logout() {
   return signOut(auth);
 }
@@ -399,6 +436,8 @@ export interface ManagedUser {
   email: string;
   role: string;
   status: string;
+  designation?: string;
+  designationCampus?: ReservationCampus | null;
   rejectionReason?: string;
   campus?: ReservationCampus | null;
   campusName?: CampusName | null;
@@ -416,6 +455,12 @@ function mapManagedUser(
     email: String(data.email || ""),
     role: normalizeRole(String(data.role || "")) ?? String(data.role || ""),
     status: String(data.status || ""),
+    designation:
+      typeof data.designation === "string" ? data.designation : undefined,
+    designationCampus:
+      data.designationCampus === "main" || data.designationCampus === "digi"
+        ? data.designationCampus
+        : null,
     rejectionReason:
       typeof data.rejectionReason === "string" ? data.rejectionReason : undefined,
     ...resolveCampusAssignment({
@@ -517,6 +562,20 @@ export async function updateAdminCampus(
 ) {
   await apiRequest(`/api/admin/users/${uid}`, {
     body: { action: "update-campus", campus },
+    method: "PATCH",
+  });
+}
+
+export async function assignMainCampusDsas(uid: string) {
+  await apiRequest(`/api/admin/users/${uid}`, {
+    body: { action: "assign-dsas" },
+    method: "PATCH",
+  });
+}
+
+export async function removeMainCampusDsas(uid: string) {
+  await apiRequest(`/api/admin/users/${uid}`, {
+    body: { action: "remove-dsas" },
     method: "PATCH",
   });
 }

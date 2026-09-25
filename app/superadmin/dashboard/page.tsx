@@ -7,12 +7,14 @@ import {
   onAllUsers,
   approveUser,
   approveAdmin,
+  assignMainCampusDsas,
   rejectUser,
   deleteUserAccount,
   disableUserAccount,
   enableUserAccount,
   ManagedUser,
   updateAdminCampus,
+  removeMainCampusDsas,
 } from '@/lib/auth/auth';
 import { getCampusName } from '@/lib/buildings/campusAssignments';
 import { type ReservationCampus } from '@/lib/buildings/campuses';
@@ -73,6 +75,12 @@ export default function SuperAdminDashboard() {
   const facultyProfessors = allUsers.filter((u) => u.role === USER_ROLES.FACULTY);
   const utilityUsers = allUsers.filter((u) => u.role === USER_ROLES.UTILITY);
   const administrators = allUsers.filter((u) => u.role === USER_ROLES.ADMIN);
+  const mainCampusDsasProfessor = facultyProfessors.find(
+    (user) =>
+      user.designation === "DSAS" &&
+      user.designationCampus === "main" &&
+      user.status === "approved"
+  );
 
   const currentUsers = (() => {
     switch (activeTab) {
@@ -114,6 +122,20 @@ export default function SuperAdminDashboard() {
   const handleApprove = async (uid: string) => {
     setActionLoading(uid);
     try { await approveUser(uid); } catch (error) { console.warn('Failed to approve:', error); }
+    setActionLoading(null);
+  };
+
+  const handleDsasDesignation = async (uid: string, remove = false) => {
+    setActionLoading(uid);
+    try {
+      if (remove) {
+        await removeMainCampusDsas(uid);
+      } else {
+        await assignMainCampusDsas(uid);
+      }
+    } catch (error) {
+      console.warn("Failed to update Main Campus DSAS designation:", error);
+    }
     setActionLoading(null);
   };
 
@@ -463,6 +485,22 @@ export default function SuperAdminDashboard() {
           ))}
         </div>
 
+        {activeTab === 'faculty' && (
+          <div className="glass-card mb-6 flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-bold text-black">Main Campus DSAS designation</p>
+              <p className="text-xs text-black/70">
+                Only one approved Faculty Professor can be designated. Assigning another Professor replaces the current designation.
+              </p>
+            </div>
+            <p className="text-xs font-bold text-black">
+              Current: {mainCampusDsasProfessor
+                ? `${mainCampusDsasProfessor.firstName} ${mainCampusDsasProfessor.lastName}`
+                : 'Not assigned'}
+            </p>
+          </div>
+        )}
+
         {/* User List */}
         {currentUsers.length === 0 ? (
           <div className="glass-card p-12 text-center">
@@ -510,6 +548,12 @@ export default function SuperAdminDashboard() {
                       {user.status}
                     </span>
 
+                    {user.designation === 'DSAS' && user.designationCampus === 'main' && (
+                      <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                        Main Campus DSAS
+                      </span>
+                    )}
+
                     {user.campusName && (
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-blue">
                         <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -520,6 +564,29 @@ export default function SuperAdminDashboard() {
                     )}
 
                     {/* ─── Action Buttons ────────────────────────── */}
+
+                    {activeTab === 'faculty' &&
+                      user.role === USER_ROLES.FACULTY &&
+                      (user.status === 'approved' ||
+                        (user.designation === 'DSAS' && user.designationCampus === 'main')) && (
+                        <button
+                          type="button"
+                          onClick={() => void handleDsasDesignation(
+                            user.uid,
+                            user.designation === 'DSAS' && user.designationCampus === 'main'
+                          )}
+                          disabled={actionLoading === user.uid}
+                          className={`inline-flex items-center rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50 ${
+                            user.designation === 'DSAS' && user.designationCampus === 'main'
+                              ? 'border-dark/15 text-black hover:bg-primary/10 hover:text-primary'
+                              : 'border-primary/25 bg-primary/10 text-primary hover:bg-primary/15'
+                          }`}
+                        >
+                          {user.designation === 'DSAS' && user.designationCampus === 'main'
+                            ? 'Remove DSAS'
+                            : 'Designate as DSAS'}
+                        </button>
+                      )}
 
                     {/* Pending: Approve & Reject */}
                     {user.status === 'pending' && (

@@ -1,4 +1,5 @@
 import "server-only";
+import type { Transaction } from "firebase-admin/firestore";
 
 import { db, deleteField, serverTimestamp, Timestamp } from "@/lib/firebase/firebase-admin";
 import {
@@ -8,13 +9,18 @@ import {
 } from "@/lib/buildings/campuses";
 import { formatTimeRange } from "../../utils/dateTime";
 import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
+import { isMainCampusDsasProfile } from "@/lib/auth/dsas-designation";
 import type { FirestoreTimestampLike } from "@/lib/types/firestore-types";
 import {
   buildApprovalFlow,
+  buildReservationRejectionNotice,
+  buildReservationRejectionUpdate,
+  getApprovalTransition,
   getCurrentApprovalStep,
-  getNextApprovalStep,
+  isAuthorizedDsasApprover,
   isCurrentApproverEmail,
   normalizeApprovalEmail,
+  requiresDsasApproval,
   type DigiReservationApproverInput,
   type MainReservationApproverInput,
   type ReservationApprovalRecord,
@@ -89,6 +95,9 @@ type ReservationPresenceStatus =
   | "warning";
 
 const PRESENCE_HEARTBEAT_TIMEOUT_MS = 2 * 60 * 1000;
+const mainCampusDsasAssignmentRef = db
+  .collection("systemSettings")
+  .doc("main-campus-dsas");
 interface ReservationExpirationMessage {
   message: string;
   sentBy: string;
@@ -854,6 +863,109 @@ async function getBuildingCampus(buildingId: string) {
   });
 }
 
+async function getMainCampusDsasApprover() {
+  const assignmentSnapshot = await db
+    .collection("systemSettings")
+    .doc("main-campus-dsas")
+    .get();
+  const assignmentData = assignmentSnapshot.data() as {
+    mainCampusDsasUid?: string | null;
+  } | undefined;
+  const uid = assignmentData?.mainCampusDsasUid?.trim();
+
+  if (!uid) {
+    throw new ApiError(
+      503,
+      "dsas_not_configured",
+      "A Main Campus DSAS-designated Professor has not been assigned. Contact the Super Admin."
+    );
+  }
+
+  const [userSnapshot, designatedSnapshot] = await Promise.all([
+    db.collection("users").doc(uid).get(),
+    db
+      .collection("users")
+      .where("designation", "==", "DSAS")
+      .where("designationCampus", "==", "main")
+      .get(),
+  ]);
+
+  const designatedProfiles = designatedSnapshot.docs
+    .map((userDoc) => ({
+      uid: userDoc.id,
+      ...(userDoc.data() as {
+        role?: string | null;
+        status?: string | null;
+        designation?: string | null;
+        designationCampus?: string | null;
+      }),
+    }))
+    .filter(isMainCampusDsasProfile);
+  const userData = userSnapshot.data() as {
+    role?: string | null;
+    status?: string | null;
+    designation?: string | null;
+    designationCampus?: string | null;
+    email?: string | null;
+  } | undefined;
+
+  if (
+    !userSnapshot.exists ||
+    !userData ||
+    !isMainCampusDsasProfile({ uid, ...userData }) ||
+    designatedProfiles.length !== 1 ||
+    designatedProfiles[0].uid !== uid ||
+    !userData.email?.trim()
+  ) {
+    throw new ApiError(
+      503,
+      "dsas_configuration_invalid",
+      "The Main Campus DSAS designation is missing or invalid. Contact the Super Admin."
+    );
+  }
+
+  return {
+    uid,
+    email: normalizeApprovalEmail(userData.email),
+  };
+}
+
+async function assertDsasStepStillAssigned(
+  transaction: Transaction,
+  step: ReservationApprovalStep
+) {
+  if (step.role !== "dsas" || !step.approverUid) {
+    throw new ApiError(409, "dsas_unavailable", "The assigned DSAS approver is unavailable.");
+  }
+
+  const [userSnapshot, assignmentSnapshot] = await Promise.all([
+    transaction.get(db.collection("users").doc(step.approverUid)),
+    transaction.get(mainCampusDsasAssignmentRef),
+  ]);
+  const userData = userSnapshot.data() as {
+    role?: string | null;
+    status?: string | null;
+    designation?: string | null;
+    designationCampus?: string | null;
+  } | undefined;
+  const assignmentData = assignmentSnapshot.data() as {
+    mainCampusDsasUid?: string | null;
+  } | undefined;
+
+  if (
+    !userSnapshot.exists ||
+    !userData ||
+    !isMainCampusDsasProfile({ uid: step.approverUid, ...userData }) ||
+    assignmentData?.mainCampusDsasUid !== step.approverUid
+  ) {
+    throw new ApiError(
+      409,
+      "dsas_unavailable",
+      "The assigned DSAS Professor is no longer designated. Contact the Super Admin."
+    );
+  }
+}
+
 async function resolveReservationCampus(input: {
   buildingId: string;
   buildingName: string;
@@ -912,9 +1024,14 @@ async function getReservationApproverInput(
     );
   }
 
+  const dsasApprover = requiresDsasApproval(campus, normalizedRole ?? "")
+    ? await getMainCampusDsasApprover()
+    : undefined;
+
   return {
     campus,
     advisorEmail: input.advisorEmail,
+    ...(dsasApprover ? { dsasApprover } : {}),
     buildingAdminEmail: await getPrimaryBuildingManagerEmail(input.buildingId),
   };
 }
@@ -947,6 +1064,30 @@ async function getInitialApproverIdsOrThrow(
       firstApprovalStep,
       firstApproverIds: buildingAdminIds,
     };
+  }
+
+  if (firstApprovalStep.role === "dsas") {
+    const uid = firstApprovalStep.approverUid;
+    if (!uid) {
+      throw new ApiError(400, "invalid_approval_flow", "The DSAS approval step has no approver identity.");
+    }
+    const dsasSnapshot = await db.collection("users").doc(uid).get();
+    const dsasData = dsasSnapshot.data() as {
+      role?: string | null;
+      status?: string | null;
+      designation?: string | null;
+      designationCampus?: string | null;
+      email?: string | null;
+    } | undefined;
+    if (
+      !dsasSnapshot.exists ||
+      !dsasData ||
+      !isMainCampusDsasProfile({ uid, ...dsasData }) ||
+      normalizeApprovalEmail(dsasData.email ?? "") !== firstApprovalStep.email
+    ) {
+      throw new ApiError(400, "invalid_approval_flow", "The DSAS approver is not a valid designated Professor.");
+    }
+    return { firstApprovalStep, firstApproverIds: [uid] };
   }
 
   const validation = await validateReservationApprover({
@@ -1002,6 +1143,21 @@ function assertCurrentStepCanBeApprovedBy(
   userEmail: string,
   authContext?: RequestAuthContext
 ) {
+  if (approvalStep.role === "dsas") {
+    if (!isAuthorizedDsasApprover({
+      campus: reservation.campus,
+      requesterRole: normalizeRole(reservation.userRole) ?? reservation.userRole,
+      step: approvalStep,
+      userEmail,
+      userRole: authContext?.role ?? null,
+      userStatus: authContext?.status,
+      userUid: authContext?.uid ?? null,
+    })) {
+      throw new ApiError(403, "forbidden", "Only the assigned Main Campus DSAS Professor can review this reservation.");
+    }
+    return;
+  }
+
   if (approvalStep.role !== "building_admin") {
     if (!isCurrentApproverEmail(approvalStep, userEmail)) {
       throw new ApiError(403, "forbidden", "You are not the current approver for this reservation.");
@@ -1947,9 +2103,41 @@ export async function approveReservationRecord(
         userEmail,
         authContext
       );
+      if (currentApprovalStep.role === "dsas") {
+        await assertDsasStepStillAssigned(transaction, currentApprovalStep);
+      }
 
-      const nextStepIndex = reservation.currentStep + 1;
-      const isFinalApproval = nextStepIndex >= reservation.approvalFlow.length;
+      const transition = getApprovalTransition(
+        reservation.approvalFlow,
+        reservation.currentStep
+      );
+      const { isFinalApproval, nextApprovalStep } = transition;
+
+      if (nextApprovalStep?.role === "dsas") {
+        await assertDsasStepStillAssigned(transaction, nextApprovalStep);
+      }
+
+      const shouldSnapshotAdvisorApprover =
+        currentApprovalStep.role === "advisor" &&
+        reservation.campus === "main" &&
+        normalizeRole(reservation.userRole) === USER_ROLES.STUDENT;
+      const advisorApproverUid = shouldSnapshotAdvisorApprover
+        ? authContext?.uid
+        : null;
+      const advisorApproverSnapshot = advisorApproverUid
+        ? await transaction.get(db.collection("users").doc(advisorApproverUid))
+        : null;
+      const advisorApproverData = advisorApproverSnapshot?.data() as {
+        firstName?: string | null;
+        lastName?: string | null;
+        displayName?: string | null;
+      } | undefined;
+      const advisorApproverName = advisorApproverData
+        ? [advisorApproverData.firstName, advisorApproverData.lastName]
+            .filter((part): part is string => Boolean(part?.trim()))
+            .join(" ")
+            .trim() || advisorApproverData.displayName?.trim() || undefined
+        : undefined;
 
       pendingReservations.forEach((pendingReservation) => {
         assertReservationPendingApproval(pendingReservation);
@@ -1966,6 +2154,15 @@ export async function approveReservationRecord(
         const approvalEntry: ReservationApprovalRecord = {
           role: reservationApprovalStep.role,
           email: reservationApprovalStep.email,
+          ...(reservationApprovalStep.role === "advisor" && advisorApproverUid
+            ? { approverUid: advisorApproverUid }
+            : {}),
+          ...(reservationApprovalStep.role === "advisor" && advisorApproverName
+            ? { approverName: advisorApproverName }
+            : {}),
+          ...(reservationApprovalStep.approverUid
+            ? { approverUid: reservationApprovalStep.approverUid }
+            : {}),
           date: Timestamp.now() as unknown as ReservationApprovalRecord["date"],
           status: "approved",
         };
@@ -1975,7 +2172,7 @@ export async function approveReservationRecord(
           {
             approvals: [...(pendingReservation.approvals ?? []), approvalEntry],
             currentStep: pendingReservation.currentStep + 1,
-            status: isFinalApproval ? "approved" : "pending",
+            status: transition.nextStatus,
             updatedAt: serverTimestamp(),
           }
         );
@@ -1984,10 +2181,7 @@ export async function approveReservationRecord(
       return {
         currentApprovalStep,
         groupedReservations: pendingReservations,
-        nextApprovalStep: getNextApprovalStep(
-          reservation.approvalFlow,
-          reservation.currentStep
-        ),
+        nextApprovalStep,
         isFinalApproval,
       };
     });
@@ -1999,6 +2193,10 @@ export async function approveReservationRecord(
           ? await getAssignedBuildingAdminIds(
               approvalResult.groupedReservations[0].buildingId
             )
+          : approvalResult.nextApprovalStep.role === "dsas"
+            ? approvalResult.nextApprovalStep.approverUid
+              ? [approvalResult.nextApprovalStep.approverUid]
+              : []
           : await getUserIdsByEmail(approvalResult.nextApprovalStep.email);
 
       const batch = db.batch();
@@ -2014,6 +2212,19 @@ export async function approveReservationRecord(
           } on ${formatGroupedScheduleSummary(
             approvalResult.groupedReservations
           )}. It is now waiting for the next approval step.`,
+          buildingId: approvalResult.groupedReservations[0].buildingId,
+          reservationId,
+        });
+      } else if (approvalResult.currentApprovalStep.role === "dsas") {
+        addNotification(batch, queuedNotifications, {
+          recipientUid: approvalResult.groupedReservations[0].userId,
+          type: "system",
+          title: "DSAS Stage Approved",
+          message: `The DSAS-designated Professor approved your reservation for ${
+            approvalResult.groupedReservations[0].roomName
+          } on ${formatGroupedScheduleSummary(
+            approvalResult.groupedReservations
+          )}. It is now waiting for Building Admin approval.`,
           buildingId: approvalResult.groupedReservations[0].buildingId,
           reservationId,
         });
@@ -2139,6 +2350,9 @@ export async function rejectReservationRecord(
         userEmail,
         authContext
       );
+      if (currentApprovalStep.role === "dsas") {
+        await assertDsasStepStillAssigned(transaction, currentApprovalStep);
+      }
 
       pendingReservations.forEach((pendingReservation) => {
         assertReservationPendingApproval(pendingReservation);
@@ -2152,12 +2366,13 @@ export async function rejectReservationRecord(
           authContext
         );
 
-        transaction.update(db.collection("reservations").doc(pendingReservation.id), {
-          status: "rejected",
-          rejectedBy: normalizeApprovalEmail(userEmail),
-          reason: reason.trim(),
-          updatedAt: serverTimestamp(),
-        });
+        transaction.update(
+          db.collection("reservations").doc(pendingReservation.id),
+          {
+            ...buildReservationRejectionUpdate(userEmail, reason),
+            updatedAt: serverTimestamp(),
+          }
+        );
       });
 
       return {
@@ -2168,18 +2383,19 @@ export async function rejectReservationRecord(
 
     const batch = db.batch();
     const queuedNotifications: AppNotificationInput[] = [];
+    const rejectionNotice = buildReservationRejectionNotice({
+      role: rejectionResult.currentApprovalStep.role,
+      roomName: rejectionResult.groupedReservations[0].roomName,
+      scheduleSummary: formatGroupedScheduleSummary(
+        rejectionResult.groupedReservations
+      ),
+      reason,
+    });
 
     addNotification(batch, queuedNotifications, {
       recipientUid: rejectionResult.groupedReservations[0].userId,
       type: "reservation_rejected",
-      title: "Reservation Rejected",
-      message: `Your reservation for ${
-        rejectionResult.groupedReservations[0].roomName
-      } on ${formatGroupedScheduleSummary(
-        rejectionResult.groupedReservations
-      )} was rejected during the ${
-        rejectionResult.currentApprovalStep.role
-      } step. Reason: ${reason.trim()}`,
+      ...rejectionNotice,
       buildingId: rejectionResult.groupedReservations[0].buildingId,
       reservationId,
     });
@@ -2445,7 +2661,11 @@ export async function cancelReservationRecord(
                         approvalStep.role !== "building_admin" &&
                         approvalStep.email.trim().length > 0
                     )
-                    .map((approvalStep) => getUserIdsByEmail(approvalStep.email))
+                    .map((approvalStep) =>
+                      approvalStep.role === "dsas" && approvalStep.approverUid
+                        ? Promise.resolve([approvalStep.approverUid])
+                        : getUserIdsByEmail(approvalStep.email)
+                    )
                 )
               ).flat(),
             ]),

@@ -8,7 +8,8 @@ import MessagesSection from '@/components/messages/MessagesSection';
 import { useAdminTab } from '@/context/AdminTabContext';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
-import { USER_ROLES } from '@/lib/auth/roles';
+import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
+import { getApprovalApproverDisplayName } from '@/lib/auth/auth';
 import { isStaffRole } from '@/lib/messages/messages';
 import {
   Notification as AppNotification,
@@ -20,6 +21,10 @@ import {
   rejectReservation,
   type Reservation,
 } from '@/lib/reservations/reservations';
+import {
+  getCompletedApprovalRecord,
+  getCurrentApprovalStep,
+} from '@/lib/reservations/reservation-approval';
 import { formatOtherEquipment } from '@/lib/reservations/equipment';
 
 interface StatusBadgeProps {
@@ -82,6 +87,7 @@ function ReservationApprovals({
   const [rejectReason, setRejectReason] = useState('');
   const [actionError, setActionError] = useState('');
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [advisorDisplayNames, setAdvisorDisplayNames] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     if (!email) return;
@@ -120,6 +126,50 @@ function ReservationApprovals({
       window.clearInterval(intervalId);
     };
   }, [email]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const unresolvedAdvisorApprovals = requests.filter((request) => {
+      const currentApprovalStep = getCurrentApprovalStep(
+        request.approvalFlow,
+        request.currentStep
+      );
+      const advisorApproval = getCompletedApprovalRecord(request.approvals, 'advisor');
+
+      return (
+        request.campus === 'main' &&
+        normalizeRole(request.userRole) === USER_ROLES.STUDENT &&
+        currentApprovalStep?.role === 'dsas' &&
+        advisorApproval &&
+        !advisorApproval.approverName?.trim() &&
+        !Object.prototype.hasOwnProperty.call(advisorDisplayNames, request.id)
+      );
+    });
+
+    if (unresolvedAdvisorApprovals.length > 0) {
+      void Promise.all(
+        unresolvedAdvisorApprovals.map(async (request) => {
+          const advisorApproval = getCompletedApprovalRecord(request.approvals, 'advisor');
+          const displayName = await getApprovalApproverDisplayName({
+            uid: advisorApproval?.approverUid,
+            email: advisorApproval?.email,
+          }).catch(() => null);
+          return [request.id, displayName] as const;
+        })
+      ).then((resolvedNames) => {
+        if (!cancelled) {
+          setAdvisorDisplayNames((current) => ({
+            ...current,
+            ...Object.fromEntries(resolvedNames),
+          }));
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [advisorDisplayNames, requests]);
 
   useEffect(() => {
     if (!targetReservationId) return;
@@ -241,6 +291,21 @@ function ReservationApprovals({
             {requests.map((request) => {
               const isExpanded = expandedId === request.id;
               const isRejecting = rejectingId === request.id;
+              const currentApprovalStep = getCurrentApprovalStep(
+                request.approvalFlow,
+                request.currentStep
+              );
+              const completedAdvisorApproval = getCompletedApprovalRecord(
+                request.approvals,
+                'advisor'
+              );
+              const advisorApproverLabel = completedAdvisorApproval
+                ? completedAdvisorApproval.approverName?.trim() ||
+                  advisorDisplayNames[request.id] ||
+                  (Object.prototype.hasOwnProperty.call(advisorDisplayNames, request.id)
+                    ? completedAdvisorApproval.email
+                    : 'Resolving name…')
+                : undefined;
 
               return (
                 <div key={request.id} className="glass-card !rounded-xl overflow-hidden border-l-4 border-yellow-500/40">
@@ -270,6 +335,16 @@ function ReservationApprovals({
                   {isExpanded && (
                     <div className="border-t border-dark/5 px-5 pb-5">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                        {request.campus === 'main' &&
+                          normalizeRole(request.userRole) === USER_ROLES.STUDENT &&
+                          currentApprovalStep?.role === 'dsas' &&
+                          completedAdvisorApproval &&
+                          advisorApproverLabel && (
+                            <div className="bg-dark/3 rounded-xl p-3 border border-dark/5">
+                              <p className="text-[10px] text-black font-bold uppercase tracking-wider mb-1">Professor / Adviser</p>
+                              <p className="text-sm text-black">✓ Approved by {advisorApproverLabel}</p>
+                            </div>
+                          )}
                         <div className="bg-dark/3 rounded-xl p-3 border border-dark/5">
                           <p className="text-[10px] text-black font-bold uppercase tracking-wider mb-1">Program / Department / Organization</p>
                           <p className="text-sm text-black">{request.programDepartmentOrganization || 'Not provided'}</p>
