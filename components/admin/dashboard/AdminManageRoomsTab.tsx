@@ -237,6 +237,10 @@ export default function AdminManageRoomsTab({
     const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
     const [scheduleRoom, setScheduleRoom] = useState<Room | null>(null);
     const [copyToast, setCopyToast] = useState('');
+    const [beaconPromptRoom, setBeaconPromptRoom] = useState<Room | null>(null);
+    const [beaconPromptValue, setBeaconPromptValue] = useState('');
+    const [beaconPromptError, setBeaconPromptError] = useState('');
+    const [savingBeaconPrompt, setSavingBeaconPrompt] = useState(false);
 
     const [roomSearch, setRoomSearch] = useState('');
     const [roomFloorFilter, setRoomFloorFilter] = useState('');
@@ -551,6 +555,69 @@ export default function AdminManageRoomsTab({
         } catch (error) {
             console.warn(`Failed to copy ${label}:`, error);
             setCopyToast(`Could not copy ${label}`);
+        }
+    };
+
+    const getDefaultBeaconId = (room: Room) => {
+        const rawBuildingId = room.buildingId.toLowerCase();
+        const buildingPrefix = rawBuildingId.includes('gd1') || room.buildingName.toLowerCase().includes('gd1')
+            ? 'gd1'
+            : rawBuildingId.includes('gd2') || room.buildingName.toLowerCase().includes('gd2')
+                ? 'gd2'
+                : rawBuildingId.includes('gd3') || room.buildingName.toLowerCase().includes('gd3')
+                    ? 'gd3'
+                    : 'dc';
+        const roomCode = room.name.toLowerCase().trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '');
+        return `${buildingPrefix}-${roomCode}-beacon`;
+    };
+
+    const copyRoomHardwareScript = async (room: Room, beaconId: string) => {
+        try {
+            const response = await fetch('/hardware/room-reserve.ino');
+            if (!response.ok) throw new Error('Could not load hardware script');
+            let script = await response.text();
+            script = script
+                .replace(/const char\* roomId\s*=\s*"[^"]*";/, `const char* roomId   = ${JSON.stringify(room.id)};`)
+                .replace(/const char\* roomName\s*=\s*"[^"]*";/, `const char* roomName = ${JSON.stringify(room.name)};`)
+                .replace(/const char\* beaconId\s*=\s*"[^"]*";/, `const char* beaconId = ${JSON.stringify(beaconId)};`);
+            await navigator.clipboard.writeText(script);
+            setCopyToast(`Hardware script for ${room.name} copied`);
+        } catch (error) {
+            console.warn('Failed to copy hardware script:', error);
+            setCopyToast('Could not copy hardware script');
+        }
+    };
+
+    const startCopyRoomScript = (room: Room) => {
+        if (room.beaconId?.trim()) {
+            void copyRoomHardwareScript(room, room.beaconId.trim());
+            return;
+        }
+        setBeaconPromptRoom(room);
+        setBeaconPromptValue(getDefaultBeaconId(room));
+        setBeaconPromptError('');
+    };
+
+    const saveBeaconId = async (alsoCopyScript: boolean) => {
+        if (!beaconPromptRoom || !beaconPromptValue.trim()) return;
+        const room = beaconPromptRoom;
+        const beaconId = beaconPromptValue.trim();
+        setSavingBeaconPrompt(true);
+        setBeaconPromptError('');
+        try {
+            await updateRoom(room.id, { beaconId });
+            setRooms((currentRooms) => currentRooms.map((currentRoom) =>
+                currentRoom.id === room.id ? { ...currentRoom, beaconId } : currentRoom
+            ));
+            setBeaconPromptRoom(null);
+            if (alsoCopyScript) await copyRoomHardwareScript(room, beaconId);
+        } catch (error) {
+            console.warn('Failed to save room Beacon ID:', error);
+            setBeaconPromptError('Could not save the Beacon ID. Please try again.');
+        } finally {
+            setSavingBeaconPrompt(false);
         }
     };
 
@@ -1267,6 +1334,14 @@ export default function AdminManageRoomsTab({
                                     </div>
 
                                     <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+                                        {showRoomIdentifiers && <button
+                                            type="button"
+                                            onClick={() => startCopyRoomScript(room)}
+                                            disabled={deletingRoomId === room.id}
+                                            className="ui-button-blue rounded-lg px-3 py-2 text-[11px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            Copy Script
+                                        </button>}
                                         <button
                                             type="button"
                                             onClick={() => startEditingRoom(room)}
@@ -1292,6 +1367,35 @@ export default function AdminManageRoomsTab({
                             )}
                         </div>
                     ))}
+                </div>
+            ) : null}
+            {showRoomIdentifiers && beaconPromptRoom ? (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4" role="presentation">
+                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="beacon-prompt-title">
+                        <h2 id="beacon-prompt-title" className="text-lg font-bold text-black">Add Beacon ID</h2>
+                        <p className="mt-2 text-sm text-black/70">This room needs a Beacon ID before its hardware script can be configured.</p>
+                        <label className="mt-5 block text-xs font-bold text-black" htmlFor="room-beacon-prompt">Beacon ID</label>
+                        <input
+                            id="room-beacon-prompt"
+                            autoFocus
+                            value={beaconPromptValue}
+                            onChange={(event) => setBeaconPromptValue(event.target.value)}
+                            placeholder="bld-roomname-beacon"
+                            className="glass-input mt-1.5 w-full px-4 py-2.5 text-sm"
+                        />
+                        {beaconPromptError ? <p className="mt-2 text-sm text-red-700">{beaconPromptError}</p> : null}
+                        <div className="mt-5 flex flex-wrap gap-2">
+                            <button type="button" onClick={() => void saveBeaconId(false)} disabled={savingBeaconPrompt || !beaconPromptValue.trim()} className="rounded-lg px-3 py-2 text-sm font-bold ui-button-green disabled:opacity-60">
+                                Add Beacon ID Only
+                            </button>
+                            <button type="button" onClick={() => void saveBeaconId(true)} disabled={savingBeaconPrompt || !beaconPromptValue.trim()} className="ui-button-blue rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-60">
+                                Add Beacon ID and Copy Script
+                            </button>
+                            <button type="button" onClick={() => setBeaconPromptRoom(null)} disabled={savingBeaconPrompt} className="rounded-lg border border-dark/10 px-3 py-2 text-sm font-bold text-black hover:bg-dark/5 disabled:opacity-60">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
                 </div>
             ) : null}
         </div>
