@@ -36,6 +36,7 @@ export interface Room {
   buildingName: string;
   beaconId?: string | null;
   bleBeaconId?: string | null;
+  beaconRssiThreshold?: number;
   beaconConnected?: boolean;
   beaconDeviceName?: string | null;
   beaconLastConnectedAt?: Timestamp | null;

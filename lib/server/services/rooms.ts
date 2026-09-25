@@ -21,6 +21,7 @@ export interface RoomCreateInput {
   buildingName: string;
   beaconId?: string | null;
   bleBeaconId?: string | null;
+  beaconRssiThreshold?: number;
 }
 
 export interface RoomStatusUpdateInput {
@@ -93,6 +94,7 @@ export async function createRoomRecord(data: RoomCreateInput) {
     status: normalizeRoomStatus(data.status),
     beaconId,
     bleBeaconId: beaconId,
+    beaconRssiThreshold: data.beaconRssiThreshold ?? -75,
     beaconConnected: false,
     beaconDeviceName: null,
     beaconLastConnectedAt: null,

@@ -36,6 +36,7 @@ type DashboardReservationRecord = {
 type DashboardRoomRecord = {
   id: string;
   beaconId?: string | null;
+  beaconRssiThreshold?: number;
   name: string;
   floor: string;
   roomType: string;
@@ -173,6 +174,7 @@ async function getRoomsByIds(roomIds: string[]) {
       const data = roomSnapshot.data() as {
         beaconId?: string | null;
         bleBeaconId?: string | null;
+        beaconRssiThreshold?: number;
         name?: string;
         floor?: string;
         roomType?: string;
@@ -196,6 +198,11 @@ async function getRoomsByIds(roomIds: string[]) {
                 data.beaconId.trim().length > 0
               ? data.beaconId.trim()
               : null,
+        beaconRssiThreshold:
+          typeof data.beaconRssiThreshold === "number" &&
+          Number.isFinite(data.beaconRssiThreshold)
+            ? data.beaconRssiThreshold
+            : -75,
         name: data.name ?? "",
         floor: data.floor ?? "",
         roomType: data.roomType ?? "",

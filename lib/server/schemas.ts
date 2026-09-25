@@ -380,6 +380,7 @@ const roomBaseSchema = z.object({
   buildingName: nonEmptyString,
   beaconId: nullableBeaconIdSchema,
   bleBeaconId: nullableBeaconIdSchema,
+  beaconRssiThreshold: z.number().int().min(-100).max(-30).optional(),
 });
 
 export const roomInputSchema = z.preprocess(normalizeRoomPayload, roomBaseSchema);

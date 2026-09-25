@@ -106,6 +106,15 @@ function getRoomTypeBadgeLetter(roomType?: string) {
     }
 }
 
+function getRecommendedBeaconRssiThreshold(capacity: string | number) {
+    const parsedCapacity = Number(capacity);
+    const normalizedCapacity = Number.isFinite(parsedCapacity) && parsedCapacity > 0
+        ? parsedCapacity
+        : 30;
+    const recommendedThreshold = Math.round(-75 - ((normalizedCapacity - 30) / 10) * 2);
+    return Math.min(-70, Math.max(-85, recommendedThreshold));
+}
+
 function PlusIcon({ className }: Readonly<IconProps>) {
     return (
         <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -209,6 +218,7 @@ export default function AdminManageRoomsTab({
     const [newRoomAcStatus, setNewRoomAcStatus] = useState('');
     const [newRoomTvStatus, setNewRoomTvStatus] = useState('');
     const [newRoomBeaconId, setNewRoomBeaconId] = useState('');
+    const [newRoomRssiThreshold, setNewRoomRssiThreshold] = useState('-75');
     const [newRoomId, setNewRoomId] = useState('');
     const [addingRoom, setAddingRoom] = useState(false);
 
@@ -233,6 +243,7 @@ export default function AdminManageRoomsTab({
     const [editAcStatus, setEditAcStatus] = useState('');
     const [editTvStatus, setEditTvStatus] = useState('');
     const [editBeaconId, setEditBeaconId] = useState('');
+    const [editRssiThreshold, setEditRssiThreshold] = useState('-75');
     const [savingRoomId, setSavingRoomId] = useState<string | null>(null);
     const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
     const [scheduleRoom, setScheduleRoom] = useState<Room | null>(null);
@@ -526,6 +537,7 @@ export default function AdminManageRoomsTab({
         setNewRoomAcStatus('');
         setNewRoomTvStatus('');
         setNewRoomBeaconId('');
+        setNewRoomRssiThreshold('-75');
     };
 
     const resetEditRoomForm = () => {
@@ -537,6 +549,7 @@ export default function AdminManageRoomsTab({
         setEditAcStatus('');
         setEditTvStatus('');
         setEditBeaconId('');
+        setEditRssiThreshold('-75');
     };
 
     const startEditingRoom = (room: Room) => {
@@ -548,6 +561,7 @@ export default function AdminManageRoomsTab({
         setEditAcStatus(room.acStatus || 'No Air Conditioning');
         setEditTvStatus(room.tvProjectorStatus || 'No Television or Projector');
         setEditBeaconId(room.beaconId || '');
+        setEditRssiThreshold(String(room.beaconRssiThreshold ?? -75));
     };
 
     const copyToClipboard = async (value: string, label: string) => {
@@ -656,7 +670,10 @@ export default function AdminManageRoomsTab({
                 status: 'Available',
                 buildingId,
                 buildingName,
-                ...(showRoomIdentifiers ? { beaconId: newRoomBeaconId.trim() || null } : {}),
+                ...(showRoomIdentifiers ? {
+                    beaconId: newRoomBeaconId.trim() || null,
+                    beaconRssiThreshold: Number(newRoomRssiThreshold) || -75,
+                } : {}),
             };
 
             await addRoom(data);
@@ -684,7 +701,10 @@ export default function AdminManageRoomsTab({
                 acStatus: editAcStatus || 'No Air Conditioning',
                 tvProjectorStatus: editTvStatus || 'No Television or Projector',
                 capacity: parseInt(editCapacity, 10) || 30,
-                ...(showRoomIdentifiers ? { beaconId: editBeaconId.trim() || null } : {}),
+                ...(showRoomIdentifiers ? {
+                    beaconId: editBeaconId.trim() || null,
+                    beaconRssiThreshold: Number(editRssiThreshold) || -75,
+                } : {}),
             };
             await updateRoom(roomId, updatedFields);
             setRooms((currentRooms) => currentRooms.map((room) =>
@@ -1064,6 +1084,28 @@ export default function AdminManageRoomsTab({
                                         </p>
                                     </div>
                                 </div>
+                                <div className="mt-4 w-full">
+                                    <label className="mb-1.5 block text-xs font-bold text-black">Beacon RSSI threshold (dBm)</label>
+                                    <div className="flex w-full items-start gap-4">
+                                        <div className="w-64 shrink-0">
+                                            <input
+                                                type="number"
+                                                min={-100}
+                                                max={-30}
+                                                step={1}
+                                                value={newRoomRssiThreshold}
+                                                onChange={(event) => setNewRoomRssiThreshold(event.target.value)}
+                                                className="glass-input w-full px-4 py-2.5 text-sm"
+                                            />
+                                            <p className="mt-1.5 whitespace-nowrap text-xs font-extrabold text-black">
+                                                Recommended based on Capacity: {getRecommendedBeaconRssiThreshold(newRoomCapacity)} dBm
+                                            </p>
+                                        </div>
+                                        <p className="min-w-0 flex-1 text-xs text-black/70">
+                                            A lower value means that the user can be farther away from the beacon. Rough indoor estimates: -70 dBm ≈ 2–5 m, -75 dBm ≈ 4–8 m, -85 dBm ≈ 8–15 m. Actual distance varies with phones, walls, and beacon placement.
+                                        </p>
+                                    </div>
+                                </div>
                             </div>}
                         </div>
 
@@ -1256,6 +1298,28 @@ export default function AdminManageRoomsTab({
                                                     </div>
                                                     <p className="mt-1.5 text-xs text-black">
                                                         Unique identifier for this room. This is retrieved from the system's database.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="mt-4 w-full">
+                                                <label className="mb-1.5 block text-xs font-bold text-black">Beacon RSSI threshold (dBm)</label>
+                                                <div className="flex w-full items-start gap-4">
+                                                    <div className="w-64 shrink-0">
+                                                        <input
+                                                            type="number"
+                                                            min={-100}
+                                                            max={-30}
+                                                            step={1}
+                                                            value={editRssiThreshold}
+                                                            onChange={(event) => setEditRssiThreshold(event.target.value)}
+                                                            className="glass-input w-full px-4 py-2.5 text-sm !border-gray-400 focus:!border-primary"
+                                                        />
+                                                        <p className="mt-1.5 whitespace-nowrap text-xs font-extrabold text-black">
+                                                            Recommended based on Capacity: {getRecommendedBeaconRssiThreshold(editCapacity)} dBm
+                                                        </p>
+                                                    </div>
+                                                    <p className="min-w-0 flex-1 text-xs text-black/70">
+                                                        A lower value means that the user can be farther away from the beacon. Rough indoor estimates: -70 dBm ≈ 2–5 m, -75 dBm ≈ 4–8 m, -85 dBm ≈ 8–15 m. Actual distance varies with phones, walls, and beacon placement.
                                                     </p>
                                                 </div>
                                             </div>
