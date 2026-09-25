@@ -423,6 +423,7 @@ export default function AdminDashboard({
 
       {activeTab === 'manage-rooms' && (
         <AdminManageRoomsTab
+          showRoomIdentifiers={profile?.role === 'Super Admin'}
           allReservations={allReservations}
           activeBuildingLabel={activeBuildingLabel}
           buildingFloors={buildingFloors}

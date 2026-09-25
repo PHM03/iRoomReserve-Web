@@ -54,6 +54,7 @@ const EMPTY_ROOM_COUNTS: RoomCountSummary = {
 };
 
 interface AdminManageRoomsTabProps {
+    showRoomIdentifiers?: boolean;
     activeBuildingLabel: string;
     buildingFloors: number;
     buildingId: string;
@@ -147,6 +148,7 @@ function TrashIcon({ className }: Readonly<IconProps>) {
 }
 
 export default function AdminManageRoomsTab({
+    showRoomIdentifiers = false,
     allReservations,
     activeBuildingLabel,
     buildingFloors,
@@ -583,7 +585,7 @@ export default function AdminManageRoomsTab({
                 status: 'Available',
                 buildingId,
                 buildingName,
-                beaconId: newRoomBeaconId.trim() || null,
+                ...(showRoomIdentifiers ? { beaconId: newRoomBeaconId.trim() || null } : {}),
             };
 
             await addRoom(data);
@@ -611,7 +613,7 @@ export default function AdminManageRoomsTab({
                 acStatus: editAcStatus || 'No Air Conditioning',
                 tvProjectorStatus: editTvStatus || 'No Television or Projector',
                 capacity: parseInt(editCapacity, 10) || 30,
-                beaconId: editBeaconId.trim() || null,
+                ...(showRoomIdentifiers ? { beaconId: editBeaconId.trim() || null } : {}),
             };
             await updateRoom(roomId, updatedFields);
             setRooms((currentRooms) => currentRooms.map((room) =>
@@ -953,7 +955,7 @@ export default function AdminManageRoomsTab({
                                     ))}
                                 </select>
                             </div>
-                            <div className="sm:col-span-2">
+                            {showRoomIdentifiers && <div className="sm:col-span-2">
                                 <div className="flex w-full gap-4">
                                     <div className="flex-1 min-w-0">
                                         <label className="block text-xs font-bold text-black mb-1.5">Beacon ID (building-room-beacon)</label>
@@ -969,7 +971,7 @@ export default function AdminManageRoomsTab({
                                         </p>
                                     </div>
                                 </div>
-                            </div>
+                            </div>}
                         </div>
 
                         <div>
@@ -1110,7 +1112,7 @@ export default function AdminManageRoomsTab({
                                                 ))}
                                             </select>
                                         </div>
-                                        <div className="sm:col-span-2">
+                                        {showRoomIdentifiers && <div className="sm:col-span-2">
                                             <div className="flex w-full gap-4">
                                                 <div className="flex-1 min-w-0">
                                                     <label className="mb-1.5 block text-xs font-bold text-black">Beacon ID (bld-roomname-beacon)</label>
@@ -1164,7 +1166,7 @@ export default function AdminManageRoomsTab({
                                                     </p>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </div>}
                                     </div>
 
                                     <div>
