@@ -244,6 +244,8 @@ export default function AdminManageRoomsTab({
 
     const [roomSearch, setRoomSearch] = useState('');
     const [roomFloorFilter, setRoomFloorFilter] = useState('');
+    const [beaconScriptSsid, setBeaconScriptSsid] = useState('St. Dominic College of Asia');
+    const [beaconScriptPassword, setBeaconScriptPassword] = useState('');
     const [rooms, setRooms] = useState<Room[]>([]);
     const [roomCounts, setRoomCounts] = useState<RoomCountSummary>(EMPTY_ROOM_COUNTS);
     const [roomsLoading, setRoomsLoading] = useState(true);
@@ -579,6 +581,8 @@ export default function AdminManageRoomsTab({
             if (!response.ok) throw new Error('Could not load hardware script');
             let script = await response.text();
             script = script
+                .replace(/const char\* ssid\s*=\s*"[^"]*";/, `const char* ssid = ${JSON.stringify(beaconScriptSsid)};`)
+                .replace(/const char\* password\s*=\s*"[^"]*";/, `const char* password = ${JSON.stringify(beaconScriptPassword)};`)
                 .replace(/const char\* roomId\s*=\s*"[^"]*";/, `const char* roomId   = ${JSON.stringify(room.id)};`)
                 .replace(/const char\* roomName\s*=\s*"[^"]*";/, `const char* roomName = ${JSON.stringify(room.name)};`)
                 .replace(/const char\* beaconId\s*=\s*"[^"]*";/, `const char* beaconId = ${JSON.stringify(beaconId)};`);
@@ -781,6 +785,28 @@ export default function AdminManageRoomsTab({
                     </div>
                 </div>
             )}
+
+            {hasAnyRooms && showRoomIdentifiers ? (
+                <div className="flex flex-col gap-3 rounded-2xl border border-blue-200/70 bg-blue-50/80 p-3 shadow-sm sm:flex-row sm:items-center">
+                    <span className="shrink-0 pl-1 text-sm !font-extrabold text-black" style={{ fontWeight: 800 }}>For Beacon Script:</span>
+                    <input
+                        type="text"
+                        aria-label="Beacon script SSID"
+                        placeholder="SSID"
+                        value={beaconScriptSsid}
+                        onChange={(event) => setBeaconScriptSsid(event.target.value)}
+                        className="glass-input min-w-0 flex-1 px-4 py-2.5 text-sm"
+                    />
+                    <input
+                        type="text"
+                        aria-label="Beacon script password"
+                        placeholder="Password"
+                        value={beaconScriptPassword}
+                        onChange={(event) => setBeaconScriptPassword(event.target.value)}
+                        className="glass-input min-w-0 flex-1 px-4 py-2.5 text-sm"
+                    />
+                </div>
+            ) : null}
 
             {scheduleRoom && (
                 <AdminRoomScheduleModal
