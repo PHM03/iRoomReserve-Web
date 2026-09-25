@@ -568,8 +568,8 @@ export default function AdminManageRoomsTab({
                     ? 'gd3'
                     : 'dc';
         const roomCode = room.name.toLowerCase().trim()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-|-$/g, '');
+            .replace(/^(?:gd[123]?|room)\b\s*/i, '')
+            .replace(/[^a-z0-9]+/g, '');
         return `${buildingPrefix}-${roomCode}-beacon`;
     };
 
