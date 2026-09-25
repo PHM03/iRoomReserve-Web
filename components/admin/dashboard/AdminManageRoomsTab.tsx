@@ -1371,7 +1371,7 @@ export default function AdminManageRoomsTab({
             ) : null}
             {showRoomIdentifiers && beaconPromptRoom ? (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4" role="presentation">
-                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="beacon-prompt-title">
+                    <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="beacon-prompt-title">
                         <h2 id="beacon-prompt-title" className="text-lg font-bold text-black">Add Beacon ID</h2>
                         <p className="mt-2 text-sm text-black/70">This room needs a Beacon ID before its hardware script can be configured.</p>
                         <label className="mt-5 block text-xs font-bold text-black" htmlFor="room-beacon-prompt">Beacon ID</label>
@@ -1384,7 +1384,7 @@ export default function AdminManageRoomsTab({
                             className="glass-input mt-1.5 w-full px-4 py-2.5 text-sm"
                         />
                         {beaconPromptError ? <p className="mt-2 text-sm text-red-700">{beaconPromptError}</p> : null}
-                        <div className="mt-5 flex flex-wrap gap-2">
+                        <div className="mt-5 flex flex-nowrap items-center justify-end gap-2">
                             <button type="button" onClick={() => void saveBeaconId(false)} disabled={savingBeaconPrompt || !beaconPromptValue.trim()} className="rounded-lg px-3 py-2 text-sm font-bold ui-button-green disabled:opacity-60">
                                 Add Beacon ID Only
                             </button>
