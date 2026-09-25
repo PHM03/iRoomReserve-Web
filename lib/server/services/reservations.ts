@@ -45,6 +45,7 @@ import {
 import {
   getAssignedBuildingAdminIds,
   getAssignedManagerIds,
+  getAssignedUtilityStaffIds,
   getResponsibleBuildingAdminIds,
 } from "@/lib/server/services/building-managers";
 import {
@@ -2519,7 +2520,7 @@ export async function checkInReservationRecord(
       throw new ApiError(403, "forbidden", "You cannot check in for this reservation.");
     }
     const roomRef = db.collection("rooms").doc(reservation.roomId);
-    const managerIds = await getBuildingManagerIds(reservation.buildingId);
+    const staffIds = await getAssignedUtilityStaffIds(reservation.buildingId);
     const queuedNotifications: AppNotificationInput[] = [];
 
     await db.runTransaction(async (transaction) => {
@@ -2605,9 +2606,9 @@ export async function checkInReservationRecord(
       });
     });
 
-    managerIds.forEach((managerUid) => {
+    staffIds.forEach((staffUid) => {
       addPushNotification(queuedNotifications, {
-        recipientUid: managerUid,
+        recipientUid: staffUid,
         type: "system",
         title: "Room Checked In",
         message: `${reservation.userName} checked in to ${reservation.roomName} on ${formatReservationScheduleLabel(
