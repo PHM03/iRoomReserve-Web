@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Reservation } from '@/lib/reservations/reservations';
 import { getCurrentDateTimeStringInTimeZone } from '@/lib/rooms/roomStatus';
-import { formatTimeRange } from '@/lib/utils/dateTime';
+import { formatDateValue, formatTimeRange } from '@/lib/utils/dateTime';
 
 interface MyReservationTimetableProps {
   className?: string;
@@ -81,11 +81,7 @@ function getWeekdayValue(dateValue: string) {
 }
 
 function formatCurrentDateLabel(date: Date = new Date()) {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date);
+  return formatDateValue(date);
 }
 
 function isCurrentOrUpcomingOccurrence(

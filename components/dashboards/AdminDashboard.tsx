@@ -31,6 +31,7 @@ import type { FeedbackSentimentSummary } from '@/lib/feedback/feedback-sentiment
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
 import {
   ADMIN_RESERVATION_HEARTBEAT_TIMEOUT_MS,
+  getLocalDateString,
   isRoomReservationHeartbeatHealthy,
   normalizeRoomCheckInMethod,
 } from '@/lib/rooms/roomStatus';
@@ -42,14 +43,6 @@ interface AdminDashboardProps {
   firstName: string;
   activeTab: AdminTab;
   campusOverride?: 'main' | 'digi';
-}
-
-function getLocalDateKey(date: Date = new Date()) {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
 }
 
 export default function AdminDashboard({
@@ -181,7 +174,7 @@ export default function AdminDashboard({
         includeSchedules: activeTab === 'dashboard',
         includeSummary: activeTab === 'dashboard',
         pendingLimit: activeTab === 'dashboard' ? 3 : undefined,
-        reservationDate: activeTab === 'dashboard' ? getLocalDateKey() : undefined,
+        reservationDate: activeTab === 'dashboard' ? getLocalDateString() : undefined,
         roomLimit: activeTab === 'dashboard' ? 5 : undefined,
         scheduleDayOfWeek: activeTab === 'dashboard' ? new Date().getDay() : undefined,
       });
@@ -284,7 +277,7 @@ export default function AdminDashboard({
         };
       }
 
-      const today = now.toISOString().split('T')[0];
+      const today = getLocalDateString(now);
       const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now
         .getMinutes()
         .toString()

@@ -12,6 +12,7 @@ import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments'
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
 import {
   ADMIN_RESERVATION_HEARTBEAT_TIMEOUT_MS,
+  getLocalDateString,
   isRoomReservationHeartbeatHealthy,
   normalizeRoomCheckInMethod,
 } from '@/lib/rooms/roomStatus';
@@ -641,7 +642,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
       };
     }
 
-    const today = now.toISOString().split('T')[0];
+    const today = getLocalDateString(now);
     const currentTime =
       now.getHours().toString().padStart(2, '0') +
       ':' +

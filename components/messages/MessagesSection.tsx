@@ -60,8 +60,8 @@ function getDateRange(preset: DatePreset): { from: number; to: number } {
   const now = new Date();
   switch (preset) {
     case 'thisWeek': {
-      const from = new Date(now);
-      from.setDate(from.getDate() - 7);
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      from.setDate(from.getDate() - from.getDay());
       from.setHours(0, 0, 0, 0);
       return {
         from: from.getTime(),

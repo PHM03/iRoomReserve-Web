@@ -3,6 +3,7 @@
 import { formatReservationWindow } from '@/lib/rooms/roomStatus';
 import type { OperationalRoomStatusViewItem } from '@/lib/rooms/roomStatusView';
 import { formatTime12h } from '@/lib/schedules/schedules';
+import { formatDate, formatDateTime } from '@/lib/utils/dateTime';
 
 interface RoomListProps {
   items: OperationalRoomStatusViewItem[];
@@ -22,7 +23,7 @@ function activityTone(activity: string) {
 
 function timestampLabel(value: { toDate: () => Date } | null | undefined) {
   const date = value?.toDate();
-  return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : null;
+  return date && !Number.isNaN(date.getTime()) ? formatDateTime(date) : null;
 }
 
 function bleLabel(room: OperationalRoomStatusViewItem['room']) {
@@ -84,7 +85,7 @@ export default function RoomList({
           ? `${classTitle} · ${formatTime12h(activeSchedule.startTime ?? '')}–${formatTime12h(activeSchedule.endTime ?? '')}`
           : 'No active class';
         const timeBlockLabel = activeUnavailability
-          ? `${activeUnavailability.date} · ${formatTime12h(activeUnavailability.startTime)}–${formatTime12h(activeUnavailability.endTime)}${activeUnavailability.reason ? ` · ${activeUnavailability.reason}` : ''}`
+          ? `${formatDate(activeUnavailability.date)} · ${formatTime12h(activeUnavailability.startTime)}–${formatTime12h(activeUnavailability.endTime)}${activeUnavailability.reason ? ` · ${activeUnavailability.reason}` : ''}`
           : 'None';
         const isFinishing = item.finishReservation?.id === finishingReservationId;
 

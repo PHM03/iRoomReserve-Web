@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { formatDate as formatCalendarDate } from '../utils/dateTime';
 import type {
   FeedbackAnalyticsReport,
   FeedbackAnalyticsReportLocationPerformance,
@@ -56,20 +57,21 @@ function displayValue(value: string | null | undefined, fallback: string) {
 
 function formatDate(value: string | null | undefined, fallback = '-') {
   if (!value) return fallback;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatCalendarDate(value);
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? fallback
-    : date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    : date.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
 function formatDateTime(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
-    : date.toLocaleString(undefined, {
+    : date.toLocaleString('en-US', {
         year: 'numeric',
-        month: 'long',
-        day: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
         hour: 'numeric',
         minute: '2-digit',
       });
@@ -311,8 +313,8 @@ function renderFilters(doc: PdfDocument, report: FeedbackAnalyticsReport, y: num
     ['Academic Year', displayValue(filters.academicYear, 'All Academic Years')],
     ['Semester', displayValue(filters.semester, 'All Semesters')],
     ['Rating', filters.star ? `${filters.star} Star${filters.star === 1 ? '' : 's'}` : 'All Ratings'],
-    ['Date From', displayValue(filters.dateFrom, 'All Dates')],
-    ['Date To', displayValue(filters.dateTo, 'All Dates')],
+    ['Date From', formatDate(filters.dateFrom, 'All Dates')],
+    ['Date To', formatDate(filters.dateTo, 'All Dates')],
     ['Role', displayValue(filters.role, 'All Roles')],
     ['Gender', displayValue(filters.gender, 'All Genders')],
   ];

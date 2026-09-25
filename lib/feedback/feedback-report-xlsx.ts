@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { formatDate as formatCalendarDate } from '../utils/dateTime';
 
 import type {
   FeedbackAnalyticsReport,
@@ -61,6 +62,21 @@ function formatDate(value: string | null | undefined) {
   if (!value) return 'N/A';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 'N/A' : date;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'UTC',
+      }).format(date);
 }
 
 function assertExcelText(value: string, field: string) {
@@ -177,7 +193,7 @@ function buildSummarySheet(report: FeedbackAnalyticsReport) {
   const rows: SheetRows = [
     [report.metadata.title],
     ['e-RoomReserve / iRoomReserv'],
-    ['Generated At', report.metadata.generatedAt],
+    ['Generated At', formatDateTime(report.metadata.generatedAt)],
     ['Campus / Building', displayValue(scope.selectedBuildingLabel, titleCase(scope.type))],
     ['Building IDs', scope.buildingIds.join(', ') || 'N/A'],
     ['Reporting Period', titleCase(report.metadata.period)],
@@ -194,8 +210,8 @@ function buildSummarySheet(report: FeedbackAnalyticsReport) {
     ['Academic Year', displayValue(filters.academicYear, 'All Academic Years')],
     ['Semester', displayValue(filters.semester, 'All Semesters')],
     ['Rating', filters.star ? `${filters.star} Star${filters.star === 1 ? '' : 's'}` : 'All Ratings'],
-    ['Date From', displayValue(filters.dateFrom, 'All Dates')],
-    ['Date To', displayValue(filters.dateTo, 'All Dates')],
+    ['Date From', filters.dateFrom ? formatCalendarDate(filters.dateFrom) : 'All Dates'],
+    ['Date To', filters.dateTo ? formatCalendarDate(filters.dateTo) : 'All Dates'],
     ['Role', displayValue(filters.role, 'All Roles')],
     ['Gender', displayValue(filters.gender, 'All Genders')],
     [],
@@ -507,6 +523,7 @@ function buildReviewsSheet(report: FeedbackAnalyticsReport) {
   if (report.reviews.length === 0) rows.push(['No reviews matched the selected filters.']);
   const ws = createSheet(rows, [20, 20, 16, 12, 22, 10, 24, 24, 70, 40, 30, 60], 3);
   setTitle(ws, 'Reviews');
+  setColumnFormats(ws, 0, 4, rows.length - 1, 'mm/dd/yyyy');
   setColumnFormats(ws, 5, 4, rows.length - 1, '0');
   setColumnFormats(ws, 7, 4, rows.length - 1, '0.000');
   for (let row = 4; row <= rows.length; row += 1) {

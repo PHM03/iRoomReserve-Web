@@ -26,6 +26,7 @@ import {
   updateRoomStatus,
   onRoomsByBuilding,
 } from '@/lib/rooms/rooms';
+import { getLocalDateString } from '@/lib/rooms/roomStatus';
 import {
   Feedback,
   onFeedbackByBuilding,
@@ -393,7 +394,7 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
     };
 
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = getLocalDateString(now);
     const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
     const activeReservation = allReservations.find(
       (reservation) =>

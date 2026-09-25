@@ -9,6 +9,7 @@ import {
   getScheduleSemesterDateRange,
   type ScheduleContext,
 } from '../schedules/scheduleContext';
+import { getLocalDateString } from '../rooms/roomStatus';
 
 export const SENTIMENT_TREND_PERIODS = FEEDBACK_ANALYTICS_PERIODS;
 
@@ -148,7 +149,7 @@ function createDailyBuckets(range: DateRange) {
 
   for (let start = new Date(range.start); start < range.end; start = addDays(start, 1)) {
     const end = addDays(start, 1);
-    buckets.push(createEmptyBucket(start.toISOString(), formatDayLabel(start), start, end));
+    buckets.push(createEmptyBucket(getLocalDateString(start), formatDayLabel(start), start, end));
   }
 
   return buckets;
@@ -160,7 +161,7 @@ function createMonthlyBuckets(range: DateRange) {
   for (let start = new Date(range.start); start < range.end; start = addMonths(start, 1)) {
     const end = new Date(Math.min(addMonths(start, 1).getTime(), range.end.getTime()));
     buckets.push(createEmptyBucket(
-      start.toISOString(),
+      getLocalDateString(start),
       start.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
       start,
       end,
@@ -176,7 +177,7 @@ function createMonthlyWeekBuckets(range: DateRange) {
 
   while (start < range.end) {
     const end = new Date(Math.min(addDays(start, 7).getTime(), range.end.getTime()));
-    buckets.push(createEmptyBucket(start.toISOString(), formatDateRangeLabel(start, end), start, end));
+    buckets.push(createEmptyBucket(getLocalDateString(start), formatDateRangeLabel(start, end), start, end));
     start = end;
   }
 

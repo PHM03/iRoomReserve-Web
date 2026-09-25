@@ -35,6 +35,23 @@ function formatReservationDates(dates?: string[], fallbackDate?: string) {
   return dateList.map((date) => formatDate(date)).join(', ');
 }
 
+function getReservationDates(reservation: Reservation) {
+  return reservation.dates?.length ? reservation.dates : [reservation.date];
+}
+
+function getReservationDateParts(date: string) {
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  if (month < 0 || month > 11 || day < 1 || day > daysInMonth) return null;
+
+  return { year, month };
+}
+
 type DisplayReservationStatus = Reservation['status'] | 'expired';
 
 function getDisplayReservationStatus(
@@ -220,8 +237,9 @@ export default function MyReservationsPage() {
   // Dynamically get available years from reservation data
   const availableYears = useMemo(() => {
     const years = reservations
-      .map((r) => new Date(r.date).getFullYear())
-      .filter((y) => !isNaN(y));
+      .flatMap((reservation) => getReservationDates(reservation))
+      .map((date) => getReservationDateParts(date)?.year)
+      .filter((year): year is number => year !== undefined);
     return [...new Set(years)].sort((a, b) => b - a);
   }, [reservations]);
 
@@ -241,17 +259,17 @@ export default function MyReservationsPage() {
     }
 
     // Year/month filter
-    if (selectedYear !== 'all') {
-      result = result.filter((r) => {
-        const d = new Date(r.date);
-        return d.getFullYear() === selectedYear;
-      });
-    }
-    if (selectedMonth !== 'all') {
-      result = result.filter((r) => {
-        const d = new Date(r.date);
-        return d.getMonth() === selectedMonth;
-      });
+    if (selectedYear !== 'all' || selectedMonth !== 'all') {
+      result = result.filter((reservation) =>
+        getReservationDates(reservation).some((date) => {
+          const dateParts = getReservationDateParts(date);
+          return Boolean(
+            dateParts &&
+            (selectedYear === 'all' || dateParts.year === selectedYear) &&
+            (selectedMonth === 'all' || dateParts.month === selectedMonth)
+          );
+        })
+      );
     }
 
     // Status filter — rejected tab includes cancelled

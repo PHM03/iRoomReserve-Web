@@ -76,8 +76,12 @@ function formatDate(value: string | null | undefined) {
   return Number.isNaN(date.getTime())
     ? value
     : new Intl.DateTimeFormat('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
         timeZone: 'UTC',
       }).format(date);
 }
@@ -88,7 +92,9 @@ function formatDateOnly(value: string | null | undefined) {
   return Number.isNaN(date.getTime())
     ? value
     : new Intl.DateTimeFormat('en-US', {
-        dateStyle: 'medium',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
         timeZone: 'UTC',
       }).format(date);
 }
@@ -456,7 +462,7 @@ function renderMetadataTable(report: FeedbackAnalyticsReport) {
     `Floor: ${displayValue(filters.floor, 'All floors')}`,
     `Room: ${displayValue(filters.roomId, 'All rooms')}`,
     `Rating: ${filters.star === null ? 'All ratings' : `${filters.star} stars`}`,
-    `Date range: ${filters.dateFrom || 'Any start'} to ${filters.dateTo || 'Any end'}`,
+    `Date range: ${filters.dateFrom ? formatDateOnly(filters.dateFrom) : 'Any start'} to ${filters.dateTo ? formatDateOnly(filters.dateTo) : 'Any end'}`,
     `Role: ${displayValue(filters.role, 'All roles')}`,
     `Gender: ${displayValue(filters.gender, 'All genders')}`,
   ].join('; ');

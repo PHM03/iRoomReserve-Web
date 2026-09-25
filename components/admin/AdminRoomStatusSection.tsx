@@ -13,6 +13,7 @@ import {
 import { formatTime12h, getScheduleDisplayTitle, type Schedule } from '@/lib/schedules/schedules';
 import { getPreferredDefaultFloorValue, sortFloorOptions } from '@/lib/buildings/floorLabels';
 import type { Room } from '@/lib/rooms/rooms';
+import { formatDate, formatDateTime } from '@/lib/utils/dateTime';
 
 interface AdminRoomStatusSectionProps {
   buildingId: string;
@@ -31,7 +32,7 @@ type ActivityFilter = 'All' | 'Available' | 'Unavailable' | 'Reserved' | 'Occupi
 
 function timestampLabel(value: Room['beaconLastConnectedAt'] | Room['beaconLastDisconnectedAt']) {
   const date = value?.toDate?.();
-  return date ? date.toLocaleString() : null;
+  return date && !Number.isNaN(date.getTime()) ? formatDateTime(date) : null;
 }
 
 function bleLabel(room: Room) {
@@ -144,14 +145,14 @@ export default function AdminRoomStatusSection({
             const relevantReservation = reservation?.status === 'approved' ? reservation : null;
             const displayedReservation = relevantReservation ?? pendingFinish;
             const activityLabel = state.condition === 'Unavailable' ? 'Administratively unavailable' : activity;
-            const reservationWindow = displayedReservation ? `${displayedReservation.date} · ${formatTime12h(displayedReservation.startTime)}–${formatTime12h(displayedReservation.endTime)}` : 'No active reservation';
+            const reservationWindow = displayedReservation ? `${formatDate(displayedReservation.date)} · ${formatTime12h(displayedReservation.startTime)}–${formatTime12h(displayedReservation.endTime)}` : 'No active reservation';
             const reservationLabel = relevantReservation
               ? `${relevantReservation.status} · ${reservationWindow}`
               : pendingFinish
                 ? `Completed · ${reservationWindow} · awaiting finish`
                 : 'No active reservation';
             const scheduleWindow = schedule ? `Class Schedule — ${formatTime12h(schedule.startTime)}–${formatTime12h(schedule.endTime)}` : null;
-            const blockWindow = block ? `${block.date} · ${formatTime12h(block.startTime)}–${formatTime12h(block.endTime)}${block.reason ? ` · ${block.reason}` : ''}` : null;
+            const blockWindow = block ? `${formatDate(block.date)} · ${formatTime12h(block.startTime)}–${formatTime12h(block.endTime)}${block.reason ? ` · ${block.reason}` : ''}` : null;
             return <li key={room.id} className="glass-card room-status-monitor-card min-w-0 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0"><h3 className="truncate text-base font-extrabold text-black">{room.name}</h3><p className="mt-0.5 text-xs font-bold text-black/50">{floorLabel} · {room.roomType || 'Room'} · Capacity {room.capacity}</p></div>
