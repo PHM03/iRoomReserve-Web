@@ -1178,6 +1178,11 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
           const status = getReservationUpdateStatus(notification, reservation);
           const note = getReservationUpdateNote(notification, reservation);
           const roomName = reservation?.roomName || 'Reservation update';
+          const campusName = reservation?.campus === 'digi'
+            ? 'SDCA Digital Campus'
+            : reservation?.campus === 'main'
+              ? 'SDCA Main Campus'
+              : '';
           const dateLabel = reservation ? formatDate(reservation.date) : 'Unavailable';
           const timeLabel = reservation
             ? formatTimeRange(reservation.startTime, reservation.endTime)
@@ -1213,6 +1218,9 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-sm font-bold text-black">{roomName}</h3>
+                      {campusName && (
+                        <span className="text-xs text-black/60">{campusName}</span>
+                      )}
                       <StatusBadge status={status} />
                       {!isRead && (
                         <span className="inline-flex items-center rounded-full border border-primary/20 bg-white px-2 py-0.5 text-[10px] font-bold text-primary">

@@ -9,7 +9,6 @@ import {
   acceptReservationRevision,
   cancelReservation,
   cancelReservationRevision,
-  completeReservation,
   getReservationRevision,
   onReservationsByUser,
   Reservation,
@@ -463,17 +462,6 @@ export default function MyReservationsPage() {
     await handleCancel(reservationId, revisionId);
   };
 
-  const handleComplete = async (reservationId: string) => {
-    if (!firebaseUser) return;
-    setActionLoading(reservationId);
-    try {
-      await completeReservation(reservationId, firebaseUser.uid);
-    } catch (error) {
-      console.error('Failed to complete:', error);
-    }
-    setActionLoading(null);
-  };
-
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
@@ -635,19 +623,23 @@ export default function MyReservationsPage() {
               actionLoading === reservation.id ||
               actionLoading === `${reservation.id}:accept-revision`;
             const submittedOn = formatDateTime(reservation.createdAt, { separator: ' • ' });
+            const campusName = reservation.campus === 'digi'
+              ? 'SDCA Digital Campus'
+              : 'SDCA Main Campus';
 
             return (
               <div
                 key={reservation.id}
-                className="rounded-xl bg-white px-5 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.08)]"
+                className="overflow-hidden rounded-3xl border border-dark/5 bg-white/85 shadow-sm"
               >
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <div className="flex flex-col gap-4 pb-4">
+                  <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-start">
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
                         <h3 className="text-base font-bold text-black">
                           {reservation.roomName}
                         </h3>
+                        <span className="text-xs text-black/60">{campusName}</span>
                         {reservation.isEvent === 'Yes' && (
                           <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-100 px-2.5 py-0.5 text-xs font-bold leading-5 text-violet-800">
                             Event
@@ -656,44 +648,25 @@ export default function MyReservationsPage() {
                         <StatusBadge status={displayStatus} />
                         <StatusBadge status={roomStatus} />
                       </div>
-                      <p className="text-sm text-black">{reservation.buildingName}</p>
-                      <div className="flex flex-wrap items-center gap-4 mt-2">
-                        <div className="flex items-center gap-1.5">
-                          <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-black/60">
-                              Reservation Date
-                            </p>
-                            <p className="text-xs text-black">
-                              {formatReservationDates(reservation.dates, reservation.date)}
-                            </p>
-                          </div>
-                        </div>
-                        {submittedOn && (
-                          <div className="flex items-start gap-1.5">
-                            <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <div>
-                              <p className="text-[10px] font-bold uppercase tracking-wide text-black/60">
-                                Submitted On
-                              </p>
-                              <p className="text-xs text-black">{submittedOn}</p>
-                            </div>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5">
-                          <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span className="text-xs text-black">
-                            {formatTimeRange(reservation.startTime, reservation.endTime)}
-                          </span>
-                        </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-black/60">
+                        <span>{formatReservationDates(reservation.dates, reservation.date)}</span>
+                        <span>{formatTimeRange(reservation.startTime, reservation.endTime)}</span>
+                        {submittedOn && <span>{submittedOn}</span>}
                       </div>
-                      <p className="text-xs text-black mt-1.5">{reservation.purpose}</p>
+                      <p className="mt-3 text-sm leading-relaxed text-black/80">{reservation.purpose}</p>
+                      {reservation.approvalDocumentUrl && (
+                        <p className="mt-2 text-xs text-black/70">
+                          <span className="font-bold">Uploaded File: </span>
+                          <a
+                            href={reservation.approvalDocumentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-primary underline underline-offset-2"
+                          >
+                            {reservation.approvalDocumentName || 'View uploaded file'}
+                          </a>
+                        </p>
+                      )}
                       {reservation.status === 'pending' && (
                         <p className="mt-2 text-xs font-semibold text-amber-800">
                           Approval required before {formatReservationDates([reservation.date])}.
@@ -715,17 +688,9 @@ export default function MyReservationsPage() {
                           </p>
                         </div>
                       )}
-                      {reservation.status === 'rejected' && reservation.reason?.trim() && (
-                        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                          <p className="text-xs font-bold text-red-900">Reason for rejection</p>
-                          <p className="mt-1 whitespace-pre-wrap text-sm text-red-950">
-                            {reservation.reason.trim()}
-                          </p>
-                        </div>
-                      )}
                     </div>
 
-                    <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:min-w-[140px]">
+                    <div className="flex items-center gap-2 sm:min-w-[140px] sm:justify-end">
                       {!isExpired && hasActiveRevision ? (
                         <>
                           <button
@@ -760,17 +725,16 @@ export default function MyReservationsPage() {
                           {actionLoading === reservation.id ? 'Processing...' : 'Cancel'}
                         </button>
                       ) : null}
-                      {!isExpired && reservation.status === 'approved' && (
-                        <button
-                          onClick={() => handleComplete(reservation.id)}
-                          disabled={actionLoading === reservation.id}
-                          className="px-4 py-2 rounded-xl text-xs font-bold ui-button-green disabled:opacity-50"
-                        >
-                          {actionLoading === reservation.id ? 'Processing...' : 'Mark Complete'}
-                        </button>
-                      )}
                     </div>
                   </div>
+                  {reservation.status === 'rejected' && reservation.reason?.trim() && (
+                    <div className="mx-5 -mt-3 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 shadow-sm">
+                      <p className="text-xs font-bold text-red-900">Reason for rejection</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-red-950">
+                        {reservation.reason.trim()}
+                      </p>
+                    </div>
+                  )}
                   {hasActiveRevision && (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                       <p className="text-sm font-bold text-amber-900">
