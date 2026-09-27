@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 
 import StatusBadge from '@/components/ui/StatusBadge';
 import { useAuth } from '@/context/AuthContext';
@@ -125,6 +125,7 @@ export default function MyReservationsPage() {
   const [cancelConfirmationId, setCancelConfirmationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentTime, setCurrentTime] = useState(() => new Date());
+  const hasInitializedDateFilter = useRef(false);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setCurrentTime(new Date()), 60_000);
@@ -173,11 +174,55 @@ export default function MyReservationsPage() {
     const unsubscribeReservations = onReservationsByUser(uid, (nextReservations) => {
       if (cancelled) return;
       setReservations(nextReservations);
+      if (!hasInitializedDateFilter.current) {
+        const today = getCurrentDateTimeStringInTimeZone().date;
+        const firstUpcomingDate = nextReservations
+          .filter((reservation) =>
+            reservation.status === 'pending' || reservation.status === 'approved',
+          )
+          .flatMap((reservation) => getReservationDates(reservation))
+          .filter((date) => date >= today && getReservationDateParts(date) !== null)
+          .sort()[0];
+        const dateParts = firstUpcomingDate
+          ? getReservationDateParts(firstUpcomingDate)
+          : null;
+
+        if (dateParts) {
+          setSelectedYear(dateParts.year);
+          setSelectedMonth(dateParts.month);
+        }
+        const initialDateTime = getCurrentDateTimeStringInTimeZone();
+        const initialFilter: FilterTab = nextReservations.some(
+          (reservation) => reservation.status === 'pending',
+        )
+          ? 'pending'
+          : nextReservations.some((reservation) => reservation.status === 'approved')
+            ? 'approved'
+            : nextReservations.some(
+                  (reservation) =>
+                    reservation.status === 'rejected' || reservation.status === 'cancelled',
+                )
+              ? 'rejected'
+              : nextReservations.some(
+                    (reservation) =>
+                      getDisplayReservationStatus(reservation, initialDateTime) === 'expired',
+                  )
+                ? 'expired'
+                : nextReservations.some((reservation) => reservation.status === 'completed')
+                  ? 'completed'
+                  : 'all';
+        setActiveFilter(initialFilter);
+        hasInitializedDateFilter.current = true;
+      }
     });
     return () => {
       cancelled = true;
       unsubscribeReservations();
     };
+  }, [uid]);
+
+  useEffect(() => {
+    hasInitializedDateFilter.current = false;
   }, [uid]);
 
   useEffect(() => {

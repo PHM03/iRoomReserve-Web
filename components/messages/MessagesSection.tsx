@@ -1266,13 +1266,21 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
               {isOpen && (
                 <div className="border-t border-dark/5 px-5 pb-5 pt-4">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <DetailField label="Room">{roomName}</DetailField>
                     <DetailField label="Date">{dateLabel}</DetailField>
                     <DetailField label="Time">{timeLabel}</DetailField>
                     <DetailField label="Purpose">{purpose}</DetailField>
-                    <DetailField label="Status">
-                      <StatusBadge status={status} />
-                    </DetailField>
+                    {reservation?.approvalDocumentUrl && (
+                      <DetailField label="Uploaded File">
+                        <a
+                          href={reservation.approvalDocumentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold text-primary underline underline-offset-2"
+                        >
+                          {reservation.approvalDocumentName || 'View uploaded file'}
+                        </a>
+                      </DetailField>
+                    )}
                     {status !== 'rejected' && (
                       <DetailField className="sm:col-span-2" label="Admin note">
                         {note}
