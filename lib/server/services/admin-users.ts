@@ -220,12 +220,14 @@ export async function approveManagedUserProfile(
       updatedAt: serverTimestamp(),
     });
   });
-  managedBuildingIds.forEach((buildingId) => {
-    batch.update(db.collection("buildings").doc(buildingId), {
-      assignedAdminUid: uid,
-      updatedAt: serverTimestamp(),
+  if (normalizeRole(role) === USER_ROLES.ADMIN) {
+    managedBuildingIds.forEach((buildingId) => {
+      batch.update(db.collection("buildings").doc(buildingId), {
+        assignedAdminUid: uid,
+        updatedAt: serverTimestamp(),
+      });
     });
-  });
+  }
   await batch.commit();
 }
 
@@ -238,12 +240,14 @@ export async function updateManagedUserCampus(
     throw new Error("User profile not found.");
   }
 
-  if (normalizeRole(userSnapshot.data()?.role) !== USER_ROLES.ADMIN) {
-    throw new Error("Only administrator campus assignments can be changed.");
+  const role = normalizeRole(userSnapshot.data()?.role);
+  if (role !== USER_ROLES.ADMIN && role !== USER_ROLES.UTILITY) {
+    throw new Error("Only administrators and utility staff can be reassigned to a campus.");
   }
 
-  const managedBuildingIds = getManagedBuildingIdsForCampus(campus);
-  if (managedBuildingIds.length === 0) {
+  const managedBuildingIds =
+    role === USER_ROLES.ADMIN ? getManagedBuildingIdsForCampus(campus) : [];
+  if (role === USER_ROLES.ADMIN && managedBuildingIds.length === 0) {
     throw new Error("A managed campus is required.");
   }
 
@@ -264,12 +268,14 @@ export async function updateManagedUserCampus(
       updatedAt: serverTimestamp(),
     });
   });
-  managedBuildingIds.forEach((buildingId) => {
-    batch.update(db.collection("buildings").doc(buildingId), {
-      assignedAdminUid: uid,
-      updatedAt: serverTimestamp(),
+  if (role === USER_ROLES.ADMIN) {
+    managedBuildingIds.forEach((buildingId) => {
+      batch.update(db.collection("buildings").doc(buildingId), {
+        assignedAdminUid: uid,
+        updatedAt: serverTimestamp(),
+      });
     });
-  });
+  }
   await batch.commit();
 }
 

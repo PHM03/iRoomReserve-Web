@@ -598,7 +598,7 @@ export async function approveAdmin(
   });
 }
 
-export async function updateAdminCampus(
+export async function updateManagedUserCampus(
   uid: string,
   campus: ReservationCampus
 ) {

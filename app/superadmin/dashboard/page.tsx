@@ -13,7 +13,7 @@ import {
   disableUserAccount,
   enableUserAccount,
   ManagedUser,
-  updateAdminCampus,
+  updateManagedUserCampus,
   removeMainCampusDsas,
 } from '@/lib/auth/auth';
 import { getCampusName } from '@/lib/buildings/campusAssignments';
@@ -106,7 +106,7 @@ export default function SuperAdminDashboard() {
     setModalLoading(true);
     try {
       if (selectedUser.status === 'approved') {
-        await updateAdminCampus(selectedUser.uid, selectedCampus);
+        await updateManagedUserCampus(selectedUser.uid, selectedCampus);
       } else {
         await approveAdmin(selectedUser.uid, selectedCampus, selectedUser.role);
       }
@@ -644,15 +644,13 @@ export default function SuperAdminDashboard() {
                         </button>
                         {(user.role === USER_ROLES.ADMIN || user.role === USER_ROLES.UTILITY) && (
                           <>
-                            {user.role === USER_ROLES.ADMIN && (
-                              <button
-                                onClick={() => openApprovalModal(user)}
-                                disabled={actionLoading === user.uid}
-                                className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-blue disabled:opacity-50"
-                              >
-                                Edit campus
-                              </button>
-                            )}
+                            <button
+                              onClick={() => openApprovalModal(user)}
+                              disabled={actionLoading === user.uid}
+                              className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold ui-button-blue disabled:opacity-50"
+                            >
+                              Edit campus
+                            </button>
                             <button
                               onClick={() => openAccountActionConfirmation('revoke', user)}
                               disabled={actionLoading === user.uid}
@@ -739,8 +737,12 @@ export default function SuperAdminDashboard() {
             </h2>
             <p className="text-sm text-black mb-6">
               {selectedUser.status === 'approved'
-                ? 'Choose the campus this administrator will manage.'
-                : 'Choose which campus this person will manage.'}
+                ? selectedUser.role === USER_ROLES.UTILITY
+                  ? 'Choose the campus this utility staff member will support.'
+                  : 'Choose the campus this administrator will manage.'
+                : selectedUser.role === USER_ROLES.UTILITY
+                  ? 'Choose which campus this utility staff member will support.'
+                  : 'Choose which campus this person will manage.'}
             </p>
 
             <div className="flex items-center space-x-4 glass-card !bg-dark/5 p-4 !rounded-xl mb-6">
