@@ -1329,7 +1329,7 @@ export default function ReserveRoomPage() {
 
     if (isStudentReservation && !uploadedApprovalDocument) {
       setApprovalDocumentError(
-        'Upload the concept paper or letter of approval before submitting this reservation.'
+        'Upload the concept paper or approval letter before submitting this reservation.'
       );
       return;
     }
@@ -2416,61 +2416,30 @@ export default function ReserveRoomPage() {
                   {isStudentReservation && (
                     <div>
                       <h5 className="mb-3 text-sm font-bold uppercase tracking-wider text-black">
-                        Concept Paper / Letter of Approval
+                        Concept Paper / Approval Letter
                       </h5>
                       <div className="rounded-xl border border-dark/10 bg-dark/5 p-4">
                         <label className="mb-2 block text-xs font-bold text-black">
                           Upload a PDF, JPG, or PNG copy of your concept paper
                         </label>
-                        <input
-                          ref={approvalDocumentInputRef}
-                          type="file"
-                          accept=".pdf,image/jpeg,image/png"
-                          onChange={handleApprovalDocumentChange}
-                          disabled={
-                            documentUploading ||
-                            documentRemoving ||
-                            submitting ||
-                            validatingApprover ||
-                            Boolean(uploadedApprovalDocument)
-                          }
-                          className="glass-input w-full px-4 py-3"
-                        />
-                        <p className="mt-2 text-[11px] text-black">
-                          Students must attach a concept paper for both Main Campus and Digital Campus reservations.
-                        </p>
-                        {documentUploading && (
-                          <p className="mt-1.5 text-xs font-bold text-black">Uploading concept paper...</p>
-                        )}
-                        {uploadedApprovalDocument && (
-                          <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-xl border border-dark/10 bg-white/80 p-2 shadow-sm transition-colors hover:bg-white">
+                        {uploadedApprovalDocument ? (
+                          <div className="flex min-h-[52px] w-full items-center gap-2 rounded-xl border border-dark/10 bg-white/80 p-2 shadow-sm">
                             <a
                               href={uploadedApprovalDocument.url}
                               target="_blank"
                               rel="noreferrer"
-                              className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
                               {uploadedApprovalDocument.contentType.startsWith('image/') ? (
                                 <img
                                   src={uploadedApprovalDocument.url}
                                   alt={`${uploadedApprovalDocument.name} preview`}
-                                  className="h-14 w-14 shrink-0 rounded-lg border border-dark/10 object-cover"
+                                  className="h-10 w-10 shrink-0 rounded-lg border border-dark/10 object-cover"
                                 />
                               ) : (
-                                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/5 text-primary">
-                                  <svg
-                                    className="h-7 w-7"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                    aria-hidden="true"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={1.8}
-                                      d="M7 3.75h6.5L19 9.25v10A1.75 1.75 0 0117.25 21h-10A1.75 1.75 0 015.5 19.25v-13.75A1.75 1.75 0 017.25 3.75z M13.5 4v5.5H19 M8.5 14h7 M8.5 17h7"
-                                    />
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/5 text-primary">
+                                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 3.75h6.5L19 9.25v10A1.75 1.75 0 0117.25 21h-10A1.75 1.75 0 015.5 19.25v-13.75A1.75 1.75 0 017.25 3.75z M13.5 4v5.5H19 M8.5 14h7 M8.5 17h7" />
                                   </svg>
                                 </span>
                               )}
@@ -2490,12 +2459,7 @@ export default function ReserveRoomPage() {
                             <button
                               type="button"
                               onClick={() => void handleRemoveApprovalDocument()}
-                              disabled={
-                                documentUploading ||
-                                documentRemoving ||
-                                submitting ||
-                                validatingApprover
-                              }
+                              disabled={documentUploading || documentRemoving || submitting || validatingApprover}
                               aria-label={`Remove uploaded file ${uploadedApprovalDocument.name}`}
                               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-black/60 transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                             >
@@ -2511,6 +2475,21 @@ export default function ReserveRoomPage() {
                               )}
                             </button>
                           </div>
+                        ) : (
+                          <input
+                            ref={approvalDocumentInputRef}
+                            type="file"
+                            accept=".pdf,image/jpeg,image/png"
+                            onChange={handleApprovalDocumentChange}
+                            disabled={documentUploading || documentRemoving || submitting || validatingApprover}
+                            className="glass-input w-full px-4 py-3"
+                          />
+                        )}
+                        <p className="mt-2 text-[11px] text-black">
+                          Students must attach a concept paper or approval letter for all reservations.
+                        </p>
+                        {documentUploading && (
+                          <p className="mt-1.5 text-xs font-bold text-black">Uploading concept paper...</p>
                         )}
                         {!uploadedApprovalDocument && approvalDocument && !documentUploading && !approvalDocumentError && (
                           <p className="mt-1.5 text-xs font-bold text-black">
