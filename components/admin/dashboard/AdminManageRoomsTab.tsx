@@ -608,9 +608,12 @@ export default function AdminManageRoomsTab({
         }
     };
 
-    const startCopyRoomScript = (room: Room) => {
-        if (room.beaconId?.trim()) {
-            void copyRoomHardwareScript(room, room.beaconId.trim());
+    const startCopyRoomScript = (room: Room, beaconIdOverride?: string) => {
+        const beaconId = beaconIdOverride === undefined
+            ? room.beaconId?.trim() ?? ''
+            : beaconIdOverride.trim();
+        if (beaconId) {
+            void copyRoomHardwareScript(room, beaconId);
             return;
         }
         setBeaconPromptRoom(room);
@@ -1377,26 +1380,43 @@ export default function AdminManageRoomsTab({
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-wrap gap-2">
-                                        <button
-                                            onClick={() => handleEditRoom(room.id)}
-                                            disabled={
-                                                savingRoomId === room.id ||
-                                                !editName.trim() ||
-                                                !editFloor.trim() ||
-                                                !editRoomType
-                                            }
-                                            className="px-4 py-2 rounded-xl text-sm font-bold ui-button-green"
-                                        >
-                                            {savingRoomId === room.id ? 'Saving...' : 'Save Changes'}
-                                        </button>
-                                        <button
-                                            onClick={resetEditRoomForm}
-                                            disabled={savingRoomId === room.id}
-                                            className="px-4 py-2 rounded-xl text-sm font-bold bg-dark/5 text-black border border-dark/10 hover:bg-primary/10 transition-all"
-                                        >
-                                            Cancel
-                                        </button>
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                onClick={() => handleEditRoom(room.id)}
+                                                disabled={
+                                                    savingRoomId === room.id ||
+                                                    !editName.trim() ||
+                                                    !editFloor.trim() ||
+                                                    !editRoomType
+                                                }
+                                                className="px-4 py-2 rounded-xl text-sm font-bold ui-button-green"
+                                            >
+                                                {savingRoomId === room.id ? 'Saving...' : 'Save Changes'}
+                                            </button>
+                                            <button
+                                                onClick={resetEditRoomForm}
+                                                disabled={savingRoomId === room.id}
+                                                className="px-4 py-2 rounded-xl text-sm font-bold bg-dark/5 text-black border border-dark/10 hover:bg-primary/10 transition-all"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                        {showRoomIdentifiers ? (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    startCopyRoomScript(
+                                                        { ...room, name: editName.trim() || room.name },
+                                                        editBeaconId,
+                                                    )
+                                                }
+                                                disabled={savingRoomId === room.id || !editBeaconId.trim()}
+                                                className="ui-button-blue rounded-lg px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                Copy Script
+                                            </button>
+                                        ) : null}
                                     </div>
                                 </div>
                             ) : (
