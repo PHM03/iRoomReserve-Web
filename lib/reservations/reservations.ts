@@ -290,6 +290,38 @@ export async function uploadReservationDocument(
   return uploadedDocument;
 }
 
+export async function deleteUploadedReservationDocument(path: string): Promise<void> {
+  const currentUser = auth.currentUser;
+  const token = currentUser ? await currentUser.getIdToken() : null;
+  const response = await fetch(buildUrl("/api/reservations/upload"), {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(currentUser?.uid ? { "x-user-id": currentUser.uid } : {}),
+    },
+    body: JSON.stringify({ path }),
+  });
+
+  const responseText = await response.text();
+  const payload = responseText
+    ? ((() => {
+        try {
+          return JSON.parse(responseText) as { error?: { message?: string } };
+        } catch {
+          return null;
+        }
+      })())
+    : null;
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.error?.message ??
+        `The request failed (status ${response.status}).`
+    );
+  }
+}
+
 export async function fetchPendingReservationsForApprover(): Promise<Reservation[]> {
   return apiRequest("/api/reservations/pending-approvals", {
     method: "GET",

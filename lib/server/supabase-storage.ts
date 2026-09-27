@@ -251,3 +251,30 @@ export async function uploadReservationDocument(input: {
     url,
   };
 }
+
+export async function deleteReservationDocumentFromStorage(path: string): Promise<void> {
+  const response = await fetch(
+    `${getSupabaseUrl()}/storage/v1/object/${DEFAULT_BUCKET}/${encodeObjectPath(path)}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${getSupabaseServiceRoleKey()}`,
+        apikey: getSupabaseServiceRoleKey(),
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as
+      | { error?: string; message?: string }
+      | null;
+
+    throw new ApiError(
+      502,
+      "storage_delete_failed",
+      errorPayload?.message ??
+        errorPayload?.error ??
+        "Supabase Storage could not remove the uploaded file."
+    );
+  }
+}

@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError, ApiError } from "@/lib/server/api-error";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
-import { assertAuthenticated } from "@/lib/server/route-guards";
-import { uploadReservationDocument } from "@/lib/server/supabase-storage";
+import { assertAuthenticated, assertVerifiedAuthentication } from "@/lib/server/route-guards";
+import {
+  deleteReservationDocumentFromStorage,
+  uploadReservationDocument,
+} from "@/lib/server/supabase-storage";
 
 export const runtime = "nodejs";
 
@@ -14,6 +17,22 @@ function getOptionalString(value: FormDataEntryValue | null) {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function isPendingDocumentPathForUser(path: string, userId: string) {
+  const prefix = `reservations/pending/${userId}/`;
+  if (!path.startsWith(prefix) || path !== path.trim()) {
+    return false;
+  }
+
+  const objectName = path.slice(prefix.length);
+  return (
+    objectName.length > 0 &&
+    objectName !== "." &&
+    objectName !== ".." &&
+    !objectName.includes("/") &&
+    !objectName.includes("\\")
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -56,6 +75,42 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(upload, { status: 201 });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const authContext = await getRequestAuthContext(request, {
+      allowCompatibilityHeaders: false,
+      includeProfile: false,
+    });
+    assertVerifiedAuthentication(authContext);
+    const userId = authContext.uid;
+    if (!userId) {
+      throw new ApiError(401, "unauthenticated", "Authentication is required.");
+    }
+
+    const payload: unknown = await request.json().catch(() => null);
+    const path =
+      typeof payload === "object" &&
+      payload !== null &&
+      "path" in payload &&
+      typeof payload.path === "string"
+        ? payload.path
+        : "";
+
+    if (!isPendingDocumentPathForUser(path, userId)) {
+      throw new ApiError(
+        400,
+        "invalid_document_path",
+        "Only your pending reservation documents can be removed."
+      );
+    }
+
+    await deleteReservationDocumentFromStorage(path);
+    return NextResponse.json({ success: true });
   } catch (error) {
     return handleApiError(error);
   }

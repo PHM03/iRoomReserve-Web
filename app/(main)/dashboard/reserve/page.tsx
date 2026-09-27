@@ -2,7 +2,7 @@
 
 import type { SubmitEvent } from 'react';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DaySchedulePanel from '@/components/rooms/schedules/DaySchedulePanel';
 import RoomAvailabilityPicker from '@/components/rooms/RoomAvailabilityPicker';
@@ -28,6 +28,7 @@ import {
 import {
   createReservation,
   createRecurringReservation,
+  deleteUploadedReservationDocument,
   onReservationsByBuildingIds,
   type Reservation,
   uploadReservationDocument,
@@ -344,7 +345,9 @@ export default function ReserveRoomPage() {
     url: string;
   } | null>(null);
   const [documentUploading, setDocumentUploading] = useState(false);
+  const [documentRemoving, setDocumentRemoving] = useState(false);
   const [approvalDocumentError, setApprovalDocumentError] = useState('');
+  const approvalDocumentInputRef = useRef<HTMLInputElement>(null);
   const [approvalEmailError, setApprovalEmailError] = useState('');
   const [approvalEmails, setApprovalEmails] = useState({ advisorEmail: '' });
   const [bookedSlots, setBookedSlots] = useState<BookingSlot[]>([]);
@@ -1026,6 +1029,10 @@ export default function ReserveRoomPage() {
     event: React.ChangeEvent<HTMLInputElement>
   ) {
     const nextFile = event.target.files?.[0] ?? null;
+    if (!nextFile || uploadedApprovalDocument || documentUploading || documentRemoving) {
+      return;
+    }
+
     console.log('[reservation-form] selected concept paper file', {
       file: nextFile,
       hasFile: Boolean(nextFile),
@@ -1037,10 +1044,6 @@ export default function ReserveRoomPage() {
     setUploadedApprovalDocument(null);
     setApprovalDocumentError('');
     setSubmitError('');
-
-    if (!nextFile) {
-      return;
-    }
 
     setDocumentUploading(true);
 
@@ -1068,6 +1071,38 @@ export default function ReserveRoomPage() {
     } finally {
       setDocumentUploading(false);
       event.target.value = '';
+    }
+  }
+
+  async function handleRemoveApprovalDocument() {
+    if (
+      !uploadedApprovalDocument ||
+      documentUploading ||
+      documentRemoving ||
+      submitting ||
+      validatingApprover
+    ) {
+      return;
+    }
+
+    setDocumentRemoving(true);
+
+    try {
+      await deleteUploadedReservationDocument(uploadedApprovalDocument.path);
+      setUploadedApprovalDocument(null);
+      setApprovalDocument(null);
+      setApprovalDocumentError('');
+      if (approvalDocumentInputRef.current) {
+        approvalDocumentInputRef.current.value = '';
+      }
+    } catch (error) {
+      setApprovalDocumentError(
+        error instanceof Error
+          ? error.message
+          : 'We could not remove the concept paper right now.'
+      );
+    } finally {
+      setDocumentRemoving(false);
     }
   }
 
@@ -1189,6 +1224,10 @@ export default function ReserveRoomPage() {
 
   async function handleSubmitReservation(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (documentRemoving) {
+      return;
+    }
 
     if (
       !firebaseUser ||
@@ -2384,10 +2423,17 @@ export default function ReserveRoomPage() {
                           Upload a PDF, JPG, or PNG copy of your concept paper
                         </label>
                         <input
+                          ref={approvalDocumentInputRef}
                           type="file"
                           accept=".pdf,image/jpeg,image/png"
                           onChange={handleApprovalDocumentChange}
-                          disabled={documentUploading}
+                          disabled={
+                            documentUploading ||
+                            documentRemoving ||
+                            submitting ||
+                            validatingApprover ||
+                            Boolean(uploadedApprovalDocument)
+                          }
                           className="glass-input w-full px-4 py-3"
                         />
                         <p className="mt-2 text-[11px] text-black">
@@ -2397,17 +2443,74 @@ export default function ReserveRoomPage() {
                           <p className="mt-1.5 text-xs font-bold text-black">Uploading concept paper...</p>
                         )}
                         {uploadedApprovalDocument && (
-                          <p className="mt-1.5 text-xs font-bold text-primary">
-                            Uploaded:{' '}
+                          <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-xl border border-dark/10 bg-white/80 p-2 shadow-sm transition-colors hover:bg-white">
                             <a
                               href={uploadedApprovalDocument.url}
                               target="_blank"
                               rel="noreferrer"
-                              className="underline underline-offset-2 hover:text-primary-hover"
+                              className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
-                              {uploadedApprovalDocument.name}
+                              {uploadedApprovalDocument.contentType.startsWith('image/') ? (
+                                <img
+                                  src={uploadedApprovalDocument.url}
+                                  alt={`${uploadedApprovalDocument.name} preview`}
+                                  className="h-14 w-14 shrink-0 rounded-lg border border-dark/10 object-cover"
+                                />
+                              ) : (
+                                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/5 text-primary">
+                                  <svg
+                                    className="h-7 w-7"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={1.8}
+                                      d="M7 3.75h6.5L19 9.25v10A1.75 1.75 0 0117.25 21h-10A1.75 1.75 0 015.5 19.25v-13.75A1.75 1.75 0 017.25 3.75z M13.5 4v5.5H19 M8.5 14h7 M8.5 17h7"
+                                    />
+                                  </svg>
+                                </span>
+                              )}
+                              <span className="min-w-0">
+                                <span className="block max-w-[180px] truncate text-xs font-bold text-black sm:max-w-[240px]">
+                                  {uploadedApprovalDocument.name}
+                                </span>
+                                <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wide text-black/50">
+                                  {uploadedApprovalDocument.contentType === 'application/pdf'
+                                    ? 'PDF document'
+                                    : uploadedApprovalDocument.contentType === 'image/png'
+                                      ? 'PNG image'
+                                      : 'JPG image'}
+                                </span>
+                              </span>
                             </a>
-                          </p>
+                            <button
+                              type="button"
+                              onClick={() => void handleRemoveApprovalDocument()}
+                              disabled={
+                                documentUploading ||
+                                documentRemoving ||
+                                submitting ||
+                                validatingApprover
+                              }
+                              aria-label={`Remove uploaded file ${uploadedApprovalDocument.name}`}
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-black/60 transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {documentRemoving ? (
+                                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                              ) : (
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
                         )}
                         {!uploadedApprovalDocument && approvalDocument && !documentUploading && !approvalDocumentError && (
                           <p className="mt-1.5 text-xs font-bold text-black">
@@ -2472,7 +2575,7 @@ export default function ReserveRoomPage() {
 
                   <button
                     type="submit"
-                    disabled={submitting || validatingApprover || documentUploading}
+                    disabled={submitting || validatingApprover || documentUploading || documentRemoving}
                     className="btn-primary flex w-full items-center justify-center px-4 py-3"
                   >
                     {submitting || validatingApprover ? (
