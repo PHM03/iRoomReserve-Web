@@ -243,6 +243,7 @@ export async function getUserProfile(uid: string) {
     accountType?: AccountType | string | null;
     organizationName?: string | null;
     accountConfigurationReminderDismissed?: boolean;
+    pushNotificationsEnabled?: boolean;
     assignedBuildings?: unknown;
     assignedBuildingIds?: string[];
     rejectionReason?: string;
@@ -360,6 +361,17 @@ export async function updateAccountSettings(
       displayName: `${normalizedFirstName} ${normalizedLastName}`.trim(),
     });
   }
+}
+
+export async function updatePushNotificationsEnabled(uid: string, enabled: boolean) {
+  await setDoc(
+    doc(db, "users", uid),
+    {
+      pushNotificationsEnabled: enabled,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 export async function dismissAccountConfigurationReminder(uid: string) {

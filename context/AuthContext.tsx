@@ -16,6 +16,7 @@ interface UserProfile {
   status: string;
   gender?: UserGender | null;
   accountConfigurationReminderDismissed?: boolean;
+  pushNotificationsEnabled?: boolean;
   accountType?: 'individual' | 'organization';
   organizationName?: string | null;
   campus?: ReservationCampus | null;
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         gender: data.gender ?? null,
         accountConfigurationReminderDismissed:
           data.accountConfigurationReminderDismissed === true,
+        pushNotificationsEnabled: data.pushNotificationsEnabled !== false,
         accountType: data.accountType === 'organization' ? 'organization' : 'individual',
         organizationName:
           typeof data.organizationName === 'string' ? data.organizationName : null,

@@ -8,6 +8,7 @@ import {
   changeCurrentUserPassword,
   normalizeAccountType,
   updateAccountSettings,
+  updatePushNotificationsEnabled,
   type AccountType,
 } from '@/lib/auth/auth';
 import { validatePassword } from '@/lib/auth/password';
@@ -56,6 +57,8 @@ export default function AccountSettingsModal({
   const [accountType, setAccountType] = useState<AccountType>('individual');
   const [organizationName, setOrganizationName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(true);
+  const [savingPushNotifications, setSavingPushNotifications] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
@@ -85,6 +88,7 @@ export default function AccountSettingsModal({
     setGender(profile?.gender ?? '');
     setAccountType(normalizeAccountType(profile?.accountType));
     setOrganizationName(profile?.organizationName ?? '');
+    setPushNotificationsEnabled(profile?.pushNotificationsEnabled !== false);
     setErrorMessage('');
     setSuccessMessage('');
     setShowPasswordFields(false);
@@ -150,6 +154,29 @@ export default function AccountSettingsModal({
       setErrorMessage('Unable to save account settings. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePushNotificationToggle = async () => {
+    if (!firebaseUser || savingPushNotifications) {
+      return;
+    }
+
+    const nextValue = !pushNotificationsEnabled;
+    setSavingPushNotifications(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      await updatePushNotificationsEnabled(firebaseUser.uid, nextValue);
+      setPushNotificationsEnabled(nextValue);
+      await reloadProfile();
+      setSuccessMessage('Notification preference saved.');
+    } catch (error) {
+      console.warn('Failed to update notification preference:', error);
+      setErrorMessage('Unable to save notification preference. Please try again.');
+    } finally {
+      setSavingPushNotifications(false);
     }
   };
 
@@ -327,6 +354,33 @@ export default function AccountSettingsModal({
               </>
             ) : null}
           </form>
+
+          <section className="rounded-xl border border-dark/10 bg-dark/5 p-4" aria-label="Notification settings">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-black">Push Notifications</h3>
+                <p className="mt-1 text-sm text-black/70">Receive updates about your reservations.</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={pushNotificationsEnabled}
+                aria-label="Push Notifications"
+                onClick={() => void handlePushNotificationToggle()}
+                disabled={savingPushNotifications}
+                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                  pushNotificationsEnabled ? 'bg-primary' : 'bg-black/25'
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    pushNotificationsEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            {savingPushNotifications ? <p className="mt-2 text-xs text-black/55">Saving preference…</p> : null}
+          </section>
 
           <div className="rounded-xl border border-dark/10 bg-dark/5 p-4">
             <div className="flex items-center justify-between gap-3">
