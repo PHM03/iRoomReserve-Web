@@ -7,6 +7,7 @@ import { getUserProfile, logout as firebaseLogout } from '@/lib/auth/auth';
 import { type CampusName } from '@/lib/buildings/campusAssignments';
 import { type ReservationCampus } from '@/lib/buildings/campuses';
 import { type UserGender } from '@/lib/auth/profile-types';
+import type { BuildingAdminNotificationPreferences } from '@/lib/auth/auth';
 
 interface UserProfile {
   firstName: string;
@@ -17,6 +18,7 @@ interface UserProfile {
   gender?: UserGender | null;
   accountConfigurationReminderDismissed?: boolean;
   pushNotificationsEnabled?: boolean;
+  notificationPreferences?: BuildingAdminNotificationPreferences;
   accountType?: 'individual' | 'organization';
   organizationName?: string | null;
   campus?: ReservationCampus | null;
@@ -63,6 +65,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         accountConfigurationReminderDismissed:
           data.accountConfigurationReminderDismissed === true,
         pushNotificationsEnabled: data.pushNotificationsEnabled !== false,
+        notificationPreferences: data.notificationPreferences,
         accountType: data.accountType === 'organization' ? 'organization' : 'individual',
         organizationName:
           typeof data.organizationName === 'string' ? data.organizationName : null,

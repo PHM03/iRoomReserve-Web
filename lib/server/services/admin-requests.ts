@@ -1,7 +1,7 @@
 import "server-only";
 
 import { db, serverTimestamp } from "@/lib/firebase/firebase-admin";
-import { getAssignedManagerIds } from "@/lib/server/services/building-managers";
+import { USER_ROLES, normalizeRole } from "@/lib/auth/roles";
 import {
   queueNotificationWrite,
   sendQueuedPushNotifications,
@@ -20,7 +20,17 @@ export interface AdminRequestCreateInput {
 }
 
 export async function createAdminRequestRecord(data: AdminRequestCreateInput) {
-  const adminIds = await getAssignedManagerIds(data.buildingId);
+  const superAdminSnapshot = await db
+    .collection("users")
+    .where("role", "==", USER_ROLES.SUPER_ADMIN)
+    .get();
+  const adminIds = superAdminSnapshot.docs.flatMap((userDoc) => {
+    const userData = userDoc.data() as { role?: string | null; status?: string | null };
+    return normalizeRole(userData.role) === USER_ROLES.SUPER_ADMIN &&
+      userData.status !== "disabled"
+      ? [userDoc.id]
+      : [];
+  });
 
   const requestRef = db.collection("adminRequests").doc();
   const batch = db.batch();

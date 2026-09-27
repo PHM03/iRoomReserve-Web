@@ -42,6 +42,20 @@ import {
 } from "@/lib/auth/profile-types";
 
 export type AccountType = "individual" | "organization";
+export const BUILDING_ADMIN_NOTIFICATION_TYPES = [
+  "new_reservation",
+  "reservation_cancelled",
+  "reservation_revision_accepted",
+  "feedback",
+  "reservation_needs_approval",
+  "reservation_request_expired",
+  "reservation_completed",
+] as const;
+export type BuildingAdminNotificationType =
+  (typeof BUILDING_ADMIN_NOTIFICATION_TYPES)[number];
+export type BuildingAdminNotificationPreferences = Partial<
+  Record<BuildingAdminNotificationType, boolean>
+>;
 
 export function normalizeAccountType(value?: string | null): AccountType {
   return value === "organization" ? "organization" : "individual";
@@ -244,6 +258,7 @@ export async function getUserProfile(uid: string) {
     organizationName?: string | null;
     accountConfigurationReminderDismissed?: boolean;
     pushNotificationsEnabled?: boolean;
+    notificationPreferences?: BuildingAdminNotificationPreferences;
     assignedBuildings?: unknown;
     assignedBuildingIds?: string[];
     rejectionReason?: string;
@@ -368,6 +383,21 @@ export async function updatePushNotificationsEnabled(uid: string, enabled: boole
     doc(db, "users", uid),
     {
       pushNotificationsEnabled: enabled,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+export async function updateBuildingAdminNotificationPreference(
+  uid: string,
+  type: BuildingAdminNotificationType,
+  enabled: boolean
+) {
+  await setDoc(
+    doc(db, "users", uid),
+    {
+      notificationPreferences: { [type]: enabled },
       updatedAt: serverTimestamp(),
     },
     { merge: true }

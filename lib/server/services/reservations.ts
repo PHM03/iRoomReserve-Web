@@ -1760,6 +1760,9 @@ export async function monitorPendingReservations(now: Date = new Date()) {
             const notificationInput: AppNotificationInput = {
               recipientUid,
               type: "system",
+              ...(!isRequester
+                ? { notificationPreferenceKey: "reservation_request_expired" as const }
+                : {}),
               title: "Reservation Request Expired",
               message: isRequester ? requesterMessage : adminMessage,
               buildingId: reservation.buildingId,
@@ -1797,6 +1800,7 @@ export async function monitorPendingReservations(now: Date = new Date()) {
             const notificationInput: AppNotificationInput = {
               recipientUid,
               type: "system",
+              notificationPreferenceKey: "reservation_needs_approval",
               title: "Reservation Needs Approval",
               message: adminMessage,
               buildingId: reservation.buildingId,
@@ -3248,6 +3252,7 @@ export async function completeReservationRecord(
       addPushNotification(queuedNotifications, {
         recipientUid: managerUid,
         type: "system",
+        notificationPreferenceKey: "reservation_completed",
         title: "Reservation Completed",
         message: `${reservation.userName} marked their reservation for ${reservation.roomName} on ${formatNotificationDate(
           reservation.date

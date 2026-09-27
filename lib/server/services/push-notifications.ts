@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { BuildingAdminNotificationType } from "@/lib/auth/auth";
 import { db, serverTimestamp } from "@/lib/firebase/firebase-admin";
 
 export type AppNotificationType =
@@ -20,6 +21,7 @@ export interface AppNotificationInput {
   buildingId: string;
   reservationId: string;
   route?: string;
+  notificationPreferenceKey?: BuildingAdminNotificationType;
   revisionId?: string;
   originalRoomId?: string;
   proposedRoomId?: string;
@@ -133,6 +135,8 @@ export async function sendQueuedPushNotifications(
     );
     const tokensByRecipientId = new Map<string, string[]>();
     const emailByRecipientId = new Map<string, string>();
+    const notificationPreferencesByRecipientId = new Map<string, Record<string, unknown>>();
+    const notificationsEnabledByRecipientId = new Map<string, boolean>();
 
     recipientSnapshots.forEach((snapshot) => {
       if (!snapshot.exists) {
@@ -141,6 +145,17 @@ export async function sendQueuedPushNotifications(
 
       const userData = snapshot.data();
       tokensByRecipientId.set(snapshot.id, getExpoPushTokens(userData));
+      notificationsEnabledByRecipientId.set(
+        snapshot.id,
+        userData?.pushNotificationsEnabled !== false
+      );
+      const preferences = userData?.notificationPreferences;
+      notificationPreferencesByRecipientId.set(
+        snapshot.id,
+        preferences && typeof preferences === "object"
+          ? (preferences as Record<string, unknown>)
+          : {}
+      );
 
       const email = userData?.email;
       if (typeof email === "string" && email.trim().length > 0) {
@@ -148,7 +163,26 @@ export async function sendQueuedPushNotifications(
       }
     });
 
-    const messages = queuedNotifications.flatMap((notification) => {
+    const enabledNotifications = queuedNotifications.filter((notification) => {
+      if (notificationsEnabledByRecipientId.get(notification.recipientUid) === false) {
+        return false;
+      }
+
+      const preferences = notificationPreferencesByRecipientId.get(notification.recipientUid);
+      const preferenceKey = notification.notificationPreferenceKey ?? notification.type;
+      const preferenceValue = preferences?.[preferenceKey];
+      const isReservationSystemPreference =
+        preferenceKey === "reservation_needs_approval" ||
+        preferenceKey === "reservation_request_expired" ||
+        preferenceKey === "reservation_completed";
+      const isDisabledByLegacySystemPreference =
+        isReservationSystemPreference &&
+        preferenceValue === undefined &&
+        preferences?.system === false;
+
+      return preferenceValue !== false && !isDisabledByLegacySystemPreference;
+    });
+    const messages = enabledNotifications.flatMap((notification) => {
       const recipientTokens = tokensByRecipientId.get(notification.recipientUid) ?? [];
 
       return recipientTokens.map((to) => ({
@@ -188,7 +222,7 @@ export async function sendQueuedPushNotifications(
       }
     }
 
-    await sendQueuedGmailNotifications(queuedNotifications, emailByRecipientId);
+    await sendQueuedGmailNotifications(enabledNotifications, emailByRecipientId);
   } catch (error) {
     console.warn("[push-notifications] unable to send Expo push notifications", error);
   }

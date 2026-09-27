@@ -8,7 +8,10 @@ import {
   changeCurrentUserPassword,
   normalizeAccountType,
   updateAccountSettings,
+  updateBuildingAdminNotificationPreference,
   updatePushNotificationsEnabled,
+  BUILDING_ADMIN_NOTIFICATION_TYPES,
+  type BuildingAdminNotificationType,
   type AccountType,
 } from '@/lib/auth/auth';
 import { validatePassword } from '@/lib/auth/password';
@@ -59,6 +62,8 @@ export default function AccountSettingsModal({
   const [saving, setSaving] = useState(false);
   const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(true);
   const [savingPushNotifications, setSavingPushNotifications] = useState(false);
+  const [showAdvancedNotificationSettings, setShowAdvancedNotificationSettings] = useState(false);
+  const [savingNotificationType, setSavingNotificationType] = useState<BuildingAdminNotificationType | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
@@ -73,6 +78,7 @@ export default function AccountSettingsModal({
   const [passwordErrorMessage, setPasswordErrorMessage] = useState('');
   const [passwordSuccessMessage, setPasswordSuccessMessage] = useState('');
   const isStudentAccount = normalizeRole(profile?.role) === USER_ROLES.STUDENT;
+  const isBuildingAdmin = normalizeRole(profile?.role) === USER_ROLES.ADMIN;
   const hasPasswordProvider =
     firebaseUser?.providerData.some((provider) => provider.providerId === 'password') ?? false;
   const handleToastClose = useCallback(() => setShowToast(false), []);
@@ -359,7 +365,7 @@ export default function AccountSettingsModal({
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-sm font-bold text-black">Push Notifications</h3>
-                <p className="mt-1 text-sm text-black/70">Receive updates about your reservations.</p>
+                <p className="mt-1 text-sm text-black/70">Receive reservation updates</p>
               </div>
               <button
                 type="button"
@@ -380,6 +386,76 @@ export default function AccountSettingsModal({
               </button>
             </div>
             {savingPushNotifications ? <p className="mt-2 text-xs text-black/55">Saving preference…</p> : null}
+            {isBuildingAdmin ? (
+              <div className="mt-3 border-t border-dark/10 pt-3">
+                <button
+                  type="button"
+                  aria-expanded={showAdvancedNotificationSettings}
+                  onClick={() => setShowAdvancedNotificationSettings((shown) => !shown)}
+                  className="text-sm font-bold text-primary transition-colors hover:text-primary/80"
+                >
+                  {showAdvancedNotificationSettings ? 'Hide advanced notification settings' : 'Advanced notification settings'}
+                </button>
+                {showAdvancedNotificationSettings ? (
+                  <div className="mt-3 space-y-3">
+                    {BUILDING_ADMIN_NOTIFICATION_TYPES.map((type) => {
+                      const labels: Record<BuildingAdminNotificationType, string> = {
+                        new_reservation: 'New reservation requests',
+                        reservation_cancelled: 'Reservation cancellations',
+                        reservation_revision_accepted: 'Accepted room revisions',
+                        feedback: 'Room feedback',
+                        reservation_needs_approval: 'Reservations needing approval',
+                        reservation_request_expired: 'Expired reservation requests',
+                        reservation_completed: 'Reservation completions',
+                      };
+                      const savedPreference = profile?.notificationPreferences?.[type];
+                      const legacySystemPreference = (
+                        profile?.notificationPreferences as
+                          | Record<string, boolean | undefined>
+                          | undefined
+                      )?.system;
+                      const isReservationSystemPreference =
+                        type === 'reservation_needs_approval' ||
+                        type === 'reservation_request_expired' ||
+                        type === 'reservation_completed';
+                      const categoryEnabled =
+                        savedPreference !== false &&
+                        !(savedPreference === undefined && isReservationSystemPreference && legacySystemPreference === false);
+                      const enabled = pushNotificationsEnabled && categoryEnabled;
+                      return (
+                        <div key={type} className="flex items-center justify-between gap-4">
+                          <span className="text-sm text-black">{labels[type]}</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={enabled}
+                            aria-label={labels[type]}
+                            disabled={!pushNotificationsEnabled || savingNotificationType !== null}
+                            onClick={async () => {
+                              if (!firebaseUser) return;
+                              setSavingNotificationType(type);
+                              setErrorMessage('');
+                              try {
+                                await updateBuildingAdminNotificationPreference(firebaseUser.uid, type, !enabled);
+                                await reloadProfile();
+                              } catch (error) {
+                                console.warn('Failed to update notification preference:', error);
+                                setErrorMessage('Unable to save notification preference. Please try again.');
+                              } finally {
+                                setSavingNotificationType(null);
+                              }
+                            }}
+                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-wait disabled:opacity-60 ${enabled ? 'bg-primary' : 'bg-black/25'}`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </section>
 
           <div className="rounded-xl border border-dark/10 bg-dark/5 p-4">
