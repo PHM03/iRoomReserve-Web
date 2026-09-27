@@ -36,6 +36,7 @@ const adminLinks: Array<{ label: string; tab: AdminTab }> = [
 
 const statusSchedulingLinks = [
   { label: 'Room Status Monitoring', pathname: '/admin/room-status' },
+  { label: 'BLE Beacon Status', pathname: '/admin/ble-status' },
   { label: 'Class Schedules', pathname: '/admin/class-schedules' },
 ];
 
@@ -281,7 +282,7 @@ function SuperAdminCampusNavBar({
             ))}
 
             <div
-              className={`relative flex shrink-0 items-center border border-[#d6d6d6] bg-[#f5f5f5] ${
+              className={`relative flex shrink-0 items-center bg-[#f5f5f5] ${
                 isStatusMenuOpen ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'
               }`}
             >

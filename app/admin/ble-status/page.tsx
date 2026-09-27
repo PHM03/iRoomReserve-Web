@@ -1,11 +1,20 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import AdminNoBuildingAssigned from '@/components/admin/AdminNoBuildingAssigned';
 import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import BleAdminMonitor from '@/components/ble/BleAdminMonitor';
 import { useAdminStatusPages } from '@/hooks/useAdminStatusPages';
 
+type CampusOverride = 'main' | 'digi';
+
+function getCampusOverride(value: string | null): CampusOverride | undefined {
+  return value === 'main' || value === 'digi' ? value : undefined;
+}
+
 export default function AdminBleStatusPage() {
+  const searchParams = useSearchParams();
+  const campusOverride = getCampusOverride(searchParams.get('campus'));
   const {
     managedBuildings,
     buildingId,
@@ -14,7 +23,7 @@ export default function AdminBleStatusPage() {
     setSelectedBuildingId,
     allReservations,
     rooms,
-  } = useAdminStatusPages();
+  } = useAdminStatusPages({ campusOverride });
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10">

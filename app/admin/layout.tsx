@@ -57,7 +57,7 @@ function AdminLayoutInner({ children }: Readonly<AdminLayoutProps>) {
   const normalizedRole = normalizeRole(profile?.role);
   const isSuperAdminAllowedPage =
     normalizedRole === USER_ROLES.SUPER_ADMIN &&
-    ['/admin/room-status', '/admin/class-schedules'].includes(pathname);
+    ['/admin/room-status', '/admin/ble-status', '/admin/class-schedules'].includes(pathname);
   const canRenderAdminLayout =
     normalizedRole === USER_ROLES.ADMIN || isSuperAdminAllowedPage;
   const navRole = isSuperAdminAllowedPage

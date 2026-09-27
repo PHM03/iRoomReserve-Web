@@ -330,13 +330,13 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   const superAdminDashboardHref = superAdminCampus
     ? `/superadmin/admin-dashboard?campus=${superAdminCampus}`
     : '/superadmin/dashboard';
-  const visibleStatusSchedulingLinks = isSuperAdminLimitedNav
-    ? statusSchedulingLinks.filter((link) => link.href !== '/admin/ble-status')
-    : statusSchedulingLinks;
+  const visibleStatusSchedulingLinks = statusSchedulingLinks;
   const getStatusSchedulingHref = (href: string) =>
     isSuperAdminLimitedNav &&
     superAdminCampus &&
-    (href === '/admin/room-status' || href === '/admin/class-schedules')
+    (href === '/admin/room-status' ||
+      href === '/admin/ble-status' ||
+      href === '/admin/class-schedules')
       ? `${href}?campus=${superAdminCampus}`
       : href;
 
