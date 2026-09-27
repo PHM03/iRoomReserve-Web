@@ -29,9 +29,9 @@ type RecentActivityStatus = Reservation['status'] | 'expired';
 const dashboardPanelClasses =
   'rounded-2xl border border-white/35 bg-white/75 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl';
 const dashboardCardClasses =
-  'relative overflow-hidden rounded-2xl border border-white/35 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/85 hover:shadow-2xl';
+  'group relative overflow-hidden rounded-2xl border border-white/35 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-2xl';
 const iconTileClasses =
-  'flex h-10 w-10 items-center justify-center rounded-2xl border border-white/40 bg-white/70 shadow-sm backdrop-blur-xl';
+  'flex h-10 w-10 items-center justify-center rounded-2xl border border-white/40 bg-white/70 shadow-sm backdrop-blur-xl transition-colors duration-300';
 
 function getReservationDateList(reservation: Reservation) {
   return reservation.dates?.length
@@ -186,7 +186,7 @@ export default function MemberDashboard({
       <div className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div className={`${dashboardCardClasses} shadow-blue-500/10 hover:shadow-blue-500/20`}>
           <div className="flex items-center gap-2 mb-3">
-            <div className={`${iconTileClasses} bg-blue-500/10 text-blue-700`}>
+            <div className={`${iconTileClasses} bg-blue-500/10 text-blue-700 group-hover:bg-blue-500/5`}>
               <svg
                 className="w-4 h-4 ui-text-blue"
                 fill="none"
@@ -238,7 +238,7 @@ export default function MemberDashboard({
 
         <div className={`${dashboardCardClasses} shadow-purple-500/10 hover:shadow-purple-500/20`}>
           <div className="flex items-center gap-2 mb-3">
-            <div className={`${iconTileClasses} bg-purple-500/10 text-purple-700`}>
+            <div className={`${iconTileClasses} bg-purple-500/10 text-purple-700 group-hover:bg-purple-500/5`}>
               <svg
                 className="w-4 h-4 ui-text-purple"
                 fill="none"
@@ -263,7 +263,7 @@ export default function MemberDashboard({
 
         <div className={`${dashboardCardClasses} shadow-green-500/10 hover:shadow-green-500/20`}>
           <div className="flex items-center gap-2 mb-3">
-            <div className={`${iconTileClasses} bg-green-500/10 text-green-700`}>
+            <div className={`${iconTileClasses} bg-green-500/10 text-green-700 group-hover:bg-green-500/5`}>
               <svg
                 className="w-4 h-4 ui-text-green"
                 fill="none"

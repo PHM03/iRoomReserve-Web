@@ -339,6 +339,7 @@ function StatCard({
   glowClassName,
   icon,
   iconClassName,
+  iconHoverClassName,
   label,
   value,
 }: Readonly<{
@@ -346,12 +347,13 @@ function StatCard({
   glowClassName: string;
   icon: React.ReactNode;
   iconClassName: string;
+  iconHoverClassName: string;
   label: string;
   value: number;
 }>) {
   return (
     <div
-      className={`rounded-2xl border border-white/35 border-l-4 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/85 hover:shadow-2xl ${accentClassName} ${glowClassName}`.trim()}
+      className={`group rounded-2xl border border-white/35 border-l-4 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-2xl ${accentClassName} ${glowClassName}`.trim()}
     >
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -363,7 +365,7 @@ function StatCard({
           </p>
         </div>
         <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/40 shadow-sm backdrop-blur-xl ${iconClassName}`.trim()}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/40 shadow-sm backdrop-blur-xl transition-colors duration-300 ${iconClassName} ${iconHoverClassName}`.trim()}
         >
           {icon}
         </div>
@@ -508,7 +510,7 @@ function UtilityBleBeaconSummary({
 
   return (
     <section
-      className={`rounded-2xl border border-white/35 border-t-2 border-t-primary bg-white/75 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10 backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl ${className}`.trim()}
+      className={`group rounded-2xl border border-white/35 border-t-2 border-t-primary bg-white/75 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10 backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl ${className}`.trim()}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -553,7 +555,7 @@ function UtilityBleBeaconSummary({
         </div>
       ) : null}
 
-      <div className="dashboard-table-shell mt-5 grid grid-cols-1 divide-y divide-white/35 rounded-2xl backdrop-blur-xl sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+      <div className="dashboard-table-shell mt-5 grid grid-cols-1 divide-y divide-white/35 rounded-2xl backdrop-blur-xl transition-colors duration-300 group-hover:!bg-white/85 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
         {summaryStats.map((stat) => (
           <div key={stat.label} className="min-h-[96px] p-4">
             <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
@@ -582,7 +584,7 @@ function UtilityReservationTimetable({
 
   return (
     <section
-      className={`rounded-2xl border border-white/35 bg-white/75 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10 backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl ${className}`.trim()}
+      className={`group rounded-2xl border border-white/35 bg-white/75 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10 backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl ${className}`.trim()}
     >
       <div className="mb-5">
         <h3 className="text-lg font-bold text-gray-900">
@@ -606,7 +608,7 @@ function UtilityReservationTimetable({
             return (
               <div
                 key={day.value}
-                className="flex min-h-[190px] flex-col rounded-2xl border border-white/35 bg-white/70 p-3 shadow-lg backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-xl"
+                className="flex min-h-[190px] flex-col rounded-2xl border border-white/35 bg-white/70 p-3 shadow-lg backdrop-blur-xl transition-all duration-300 group-hover:bg-white/85 hover:bg-white/85 hover:shadow-xl"
               >
                 <div className="border-b border-white/30 pb-2">
                   <p className="text-sm font-bold text-gray-900">
@@ -785,6 +787,7 @@ export default function UtilityStaffDashboard({
       glowClassName: 'shadow-primary/10 hover:shadow-primary/20',
       icon: <RoomsIcon />,
       iconClassName: 'bg-primary/10 text-primary',
+      iconHoverClassName: 'group-hover:bg-primary/5',
       label: 'Total Rooms',
       value: rooms.length,
     },
@@ -793,6 +796,7 @@ export default function UtilityStaffDashboard({
       glowClassName: 'shadow-green-500/10 hover:shadow-green-500/20',
       icon: <AvailableIcon />,
       iconClassName: 'bg-green-500/10 text-green-700',
+      iconHoverClassName: 'group-hover:bg-green-500/5',
       label: 'Available',
       value: availableCount,
     },
@@ -801,6 +805,7 @@ export default function UtilityStaffDashboard({
       glowClassName: 'shadow-blue-500/10 hover:shadow-blue-500/20',
       icon: <CalendarIcon />,
       iconClassName: 'bg-blue-500/10 text-blue-700',
+      iconHoverClassName: 'group-hover:bg-blue-500/5',
       label: 'Reserved',
       value: reservedCount,
     },
@@ -809,6 +814,7 @@ export default function UtilityStaffDashboard({
       glowClassName: 'shadow-orange-500/10 hover:shadow-orange-500/20',
       icon: <OccupiedIcon />,
       iconClassName: 'bg-orange-500/10 text-orange-700',
+      iconHoverClassName: 'group-hover:bg-orange-500/5',
       label: 'Occupied',
       value: ongoingCount,
     },
@@ -817,6 +823,7 @@ export default function UtilityStaffDashboard({
       glowClassName: 'shadow-yellow-500/10 hover:shadow-yellow-500/20',
       icon: <RequestsIcon />,
       iconClassName: 'bg-yellow-500/10 text-yellow-700',
+      iconHoverClassName: 'group-hover:bg-yellow-500/5',
       label: 'Open Requests',
       value: openRequests.length,
     },
@@ -867,6 +874,7 @@ export default function UtilityStaffDashboard({
               glowClassName={card.glowClassName}
               icon={card.icon}
               iconClassName={card.iconClassName}
+              iconHoverClassName={card.iconHoverClassName}
               label={card.label}
               value={card.value}
             />
