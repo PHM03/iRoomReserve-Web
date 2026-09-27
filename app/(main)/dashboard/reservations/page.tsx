@@ -670,6 +670,14 @@ export default function MyReservationsPage() {
                           </p>
                         </div>
                       )}
+                      {reservation.status === 'rejected' && reservation.reason?.trim() && (
+                        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                          <p className="text-xs font-bold text-red-900">Reason for rejection</p>
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-red-950">
+                            {reservation.reason.trim()}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:min-w-[140px]">

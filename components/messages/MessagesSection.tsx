@@ -1231,9 +1231,18 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                       </span>
                     </div>
 
-                    <p className="mt-3 text-sm leading-relaxed text-black/80">
+                    {status === 'rejected' && note ? (
+                      <p className="mt-3 text-sm leading-relaxed text-black/80">
+                        <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-black/50">
+                          Reason for Rejection
+                        </span>
+                        {shortenText(note, 150)}
+                      </p>
+                    ) : (
+                      <p className="mt-3 text-sm leading-relaxed text-black/80">
                       {shortenText(note, 150)}
-                    </p>
+                      </p>
+                    )}
                   </div>
 
                   <svg
@@ -1264,12 +1273,11 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                     <DetailField label="Status">
                       <StatusBadge status={status} />
                     </DetailField>
-                    <DetailField
-                      className="sm:col-span-2"
-                      label="Admin note"
-                    >
-                      {note}
-                    </DetailField>
+                    {status !== 'rejected' && (
+                      <DetailField className="sm:col-span-2" label="Admin note">
+                        {note}
+                      </DetailField>
+                    )}
                   </div>
 
                   {hasPendingRevision && reservation && revisionId ? (
