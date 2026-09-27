@@ -51,7 +51,6 @@ import { apiRequestBlob } from '@/lib/api/client';
 import { respondToFeedback, type Feedback } from '@/lib/feedback/feedback';
 import {
   getFeedbackDisplayName,
-  getFeedbackReviewerGroupId,
 } from '@/lib/feedback/feedback-privacy';
 import { FEEDBACK_ROLE_OPTIONS, matchesFeedbackRole } from '@/lib/feedback/feedback-role';
 import { USER_GENDER_LABELS, USER_GENDER_VALUES, normalizeUserGender } from '@/lib/auth/profile-types';
@@ -163,31 +162,19 @@ function applyFeedbackFilters(
   });
 }
 
-interface ReviewerFeedbackGroup {
+interface ReviewCard {
   id: string;
   name: string;
   feedback: Feedback[];
   averageRating: number;
 }
 
-function groupFeedbackByReviewer(items: Feedback[]): ReviewerFeedbackGroup[] {
-  const groups = new Map<string, { id: string; name: string; feedback: Feedback[] }>();
-
-  items.forEach((feedback) => {
-    // Anonymous entries must remain separate so the UI cannot reveal that
-    // multiple anonymous reviews belong to the same account.
-    const id = getFeedbackReviewerGroupId(feedback);
-    const existing = groups.get(id);
-    if (existing) {
-      existing.feedback.push(feedback);
-      return;
-    }
-    groups.set(id, { id, name: getFeedbackDisplayName(feedback), feedback: [feedback] });
-  });
-
-  return [...groups.values()].map((group) => ({
-    ...group,
-    averageRating: group.feedback.reduce((total, feedback) => total + feedback.overallRating, 0) / group.feedback.length,
+function createReviewCards(items: Feedback[]): ReviewCard[] {
+  return items.map((feedback) => ({
+    id: feedback.id,
+    name: getFeedbackDisplayName(feedback),
+    feedback: [feedback],
+    averageRating: feedback.overallRating,
   }));
 }
 
@@ -210,7 +197,7 @@ export default function AdminFeedbackTab({
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
   const [expandedFeedbackId, setExpandedFeedbackId] = useState<string | null>(null);
-  const [expandedReviewerId, setExpandedReviewerId] = useState<string | null>(null);
+  const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
   const [dashboardView, setDashboardView] = useState<FeedbackDashboardView>('analysis');
   const [reviewView, setReviewView] = useState<FeedbackReviewView>('reviews');
 
@@ -233,6 +220,10 @@ export default function AdminFeedbackTab({
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [generatingReport, setGeneratingReport] = useState<'pdf' | 'xlsx' | 'docx' | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFeedbackScope(dashboardView === 'reviews' ? 'room' : 'building');
+  }, [dashboardView]);
   const reportMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -364,8 +355,8 @@ export default function AdminFeedbackTab({
     );
   }, [analyticsNow, analyticsScheduleContext, reportFilters, scopedFeedback]);
 
-  const reviewerFeedbackGroups = useMemo(
-    () => groupFeedbackByReviewer(filteredFeedback),
+  const reviewCards = useMemo(
+    () => createReviewCards(filteredFeedback),
     [filteredFeedback],
   );
 
@@ -521,7 +512,7 @@ export default function AdminFeedbackTab({
   };
 
   const clearFilters = () => {
-    setFeedbackScope('building');
+    setFeedbackScope(dashboardView === 'reviews' ? 'room' : 'building');
     setFeedbackFloor(floorOptions[0] ?? '');
     setFeedbackRoomId('');
     setStarFilter(null);
@@ -1187,8 +1178,8 @@ export default function AdminFeedbackTab({
               <p className="text-sm font-bold text-black/60">No reviews match your filters.</p>
             </div>
           ) : (
-            reviewerFeedbackGroups.map((reviewer) => {
-              const isReviewerExpanded = expandedReviewerId === reviewer.id;
+              reviewCards.map((reviewer) => {
+              const isReviewerExpanded = expandedReviewId === reviewer.id;
               const previewFeedback = reviewer.feedback[0];
 
               return (
@@ -1196,7 +1187,7 @@ export default function AdminFeedbackTab({
                   <button
                     type="button"
                     className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 p-4 text-left transition-colors hover:bg-white/45 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-inset sm:grid-cols-[minmax(0,1.4fr)_minmax(100px,.7fr)_minmax(140px,.8fr)_auto]"
-                    onClick={() => setExpandedReviewerId(isReviewerExpanded ? null : reviewer.id)}
+                    onClick={() => setExpandedReviewId(isReviewerExpanded ? null : reviewer.id)}
                     aria-expanded={isReviewerExpanded}
                     aria-controls={`reviewer-reviews-${reviewer.id}`}
                     aria-label={`${isReviewerExpanded ? 'Hide' : 'Show'} reviews from ${reviewer.name}`}
