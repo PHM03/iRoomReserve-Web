@@ -69,7 +69,6 @@ const reservationActionSchema = z.discriminatedUnion("action", [
     bluetoothOn: z.boolean(),
     checkedAt: z.string().trim().min(1).optional(),
     inRange: z.boolean(),
-    wifiConnected: z.boolean().optional(),
     rssi: z.number().nullable().optional(),
   }),
   z.object({
@@ -223,7 +222,6 @@ export async function PATCH(
           bluetoothOn: payload.bluetoothOn,
           checkedAt: payload.checkedAt,
           inRange: payload.inRange,
-          wifiConnected: payload.wifiConnected,
           rssi: payload.rssi,
           userId: payload.userId,
         });

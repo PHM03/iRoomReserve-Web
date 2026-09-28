@@ -155,7 +155,6 @@ interface ReservationRecord {
   presenceLastAppState?: ReservationPresenceAppState | null;
   presenceLastBluetoothOn?: boolean | null;
   presenceLastInRange?: boolean | null;
-  presenceLastWifiConnected?: boolean | null;
   presenceLastRssi?: number | null;
   presenceStatus?: ReservationPresenceStatus | null;
   createdAt?: FirestoreTimestampLike;
@@ -1297,7 +1296,6 @@ function normalizePresenceStatus(
     bluetoothOn: boolean;
     checkedAt: string | null;
     inRange: boolean;
-    wifiConnected?: boolean;
   },
   now: Date = new Date()
 ): ReservationPresenceStatus {
@@ -1311,7 +1309,7 @@ function normalizePresenceStatus(
     }
   }
 
-  if (!input.bluetoothOn || !input.inRange || input.wifiConnected === false) {
+  if (!input.bluetoothOn || !input.inRange) {
     return "warning";
   }
 
@@ -3014,7 +3012,6 @@ export async function sendReservationPresenceHeartbeatRecord(
     bluetoothOn: boolean;
     checkedAt?: string;
     inRange: boolean;
-    wifiConnected?: boolean;
     rssi?: number | null;
     userId: string;
   }
@@ -3090,7 +3087,6 @@ export async function sendReservationPresenceHeartbeatRecord(
         bluetoothOn: input.bluetoothOn,
         checkedAt,
         inRange: input.inRange,
-        wifiConnected: input.wifiConnected,
       });
       const nextRoomPresence = {
         beaconConnected: input.bluetoothOn && input.inRange,
@@ -3104,7 +3100,6 @@ export async function sendReservationPresenceHeartbeatRecord(
         presenceLastAppState: normalizedAppState,
         presenceLastBluetoothOn: input.bluetoothOn,
         presenceLastInRange: input.inRange,
-        presenceLastWifiConnected: input.wifiConnected ?? null,
         presenceLastRssi:
           typeof input.rssi === "number" && Number.isFinite(input.rssi)
             ? input.rssi
