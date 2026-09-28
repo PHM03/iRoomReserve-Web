@@ -206,8 +206,23 @@ export async function syncRoomBeaconTelemetry(
     : null;
 
   if (roomRef) {
-    const directSnapshot = await roomRef.get();
-    if (!directSnapshot.exists) {
+    try {
+      await roomRef.update({
+        beaconConnected: isConnected,
+        beaconDeviceName: isConnected ? normalizedBeaconId : null,
+        beaconLastConnectedAt: isConnected ? serverTimestamp() : null,
+        beaconLastDisconnectedAt: isConnected ? null : serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return;
+    } catch (error) {
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? (error as { code?: unknown }).code
+          : undefined;
+      if (code !== 5 && code !== "5" && code !== "not-found") {
+        throw error;
+      }
       roomRef = null;
     }
   }

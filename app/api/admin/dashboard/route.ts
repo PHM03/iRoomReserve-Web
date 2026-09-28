@@ -371,8 +371,18 @@ export async function GET(request: NextRequest) {
         ? schedulesBaseQuery
         : schedulesBaseQuery.where("dayOfWeek", "==", scheduleDayOfWeek);
 
+    // A dashboard summary needs every room, so reuse that result for the room
+    // preview instead of issuing a second query for a limited preview.
+    const roomSnapshotPromise = includeSummary
+      ? roomsBaseQuery.get()
+      : includeRooms
+        ? (roomFetchLimit
+            ? roomPreviewQuery.limit(roomFetchLimit)
+            : roomPreviewQuery
+          ).get()
+        : Promise.resolve(null);
+
     const [
-      roomSummarySnapshot,
       roomsSnapshot,
       approvedReservationsSnapshot,
       pendingReservationsSnapshot,
@@ -380,11 +390,7 @@ export async function GET(request: NextRequest) {
       schedulesSnapshot,
       roomHistorySnapshot,
     ] = await Promise.all([
-      includeSummary ? roomsBaseQuery.get() : Promise.resolve(null),
-      includeRooms
-        ? (roomFetchLimit ? roomPreviewQuery.limit(roomFetchLimit) : roomPreviewQuery)
-            .get()
-        : Promise.resolve(null),
+      roomSnapshotPromise,
       includeApprovedReservations
         ? approvedReservationsQuery.get()
         : Promise.resolve(null),
@@ -402,6 +408,7 @@ export async function GET(request: NextRequest) {
         : Promise.resolve(null),
     ]);
 
+    const roomSummarySnapshot = includeSummary ? roomsSnapshot : null;
     const allSummaryRooms = (roomSummarySnapshot?.docs ?? [])
       .map((doc) => ({
         id: doc.id,
@@ -460,7 +467,7 @@ export async function GET(request: NextRequest) {
           return matchesRoomSearch(room, roomSearch);
         }).length
       : 0;
-    const rooms = roomsSnapshot
+    const rooms = includeRooms && roomsSnapshot
       ? roomsSnapshot.docs
         .map((doc) => ({
           id: doc.id,
