@@ -259,7 +259,9 @@ function ReservationApprovals({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-black/50">
-              Faculty Queue
+              {profile?.designation === 'DSAS' && profile.designationCampus === 'main'
+                ? 'DEPARTMENT OF STUDENT AFFAIRS AND SERVICES APPROVAL'
+                : 'ADVISER / DEPARTMENT HEAD APPROVAL'}
             </p>
             <h2 className="mt-2 text-lg font-bold text-black">
               Pending reservation approvals

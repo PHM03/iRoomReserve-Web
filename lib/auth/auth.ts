@@ -250,6 +250,8 @@ export async function getUserProfile(uid: string) {
     email: string;
     role?: string;
     status?: string;
+    designation?: string;
+    designationCampus?: string | null;
     campus?: string;
     campusName?: string;
     assignedBuilding?: string;

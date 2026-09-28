@@ -15,6 +15,8 @@ interface UserProfile {
   email: string;
   role: string;
   status: string;
+  designation?: string;
+  designationCampus?: ReservationCampus | null;
   gender?: UserGender | null;
   accountConfigurationReminderDismissed?: boolean;
   pushNotificationsEnabled?: boolean;
@@ -61,6 +63,11 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         email: data.email,
         role: data.role || 'Student',
         status: data.status || 'approved',
+        designation: typeof data.designation === 'string' ? data.designation : undefined,
+        designationCampus:
+          data.designationCampus === 'main' || data.designationCampus === 'digi'
+            ? data.designationCampus
+            : null,
         gender: data.gender ?? null,
         accountConfigurationReminderDismissed:
           data.accountConfigurationReminderDismissed === true,
