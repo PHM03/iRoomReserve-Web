@@ -5,7 +5,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import NavBar from '@/components/layout/NavBar';
 import { useAdminTab } from '@/context/AdminTabContext';
-import { USER_ROLES } from '@/lib/auth/roles';
+import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
 import Link from 'next/link';
 
 interface DashboardLayoutProps {
@@ -25,7 +25,7 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
     if (!loading && !firebaseUser) {
       router.push('/');
     }
-    if (!loading && profile?.role === USER_ROLES.SUPER_ADMIN) {
+    if (!loading && normalizeRole(profile?.role) === USER_ROLES.SUPER_ADMIN) {
       router.push('/superadmin/dashboard');
     }
   }, [loading, firebaseUser, profile, router]);
@@ -122,7 +122,7 @@ function DashboardLayoutInner({ children }: Readonly<DashboardLayoutProps>) {
     role: profile?.role || USER_ROLES.STUDENT,
   };
 
-  const isAdmin = profile?.role === USER_ROLES.ADMIN;
+  const isAdmin = normalizeRole(profile?.role) === USER_ROLES.ADMIN;
   const isFaculty = profile?.role === USER_ROLES.FACULTY;
   const isUtility = profile?.role === USER_ROLES.UTILITY;
   const isStudent = !isAdmin && !isFaculty && !isUtility;

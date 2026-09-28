@@ -377,8 +377,6 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
             console.warn('Failed to delete stale notification, marking as read instead:', deleteError);
             await markNotificationRead(notification.id);
           }
-          setShowNotifications(false);
-          return;
         }
       } else {
         await markNotificationRead(notification.id);
