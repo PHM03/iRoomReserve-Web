@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import {
   sortFloorOptions,
@@ -562,6 +562,23 @@ export default function AdminPendingTab({
     if (roomFilter && r.roomName !== roomFilter) return false;
 
     return true;
+  });
+  const orderedFilteredRequests = [...filteredRequests].sort((a, b) => {
+    const aNeedsApproval =
+      a.status === 'pending' && getMonitoringDayOffset(a.date) !== null;
+    const bNeedsApproval =
+      b.status === 'pending' && getMonitoringDayOffset(b.date) !== null;
+    if (aNeedsApproval !== bNeedsApproval) {
+      return Number(bNeedsApproval) - Number(aNeedsApproval);
+    }
+
+    if (aNeedsApproval && bNeedsApproval) {
+      const aDate = [...(a.dates?.length ? a.dates : [a.date])].sort()[0];
+      const bDate = [...(b.dates?.length ? b.dates : [b.date])].sort()[0];
+      return aDate.localeCompare(bDate);
+    }
+
+    return 0;
   });
 
   const revisionReservation = revisionReservationId
@@ -1137,13 +1154,25 @@ export default function AdminPendingTab({
                 </div>
               )}
 
-              {filteredRequests.map((request) => {
+              {orderedFilteredRequests.map((request, index) => {
                 const isExpired = request.status === 'expired';
                 const canSendExpirationMessage =
                   isExpired && request.expirationReason === 'pending_approval_deadline';
                 const monitoringDayOffset = request.status === 'pending'
                   ? getMonitoringDayOffset(request.date)
                   : null;
+                const isNeedsApprovalGroup = monitoringDayOffset !== null;
+                const previousRequest = orderedFilteredRequests[index - 1];
+                const previousWasNeedsApproval = previousRequest
+                  ? previousRequest.status === 'pending' &&
+                    getMonitoringDayOffset(previousRequest.date) !== null
+                  : false;
+                const showNeedsApprovalHeading =
+                  isNeedsApprovalGroup && !previousWasNeedsApproval;
+                const showOtherReservationsHeading =
+                  !isNeedsApprovalGroup &&
+                  index > 0 &&
+                  previousWasNeedsApproval;
                 const badge = statusBadge(isExpired ? 'expired' : request.status);
                 const initials = request.userName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
                 const avatarBg = avatarColor(request.userName);
@@ -1175,8 +1204,19 @@ export default function AdminPendingTab({
                   Boolean(advisorApproverLabel) &&
                   Boolean(completedDsasApproval);
                 return (
+                  <Fragment key={request.id}>
+                    {showNeedsApprovalHeading && (
+                      <h3 style={{ margin: '0 0 12px', fontSize: '15px', fontWeight: 700, color: '#92400e' }}>
+                        Reservations that Need Approval:
+                      </h3>
+                    )}
+                    {showOtherReservationsHeading && (
+                      <hr
+                        aria-hidden="true"
+                        style={{ width: '100%', border: 0, borderTop: '1px solid rgba(52,52,52,0.2)', margin: '8px 0 20px' }}
+                      />
+                    )}
                   <div
-                    key={request.id}
                     role="button"
                     tabIndex={0}
                     aria-expanded={isExpanded}
@@ -1187,12 +1227,12 @@ export default function AdminPendingTab({
                         toggleReservationExpanded(request.id);
                       }
                     }}
-                    style={{ background: 'rgba(255,255,255,0.74)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.38)', boxShadow: '0 12px 30px rgba(15,23,42,0.12)', padding: isExpanded ? '20px 24px' : '14px 18px', transition: 'box-shadow 0.2s, background 0.2s, transform 0.2s', animation: 'fadeInCard 0.25s ease both', cursor: 'pointer', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
+                    style={{ background: 'rgba(255,255,255,0.74)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.38)', boxShadow: '0 12px 30px rgba(15,23,42,0.12)', padding: isExpanded ? '20px 24px' : '14px 18px', marginBottom: '12px', transition: 'box-shadow 0.2s, background 0.2s, transform 0.2s', animation: 'fadeInCard 0.25s ease both', cursor: 'pointer', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 18px 44px rgba(15,23,42,0.18)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.9)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 30px rgba(15,23,42,0.12)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.74)'; }}
                   >
                     {/* Top row */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isExpanded ? '16px' : 0, gap: '16px', rowGap: '14px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isExpanded ? '16px' : 0, columnGap: '16px', rowGap: '14px', flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
                         <div style={{ width: isExpanded ? '44px' : '36px', height: isExpanded ? '44px' : '36px', borderRadius: '50%', background: avatarBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: isExpanded ? '14px' : '12px', flexShrink: 0 }}>{initials}</div>
                         <div>
@@ -1212,18 +1252,13 @@ export default function AdminPendingTab({
                           {isExpanded && <p style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>Reservation Request</p>}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '14px', rowGap: '10px', flexWrap: 'wrap', minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', columnGap: '14px', rowGap: '10px', flexWrap: 'wrap', minWidth: 0 }}>
                         <span style={{ fontSize: '13px', color: '#222', fontWeight: 600 }}>{request.roomName}</span>
                          <span style={{ fontSize: '13px', color: '#555' }}>{dateLabel}</span>
                          <span style={{ fontSize: '13px', color: '#555' }}>{timeLabel}</span>
-                         {monitoringDayOffset !== null && (
-                           <span style={{ fontSize: '12px', color: '#92400e', fontWeight: 700 }}>
-                             Reservation Needs Approval
-                           </span>
-                         )}
                          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>{badge.label}</span>
                          {(!isExpired || isExpanded) && (
-                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', rowGap: '8px', flexWrap: 'wrap' }}>
+                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', columnGap: '12px', rowGap: '8px', flexWrap: 'wrap' }}>
                              {isExpired ? (
                                <>
                                  {canSendExpirationMessage && !request.expirationMessage?.message && (
@@ -1562,6 +1597,7 @@ export default function AdminPendingTab({
                       </>
                     )}
                   </div>
+                  </Fragment>
                 );
               })}
             </div>
