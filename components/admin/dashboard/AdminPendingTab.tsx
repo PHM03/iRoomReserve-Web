@@ -1443,13 +1443,6 @@ export default function AdminPendingTab({
                       )}
                     </div>
 
-                    {request.expirationMessage?.message && (
-                      <div style={{ marginBottom: '12px', borderRadius: '10px', border: '1px solid #bfdbfe', background: '#eff6ff', padding: '10px 14px' }}>
-                        <p style={{ fontSize: '11px', fontWeight: 700, color: '#1e3a8a', marginBottom: '4px' }}>Admin message</p>
-                        <p style={{ fontSize: '13px', color: '#1e293b', whiteSpace: 'pre-wrap' }}>{request.expirationMessage.message}</p>
-                      </div>
-                    )}
-
                     {canSendExpirationMessage && isEditingExpirationMessage && !request.expirationMessage?.message && (
                       <div style={{ marginBottom: '12px', borderRadius: '10px', border: '1px solid #bfdbfe', background: '#eff6ff', padding: '12px 14px' }} onClick={(event) => event.stopPropagation()}>
                         <label htmlFor={`expiration-message-${request.id}`} style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a', marginBottom: '6px' }}>
@@ -1458,12 +1451,13 @@ export default function AdminPendingTab({
                         <textarea
                           id={`expiration-message-${request.id}`}
                           value={expirationMessage}
+                          onKeyDown={(event) => event.stopPropagation()}
                           onChange={(event) => {
                             setExpirationMessage(event.target.value);
                             setExpirationMessageError('');
                           }}
                           maxLength={500}
-                          placeholder="Optional message to the requester..."
+                          placeholder="Write something here..."
                           disabled={expirationMessageSubmitting}
                           style={{ width: '100%', minHeight: '76px', resize: 'vertical', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: '#1e293b', boxSizing: 'border-box' }}
                         />
@@ -1565,6 +1559,13 @@ export default function AdminPendingTab({
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
                           {request.approvalDocumentName || 'Open attachment'}
                         </a>
+                      </div>
+                    )}
+
+                    {request.expirationMessage?.message && (
+                      <div style={{ marginBottom: '12px', borderRadius: '10px', border: '1px solid #bfdbfe', background: '#eff6ff', padding: '10px 14px' }}>
+                        <p style={{ fontSize: '11px', fontWeight: 700, color: '#1e3a8a', marginBottom: '4px' }}>Admin message</p>
+                        <p style={{ fontSize: '13px', color: '#1e293b', whiteSpace: 'pre-wrap' }}>{request.expirationMessage.message}</p>
                       </div>
                     )}
 
