@@ -544,7 +544,7 @@ export default function AdminClassSchedulesPage() {
           />
 
           {showSwitchConfirm ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 ">
               <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
                 <h4 className="mb-2 text-base font-bold text-gray-900">
                   Switch Class Schedules?

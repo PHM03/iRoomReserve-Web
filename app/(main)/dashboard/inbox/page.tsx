@@ -255,7 +255,7 @@ function ReservationApprovals({
 
   return (
     <section className="mb-8">
-      <div className="rounded-[28px] border border-amber-200/70 bg-white/85 p-4 shadow-sm backdrop-blur sm:p-5">
+      <div className="rounded-[28px] border border-amber-200/70 bg-white p-4 shadow-sm  sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-black/50">
@@ -495,7 +495,7 @@ function UserInbox({
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
-        <div className="w-full rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
+        <div className="w-full rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] ">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-gray-800">

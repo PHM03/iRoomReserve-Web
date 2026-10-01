@@ -345,7 +345,7 @@ export default function AdminDashboard({
   if (!buildingId || !buildingName) {
     return (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
-        <div className="mb-8 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
+        <div className="mb-8 rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] ">
           <h2 className="text-2xl font-bold text-black">Welcome, {firstName}</h2>
           <p className="text-black mt-1">Administrator Dashboard</p>
         </div>
@@ -364,7 +364,7 @@ export default function AdminDashboard({
     >
       {activeTab === 'dashboard' ? (
         <div className="mb-6">
-          <div className="relative z-[60] flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative z-[60] flex flex-col gap-3 rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)]  transition-all duration-300 hover:bg-white hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <h2 className="text-xl font-bold text-gray-800">
                 Welcome, {firstName}

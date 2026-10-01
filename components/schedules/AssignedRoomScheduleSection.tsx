@@ -405,7 +405,7 @@ export default function AssignedRoomScheduleSection({
 
   if (profile?.status?.trim().toLowerCase() !== 'approved') {
     return (
-      <section className={`rounded-2xl border border-white/35 bg-white/75 p-6 shadow-xl ${className}`}>
+      <section className={`rounded-2xl border border-white/35 bg-white p-6 shadow-xl ${className}`}>
         <h3 className="text-lg font-bold text-gray-900">Class Schedules</h3>
         <p className="mt-2 text-sm text-gray-500">
           Schedule management is available after your account is approved.
@@ -427,7 +427,7 @@ export default function AssignedRoomScheduleSection({
 
   return (
     <section className={`space-y-4 ${className}`}>
-      <div className="rounded-2xl border border-white/35 bg-white/75 p-6 shadow-xl backdrop-blur-xl">
+      <div className="rounded-2xl border border-white/35 bg-white p-6 shadow-xl ">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-primary">

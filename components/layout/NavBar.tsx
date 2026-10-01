@@ -428,7 +428,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     <>
     <nav
       ref={navRef}
-      className="glass-nav fixed top-0 left-0 right-0 z-50 border-white/40 bg-white/90 shadow-xl backdrop-blur-xl"
+      className="glass-nav fixed top-0 left-0 right-0 z-50 border-white/40 bg-white shadow-xl "
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-3 py-4 xl:gap-5">
@@ -742,7 +742,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
       </div>
 
       {isMenuOpen ? (
-        <div className="xl:hidden border-t border-[#343434]/8 bg-white/90 shadow-xl backdrop-blur-xl">
+        <div className="xl:hidden border-t border-[#343434]/8 bg-white shadow-xl ">
           <div className="px-3 py-2 space-y-1">
             {isAdmin ? (
               <>
@@ -759,7 +759,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   </button>
                 ))}
 
-                <div className="rounded-2xl border border-white/50 bg-white/75 shadow-sm">
+                <div className="rounded-2xl border border-white/50 bg-white shadow-sm">
                   <button
                     type="button"
                     onClick={() =>

@@ -241,14 +241,14 @@ export default function AccountSettingsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 ">
       <Toast
         message="Changes saved successfully."
         type="success"
         show={showToast}
         onClose={handleToastClose}
       />
-      <div className="w-full max-w-lg max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-white/40 bg-white/95 p-6 shadow-2xl backdrop-blur-xl">
+      <div className="w-full max-w-lg max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-white/40 bg-white p-6 shadow-2xl ">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-black">Account Settings</h2>
@@ -478,7 +478,7 @@ export default function AccountSettingsModal({
                     setPasswordErrorMessage('');
                     setPasswordSuccessMessage('');
                   }}
-                  className="rounded-xl border border-dark/10 bg-white/70 px-3 py-2 text-sm font-bold text-black transition-all hover:bg-primary/10 hover:text-primary"
+                  className="rounded-xl border border-dark/10 bg-white px-3 py-2 text-sm font-bold text-black transition-all hover:bg-primary/10 hover:text-primary"
                 >
                   {showPasswordFields ? 'Cancel' : 'Change Password'}
                 </button>

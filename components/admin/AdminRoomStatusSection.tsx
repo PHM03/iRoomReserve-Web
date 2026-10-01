@@ -133,7 +133,7 @@ export default function AdminRoomStatusSection({
           <span className="text-[11px] font-bold text-black/45 sm:ml-auto">{filtered.length} of {buildingRooms.length} rooms</span>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {[['Total rooms', counts.total], ['Available', counts.available], ['Unavailable', counts.unavailable], ['Reserved / occupied', counts.inUse]].map(([label, value]) => <div key={label} className="rounded-xl border border-dark/10 bg-white/50 px-3 py-2"><p className="text-[10px] font-extrabold uppercase tracking-wide text-black/45">{label}</p><p className="text-lg font-extrabold text-black">{value}</p></div>)}
+          {[['Total rooms', counts.total], ['Available', counts.available], ['Unavailable', counts.unavailable], ['Reserved / occupied', counts.inUse]].map(([label, value]) => <div key={label} className="rounded-xl border border-dark/10 bg-white px-3 py-2"><p className="text-[10px] font-extrabold uppercase tracking-wide text-black/45">{label}</p><p className="text-lg font-extrabold text-black">{value}</p></div>)}
         </div>
       </div>
 

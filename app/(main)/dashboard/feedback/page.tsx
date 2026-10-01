@@ -367,7 +367,7 @@ export default function FeedbackPage() {
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       {/* ── Unified page header ─────────────────────────────── */}
       <div className="mb-8">
-        <div className="rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
+        <div className="rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] ">
           <h1 className="text-2xl font-bold text-gray-800">Feedback</h1>
           <p className="text-gray-600 mt-1">Rate your experience and help us improve</p>
         </div>
@@ -377,7 +377,7 @@ export default function FeedbackPage() {
       {showForm && selectedReservation && (
         <div
           ref={feedbackFormRef}
-          className="rounded-2xl border border-white/50 bg-white/90 p-6 shadow-sm backdrop-blur mb-8"
+          className="rounded-2xl border border-white/50 bg-white p-6 shadow-sm  mb-8"
         >
           {submitSuccess ? (
             <div className="text-center py-8">
@@ -411,7 +411,7 @@ export default function FeedbackPage() {
                   </button>
                 </div>
 
-                <section className="rounded-xl border border-dark/10 bg-white/70 p-4">
+                <section className="rounded-xl border border-dark/10 bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <label className="block text-sm font-bold text-black">Overall Rating</label>
@@ -424,7 +424,7 @@ export default function FeedbackPage() {
                   </div>
                 </section>
 
-                <section className="rounded-xl border border-dark/10 bg-white/70 p-4">
+                <section className="rounded-xl border border-dark/10 bg-white p-4">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <h4 className="text-sm font-bold text-black">Category Ratings</h4>
@@ -620,7 +620,7 @@ export default function FeedbackPage() {
       {/* ── Two-column grid: Rate Now (left) + Your Feedback (right) ── */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* ── Left column: Rate Your Experience ──────────────── */}
-        <div className="rounded-2xl border border-white/50 bg-white/90 p-5 shadow-sm backdrop-blur">
+        <div className="rounded-2xl border border-white/50 bg-white p-5 shadow-sm ">
           <div className="flex items-center gap-2 mb-4">
             {visiblePendingFeedback.length > 0 && (
               <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
@@ -667,7 +667,7 @@ export default function FeedbackPage() {
         </div>
 
         {/* ── Right column: Your Feedback ────────────────────── */}
-        <div className="rounded-2xl border border-white/50 bg-white/90 p-5 shadow-sm backdrop-blur">
+        <div className="rounded-2xl border border-white/50 bg-white p-5 shadow-sm ">
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-gray-800">

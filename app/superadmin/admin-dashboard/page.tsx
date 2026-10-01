@@ -521,7 +521,7 @@ function SuperAdminCampusNavBar({
       </div>
 
       {isMenuOpen ? (
-        <div className="2xl:hidden border-t border-[#343434]/8 bg-[#f5f5f5]/80 backdrop-blur-xl">
+        <div className="2xl:hidden border-t border-[#343434]/8 bg-[#f5f5f5] ">
           <div className="px-3 py-2 space-y-1">
             {adminLinks.map((link) => (
               <button

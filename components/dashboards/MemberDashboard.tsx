@@ -27,11 +27,11 @@ interface MemberDashboardProps {
 type RecentActivityStatus = Reservation['status'] | 'expired';
 
 const dashboardPanelClasses =
-  'rounded-2xl border border-white/35 bg-white/75 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl';
+  'rounded-2xl border border-white/35 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.17)]  transition-all duration-300 hover:bg-white hover:shadow-2xl';
 const dashboardCardClasses =
   'group relative overflow-hidden rounded-2xl border border-white/35 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-2xl';
 const iconTileClasses =
-  'flex h-10 w-10 items-center justify-center rounded-2xl border border-white/40 bg-white/70 shadow-sm backdrop-blur-xl transition-colors duration-300';
+  'flex h-10 w-10 items-center justify-center rounded-2xl border border-white/40 bg-white shadow-sm  transition-colors duration-300';
 
 function getReservationDateList(reservation: Reservation) {
   return reservation.dates?.length
@@ -304,7 +304,7 @@ export default function MemberDashboard({
             {upcomingReservations.map((reservation) => (
               <div
                 key={reservation.id}
-                className="dashboard-row rounded-2xl p-5 backdrop-blur-xl"
+                className="dashboard-row rounded-2xl p-5 "
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <h4 className="text-sm font-bold text-black">
@@ -374,7 +374,7 @@ export default function MemberDashboard({
               </svg>
             </Link>
           </div>
-          <div className="dashboard-table-shell overflow-hidden rounded-2xl backdrop-blur-xl">
+          <div className="dashboard-table-shell overflow-hidden rounded-2xl ">
             {recentActivity.length === 0 ? (
               <div className="dashboard-empty-state m-4 rounded-2xl p-12 text-center">
                 <svg
@@ -406,7 +406,7 @@ export default function MemberDashboard({
                   return (
                     <div
                       key={reservation.id}
-                      className="flex items-center gap-4 p-4 transition-all duration-300 hover:bg-white/80"
+                      className="flex items-center gap-4 p-4 transition-all duration-300 hover:bg-white"
                     >
                       <span
                         className={`w-2.5 h-full min-h-[40px] rounded-full shrink-0 ${getRecentActivityAccentClass(recentActivityStatus)}`}

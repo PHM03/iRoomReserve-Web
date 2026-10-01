@@ -1061,7 +1061,7 @@ export default function AdminClassSchedulesSection({
 
           {/* ── Delete confirmation dialog ── */}
           {showDeleteConfirm ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 ">
               <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
                 <h4 className="mb-2 text-base font-bold text-gray-900">
                   Delete Schedule?
@@ -1092,7 +1092,7 @@ export default function AdminClassSchedulesSection({
           ) : null}
 
           {showOverrideConfirm ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 ">
               <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
                 <h4 className="mb-2 text-base font-bold text-gray-900">
                   Override Existing Schedule?
@@ -1320,7 +1320,7 @@ export default function AdminClassSchedulesSection({
               </div>
 
               {showImportOverrideConfirm ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 ">
                   <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
                     <h4 className="mb-2 text-base font-bold text-gray-900">
                       Override Imported Schedule Conflicts?
@@ -1463,7 +1463,7 @@ export default function AdminClassSchedulesSection({
       ) : null}
 
       {enableClearRoom && showClearRoomConfirm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 ">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <h4 className="mb-2 text-base font-bold text-gray-900">
               Clear Room&apos;s Schedule?

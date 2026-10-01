@@ -18,7 +18,7 @@ export default function ClassSchedulesPage() {
     return (
       <main className="relative z-10 min-h-screen pb-24 pt-[100px] md:pb-8">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <section className="dashboard-empty-state rounded-2xl p-10 text-center backdrop-blur-xl">
+          <section className="dashboard-empty-state rounded-2xl p-10 text-center ">
             <h2 className="text-xl font-bold text-gray-900">Class Schedules</h2>
             <p className="mt-2 text-sm text-gray-500">
               This page is available to Faculty and Utility Staff.
@@ -34,7 +34,7 @@ export default function ClassSchedulesPage() {
   return (
     <main className="relative z-10 min-h-screen pb-24 pt-[100px] md:pb-8">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <section className="mb-8 rounded-2xl border border-white/35 bg-white/75 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
+        <section className="mb-8 rounded-2xl border border-white/35 bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] ">
           <p className="text-xs font-bold uppercase tracking-wide text-primary">
             {roleLabel} class schedules
           </p>

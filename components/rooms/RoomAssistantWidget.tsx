@@ -1458,14 +1458,14 @@ export default function RoomAssistantWidget({
                 <button
                   type="button"
                   onClick={resetConversation}
-                  className="rounded-full border border-white/18 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-white/18"
+                  className="rounded-full border border-white/18 bg-white px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-white"
                 >
                   Reset
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/18 bg-white/10 text-white transition-colors hover:bg-white/18"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/18 bg-white text-white transition-colors hover:bg-white"
                   aria-label="Minimize room assistant"
                   title="Minimize room assistant"
                 >
@@ -1670,13 +1670,13 @@ export default function RoomAssistantWidget({
                             </div>
 
                             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-black/72">
-                              <span className="rounded-full border border-black/8 bg-white/85 px-2.5 py-1">
+                              <span className="rounded-full border border-black/8 bg-white px-2.5 py-1">
                                 Capacity {recommendation.capacity}
                               </span>
-                              <span className="rounded-full border border-black/8 bg-white/85 px-2.5 py-1">
+                              <span className="rounded-full border border-black/8 bg-white px-2.5 py-1">
                                 {recommendation.building}
                               </span>
-                              <span className="rounded-full border border-black/8 bg-white/85 px-2.5 py-1">
+                              <span className="rounded-full border border-black/8 bg-white px-2.5 py-1">
                                 Floor {recommendation.floor}
                               </span>
                             </div>
@@ -1731,7 +1731,7 @@ export default function RoomAssistantWidget({
             )}
           </div>
 
-          <div className="border-t border-black/8 bg-white/65 px-4 py-3 text-[10px] leading-relaxed text-black/62">
+          <div className="border-t border-black/8 bg-white px-4 py-3 text-[10px] leading-relaxed text-black/62">
             {dataError
               ? dataError
               : dataLoading

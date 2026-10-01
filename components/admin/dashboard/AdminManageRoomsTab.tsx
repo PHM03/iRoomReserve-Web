@@ -748,7 +748,7 @@ export default function AdminManageRoomsTab({
     return (
         <div className="space-y-5">
             {copyToast ? <div role="status" className={`fixed right-6 top-24 z-[120] rounded-xl border px-4 py-3 text-sm font-bold shadow-lg ${copyToast.startsWith('Could not') ? 'border-red-200 bg-red-50 text-red-800' : 'border-green-200 bg-green-50 text-green-800'}`}>{copyToast}</div> : null}
-            <div className="relative z-[60] flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative z-[60] flex flex-col gap-3 rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)]  transition-all duration-300 hover:bg-white hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
                     <h3 className="text-xl font-bold text-gray-800">Manage Facilities</h3>
                     <button
@@ -782,7 +782,7 @@ export default function AdminManageRoomsTab({
             </div>
 
             {hasAnyRooms && (
-                <div className="flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/70 p-3 shadow-lg backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 rounded-2xl border border-white/35 bg-white p-3 shadow-lg  sm:flex-row sm:items-center sm:justify-between">
                     <div className="relative sm:w-1/2">
                         <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-black/50" />
                         <input
@@ -853,7 +853,7 @@ export default function AdminManageRoomsTab({
                                     setEditingFloorName(null);
                                     setFloorActionError('');
                                 }}
-                                className="rounded-lg border border-primary/40 bg-white/70 px-3 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary/10"
+                                className="rounded-lg border border-primary/40 bg-white px-3 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary/10"
                             >
                                 {managingFloors ? 'Done Managing' : 'Manage Floors'}
                             </button>
@@ -997,7 +997,7 @@ export default function AdminManageRoomsTab({
                             disabled={addingFloor}
                             className="rounded-xl bg-[#a12124] p-4 text-center text-white shadow-sm transition-all hover:bg-[#8f1c1f] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-white/15">
+                            <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-white">
                                 <PlusIcon className="h-5 w-5" />
                             </div>
                             <p className="text-sm font-bold">

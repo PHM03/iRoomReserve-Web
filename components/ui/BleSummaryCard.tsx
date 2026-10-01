@@ -245,19 +245,19 @@ export default function BleSummaryCard({
         ) : null}
 
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
+          <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white px-2 py-1.5">
             <span className="text-[11px] font-bold uppercase text-black/55">Total Beacons</span>
             <span className="text-sm font-bold text-black">{totalBeacons}</span>
           </div>
-          <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
+          <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white px-2 py-1.5">
             <span className="text-[11px] font-bold uppercase text-black/55">{compactOnlineLabel}</span>
             <span className="text-sm font-bold text-black">{totalOnlineBeacons}</span>
           </div>
-          <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
+          <div className="flex items-center justify-between rounded-lg border border-dark/10 bg-white px-2 py-1.5">
             <span className="text-[11px] font-bold uppercase text-black/55">{compactActiveLabel}</span>
             <span className="text-sm font-bold text-black">{totalActiveBeacons}</span>
           </div>
-          <div className="rounded-lg border border-dark/10 bg-white/70 px-2 py-1.5">
+          <div className="rounded-lg border border-dark/10 bg-white px-2 py-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-bold uppercase text-black/55">Last Updated</span>
               <span className="truncate text-right text-xs font-bold text-black">

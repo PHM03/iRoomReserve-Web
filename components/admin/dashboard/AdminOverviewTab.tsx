@@ -73,7 +73,7 @@ function DashboardSection({
   title,
 }: Readonly<DashboardSectionProps>) {
   return (
-    <section className={`glass-card p-4 backdrop-blur-xl sm:p-5 ${className}`.trim()}>
+    <section className={`glass-card p-4  sm:p-5 ${className}`.trim()}>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-extrabold text-black">{title}</h3>
@@ -448,7 +448,7 @@ export default function AdminOverviewTab({
               />
             </label>
 
-            <div className="flex min-w-0 gap-1 overflow-x-auto rounded-xl border border-white/45 bg-white/55 p-1 shadow-inner backdrop-blur-xl">
+            <div className="flex min-w-0 gap-1 overflow-x-auto rounded-xl border border-white/45 bg-white p-1 shadow-inner ">
               {ROOM_FILTERS.map((filter) => {
                 const isActive = roomStatusFilter === filter;
                 return (
@@ -459,7 +459,7 @@ export default function AdminOverviewTab({
                     className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
                       isActive
                         ? 'bg-white text-primary shadow-sm'
-                        : 'text-black/60 hover:bg-white/80 hover:text-black'
+                        : 'text-black/60 hover:bg-white hover:text-black'
                     }`}
                   >
                     {filter}

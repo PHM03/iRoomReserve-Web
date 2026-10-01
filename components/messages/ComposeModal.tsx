@@ -137,7 +137,7 @@ export default function ComposeModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-end bg-black/40 p-2 backdrop-blur-sm sm:items-center sm:justify-center sm:p-6"
+      className="fixed inset-0 z-[60] flex items-end justify-end bg-black/40 p-2  sm:items-center sm:justify-center sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="compose-modal-title"

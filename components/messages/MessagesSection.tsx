@@ -967,7 +967,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
               className={`overflow-hidden rounded-3xl border transition-shadow ${
                 isUnread
                   ? 'border-primary/15 bg-primary/5 shadow-sm'
-                  : 'border-dark/5 bg-white/75'
+                  : 'border-dark/5 bg-white'
               }`}
             >
               <button
@@ -975,7 +975,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                 onClick={() =>
                   handleOpenMessage(message, { markAsRead: tab !== 'sent' })
                 }
-                className="w-full px-5 py-4 text-left transition-colors hover:bg-white/35"
+                className="w-full px-5 py-4 text-left transition-colors hover:bg-white"
               >
                 <div
                   className={`flex items-start gap-3 ${
@@ -1202,14 +1202,14 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
               key={notification.id}
               className={`overflow-hidden rounded-3xl border transition-shadow ${
                 isRead
-                  ? 'border-dark/5 bg-white/75'
+                  ? 'border-dark/5 bg-white'
                   : 'border-primary/15 bg-primary/5 shadow-sm'
               }`}
             >
               <button
                 type="button"
                 onClick={() => handleToggleReservationUpdate(notification)}
-                className="w-full px-5 py-4 text-left transition-colors hover:bg-white/35"
+                className="w-full px-5 py-4 text-left transition-colors hover:bg-white"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
@@ -1339,7 +1339,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
   return (
     <section className="mb-8">
       {(props.title || props.subtitle) && (
-        <div className="mb-5 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
+        <div className="mb-5 rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] ">
           {props.title && (
             <h2 className="text-xl font-bold text-black">{props.title}</h2>
           )}
@@ -1349,7 +1349,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
         </div>
       )}
 
-      <div className="rounded-[32px] border border-white/50 bg-white/85 p-4 shadow-sm backdrop-blur sm:p-5">
+      <div className="rounded-[32px] border border-white/50 bg-white p-4 shadow-sm  sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             {tabs.map((tab) => (
@@ -1382,7 +1382,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
                       activeTab === tab.key
-                        ? 'bg-white/20 text-white'
+                        ? 'bg-white text-white'
                         : 'border border-primary/20 bg-primary/10 text-primary'
                     }`}
                   >
@@ -1445,7 +1445,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search by name, subject, or message..."
-                className="w-full rounded-2xl border border-white/45 bg-white/85 py-3 pl-11 pr-10 text-sm text-black shadow-sm backdrop-blur-xl placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
+                className="w-full rounded-2xl border border-white/45 bg-white py-3 pl-11 pr-10 text-sm text-black shadow-sm  placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
               {searchQuery && (
                 <button
@@ -1497,7 +1497,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                 value={reservationSearch}
                 onChange={(event) => setReservationSearch(event.target.value)}
                 placeholder="Search by room, building, requester, or status..."
-                className="w-full rounded-2xl border border-white/45 bg-white/85 py-3 pl-11 pr-10 text-sm text-black shadow-sm backdrop-blur-xl placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
+                className="w-full rounded-2xl border border-white/45 bg-white py-3 pl-11 pr-10 text-sm text-black shadow-sm  placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
               {reservationSearch && (
                 <button

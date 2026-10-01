@@ -71,7 +71,7 @@ export default function Toast({ message, type = 'success', show, onClose, durati
   return (
     <div className="fixed top-0 left-0 right-0 z-[100] flex justify-center pointer-events-none">
       <div
-        className={`mt-4 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-bold pointer-events-auto backdrop-blur-xl transition-all duration-300 ease-in-out ${toastStyle.container} ${
+        className={`mt-4 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-bold pointer-events-auto  transition-all duration-300 ease-in-out ${toastStyle.container} ${
           animating
             ? 'translate-y-0 opacity-100'
             : '-translate-y-4 opacity-0'

@@ -361,7 +361,7 @@ export default function RoomStatusPage() {
     return (
       <main className="relative z-10 mx-auto max-w-6xl px-4 pb-24 pt-[100px] sm:px-6 lg:px-8 md:pb-8">
         <div className="mb-8">
-          <div className="inline-block rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
+          <div className="inline-block rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] ">
             <h2 className="text-2xl font-bold text-gray-800">Room Status &amp; Schedule</h2>
             <p className="mt-1 text-gray-600">No campus is assigned to your account yet.</p>
           </div>
@@ -372,7 +372,7 @@ export default function RoomStatusPage() {
 
   return (
     <main className="relative z-10 mx-auto max-w-7xl px-4 pb-24 pt-[100px] sm:px-6 lg:px-8 md:pb-8">
-      <div className="mb-6 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
+      <div className="mb-6 rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] ">
         <h2 className="text-2xl font-bold text-gray-800">Room Status &amp; Schedule</h2>
         <p className="mt-1 text-gray-600">
           Operational room information for <span className="ui-text-teal font-bold">{activeCampus?.label ?? 'your assigned campus'}</span>.
@@ -424,7 +424,7 @@ export default function RoomStatusPage() {
       </div>
 
       {loadError ? <p role="alert" className="mb-4 rounded-xl border border-red-500/20 bg-red-50 px-4 py-3 text-sm font-bold text-red-800">{loadError}</p> : null}
-      {actionMessage ? <p role="status" className="mb-4 rounded-xl border border-primary/15 bg-white/75 px-4 py-3 text-sm font-bold text-black/70">{actionMessage}</p> : null}
+      {actionMessage ? <p role="status" className="mb-4 rounded-xl border border-primary/15 bg-white px-4 py-3 text-sm font-bold text-black/70">{actionMessage}</p> : null}
 
       <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
@@ -441,16 +441,16 @@ export default function RoomStatusPage() {
       </div>
 
       {isLoading ? (
-        <div className="dashboard-empty-state rounded-2xl p-10 text-center backdrop-blur-xl">
+        <div className="dashboard-empty-state rounded-2xl p-10 text-center ">
           <p className="text-sm font-bold text-black/60">Loading room status…</p>
         </div>
       ) : roomStatuses.length === 0 ? (
-        <div className="dashboard-empty-state rounded-2xl p-12 text-center backdrop-blur-xl">
+        <div className="dashboard-empty-state rounded-2xl p-12 text-center ">
           <p className="text-base font-bold text-black">No rooms are configured for this campus yet.</p>
           <p className="mt-2 text-sm text-black">Once rooms are added, they will appear in their building and floor groups.</p>
         </div>
       ) : filteredRoomStatuses.length === 0 ? (
-        <div className="dashboard-empty-state rounded-2xl p-10 text-center backdrop-blur-xl">
+        <div className="dashboard-empty-state rounded-2xl p-10 text-center ">
           <p className="text-sm font-bold text-black/60">No rooms match your filters.</p>
         </div>
       ) : shouldShowBuildingSections ? (

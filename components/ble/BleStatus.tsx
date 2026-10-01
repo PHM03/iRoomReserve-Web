@@ -220,7 +220,7 @@ export default function BleStatus({
 
   return (
     <section
-      className={`rounded-xl border border-dark/10 bg-white/70 p-4 shadow-sm ${className}`.trim()}
+      className={`rounded-xl border border-dark/10 bg-white p-4 shadow-sm ${className}`.trim()}
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">

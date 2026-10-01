@@ -259,7 +259,7 @@ export default function SentimentTrendSection({
         ) : null}
       </div>
 
-      <div className="mt-4 rounded-2xl border border-dark/10 bg-white/55 p-3 sm:p-4">
+      <div className="mt-4 rounded-2xl border border-dark/10 bg-white p-3 sm:p-4">
         <p className="text-sm font-extrabold text-black">Sentiment Trend</p>
         <p className="mt-1 text-xs text-black/55">
            Positive and negative review rates for each {period === 'weekly' ? 'day' : period === 'monthly' || period === 'semester' ? 'week' : 'month'} in the selected period.

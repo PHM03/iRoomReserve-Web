@@ -139,7 +139,7 @@ function LocationTable({
     ? sortLocationPerformance(items, sort)
     : [...items].sort((left, right) => Number(right.reliable) - Number(left.reliable) || right.negativeRate - left.negativeRate);
   return (
-    <div className="rounded-xl border border-dark/10 bg-white/65 p-3">
+    <div className="rounded-xl border border-dark/10 bg-white p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h4 className="text-sm font-bold text-black">{title}</h4>
         {!sort || !onSortChange ? (
@@ -420,7 +420,7 @@ export function LocationPerformanceSection({
         <p className="mt-1 text-xs text-black/55">Refines the globally filtered feedback set. Comparative labels require at least five reviews. VADER sentiment scores range from -1 (very negative) to +1 (very positive).</p>
       </div>
 
-      <div className="mb-4 grid gap-2 rounded-xl border border-dark/10 bg-white/55 p-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mb-4 grid gap-2 rounded-xl border border-dark/10 bg-white p-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="flex min-w-0 flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-black/50">
           Floor
           <select
@@ -472,7 +472,7 @@ export function LocationPerformanceSection({
 
       {selectedPerformance ? (
         <>
-          <div className="mb-3 rounded-xl border border-dark/10 bg-white/65 p-3">
+          <div className="mb-3 rounded-xl border border-dark/10 bg-white p-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h4 className="text-sm font-bold text-black">Performance summary</h4>
@@ -500,7 +500,7 @@ export function LocationPerformanceSection({
             </div>
           </div>
 
-          <details className="mb-3 rounded-xl border border-dark/10 bg-white/55 p-3">
+          <details className="mb-3 rounded-xl border border-dark/10 bg-white p-3">
             <summary className="cursor-pointer text-xs font-bold text-black">View location breakdown</summary>
             <div className="mt-3 space-y-3">
               <LocationTable title="Buildings" items={visibleBuildings} showBuildingContext={showBuildingContext} />
@@ -598,7 +598,7 @@ export function LocationPerformanceSection({
                       <button
                         key={concern.label}
                         type="button"
-                        className={`flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-xs text-black/70 transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-primary/40 ${isActive ? 'bg-white/75' : ''}`}
+                        className={`flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-xs text-black/70 transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 ${isActive ? 'bg-white' : ''}`}
                         onMouseEnter={() => setActiveConcern(concern.label)}
                         onMouseLeave={() => setActiveConcern(null)}
                         onFocus={() => setActiveConcern(concern.label)}
@@ -627,7 +627,7 @@ export function LocationPerformanceSection({
 
 function CategoryCard({ category }: { category: CategoryPerformance }) {
   return (
-    <div className="rounded-xl border border-dark/10 bg-white/65 p-3">
+    <div className="rounded-xl border border-dark/10 bg-white p-3">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-bold text-black">{category.label}</p>
         <span className={`text-[10px] font-bold ${directionClass(category.direction)}`}>{directionLabel(category.direction)}</span>
@@ -662,7 +662,7 @@ export function DemographicPerformanceSection({ groups }: { groups: DemographicP
     <div className="grid gap-3 md:grid-cols-2">
       {items.length === 0 ? <p className="text-xs text-black/50">No demographic data is available for the selected filters.</p> : null}
       {items.map((group) => (
-        <div key={group.group} className="rounded-xl border border-dark/10 bg-white/65 p-3">
+        <div key={group.group} className="rounded-xl border border-dark/10 bg-white p-3">
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-sm font-bold text-black">{group.label}</p>
@@ -705,7 +705,7 @@ export function ActionableInsightsSection({ insights }: { insights: string[] }) 
       </div>
       {insights.length === 0 ? <p className="dashboard-empty-state rounded-xl px-3 py-5 text-center text-xs text-black/50">No actionable insight is available.</p> : (
         <ul className="space-y-2">
-          {insights.map((insight) => <li key={insight} className="rounded-xl border border-dark/10 bg-white/65 px-3 py-2 text-xs font-bold text-black/70">{insight}</li>)}
+          {insights.map((insight) => <li key={insight} className="rounded-xl border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70">{insight}</li>)}
         </ul>
       )}
     </section>

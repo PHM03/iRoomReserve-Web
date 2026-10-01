@@ -312,7 +312,7 @@ export default function BleAdminMonitor({
               type="button"
               onClick={() => void handleClearHistory()}
               disabled={historyEntries.length === 0 || isClearingHistory}
-              className="rounded-xl border border-dark/10 bg-white/70 px-4 py-2 text-xs font-bold text-black transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-dark/10 bg-white px-4 py-2 text-xs font-bold text-black transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isClearingHistory ? 'Clearing...' : 'Clear History'}
             </button>
@@ -371,7 +371,7 @@ export default function BleAdminMonitor({
                   <th className="px-4 py-3">Last Update</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-dark/10 bg-white/60 text-sm text-black">
+              <tbody className="divide-y divide-dark/10 bg-white text-sm text-black">
                 {filteredBeaconRooms.map((room) => {
                   const hardwareOnline = isRoomBeaconHardwareOnline(room);
                   const reservationStatus = getReservationStatus(
@@ -439,7 +439,7 @@ export default function BleAdminMonitor({
                   <th className="px-4 py-3">Connection Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-dark/10 bg-white/60 text-sm text-black">
+              <tbody className="divide-y divide-dark/10 bg-white text-sm text-black">
                 {historyEntries.map((entry, index) => {
                   const rowTone = getBleHistoryTone(entry);
 

@@ -350,7 +350,7 @@ export default function AdminRoomHistoryTab({
 
   return (
     <div>
-      <div className="relative z-[60] mb-6 flex flex-col gap-3 rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl transition-all duration-300 hover:bg-white/85 hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative z-[60] mb-6 flex flex-col gap-3 rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)]  transition-all duration-300 hover:bg-white hover:shadow-2xl sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-xl font-bold text-gray-800">Reservation History</h3>
         {managedBuildings.length > 1 ? (
           <div className="w-full sm:ml-auto sm:w-72">
@@ -388,7 +388,7 @@ export default function AdminRoomHistoryTab({
               <select
                 value={historyYearFilter}
                 onChange={(event) => setHistoryYearFilter(event.target.value)}
-                className="rounded-xl border border-white/55 bg-white/85 px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
+                className="rounded-xl border border-white/55 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
               >
                 <option value="all">All Years</option>
                 {availableHistoryYears.map((year) => (
@@ -401,7 +401,7 @@ export default function AdminRoomHistoryTab({
               <select
                 value={historyMonthFilter}
                 onChange={(event) => setHistoryMonthFilter(event.target.value)}
-                className="rounded-xl border border-white/55 bg-white/85 px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
+                className="rounded-xl border border-white/55 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
               >
                 <option value="all">All Months</option>
                 {MONTH_FILTER_OPTIONS.map((month, index) => (
@@ -444,7 +444,7 @@ export default function AdminRoomHistoryTab({
         </div>
       ) : (
         <>
-          <div className="dashboard-table-shell hidden overflow-hidden rounded-2xl backdrop-blur-xl md:block">
+          <div className="dashboard-table-shell hidden overflow-hidden rounded-2xl  md:block">
             <table className="w-full min-w-full">
               <thead>
                 <tr className="border-b border-dark/10">
@@ -472,7 +472,7 @@ export default function AdminRoomHistoryTab({
                   return (
                     <Fragment key={group.userName}>
                       <tr
-                        className="border-b border-dark/5 transition-colors hover:bg-white/85"
+                        className="border-b border-dark/5 transition-colors hover:bg-white"
                       >
                         <td className="whitespace-nowrap px-6 py-4">
                           <div className="flex items-center gap-2">
@@ -507,7 +507,7 @@ export default function AdminRoomHistoryTab({
                       {isExpanded ? (
                         <tr className="border-b border-dark/5">
                           <td colSpan={5} className="bg-primary/5 px-6 py-5">
-                            <div className="dashboard-table-shell overflow-hidden rounded-xl bg-white/80">
+                            <div className="dashboard-table-shell overflow-hidden rounded-xl bg-white">
                               <table className="min-w-full">
                                 <thead className="border-b border-dark/10 bg-dark/5">
                                   <tr>
@@ -593,7 +593,7 @@ export default function AdminRoomHistoryTab({
               const isExpanded = expandedUsers.includes(group.userName);
 
               return (
-                <div key={group.userName} className="glass-card p-4 backdrop-blur-xl">
+                <div key={group.userName} className="glass-card p-4 ">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">

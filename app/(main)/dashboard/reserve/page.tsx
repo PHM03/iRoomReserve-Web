@@ -1466,7 +1466,7 @@ export default function ReserveRoomPage() {
   return (
     <main className="relative z-10 mx-auto max-w-5xl px-4 pt-[100px] py-8 pb-24 sm:px-6 lg:px-8 md:pb-8">
       <div className="mb-8">
-        <div className="w-full rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
+        <div className="w-full rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] ">
           <h2 className="text-2xl font-bold text-gray-800">Reserve a Room</h2>
           <p className="mt-1 text-gray-600">
             Browse rooms, filter quickly, and continue straight into reservation details.
@@ -1873,7 +1873,7 @@ export default function ReserveRoomPage() {
                         })}
                       </p>
                     </div>
-                    <span className="inline-flex items-center rounded-full border border-primary/20 bg-white/80 px-3 py-1 text-xs font-bold text-primary">
+                    <span className="inline-flex items-center rounded-full border border-primary/20 bg-white px-3 py-1 text-xs font-bold text-primary">
                       {selectedRoomCampusName}
                     </span>
                   </div>
@@ -1888,25 +1888,25 @@ export default function ReserveRoomPage() {
                       </span>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <div className="rounded-xl border border-white/45 bg-white/85 p-3 shadow-sm backdrop-blur-xl">
+                    <div className="rounded-xl border border-white/45 bg-white p-3 shadow-sm ">
                       <p className="text-[10px] font-bold uppercase text-black/55">Capacity</p>
                       <p className="mt-1 text-sm font-bold text-black">
                         {selectedRoom.capacity} people
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/45 bg-white/85 p-3 shadow-sm backdrop-blur-xl">
+                    <div className="rounded-xl border border-white/45 bg-white p-3 shadow-sm ">
                       <p className="text-[10px] font-bold uppercase text-black/55">Air Conditioning</p>
                       <p className="mt-1 text-sm font-bold text-black">
                         {selectedRoom.acStatus || 'Not specified'}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/45 bg-white/85 p-3 shadow-sm backdrop-blur-xl">
+                    <div className="rounded-xl border border-white/45 bg-white p-3 shadow-sm ">
                       <p className="text-[10px] font-bold uppercase text-black/55">Category</p>
                       <p className="mt-1 text-sm font-bold text-black">
                         {selectedRoom.roomType || 'Room'}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-white/45 bg-white/85 p-3 shadow-sm backdrop-blur-xl">
+                    <div className="rounded-xl border border-white/45 bg-white p-3 shadow-sm ">
                       <p className="text-[10px] font-bold uppercase text-black/55">TV/Projector</p>
                       <p className="mt-1 text-sm font-bold text-black">
                         {selectedRoom.tvProjectorStatus || 'Not specified'}
@@ -2062,7 +2062,7 @@ export default function ReserveRoomPage() {
 
                         {/* Schedule Panel — appears when a date is selected */}
                         {reservationDate && selectedCampus && firebaseUser && (
-                          <div className="rounded-2xl border border-white/45 bg-white/80 p-4 shadow-sm backdrop-blur-xl">
+                          <div className="rounded-2xl border border-white/45 bg-white p-4 shadow-sm ">
                             <DaySchedulePanel
                               date={reservationDate}
                               roomEnrichedSlots={enrichedSlots}
@@ -2343,7 +2343,7 @@ export default function ReserveRoomPage() {
                             inputMode="numeric"
                             value={equipment[item.key]}
                             onChange={(event) => setEquipmentQuantity(item.key, event.target.value)}
-                            className="h-8 w-12 rounded-lg border border-dark/10 bg-white/80 px-1 text-center text-sm font-bold text-black outline-none transition-colors focus:border-primary"
+                            className="h-8 w-12 rounded-lg border border-dark/10 bg-white px-1 text-center text-sm font-bold text-black outline-none transition-colors focus:border-primary"
                             aria-label={`${item.label} quantity`}
                           />
                           <button
@@ -2371,7 +2371,7 @@ export default function ReserveRoomPage() {
                           setOtherEquipmentError('');
                         }}
                         maxLength={250}
-                        className="h-8 min-w-0 flex-1 rounded-lg border border-dark/10 bg-white/80 px-3 text-sm text-black outline-none transition-colors focus:border-primary"
+                        className="h-8 min-w-0 flex-1 rounded-lg border border-dark/10 bg-white px-3 text-sm text-black outline-none transition-colors focus:border-primary"
                         placeholder="Please specify equipment"
                         aria-invalid={Boolean(otherEquipmentError)}
                         aria-describedby={otherEquipmentError ? 'other-equipment-error' : undefined}
@@ -2392,7 +2392,7 @@ export default function ReserveRoomPage() {
                           inputMode="numeric"
                           value={otherEquipmentQuantity}
                           onChange={(event) => setOtherEquipmentQuantityValue(event.target.value)}
-                          className="h-8 w-12 rounded-lg border border-dark/10 bg-white/80 px-1 text-center text-sm font-bold text-black outline-none transition-colors focus:border-primary"
+                          className="h-8 w-12 rounded-lg border border-dark/10 bg-white px-1 text-center text-sm font-bold text-black outline-none transition-colors focus:border-primary"
                           aria-label="Other equipment quantity"
                         />
                         <button
@@ -2423,7 +2423,7 @@ export default function ReserveRoomPage() {
                           Upload a PDF, JPG, or PNG copy of your concept paper
                         </label>
                         {uploadedApprovalDocument ? (
-                          <div className="flex min-h-[52px] w-full items-center gap-2 rounded-xl border border-dark/10 bg-white/80 p-2 shadow-sm">
+                          <div className="mt-2 flex min-h-[52px] w-full items-center gap-2 rounded-xl border border-dark/10 bg-white p-2 shadow-sm">
                             <a
                               href={uploadedApprovalDocument.url}
                               target="_blank"
@@ -2486,7 +2486,7 @@ export default function ReserveRoomPage() {
                           />
                         )}
                         <p className="mt-2 text-[11px] text-black">
-                          Students must attach a concept paper or approval letter for all reservations.
+                          Students must attach a concept paper for both Main Campus and Digital Campus reservations.
                         </p>
                         {documentUploading && (
                           <p className="mt-1.5 text-xs font-bold text-black">Uploading concept paper...</p>

@@ -465,7 +465,7 @@ export default function MyReservationsPage() {
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-[100px] py-8 relative z-10 pb-24 md:pb-8">
       <div className="mb-8">
-        <div className="w-full rounded-2xl border border-white/35 bg-white/75 px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] backdrop-blur-xl">
+        <div className="w-full rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)] ">
           <h2 className="text-2xl font-bold text-gray-800">My Reservations</h2>
           <p className="text-gray-600 mt-1">
             View and manage all your room reservations
@@ -569,7 +569,7 @@ export default function MyReservationsPage() {
                 <span
                   className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
                     isActive
-                      ? 'bg-white/20 text-white'
+                      ? 'bg-white text-white'
                       : 'border border-primary/20 bg-primary/10 text-primary'
                   }`}
                 >
@@ -768,7 +768,7 @@ export default function MyReservationsPage() {
                   )}
                   {showMobileAppStartLabel ? (
                     <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-                      <span className="inline-flex items-center rounded-lg border border-blue-200 bg-white/70 px-3 py-1.5 text-xs font-bold text-blue-800">
+                      <span className="inline-flex items-center rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-800">
                         Start Reservation through Mobile App
                       </span>
                     </div>

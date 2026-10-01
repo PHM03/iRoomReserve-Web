@@ -370,7 +370,7 @@ export default function DaySchedulePanel({
       case 'pending-others':
         return 'border border-amber-200/90 bg-amber-50/95 text-amber-700';
       default:
-        return 'border border-dark/10 bg-white/80 text-black/70';
+        return 'border border-dark/10 bg-white text-black/70';
     }
   }
 
