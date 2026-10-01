@@ -15,9 +15,9 @@ export const CAMPUS_TIME_RULES: Record<string, CampusTimeRule> = {
   digi: {
     startHour: 7,
     endHour: 19,
-    campusLabel: "SDCA Digi Campus",
+    campusLabel: "SDCA Digital Campus",
     errorMessage:
-      "Class schedules for SDCA Digi Campus must be between 7:00 AM and 7:00 PM.",
+      "Class schedules for SDCA Digital Campus must be between 7:00 AM and 7:00 PM.",
   },
   main: {
     startHour: 7,

@@ -110,7 +110,7 @@ const CAMPUS_OPTIONS: AssistantOption[] = [
     value: 'main'
   },
   {
-    label: 'SDCA Digi Campus',
+    label: 'SDCA Digital Campus',
     value: 'digi'
   },
 ];
@@ -297,7 +297,7 @@ function isCampusOptionValue(value: AssistantOptionValue): value is ReservationC
 
 function createCampusPromptMessage() {
   return createMessage(
-    'Which campus are you looking for? SDCA Main Campus or SDCA Digi Campus?',
+    'Which campus are you looking for? SDCA Main Campus or SDCA Digital Campus?',
     'system',
     'buttons',
     { options: CAMPUS_OPTIONS }

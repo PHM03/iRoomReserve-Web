@@ -5,7 +5,7 @@ import {
   type ReservationCampus,
 } from "./campuses";
 
-export type CampusName = "SDCA Main Campus" | "SDCA Digi Campus";
+export type CampusName = "SDCA Main Campus" | "SDCA Digital Campus";
 
 interface CampusAssignmentInput {
   assignedBuilding?: unknown;
@@ -17,7 +17,7 @@ interface CampusAssignmentInput {
 }
 
 export const CAMPUS_NAMES: Record<ReservationCampus, CampusName> = {
-  digi: "SDCA Digi Campus",
+  digi: "SDCA Digital Campus",
   main: "SDCA Main Campus",
 };
 

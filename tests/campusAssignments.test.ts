@@ -26,14 +26,21 @@ describe('campus assignments', () => {
 
     expect(assignment).toEqual({
       campus: 'digi',
-      campusName: 'SDCA Digi Campus',
+      campusName: 'SDCA Digital Campus',
+    });
+  });
+
+  it('normalizes the former campus display name to the current name', () => {
+    expect(resolveCampusAssignment({ campusName: 'SDCA Digi Campus' })).toEqual({
+      campus: 'digi',
+      campusName: 'SDCA Digital Campus',
     });
   });
 
   it('returns the managed buildings for each campus', () => {
     expect(getManagedBuildingIdsForCampus('main')).toEqual(['gd1', 'gd2', 'gd3']);
     expect(getManagedBuildingIdsForCampus('digi')).toEqual(['sdca-digital-campus']);
-    expect(getCampusName('digi')).toBe('SDCA Digi Campus');
+    expect(getCampusName('digi')).toBe('SDCA Digital Campus');
   });
 
   it('matches campus access against buildings in that campus', () => {

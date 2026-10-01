@@ -113,7 +113,7 @@ service cloud.firestore {
           buildingId in ["gd1", "gd2", "gd3"]
         ) ||
         (
-          userProfile().campusName == "SDCA Digi Campus" &&
+          userProfile().campusName in ["SDCA Digital Campus", "SDCA Digi Campus"] &&
           buildingId == "sdca-digital-campus"
         )
       );
@@ -151,7 +151,7 @@ service cloud.firestore {
               resource.data.buildingId in ["gd1", "gd2", "gd3"]
             ) ||
             (
-              userProfile().campusName == "SDCA Digi Campus" &&
+              userProfile().campusName in ["SDCA Digital Campus", "SDCA Digi Campus"] &&
               resource.data.buildingId == "sdca-digital-campus"
             )
           )

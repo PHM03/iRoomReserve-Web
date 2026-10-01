@@ -11,7 +11,7 @@ import {
   type Schedule,
 } from '@/lib/schedules/schedules';
 
-type ScheduleCampusFilter = 'SDCA Digi Campus' | 'SDCA Main Campus';
+type ScheduleCampusFilter = 'SDCA Digital Campus' | 'SDCA Main Campus';
 type ScheduleBuildingFilter = 'gd1' | 'gd2' | 'gd3';
 
 interface TodayClassSchedulesPanelProps {
@@ -151,7 +151,7 @@ export default function TodayClassSchedulesPanel(
       };
     }
 
-    if (selectedCampus === 'SDCA Digi Campus') {
+    if (selectedCampus === 'SDCA Digital Campus') {
       return DIGI_BUILDING
         ? {
             id: DIGI_BUILDING.id,
@@ -410,7 +410,7 @@ export default function TodayClassSchedulesPanel(
               }}
             >
               <option value="">Select Campus</option>
-              <option value="SDCA Digi Campus">SDCA Digi Campus</option>
+              <option value="SDCA Digital Campus">SDCA Digital Campus</option>
               <option value="SDCA Main Campus">SDCA Main Campus</option>
             </select>
 

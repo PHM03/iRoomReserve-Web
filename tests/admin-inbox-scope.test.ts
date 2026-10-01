@@ -86,7 +86,7 @@ describe('Building Admin Main Campus Inbox scope', () => {
       filterInboxMessagesByBuildingScope(
         [
           { ...message('digi-by-campus', undefined, 50), campus: 'digi' },
-          { ...message('digi-by-name', undefined, 40), buildingName: 'SDCA Digi Campus' },
+          { ...message('digi-by-name', undefined, 40), buildingName: 'SDCA Digital Campus' },
         ],
         getBuildingAdminInboxBuildingIds('main', 'gd1'),
       ),

@@ -120,7 +120,7 @@ const FILTER_CHIPS: Array<{ key: RoomFilterKey; label: string }> = [
   },
 ];
 const BUILDING_FLOORS: Record<string, string[]> = {
-  // SDCA Digi Campus — single building, use its actual buildingId from getManagedBuildingsForCampus('digi')
+  // SDCA Digital Campus — single building, use its actual buildingId from getManagedBuildingsForCampus('digi')
   digi: ['Ground Floor', '2nd Floor', '3rd Floor', '4th Floor'],
   // SDCA Main Campus buildings
   gd1: ['Basement', 'Ground Floor', '2nd Floor', '3rd Floor', '4th Floor', '5th Floor', '6th Floor', '7th Floor', '8th Floor'],

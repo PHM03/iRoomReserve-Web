@@ -20,12 +20,16 @@ import { getCampusName } from '@/lib/buildings/campusAssignments';
 import { type ReservationCampus } from '@/lib/buildings/campuses';
 import { USER_ROLES } from '@/lib/auth/roles';
 
-type Tab = 'all' | 'students' | 'faculty' | 'utility' | 'admins' | 'pending';
+type StatusFilter = 'pending' | 'complete' | 'disabled';
+type RoleFilter = 'all' | 'students' | 'faculty' | 'utility' | 'dsas' | 'admins';
 
 export default function SuperAdminDashboard() {
   const { firebaseUser, profile, loading, logout } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>('pending');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [campusFilter, setCampusFilter] = useState<ReservationCampus | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [allUsers, setAllUsers] = useState<ManagedUser[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showAccountTooltip, setShowAccountTooltip] = useState(false);
@@ -75,24 +79,37 @@ export default function SuperAdminDashboard() {
   const facultyProfessors = allUsers.filter((u) => u.role === USER_ROLES.FACULTY);
   const utilityUsers = allUsers.filter((u) => u.role === USER_ROLES.UTILITY);
   const administrators = allUsers.filter((u) => u.role === USER_ROLES.ADMIN);
-  const mainCampusDsasProfessor = facultyProfessors.find(
-    (user) =>
-      user.designation === "DSAS" &&
-      user.designationCampus === "main" &&
-      user.status === "approved"
-  );
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const currentUsers = allUsers.filter((user) => {
+    const matchesStatus = statusFilter === 'pending'
+      ? user.status === 'pending'
+      : statusFilter === 'disabled'
+        ? user.status === 'disabled'
+        : user.status !== 'pending' && user.status !== 'disabled';
+    const matchesRole = (() => {
+      switch (roleFilter) {
+        case 'students': return user.role === USER_ROLES.STUDENT;
+        case 'faculty': return user.role === USER_ROLES.FACULTY;
+        case 'utility': return user.role === USER_ROLES.UTILITY;
+        case 'dsas': return user.role === USER_ROLES.FACULTY && user.designation === 'DSAS';
+        case 'admins': return user.role === USER_ROLES.ADMIN;
+        case 'all': return true;
+      }
+    })();
+    const matchesCampus = roleFilter !== 'utility' || campusFilter === 'all' ||
+      user.campus === campusFilter;
+    const searchableText = [
+      user.firstName,
+      user.lastName,
+      user.email,
+      user.role,
+      user.campusName ?? '',
+      user.designation ?? '',
+    ].join(' ').toLowerCase();
+    const matchesSearch = !normalizedSearchQuery || searchableText.includes(normalizedSearchQuery);
 
-  const currentUsers = (() => {
-    switch (activeTab) {
-      case 'students': return students;
-      case 'faculty': return facultyProfessors;
-      case 'utility': return utilityUsers;
-      case 'admins': return administrators;
-      case 'pending': return pendingUsers;
-      case 'all':
-      default: return allUsers;
-    }
-  })();
+    return matchesStatus && matchesRole && matchesCampus && matchesSearch;
+  });
 
   // ─── Handlers ─────────────────────────────────────────────────
   const openApprovalModal = async (user: ManagedUser) => {
@@ -212,56 +229,23 @@ export default function SuperAdminDashboard() {
 
   const getRoleBadge = (role: string) => {
     switch (role) {
-      case 'Student': return 'ui-badge-blue';
-      case 'Faculty Professor': return 'ui-badge-green';
-      case 'Utility Staff': return 'ui-badge-teal';
-      case 'Administrator': return 'ui-badge-red';
-      default: return 'ui-badge-gray';
+      case 'Student': return 'border-blue-200 bg-blue-50 text-blue-800';
+      case 'Faculty Professor': return 'border-violet-200 bg-violet-50 text-violet-800';
+      case 'Utility Staff': return 'border-teal-200 bg-teal-50 text-teal-800';
+      case 'Administrator': return 'border-primary/25 bg-red-50 text-[#7f1d1d]';
+      default: return 'border-gray-200 bg-gray-100 text-gray-700';
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'approved': return 'ui-badge-green';
-      case 'pending': return 'ui-badge-yellow';
-      case 'rejected': return 'ui-badge-red';
-      case 'disabled': return 'ui-badge-gray';
-      default: return 'ui-badge-gray';
+      case 'approved': return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+      case 'pending': return 'border-amber-200 bg-amber-50 text-amber-800';
+      case 'rejected': return 'border-red-200 bg-red-50 text-red-800';
+      case 'disabled': return 'border-gray-200 bg-gray-100 text-gray-700';
+      default: return 'border-gray-200 bg-gray-100 text-gray-700';
     }
   };
-
-  const tabs: { key: Tab; label: string; count: number }[] = [
-    {
-      key: 'pending',
-      label: 'Pending',
-      count: pendingUsers.length
-    },
-    {
-      key: 'all',
-      label: 'All Users',
-      count: allUsers.length
-    },
-    {
-      key: 'students',
-      label: 'Students',
-      count: students.length
-    },
-    {
-      key: 'faculty',
-      label: 'Faculty Professor',
-      count: facultyProfessors.length
-    },
-    {
-      key: 'utility',
-      label: 'Utility Staff',
-      count: utilityUsers.length
-    },
-    {
-      key: 'admins',
-      label: 'Admins',
-      count: administrators.length
-    },
-  ];
 
   // Helper to check if a user needs campus assignment during approval
   const needsBuildingAssignment = (user: ManagedUser) =>
@@ -372,7 +356,7 @@ export default function SuperAdminDashboard() {
                 onClick={() => router.push('/superadmin/admin-dashboard?campus=digi')}
                 className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-bold bg-primary/15 text-primary border border-primary/25 hover:bg-primary/25 transition-all"
               >
-                SDCA Digi Campus
+                SDCA Digital Campus
               </button>
             </div>
           </div>
@@ -461,45 +445,65 @@ export default function SuperAdminDashboard() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex flex-wrap gap-1 mb-6 glass-card !rounded-xl p-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 min-w-[100px] py-2.5 px-3 rounded-lg text-sm font-bold transition-all ${
-                activeTab === tab.key
-                  ? 'bg-primary text-white shadow-lg shadow-primary/30'
-                  : 'text-black hover:text-primary hover:bg-primary/10'
-              }`}
-            >
-              {tab.label}
-              {tab.count > 0 && (
-                <span className={`ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                  activeTab === tab.key ? 'bg-dark/20 text-black' : 'bg-dark/10 text-black'
-                }`}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === 'faculty' && (
-          <div className="glass-card mb-6 flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-bold text-black">Main Campus DSAS designation</p>
-              <p className="text-xs text-black/70">
-                Only one approved Faculty Professor can be designated. Assigning another Professor replaces the current designation.
-              </p>
-            </div>
-            <p className="text-xs font-bold text-black">
-              Current: {mainCampusDsasProfessor
-                ? `${mainCampusDsasProfessor.firstName} ${mainCampusDsasProfessor.lastName}`
-                : 'Not assigned'}
-            </p>
+        {/* User search and filters */}
+        <section className="glass-card mb-6 p-4 sm:p-5" aria-label="Search and filter users">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-black lg:col-span-2">
+              Search users
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search by name, email, role, or campus"
+                className="glass-input h-10 w-full px-3 text-sm font-normal"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-black">
+              Status
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+                className="glass-input h-10 w-full px-3 text-sm"
+              >
+                <option value="pending">Pending</option>
+                <option value="complete">Complete</option>
+                <option value="disabled">Disabled ({disabledUsers.length})</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-black">
+              Roles
+              <select
+                value={roleFilter}
+                onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
+                className="glass-input h-10 w-full px-3 text-sm"
+              >
+                <option value="all">All Roles</option>
+                <option value="students">Students ({students.length})</option>
+                <option value="faculty">Faculty Professor ({facultyProfessors.length})</option>
+                <option value="dsas">DSAS ({facultyProfessors.filter((user) => user.designation === 'DSAS').length})</option>
+                <option value="utility">Utility Staff ({utilityUsers.length})</option>
+                <option value="admins">Admins ({administrators.length})</option>
+              </select>
+            </label>
+            {roleFilter === 'utility' ? (
+              <label className="flex flex-col gap-1.5 text-xs font-bold text-black">
+                Campus
+                <select
+                  value={campusFilter}
+                  onChange={(event) => setCampusFilter(event.target.value as ReservationCampus | 'all')}
+                  className="glass-input h-10 w-full px-3 text-sm"
+                >
+                  <option value="all">All campuses</option>
+                  <option value="main">SDCA Main Campus</option>
+                  <option value="digi">SDCA Digital Campus</option>
+                </select>
+              </label>
+            ) : null}
           </div>
-        )}
+          <p className="mt-3 text-xs text-black/60" aria-live="polite">
+            Showing {currentUsers.length} {statusFilter} account{currentUsers.length === 1 ? '' : 's'}.
+          </p>
+        </section>
 
         {/* User List */}
         {currentUsers.length === 0 ? (
@@ -509,8 +513,9 @@ export default function SuperAdminDashboard() {
             </svg>
             <h3 className="text-lg font-bold text-black mb-1">No users found</h3>
             <p className="text-sm text-black">
-              {activeTab === 'pending' ? 'All caught up! No registrations waiting for approval.'
-                : `No ${activeTab === 'all' ? '' : activeTab + ' '}users found.`}
+              {statusFilter === 'pending'
+                ? 'No pending registrations match the current filters.'
+                : 'No accounts match the current filters.'}
             </p>
           </div>
         ) : (
@@ -533,39 +538,32 @@ export default function SuperAdminDashboard() {
                     <div>
                       <h3 className="text-black font-bold text-lg">{user.firstName} {user.lastName}</h3>
                       <p className="text-black text-sm">{user.email}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2" aria-label="Account details">
+                        <span className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-[11px] font-bold leading-none ${getRoleBadge(user.role)}`}>
+                          {user.role}
+                        </span>
+                        <span className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-[11px] font-bold capitalize leading-none ${getStatusBadge(user.status)}`}>
+                          {user.status}
+                        </span>
+                        {user.designation === 'DSAS' && user.designationCampus === 'main' && (
+                          <span className="inline-flex items-center rounded-lg border border-primary/25 bg-red-50 px-2.5 py-1 text-[11px] font-bold leading-none text-[#7f1d1d]">
+                            Main Campus DSAS
+                          </span>
+                        )}
+                        {user.campusName && (
+                          <span className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-bold leading-none text-blue-800">
+                            {user.campusName}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Badges & Actions */}
+                  {/* Actions */}
                   <div className="flex items-center flex-wrap gap-2 sm:ml-auto">
-                    {/* Role badge */}
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${getRoleBadge(user.role)}`}>
-                      {user.role}
-                    </span>
-
-                    {/* Status badge */}
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${getStatusBadge(user.status)}`}>
-                      {user.status}
-                    </span>
-
-                    {user.designation === 'DSAS' && user.designationCampus === 'main' && (
-                      <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                        Main Campus DSAS
-                      </span>
-                    )}
-
-                    {user.campusName && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ui-badge-blue">
-                        <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10l9-6 9 6-9 6-9-6zm2 3.5v4.5l7 4 7-4v-4.5" />
-                        </svg>
-                        {user.campusName}
-                      </span>
-                    )}
-
                     {/* ─── Action Buttons ────────────────────────── */}
 
-                    {activeTab === 'faculty' &&
+                    {(roleFilter === 'faculty' || roleFilter === 'dsas') &&
                       user.role === USER_ROLES.FACULTY &&
                       (user.status === 'approved' ||
                         (user.designation === 'DSAS' && user.designationCampus === 'main')) && (
@@ -707,7 +705,7 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
-        {activeTab === 'admins' && (
+        {roleFilter === 'admins' && (
           <div className="mt-4 flex justify-center">
             <button
               type="button"
