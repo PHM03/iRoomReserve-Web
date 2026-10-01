@@ -569,7 +569,7 @@ export default function MyReservationsPage() {
                 <span
                   className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
                     isActive
-                      ? 'bg-white text-white'
+                      ? 'border border-white/80 bg-white text-primary'
                       : 'border border-primary/20 bg-primary/10 text-primary'
                   }`}
                 >
@@ -630,7 +630,7 @@ export default function MyReservationsPage() {
             return (
               <div
                 key={reservation.id}
-                className="overflow-hidden rounded-3xl border border-dark/5 bg-white/85 shadow-sm"
+                className="overflow-hidden rounded-3xl border border-dark/5 bg-white shadow-sm"
               >
                 <div className="flex flex-col gap-4 pb-4">
                   <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-start">

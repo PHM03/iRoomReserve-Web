@@ -7,6 +7,10 @@ import { Feedback, createFeedback, getAverageSentiment, getFeedbackByUser } from
 import { Reservation, getReservationsByUser } from '@/lib/reservations/reservations';
 import { getSentimentLabel } from '@/lib/ai/sentiment';
 import {
+  limitFeedbackCharacters,
+  MAX_FEEDBACK_CHARACTERS,
+} from '@/lib/feedback/feedback-text-limit';
+import {
   FEEDBACK_ASPECT_LABELS,
   FEEDBACK_CATEGORY_KEYS,
   FEEDBACK_CATEGORY_LABELS,
@@ -115,6 +119,7 @@ export default function FeedbackPage() {
 
   const deferredComment = useDeferredValue(comment);
   const trimmedComment = comment.trim();
+  const feedbackCharacterCount = comment.length;
   const sentimentPreview = analyzeFeedbackText(deferredComment);
   const sentimentPreviewLabel = sentimentPreview.sentimentClassification;
   const selectedCategoryRatings = getCompleteCategoryRatings(categoryRatings);
@@ -467,11 +472,23 @@ export default function FeedbackPage() {
                   <label className="block text-sm font-bold text-black mb-1.5">Required Feedback</label>
                   <textarea
                     value={comment}
-                    onChange={(event) => setComment(event.target.value)}
+                    onChange={(event) => setComment(limitFeedbackCharacters(event.target.value))}
                     className="glass-input w-full px-4 py-3 min-h-[132px] resize-none"
                     placeholder="Mention what worked, what failed, and which room areas need attention..."
+                    maxLength={MAX_FEEDBACK_CHARACTERS}
+                    aria-describedby="feedback-character-count"
                     required
                   />
+                  <p
+                    id="feedback-character-count"
+                    className={`mt-1.5 text-right text-xs font-bold ${
+                      feedbackCharacterCount >= MAX_FEEDBACK_CHARACTERS ? 'text-primary' : 'text-black/50'
+                    }`}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {feedbackCharacterCount}/{MAX_FEEDBACK_CHARACTERS} characters
+                  </p>
                 </div>
 
                 <label className="flex items-start gap-3 rounded-xl border border-dark/10 bg-dark/5 p-4 text-sm text-black">
@@ -575,7 +592,7 @@ export default function FeedbackPage() {
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {sentimentPreview.extractedKeywords.map((keyword) => (
-                          <span key={keyword} className="rounded-full border border-dark/10 bg-white px-2 py-0.5 text-[10px] font-bold text-black/60">
+                          <span key={keyword} className="min-w-0 max-w-full break-all rounded-full border border-dark/10 bg-white px-2 py-0.5 text-[10px] font-bold text-black/60">
                             {keyword}
                           </span>
                         ))}

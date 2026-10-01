@@ -7,6 +7,8 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import { useAuth } from '@/context/AuthContext';
 import { useAdminTab } from '@/context/AdminTabContext';
+import { onFeedbackByUser, type Feedback } from '@/lib/feedback/feedback';
+import { onInboxMessages, type Message } from '@/lib/messages/messages';
 import {
   deleteNotification,
   markAllNotificationsRead,
@@ -17,7 +19,11 @@ import {
 } from '@/lib/notifications/notifications';
 import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
 import { dismissAccountConfigurationReminder } from '@/lib/auth/auth';
-import { expireOpenReservations } from '@/lib/reservations/reservations';
+import {
+  expireOpenReservations,
+  onReservationsByUser,
+  type Reservation,
+} from '@/lib/reservations/reservations';
 import AccountSettingsModal from '@/components/auth/AccountSettingsModal';
 
 export type AdminTab =
@@ -92,7 +98,7 @@ const statusSchedulingLinks = [
 ];
 
 const navItemBaseClasses =
-  'font-ui-bold rounded-lg bg-transparent text-[0.95rem] uppercase tracking-tight whitespace-nowrap leading-none transition-colors duration-200 ease-in-out';
+  'rounded-lg bg-transparent text-sm font-normal uppercase tracking-tight whitespace-nowrap leading-none transition-colors duration-200 ease-in-out';
 const navItemActiveClasses = 'bg-transparent text-[#a12124] shadow-none';
 const navItemInactiveClasses =
   'bg-transparent text-[#343434] hover:bg-transparent hover:text-[#a12124] hover:shadow-none';
@@ -115,6 +121,21 @@ function ChevronDownIcon({ open }: Readonly<ChevronDownIconProps>) {
   );
 }
 
+function NavCountBadge({ count, label }: Readonly<{ count: number; label: string }>) {
+  if (count <= 0) {
+    return null;
+  }
+
+  return (
+    <span
+      className="inline-flex min-w-4 items-center justify-center rounded-full border border-primary/20 bg-primary/10 px-1 py-0.5 text-[9px] font-bold leading-none text-primary"
+      aria-label={`${count} ${label}`}
+    >
+      {count}
+    </span>
+  );
+}
+
 const NavBar: React.FC<Readonly<NavBarProps>> = ({
   user,
   onLogout,
@@ -130,6 +151,8 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   const { firebaseUser, profile } = useAuth();
   const { setSelectedBuildingId } = useAdminTab();
   const uid = firebaseUser?.uid;
+  const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserTooltip, setShowUserTooltip] = useState(false);
@@ -174,6 +197,55 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     if (!uid) return;
 
     const unsubscribe = onUnreadNotifications(uid, (next) => setNotifications(next));
+
+    return () => unsubscribe();
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid || isAdmin || isUtilityRole) {
+      setPendingFeedbackCount(0);
+      return;
+    }
+
+    let currentReservations: Reservation[] = [];
+    let currentFeedback: Feedback[] = [];
+    const updatePendingFeedbackCount = () => {
+      const feedbackReservationIds = new Set(
+        currentFeedback.map((feedback) => feedback.reservationId)
+      );
+      setPendingFeedbackCount(
+        currentReservations.filter(
+          (reservation) =>
+            reservation.status === 'completed' &&
+            !feedbackReservationIds.has(reservation.id)
+        ).length
+      );
+    };
+
+    const unsubscribeReservations = onReservationsByUser(uid, (nextReservations) => {
+      currentReservations = nextReservations;
+      updatePendingFeedbackCount();
+    });
+    const unsubscribeFeedback = onFeedbackByUser(uid, (nextFeedback) => {
+      currentFeedback = nextFeedback;
+      updatePendingFeedbackCount();
+    });
+
+    return () => {
+      unsubscribeReservations();
+      unsubscribeFeedback();
+    };
+  }, [isAdmin, isUtilityRole, uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      setUnreadMessageCount(0);
+      return;
+    }
+
+    const unsubscribe = onInboxMessages(uid, (messages: Message[]) => {
+      setUnreadMessageCount(messages.filter((message) => !message.isRead).length);
+    });
 
     return () => unsubscribe();
   }, [uid]);
@@ -320,6 +392,10 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     fontFamily: 'var(--font-century-gothic-bold)',
     fontWeight: 700 as const,
   };
+  const navbarLinkStyle = {
+    fontFamily: 'var(--font-century-gothic)',
+    fontWeight: 400 as const,
+  };
 
   const closeMenus = () => {
     setIsStatusMenuOpen(false);
@@ -446,7 +522,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
           </div>
 
           <div
-            className={`hidden xl:flex flex-1 items-center justify-center gap-1 2xl:gap-2 ${navCenterPaddingClasses}`}
+            className={`hidden xl:flex flex-1 items-center justify-center gap-2 2xl:gap-3 ${navCenterPaddingClasses}`}
           >
             {isAdmin ? (
               <>
@@ -457,10 +533,16 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                     className={`flex shrink-0 items-center ${adminLinkPaddingClasses} py-2 ${getNavItemClasses(
                       !isAdminRoute && activeTab === link.tab
                     )}`}
-                    style={navbarBoldStyle}
+                    style={navbarLinkStyle}
                   >
-                    <span className="whitespace-nowrap" style={navbarBoldStyle}>
-                      {link.label}
+                    <span
+                      className="inline-flex items-center gap-1.5 whitespace-nowrap"
+                      style={navbarLinkStyle}
+                    >
+                      <span>{link.label}</span>
+                      {link.tab === 'inbox' ? (
+                        <NavCountBadge count={unreadMessageCount} label="unread messages" />
+                      ) : null}
                     </span>
                   </button>
                 ))}
@@ -472,11 +554,11 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                     className={`flex items-center gap-2 ${adminLinkPaddingClasses} py-2 ${getNavItemClasses(
                       isStatusSchedulingActive
                     )}`}
-                    style={navbarBoldStyle}
+                    style={navbarLinkStyle}
                     aria-haspopup="menu"
                     aria-expanded={isStatusMenuOpen}
                   >
-                    <span className="whitespace-nowrap" style={navbarBoldStyle}>
+                    <span className="whitespace-nowrap" style={navbarLinkStyle}>
                       Status &amp; Scheduling
                     </span>
                     <ChevronDownIcon open={isStatusMenuOpen} />
@@ -509,9 +591,17 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   className={`shrink-0 ${defaultLinkPaddingClasses} py-2 whitespace-nowrap ${getNavItemClasses(
                     pathname === link.href
                   )}`}
-                  style={navbarBoldStyle}
+                  style={navbarLinkStyle}
                 >
-                  <span style={navbarBoldStyle}>{link.label}</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span>{link.label}</span>
+                    {link.href === '/dashboard/feedback' ? (
+                      <NavCountBadge count={pendingFeedbackCount} label="feedback pending" />
+                    ) : null}
+                    {link.href === '/dashboard/inbox' ? (
+                      <NavCountBadge count={unreadMessageCount} label="unread messages" />
+                    ) : null}
+                  </span>
                 </Link>
               ))
             )}
@@ -753,9 +843,14 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                     className={`flex w-full items-center px-3 py-2.5 text-left ${getNavItemClasses(
                       !isAdminRoute && activeTab === link.tab
                     )}`}
-                    style={navbarBoldStyle}
+                    style={navbarLinkStyle}
                   >
-                    {link.label}
+                    <span className="flex items-center gap-1.5">
+                      <span>{link.label}</span>
+                      {link.tab === 'inbox' ? (
+                        <NavCountBadge count={unreadMessageCount} label="unread messages" />
+                      ) : null}
+                    </span>
                   </button>
                 ))}
 
@@ -768,7 +863,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                     className={`flex w-full items-center justify-between px-3 py-2.5 text-left ${getNavItemClasses(
                       isStatusSchedulingActive
                     )}`}
-                    style={navbarBoldStyle}
+                    style={navbarLinkStyle}
                   >
                     <span>Status &amp; Scheduling</span>
                     <ChevronDownIcon open={isMobileStatusMenuOpen} />
@@ -800,9 +895,17 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   href={link.href}
                   onClick={() => setIsMenuOpen(false)}
                   className={`block px-3 py-2.5 ${getNavItemClasses(pathname === link.href)}`}
-                  style={navbarBoldStyle}
+                  style={navbarLinkStyle}
                 >
-                  {link.label}
+                  <span className="inline-flex items-center gap-1.5">
+                    <span>{link.label}</span>
+                    {link.href === '/dashboard/feedback' ? (
+                      <NavCountBadge count={pendingFeedbackCount} label="feedback pending" />
+                    ) : null}
+                    {link.href === '/dashboard/inbox' ? (
+                      <NavCountBadge count={unreadMessageCount} label="unread messages" />
+                    ) : null}
+                  </span>
                 </Link>
               ))
             )}

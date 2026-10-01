@@ -7,6 +7,7 @@ import {
   SCHEDULE_ACADEMIC_YEARS,
   SCHEDULE_SEMESTERS,
 } from "../schedules/scheduleContext";
+import { MAX_FEEDBACK_CHARACTERS } from "../feedback/feedback-text-limit";
 
 const nonEmptyString = z.string().trim().min(1);
 const timeString = z.string().regex(/^\d{2}:\d{2}$/, "Expected HH:mm time.");
@@ -361,7 +362,10 @@ export const feedbackCreateSchema = z.object({
   userId: nonEmptyString,
   userName: nonEmptyString,
   showSubmitterName: z.boolean().default(false),
-  message: nonEmptyString,
+  message: nonEmptyString.max(
+    MAX_FEEDBACK_CHARACTERS,
+    `Feedback must be ${MAX_FEEDBACK_CHARACTERS} characters or fewer.`,
+  ),
   rating: z.number().int().min(1).max(5),
   categoryRatings: feedbackCategoryRatingsSchema,
 });

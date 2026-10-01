@@ -14,6 +14,7 @@ import {
 
 import { apiRequest } from "@/lib/api/client";
 import { auth, db } from "@/lib/firebase/firebase";
+import { MAX_FEEDBACK_CHARACTERS } from "@/lib/feedback/feedback-text-limit";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
 import {
   resolveFeedbackSentimentLabel,
@@ -280,6 +281,10 @@ export async function submitFeedback(
 
   if (!text) {
     throw new Error("Feedback text cannot be empty.");
+  }
+
+  if (text.length > MAX_FEEDBACK_CHARACTERS) {
+    throw new Error(`Feedback must be ${MAX_FEEDBACK_CHARACTERS} characters or fewer.`);
   }
 
   if (!currentUser) {

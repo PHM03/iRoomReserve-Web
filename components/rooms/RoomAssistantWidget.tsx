@@ -1458,14 +1458,14 @@ export default function RoomAssistantWidget({
                 <button
                   type="button"
                   onClick={resetConversation}
-                  className="rounded-full border border-white/18 bg-white px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-white"
+                  className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-white/20"
                 >
                   Reset
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/18 bg-white text-white transition-colors hover:bg-white"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20"
                   aria-label="Minimize room assistant"
                   title="Minimize room assistant"
                 >

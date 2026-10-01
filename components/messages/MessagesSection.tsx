@@ -28,10 +28,6 @@ import ComposeModal from './ComposeModal';
 type InboxTab = 'unread' | 'read' | 'sent' | 'closed' | 'reservationUpdates';
 type ReservationUpdateStatus = 'approved' | 'rejected' | 'cancelled' | 'expired' | 'pending';
 type DatePreset = 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'all';
-type CustomDateRange = {
-  fromDate: string;
-  toDate: string;
-};
 
 const DATE_PRESETS: Array<{ key: DatePreset; label: string }> = [
   {
@@ -97,32 +93,6 @@ function getDateRange(preset: DatePreset): { from: number; to: number } {
         to: Infinity
       };
   }
-}
-
-function getCustomDateRange(range: CustomDateRange): { from: number; to: number } {
-  const fromDate = new Date(`${range.fromDate}T00:00:00`);
-  const toDate = new Date(`${range.toDate}T23:59:59.999`);
-  const fromTime = fromDate.getTime();
-  const toTime = toDate.getTime();
-
-  if (Number.isNaN(fromTime) || Number.isNaN(toTime)) {
-    return {
-      from: 0,
-      to: Infinity
-    };
-  }
-
-  return {
-    from: Math.min(fromTime, toTime),
-    to: Math.max(fromTime, toTime),
-  };
-}
-
-function getActiveDateRange(
-  preset: DatePreset,
-  customRange: CustomDateRange | null
-): { from: number; to: number } {
-  return customRange ? getCustomDateRange(customRange) : getDateRange(preset);
 }
 
 interface MessagesSectionProps {
@@ -237,13 +207,6 @@ interface DetailFieldProps {
 }
 
 interface DateFilterControlsProps {
-  customFrom: string;
-  customRange: CustomDateRange | null;
-  customTo: string;
-  onApplyCustomRange: () => void;
-  onClearCustomRange: () => void;
-  onCustomFromChange: (value: string) => void;
-  onCustomToChange: (value: string) => void;
   onPresetChange: (preset: DatePreset) => void;
   preset: DatePreset;
 }
@@ -303,67 +266,11 @@ function DetailField({
 }
 
 function DateFilterControls({
-  customFrom,
-  customRange,
-  customTo,
-  onApplyCustomRange,
-  onClearCustomRange,
-  onCustomFromChange,
-  onCustomToChange,
   onPresetChange,
   preset,
 }: Readonly<DateFilterControlsProps>) {
-  const canApplyCustomRange = Boolean(customFrom && customTo);
-  const canClearCustomRange = Boolean(customFrom || customTo || customRange);
-
   return (
-    <div className="mt-4 space-y-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <span className="mb-2 mr-1 text-[10px] font-bold uppercase tracking-wider text-black/40">
-          Custom Range
-        </span>
-        <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-black/45">
-          From
-          <input
-            type="date"
-            value={customFrom}
-            onChange={(event) => onCustomFromChange(event.target.value)}
-            className="rounded-xl border border-dark/10 bg-white px-3 py-2 text-xs font-semibold normal-case tracking-normal text-black focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-black/45">
-          To
-          <input
-            type="date"
-            value={customTo}
-            onChange={(event) => onCustomToChange(event.target.value)}
-            className="rounded-xl border border-dark/10 bg-white px-3 py-2 text-xs font-semibold normal-case tracking-normal text-black focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={onApplyCustomRange}
-          disabled={!canApplyCustomRange}
-          className="rounded-xl border border-primary bg-primary px-3 py-2 text-xs font-bold text-white transition-all hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-dark/10 disabled:bg-dark/5 disabled:text-black/35"
-        >
-          Apply
-        </button>
-        <button
-          type="button"
-          onClick={onClearCustomRange}
-          disabled={!canClearCustomRange}
-          className="rounded-xl border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/55 transition-all hover:text-primary disabled:cursor-not-allowed disabled:text-black/25"
-        >
-          Clear
-        </button>
-        {customRange ? (
-          <span className="mb-2 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">
-            Custom active
-          </span>
-        ) : null}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="mr-1 text-[10px] font-bold uppercase tracking-wider text-black/40">
           Period
         </span>
@@ -373,7 +280,7 @@ function DateFilterControls({
             type="button"
             onClick={() => onPresetChange(datePreset.key)}
             className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all ${
-              !customRange && preset === datePreset.key
+              preset === datePreset.key
                 ? 'border border-primary bg-primary text-white shadow-sm'
                 : 'border border-dark/10 bg-white text-black/55 hover:text-primary'
             }`}
@@ -381,7 +288,6 @@ function DateFilterControls({
             {datePreset.label}
           </button>
         ))}
-      </div>
     </div>
   );
 }
@@ -446,16 +352,8 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [datePreset, setDatePreset] = useState<DatePreset>('thisMonth');
-  const [customDateFrom, setCustomDateFrom] = useState('');
-  const [customDateTo, setCustomDateTo] = useState('');
-  const [customDateRange, setCustomDateRange] =
-    useState<CustomDateRange | null>(null);
   const [reservationSearch, setReservationSearch] = useState('');
   const [reservationDatePreset, setReservationDatePreset] = useState<DatePreset>('thisMonth');
-  const [reservationCustomDateFrom, setReservationCustomDateFrom] = useState('');
-  const [reservationCustomDateTo, setReservationCustomDateTo] = useState('');
-  const [reservationCustomDateRange, setReservationCustomDateRange] =
-    useState<CustomDateRange | null>(null);
   const [reservationActionLoading, setReservationActionLoading] = useState<string | null>(null);
   const [reservationActionErrors, setReservationActionErrors] = useState<Record<string, string>>({});
   const [cancelRevisionConfirmation, setCancelRevisionConfirmation] = useState<{
@@ -557,47 +455,15 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
   const { from: dateFromMs, to: dateToMs } = useMemo(
-    () => getActiveDateRange(datePreset, customDateRange),
-    [customDateRange, datePreset]
+    () => getDateRange(datePreset),
+    [datePreset]
   );
-
-  const handleApplyCustomDateRange = () => {
-    if (!customDateFrom || !customDateTo) return;
-    setCustomDateRange({
-      fromDate: customDateFrom,
-      toDate: customDateTo,
-    });
-  };
-
-  const handleClearCustomDateRange = () => {
-    setCustomDateFrom('');
-    setCustomDateTo('');
-    setCustomDateRange(null);
-  };
 
   const handleDatePresetChange = (nextPreset: DatePreset) => {
     setDatePreset(nextPreset);
-    setCustomDateRange(null);
   };
 
-  const handleApplyReservationCustomDateRange = () => {
-    if (!reservationCustomDateFrom || !reservationCustomDateTo) return;
-    setReservationCustomDateRange({
-      fromDate: reservationCustomDateFrom,
-      toDate: reservationCustomDateTo,
-    });
-  };
-
-  const handleClearReservationCustomDateRange = () => {
-    setReservationCustomDateFrom('');
-    setReservationCustomDateTo('');
-    setReservationCustomDateRange(null);
-  };
-
-  const handleReservationDatePresetChange = (nextPreset: DatePreset) => {
-    setReservationDatePreset(nextPreset);
-    setReservationCustomDateRange(null);
-  };
+  const handleReservationDatePresetChange = setReservationDatePreset;
 
   const filterMessages = (messages: Message[]) => {
     return messages.filter((message) => {
@@ -629,6 +495,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
   const filteredSent = filterMessages(
     sentMessages.filter((m) => !m.closedBySender)
   );
+  const hasMessageFilters = Boolean(normalizedSearch) || datePreset !== 'all';
 
   const closedMessages = filterMessages(
     sentMessages.filter((m) => m.closedBySender)
@@ -689,12 +556,8 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
   );
 
   const { from: reservationDateFromMs, to: reservationDateToMs } = useMemo(
-    () =>
-      getActiveDateRange(
-        reservationDatePreset,
-        reservationCustomDateRange
-      ),
-    [reservationCustomDateRange, reservationDatePreset]
+    () => getDateRange(reservationDatePreset),
+    [reservationDatePreset]
   );
 
   const filteredReservationNotifications = useMemo(() => {
@@ -923,24 +786,28 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
       return (
         <EmptyState
           title={
-            tab === 'unread'
-              ? 'No unread messages.'
-              : tab === 'read'
-                ? 'No read messages yet.'
-                : tab === 'closed'
-                  ? 'No closed messages.'
-                  : 'No sent messages yet.'
+            hasMessageFilters
+              ? `No ${tab} messages match your filters.`
+              : tab === 'unread'
+                ? 'No unread messages.'
+                : tab === 'read'
+                  ? 'No read messages yet.'
+                  : tab === 'closed'
+                    ? 'No closed messages.'
+                    : 'No sent messages yet.'
           }
           description={
-            tab === 'unread'
-              ? isStaff
-                ? "You're all caught up."
-                : 'No new direct messages have arrived.'
-              : tab === 'read'
-                ? 'Messages you open will stay here for quick reference.'
-                : tab === 'closed'
-                  ? 'Messages you close from your Sent tab will appear here.'
-                  : 'Messages you send will appear here so you can track outgoing conversations.'
+            hasMessageFilters
+              ? 'Try another period or clear the search to see more messages.'
+              : tab === 'unread'
+                ? isStaff
+                  ? "You're all caught up."
+                  : 'No new direct messages have arrived.'
+                : tab === 'read'
+                  ? 'Messages you open will stay here for quick reference.'
+                  : tab === 'closed'
+                    ? 'Messages you close from your Sent tab will appear here.'
+                    : 'Messages you send will appear here so you can track outgoing conversations.'
           }
         />
       );
@@ -1362,14 +1229,8 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                   setOpenReservationUpdateId(null);
                   setSearchQuery('');
                   setDatePreset('thisMonth');
-                  setCustomDateFrom('');
-                  setCustomDateTo('');
-                  setCustomDateRange(null);
                   setReservationSearch('');
                   setReservationDatePreset('thisMonth');
-                  setReservationCustomDateFrom('');
-                  setReservationCustomDateTo('');
-                  setReservationCustomDateRange(null);
                 }}
                 className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all ${
                   activeTab === tab.key
@@ -1382,7 +1243,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
                       activeTab === tab.key
-                        ? 'bg-white text-white'
+                        ? 'border border-white/80 bg-white text-primary'
                         : 'border border-primary/20 bg-primary/10 text-primary'
                     }`}
                   >
@@ -1461,13 +1322,6 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
             </div>
 
             <DateFilterControls
-              customFrom={customDateFrom}
-              customRange={customDateRange}
-              customTo={customDateTo}
-              onApplyCustomRange={handleApplyCustomDateRange}
-              onClearCustomRange={handleClearCustomDateRange}
-              onCustomFromChange={setCustomDateFrom}
-              onCustomToChange={setCustomDateTo}
               onPresetChange={handleDatePresetChange}
               preset={datePreset}
             />
@@ -1513,13 +1367,6 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
             </div>
 
             <DateFilterControls
-              customFrom={reservationCustomDateFrom}
-              customRange={reservationCustomDateRange}
-              customTo={reservationCustomDateTo}
-              onApplyCustomRange={handleApplyReservationCustomDateRange}
-              onClearCustomRange={handleClearReservationCustomDateRange}
-              onCustomFromChange={setReservationCustomDateFrom}
-              onCustomToChange={setReservationCustomDateTo}
               onPresetChange={handleReservationDatePresetChange}
               preset={reservationDatePreset}
             />
