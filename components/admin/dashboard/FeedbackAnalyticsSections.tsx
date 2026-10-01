@@ -417,7 +417,7 @@ export function LocationPerformanceSection({
       <div className="mb-4">
         <h3 id="location-performance-heading" className="text-base font-bold text-black">Location Performance</h3>
         <p className="mt-1 text-xs font-bold text-black/65">Building: {activeBuildingLabel}</p>
-        <p className="mt-1 text-xs text-black/55">Refines the globally filtered feedback set. Comparative labels require at least five reviews. VADER sentiment scores range from -1 (very negative) to +1 (very positive).</p>
+        <p className="mt-1 text-xs text-black/55">Uses the selected period and building scope. These location filters are independent of the filters above. Comparative labels require at least five reviews. VADER sentiment scores range from -1 (very negative) to +1 (very positive).</p>
       </div>
 
       <div className="mb-4 grid gap-2 rounded-xl border border-dark/10 bg-white p-3 sm:grid-cols-2 lg:grid-cols-3">

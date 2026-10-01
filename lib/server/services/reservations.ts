@@ -2654,7 +2654,7 @@ export async function cancelReservationRecord(
       reservation.status === "approved"
         ? [
             ...new Set([
-              ...(await getBuildingManagerIds(reservation.buildingId)),
+              ...(await getAssignedBuildingAdminIds(reservation.buildingId)),
               ...(
                 await Promise.all(
                   reservation.approvalFlow
@@ -2686,7 +2686,7 @@ export async function cancelReservationRecord(
     cancellationRecipientIds.forEach((recipientUid) => {
       addNotification(batch, queuedNotifications, {
         recipientUid,
-        type: "system",
+        type: "reservation_cancelled",
         title: "Approved Reservation Cancelled",
         message: `${reservation.userName} has cancelled their reservation for ${
           reservation.roomName

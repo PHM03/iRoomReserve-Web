@@ -420,9 +420,9 @@ export default function AdminOverviewTab({
             <button
               type="button"
               onClick={() => setActiveTab('manage-rooms')}
-              className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 text-[11px] font-bold text-primary transition-all hover:bg-primary/15"
+              className="rounded-lg px-2 py-1 text-[11px] font-bold text-primary transition-all hover:bg-primary/5"
             >
-              View All Rooms
+              View all
             </button>
           }
         >
@@ -448,7 +448,7 @@ export default function AdminOverviewTab({
               />
             </label>
 
-            <div className="flex min-w-0 gap-1 overflow-x-auto rounded-xl border border-white/45 bg-white p-1 shadow-inner ">
+            <div className="flex min-w-0 gap-1 overflow-x-auto rounded-xl border border-dark/10 bg-white p-1 shadow-inner">
               {ROOM_FILTERS.map((filter) => {
                 const isActive = roomStatusFilter === filter;
                 return (
@@ -458,8 +458,8 @@ export default function AdminOverviewTab({
                     onClick={() => setRoomStatusFilter(filter)}
                     className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
                       isActive
-                        ? 'bg-white text-primary shadow-sm'
-                        : 'text-black/60 hover:bg-white hover:text-black'
+                        ? 'bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
+                        : 'text-black/60 hover:bg-dark/5 hover:text-black'
                     }`}
                   >
                     {filter}

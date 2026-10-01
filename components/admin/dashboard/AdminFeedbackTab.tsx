@@ -12,7 +12,6 @@ import {
   FEEDBACK_ANALYTICS_PERIODS,
   compareFeedbackPeriods,
   filterFeedbackByPeriod,
-  getFeedbackCreatedAt,
   scopeFeedbackToBuildings,
   type FeedbackAnalyticsPeriod,
 } from '@/lib/feedback/feedback-period';
@@ -144,18 +143,11 @@ function getBroadSentimentPercentages(summary: FeedbackSentimentSummary) {
 function applyFeedbackFilters(
   items: Feedback[],
   starFilter: number | null,
-  dateFrom: string,
-  dateTo: string,
   roleFilter: string,
   genderFilter: string,
 ) {
-  const from = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
-  const to = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
   return items.filter((feedback) => {
     if (starFilter !== null && Math.round(feedback.rating) !== starFilter) return false;
-    const date = getFeedbackCreatedAt(feedback.createdAt);
-    if (from && (!date || date < from)) return false;
-    if (to && (!date || date > to)) return false;
     if (!matchesFeedbackRole(feedback, roleFilter)) return false;
     if (genderFilter && normalizeUserGender(feedback.gender) !== genderFilter) return false;
     return true;
@@ -205,8 +197,6 @@ export default function AdminFeedbackTab({
   const [feedbackFloor, setFeedbackFloor] = useState('');
   const [feedbackRoomId, setFeedbackRoomId] = useState('');
   const [starFilter, setStarFilter] = useState<FeedbackReportRating | null>(null);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [genderFilter, setGenderFilter] = useState('');
   const [analyticsPeriod, setAnalyticsPeriod] = useState<FeedbackAnalyticsPeriod>('all_time');
@@ -291,6 +281,7 @@ export default function AdminFeedbackTab({
   const selectedFeedbackRoomId = roomOptions.some((room) => room.id === feedbackRoomId)
     ? feedbackRoomId
     : roomOptions[0]?.id ?? '';
+  const isReviewsListView = dashboardView === 'reviews' && reviewView === 'reviews';
 
   // This is the explicit, serializable snapshot a future report action will
   // pass to the report builder. It is intentionally independent of
@@ -304,9 +295,9 @@ export default function AdminFeedbackTab({
       period: analyticsPeriod,
       academicYear: analyticsAcademicYear,
       semester: analyticsSemester,
-      star: starFilter,
-      dateFrom,
-      dateTo,
+      star: isReviewsListView ? starFilter : null,
+      dateFrom: '',
+      dateTo: '',
       role: roleFilter,
       gender: genderFilter,
     }),
@@ -314,11 +305,10 @@ export default function AdminFeedbackTab({
       analyticsAcademicYear,
       analyticsPeriod,
       analyticsSemester,
-      dateFrom,
-      dateTo,
       feedbackScope,
       feedbackScopeId,
       genderFilter,
+      isReviewsListView,
       roleFilter,
       selectedFeedbackFloor,
       selectedFeedbackRoomId,
@@ -348,8 +338,6 @@ export default function AdminFeedbackTab({
     return applyFeedbackFilters(
       periodFeedback.items,
       reportFilters.star,
-      reportFilters.dateFrom,
-      reportFilters.dateTo,
       reportFilters.role,
       reportFilters.gender,
     );
@@ -372,16 +360,12 @@ export default function AdminFeedbackTab({
       currentItems: applyFeedbackFilters(
         comparison.currentItems,
         reportFilters.star,
-        reportFilters.dateFrom,
-        reportFilters.dateTo,
         reportFilters.role,
         reportFilters.gender,
       ),
       previousItems: applyFeedbackFilters(
         comparison.previousItems,
         reportFilters.star,
-        reportFilters.dateFrom,
-        reportFilters.dateTo,
         reportFilters.role,
         reportFilters.gender,
       ),
@@ -397,7 +381,7 @@ export default function AdminFeedbackTab({
   }, [filteredFeedback, selectedPeriodFeedback.configured]);
 
   const hasActiveFilters =
-    reportFilters.locationScope !== 'building' || reportFilters.star !== null || !!reportFilters.dateFrom || !!reportFilters.dateTo || !!reportFilters.role || !!reportFilters.gender;
+    reportFilters.locationScope !== 'building' || reportFilters.star !== null || !!reportFilters.role || !!reportFilters.gender;
   const insightPeriodFeedback = selectedPeriodFeedback;
 
   const feedbackInsights = useMemo(
@@ -431,6 +415,35 @@ export default function AdminFeedbackTab({
     ),
     [activeFeedbackBuildingIds, buildingId, buildingRooms, filteredFeedback, insightPeriodFeedback.comparable, insightPeriodFeedback.previousItems, reportFilters],
   );
+  const roomAnalyticsLocationPerformance = useMemo(() => {
+    const periodFeedback = compareFeedbackPeriods(
+      buildingFeedbackList,
+      analyticsPeriod,
+      analyticsNow,
+      analyticsScheduleContext,
+    );
+    return filterFeedbackLocationAnalytics(
+      buildFeedbackLocationAnalytics(
+        periodFeedback.currentItems,
+        periodFeedback.previousItems,
+        buildingRooms,
+        periodFeedback.comparable,
+      ),
+      'building',
+      buildingId,
+      '',
+      '',
+      activeFeedbackBuildingIds,
+    );
+  }, [
+    activeFeedbackBuildingIds,
+    analyticsNow,
+    analyticsPeriod,
+    analyticsScheduleContext,
+    buildingFeedbackList,
+    buildingId,
+    buildingRooms,
+  ]);
   const demographicAnalytics = useMemo(
     () => buildFeedbackDemographicAnalytics(filteredFeedback),
     [filteredFeedback],
@@ -516,8 +529,6 @@ export default function AdminFeedbackTab({
     setFeedbackFloor(floorOptions[0] ?? '');
     setFeedbackRoomId('');
     setStarFilter(null);
-    setDateFrom('');
-    setDateTo('');
     setRoleFilter('');
     setGenderFilter('');
   };
@@ -781,51 +792,27 @@ export default function AdminFeedbackTab({
               ) : null}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">
-                Stars
-              </span>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  onClick={() => setStarFilter(starFilter === star ? null : star as FeedbackReportRating)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
-                    starFilter === star
-                      ? 'bg-yellow-400 text-yellow-900 border-yellow-500'
-                      : 'border-white/45 bg-white text-black/65 shadow-sm hover:bg-white hover:text-black'
-                  }`}
-                >
-                  {'★'.repeat(star)}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">
-                Date
-              </span>
-              <label className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-black/50">From</span>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  max={dateTo || undefined}
-                  className="glass-input h-8 px-2 text-xs font-bold text-black"
-                />
-              </label>
-              <label className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-black/50">To</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  min={dateFrom || undefined}
-                  className="glass-input h-8 px-2 text-xs font-bold text-black"
-                />
-              </label>
-            </div>
+            {isReviewsListView ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">
+                  Stars
+                </span>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setStarFilter(starFilter === star ? null : star as FeedbackReportRating)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                      starFilter === star
+                        ? 'bg-yellow-400 text-yellow-900 border-yellow-500'
+                        : 'border-white/45 bg-white text-black/65 shadow-sm hover:bg-white hover:text-black'
+                    }`}
+                  >
+                    {'★'.repeat(star)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">Group</span>
@@ -1161,7 +1148,7 @@ export default function AdminFeedbackTab({
                     hideControls
                   />
                   <LocationPerformanceSection
-                    analytics={locationAnalytics}
+                    analytics={roomAnalyticsLocationPerformance}
                     activeBuildingLabel={activeBuildingLabel}
                     showBuildingContext={isWholeCampus}
                   />

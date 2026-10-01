@@ -26,7 +26,7 @@ export function StatusBadge({ status }: Readonly<StatusBadgeProps>) {
   const style = (() => {
     switch (status) {
       case 'Occupied':
-        return 'ui-badge-red';
+        return 'ui-badge-orange';
       case 'Reserved':
         return 'ui-badge-blue';
       case 'Unavailable':

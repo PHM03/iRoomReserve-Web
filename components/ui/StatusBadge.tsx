@@ -34,9 +34,10 @@ function getBadgeStyle(status: string): string {
       return 'ui-badge-green';
     case 'Reserved':
       return 'ui-badge-blue';
-    case 'Occupied':
     case 'Unavailable':
       return 'ui-badge-red';
+    case 'Occupied':
+      return 'ui-badge-orange';
     case 'approved':
     case 'responded':
     case 'Connected':

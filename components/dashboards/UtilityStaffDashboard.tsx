@@ -110,50 +110,6 @@ const ROOM_STATUS_SUMMARIES = [
   },
 ] as const;
 
-function RoomsIcon({ className = 'h-5 w-5' }: IconProps) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        d="M4 21V7l8-4 8 4v14M9 21v-6h6v6M8 9h.01M12 9h.01M16 9h.01M8 12h.01M16 12h.01"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-      />
-    </svg>
-  );
-}
-
-function AvailableIcon({ className = 'h-5 w-5' }: IconProps) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        d="M9 12l2 2 4-4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-      />
-      <path
-        d="M12 21a9 9 0 100-18 9 9 0 000 18z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-      />
-    </svg>
-  );
-}
-
 function CalendarIcon({ className = 'h-5 w-5' }: IconProps) {
   return (
     <svg
@@ -165,44 +121,6 @@ function CalendarIcon({ className = 'h-5 w-5' }: IconProps) {
     >
       <path
         d="M8 7V3m8 4V3M4 11h16M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-      />
-    </svg>
-  );
-}
-
-function OccupiedIcon({ className = 'h-5 w-5' }: IconProps) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        d="M15 11a3 3 0 11-6 0 3 3 0 016 0zM4 21a8 8 0 0116 0"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-      />
-    </svg>
-  );
-}
-
-function RequestsIcon({ className = 'h-5 w-5' }: IconProps) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        d="M9 5h6M9 9h6M9 13h3M7 3h10a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 012-2z"
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={2}
@@ -335,41 +253,28 @@ function buildEntriesByDay(
 }
 
 function StatCard({
-  accentClassName,
-  glowClassName,
-  icon,
-  iconClassName,
-  iconHoverClassName,
+  detail,
   label,
+  tone,
   value,
 }: Readonly<{
-  accentClassName: string;
-  glowClassName: string;
-  icon: React.ReactNode;
-  iconClassName: string;
-  iconHoverClassName: string;
+  detail?: string;
   label: string;
+  tone: string;
   value: number;
 }>) {
   return (
-    <div
-      className={`group rounded-2xl border border-white/35 border-l-4 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.17)]  transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-2xl ${accentClassName} ${glowClassName}`.trim()}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-3xl font-bold leading-none text-gray-900">
-            {value}
-          </p>
-          <p className="mt-2 text-xs font-bold uppercase tracking-wide text-gray-500">
-            {label}
-          </p>
-        </div>
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/40 shadow-sm  transition-colors duration-300 ${iconClassName} ${iconHoverClassName}`.trim()}
-        >
-          {icon}
-        </div>
-      </div>
+    <div className="glass-card flex min-h-[96px] flex-col items-start justify-start p-4">
+      <div className={`mb-2 h-1 w-8 rounded-full ${tone}`} />
+      <p className="truncate text-[11px] font-bold text-black/55">{label}</p>
+      <p className="mt-1 text-2xl font-extrabold leading-none text-black">
+        {value}
+      </p>
+      {detail ? (
+        <p className="mt-1 truncate text-[10px] font-bold text-black/40">
+          {detail}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -749,6 +654,9 @@ export default function UtilityStaffDashboard({
   const ongoingCount = roomStatuses.filter(
     ({ resolved }) => resolved.status === 'Occupied'
   ).length;
+  const unavailableCount = roomStatuses.filter(
+    ({ resolved }) => resolved.status === 'Unavailable'
+  ).length;
 
   if (!buildingId || !buildingName) {
     return (
@@ -783,48 +691,29 @@ export default function UtilityStaffDashboard({
 
   const statCards = [
     {
-      accentClassName: 'border-l-primary',
-      glowClassName: 'shadow-primary/10 hover:shadow-primary/20',
-      icon: <RoomsIcon />,
-      iconClassName: 'bg-primary/10 text-primary',
-      iconHoverClassName: 'group-hover:bg-primary/5',
+      detail: `${unavailableCount} unavailable`,
       label: 'Total Rooms',
+      tone: 'bg-primary',
       value: rooms.length,
     },
     {
-      accentClassName: 'border-l-green-500/70',
-      glowClassName: 'shadow-green-500/10 hover:shadow-green-500/20',
-      icon: <AvailableIcon />,
-      iconClassName: 'bg-green-500/10 text-green-700',
-      iconHoverClassName: 'group-hover:bg-green-500/5',
       label: 'Available',
+      tone: 'bg-green-500',
       value: availableCount,
     },
     {
-      accentClassName: 'border-l-blue-500/70',
-      glowClassName: 'shadow-blue-500/10 hover:shadow-blue-500/20',
-      icon: <CalendarIcon />,
-      iconClassName: 'bg-blue-500/10 text-blue-700',
-      iconHoverClassName: 'group-hover:bg-blue-500/5',
       label: 'Reserved',
+      tone: 'bg-blue-500',
       value: reservedCount,
     },
     {
-      accentClassName: 'border-l-orange-500/70',
-      glowClassName: 'shadow-orange-500/10 hover:shadow-orange-500/20',
-      icon: <OccupiedIcon />,
-      iconClassName: 'bg-orange-500/10 text-orange-700',
-      iconHoverClassName: 'group-hover:bg-orange-500/5',
       label: 'Occupied',
+      tone: 'bg-orange-500',
       value: ongoingCount,
     },
     {
-      accentClassName: 'border-l-yellow-500/70',
-      glowClassName: 'shadow-yellow-500/10 hover:shadow-yellow-500/20',
-      icon: <RequestsIcon />,
-      iconClassName: 'bg-yellow-500/10 text-yellow-700',
-      iconHoverClassName: 'group-hover:bg-yellow-500/5',
       label: 'Open Requests',
+      tone: 'bg-yellow-500',
       value: openRequests.length,
     },
   ];
@@ -866,16 +755,13 @@ export default function UtilityStaffDashboard({
           )}
         </div>
 
-        <div className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {statCards.map((card) => (
             <StatCard
               key={card.label}
-              accentClassName={card.accentClassName}
-              glowClassName={card.glowClassName}
-              icon={card.icon}
-              iconClassName={card.iconClassName}
-              iconHoverClassName={card.iconHoverClassName}
+              detail={'detail' in card ? card.detail : undefined}
               label={card.label}
+              tone={card.tone}
               value={card.value}
             />
           ))}
