@@ -33,7 +33,8 @@ export type AdminTab =
   | 'status-scheduling'
   | 'reservation-history'
   | 'inbox'
-  | 'pending';
+  | 'pending'
+  | 'audit-logs';
 
 type CampusOverride = 'main' | 'digi';
 
@@ -416,6 +417,14 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
       ? `${href}?campus=${superAdminCampus}`
       : href;
 
+  const visibleAdminLinks = isSuperAdminLimitedNav
+    ? [
+        ...adminLinks.slice(0, 5),
+        { label: 'Audit Logs', tab: 'audit-logs' as const },
+        adminLinks[5],
+      ]
+    : adminLinks;
+
   const handleAdminTabClick = (tab: AdminTab) => {
     onTabChange?.(tab);
     closeMenus();
@@ -477,7 +486,11 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
     if ((isAdmin || isBuildingAdmin) && onTabChange) {
       const destinationTab = isPending ? 'pending' : isFeedback ? 'feedback' : 'inbox';
       onTabChange(destinationTab);
-      router.push(`/dashboard?tab=${destinationTab}`);
+      router.push(
+        isSuperAdminLimitedNav
+          ? superAdminDashboardHref
+          : `/dashboard?tab=${destinationTab}`
+      );
       return;
     }
 
@@ -506,7 +519,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
       ref={navRef}
       className="glass-nav fixed top-0 left-0 right-0 z-50 border-white/40 bg-white shadow-xl "
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={`${isSuperAdminLimitedNav ? 'max-w-screen-2xl' : 'max-w-7xl'} mx-auto px-4 sm:px-6 lg:px-8`}>
         <div className="flex items-center justify-between gap-3 py-4 xl:gap-5">
           <div className="flex shrink-0 items-center gap-2">
             <Image
@@ -522,11 +535,11 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
           </div>
 
           <div
-            className={`hidden xl:flex flex-1 items-center justify-center gap-2 2xl:gap-3 ${navCenterPaddingClasses}`}
+            className={`hidden ${isSuperAdminLimitedNav ? '2xl:flex' : 'xl:flex'} flex-1 items-center justify-center gap-2 2xl:gap-3 ${navCenterPaddingClasses}`}
           >
             {isAdmin ? (
               <>
-                {adminLinks.map((link) => (
+                {visibleAdminLinks.map((link) => (
                   <button
                     key={link.tab}
                     onClick={() => handleAdminTabClick(link.tab)}
@@ -608,6 +621,17 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
           </div>
 
           <div className="flex shrink-0 items-center space-x-1 sm:space-x-2">
+            {isSuperAdminLimitedNav ? (
+              <Link
+                href="/superadmin/dashboard"
+                className="hidden items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium leading-none text-[#343434]/70 transition-colors duration-200 hover:text-[#a12124] sm:inline-flex"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                <span>Super Admin Dashboard</span>
+              </Link>
+            ) : null}
             <div className="flex items-center space-x-2">
               <div
                 className="relative"
@@ -805,7 +829,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
 
             <button
               onClick={() => setIsMenuOpen((current) => !current)}
-              className={`xl:hidden ${navIconButtonClasses}`}
+              className={`${isSuperAdminLimitedNav ? '2xl:hidden' : 'xl:hidden'} ${navIconButtonClasses}`}
             >
               {isMenuOpen ? (
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -832,11 +856,11 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
       </div>
 
       {isMenuOpen ? (
-        <div className="xl:hidden border-t border-[#343434]/8 bg-white shadow-xl ">
+        <div className={`${isSuperAdminLimitedNav ? '2xl:hidden' : 'xl:hidden'} border-t border-[#343434]/8 bg-white shadow-xl`}>
           <div className="px-3 py-2 space-y-1">
             {isAdmin ? (
               <>
-                {adminLinks.map((link) => (
+                {visibleAdminLinks.map((link) => (
                   <button
                     key={link.tab}
                     onClick={() => handleAdminTabClick(link.tab)}

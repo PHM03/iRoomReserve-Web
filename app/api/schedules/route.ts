@@ -18,6 +18,7 @@ import {
 import {
   assertScheduleAccess,
 } from "@/lib/server/schedule-authorization";
+import { writeAuditLog } from "@/lib/server/services/audit-logs";
 
 export const runtime = "nodejs";
 
@@ -167,6 +168,15 @@ export async function POST(request: NextRequest) {
     }
 
     const id = await createScheduleRecord(safePayload, overrideScheduleIds);
+    await writeAuditLog(authContext, {
+      action: "schedule.created",
+      entityType: "schedule",
+      entityId: id,
+      summary: `Created a class schedule for ${payload.subjectName}.`,
+      buildingId: payload.buildingId,
+      changes: { schedule: { from: null, to: `${payload.subjectName} · ${payload.dayOfWeek} · ${payload.startTime}-${payload.endTime}` } },
+      metadata: { roomName: payload.roomName, subjectName: payload.subjectName, dayOfWeek: payload.dayOfWeek, startTime: payload.startTime, endTime: payload.endTime, semester: payload.semester, academicYear: payload.academicYear },
+    });
     return NextResponse.json({ id });
   } catch (error) {
     return handleApiError(error);
@@ -229,6 +239,18 @@ export async function DELETE(request: NextRequest) {
         batch.delete(scheduleDoc.ref);
       });
       await batch.commit();
+    }
+
+    if (schedulesToDelete.length > 0) {
+      await writeAuditLog(authContext, {
+        action: "schedule.cleared",
+        entityType: "schedule",
+        entityId: `${roomId.trim()}_${semester}_${academicYear}`,
+        summary: `Cleared ${schedulesToDelete.length} class schedule${schedulesToDelete.length === 1 ? "" : "s"} from ${schedulesToDelete[0]?.data().roomName ?? "room"}.`,
+        buildingId,
+        changes: { scheduleCount: { from: schedulesToDelete.length, to: 0 } },
+        metadata: { roomName: String(schedulesToDelete[0]?.data().roomName ?? "Room"), semester, academicYear, deletedCount: schedulesToDelete.length },
+      });
     }
 
     return NextResponse.json({ deletedCount: schedulesToDelete.length });

@@ -5,12 +5,13 @@ import { ApiError, handleApiError } from "@/lib/server/api-error";
 import { getOptionalAdminDb } from "@/lib/server/firebase-admin";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
 import {
-  assertAuthenticated,
   assertCanManageBuilding,
   assertRole,
+  assertVerifiedAuthentication,
 } from "@/lib/server/route-guards";
 import { db, serverTimestamp } from "@/lib/firebase/firebase-admin";
 import { z } from "zod";
+import { buildAuditChanges, writeAuditLog } from "@/lib/server/services/audit-logs";
 import {
   SCHEDULE_ACADEMIC_YEARS,
   SCHEDULE_SEMESTERS,
@@ -26,8 +27,8 @@ export async function PATCH(
   { params }: { params: Promise<{ buildingId: string }> }
 ) {
   try {
-    const authContext = await getRequestAuthContext(request);
-    assertAuthenticated(authContext);
+    const authContext = await getRequestAuthContext(request, { allowCompatibilityHeaders: false });
+    assertVerifiedAuthentication(authContext);
     assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
 
     const { buildingId } = await params;
@@ -54,6 +55,30 @@ export async function PATCH(
       activeScheduleSemester: payload.semester,
       updatedAt: serverTimestamp(),
     });
+
+    const building = buildingSnapshot.data() ?? {};
+    const changes = buildAuditChanges(
+      {
+        activeScheduleAcademicYear: typeof building.activeScheduleAcademicYear === "string" ? building.activeScheduleAcademicYear : null,
+        activeScheduleSemester: typeof building.activeScheduleSemester === "string" ? building.activeScheduleSemester : null,
+      },
+      {
+        activeScheduleAcademicYear: payload.academicYear,
+        activeScheduleSemester: payload.semester,
+      },
+    );
+    if (Object.keys(changes).length > 0) {
+      await writeAuditLog(authContext, {
+        action: "building.updated",
+        entityType: "building",
+        entityId: buildingId,
+        summary: `Updated the active schedule context for ${String(building.name ?? buildingId)}.`,
+        buildingId,
+        buildingName: typeof building.name === "string" ? building.name : null,
+        campus: typeof building.campus === "string" ? building.campus : authContext.campus,
+        changes,
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

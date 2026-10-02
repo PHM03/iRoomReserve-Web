@@ -244,6 +244,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Audit entries are written only by the authenticated server and cannot be
+    // read or altered directly by clients.
+    match /auditLogs/{docId} {
+      allow read, write: if false;
+    }
+
     // Read-only client access keeps room availability in sync. Changes are
     // made only through the authenticated server route.
     match /roomUnavailability/{docId} {

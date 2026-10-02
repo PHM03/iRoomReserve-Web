@@ -9,6 +9,7 @@ import AdminInboxTab from '@/components/admin/dashboard/AdminInboxTab';
 import AdminOverviewTab from '@/components/admin/dashboard/AdminOverviewTab';
 import AdminPendingTab from '@/components/admin/dashboard/AdminPendingTab';
 import AdminRoomHistoryTab from '@/components/admin/dashboard/AdminRoomHistoryTab';
+import AdminAuditLogsTab from '@/components/admin/dashboard/AdminAuditLogsTab';
 import AdminManageRoomsTab from '@/components/admin/dashboard/AdminManageRoomsTab';
 import {
   getManagedBuildingDisplayLabel,
@@ -341,6 +342,14 @@ export default function AdminDashboard({
   const summaryAvailableCount = dashboardSummary?.availableRooms ?? availableCount;
   const pendingCount = dashboardSummary?.pendingRequests ?? requests.length;
   const approverEmail = profile?.email || firebaseUser?.email;
+
+  if (activeTab === 'audit-logs' && profile?.role === 'Super Admin') {
+    return (
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[100px] pb-24 md:pb-8 relative z-10">
+        <AdminAuditLogsTab campus={campusOverride} />
+      </main>
+    );
+  }
 
   if (!buildingId || !buildingName) {
     return (

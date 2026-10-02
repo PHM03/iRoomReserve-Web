@@ -11,8 +11,8 @@ import {
 import { handleApiError } from "@/lib/server/api-error";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
 import {
-  assertAuthenticated,
   assertRole,
+  assertVerifiedAuthentication,
 } from "@/lib/server/route-guards";
 import { confirmFinishedReservationRecord } from "@/lib/server/services/reservations";
 
@@ -226,8 +226,8 @@ async function getRoomsByIds(roomIds: string[]) {
 
 export async function GET(request: NextRequest) {
   try {
-    const authContext = await getRequestAuthContext(request);
-    assertAuthenticated(authContext);
+    const authContext = await getRequestAuthContext(request, { allowCompatibilityHeaders: false });
+    assertVerifiedAuthentication(authContext);
 
     const profileSnapshot = await db.collection("users").doc(authContext.uid!).get();
     const profile = profileSnapshot.exists

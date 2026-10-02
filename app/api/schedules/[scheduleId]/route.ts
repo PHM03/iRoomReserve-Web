@@ -15,6 +15,7 @@ import { validateScheduleTimes } from "@/lib/schedules/scheduleTimeRules";
 import {
   assertScheduleAccess,
 } from "@/lib/server/schedule-authorization";
+import { buildAuditChanges, writeAuditLog } from "@/lib/server/services/audit-logs";
 
 export const runtime = "nodejs";
 
@@ -126,6 +127,19 @@ export async function PATCH(
       await updateScheduleRecord(scheduleId, safePayload);
     }
 
+    await writeAuditLog(authContext, {
+      action: "schedule.updated",
+      entityType: "schedule",
+      entityId: scheduleId,
+      summary: `Updated the class schedule for ${mergedSchedule.subjectName ?? "a room"}.`,
+      buildingId: mergedSchedule.buildingId ?? null,
+      changes: buildAuditChanges(
+        existingSchedule as Record<string, string | number | boolean | null | undefined>,
+        safePayload as Record<string, string | number | boolean | null | undefined>,
+      ),
+      metadata: { roomName: mergedSchedule.roomName ?? "Room", subjectName: mergedSchedule.subjectName ?? "Class", dayOfWeek: mergedSchedule.dayOfWeek ?? 0, startTime: mergedSchedule.startTime ?? "", endTime: mergedSchedule.endTime ?? "", semester: mergedSchedule.semester ?? "", academicYear: mergedSchedule.academicYear ?? "" },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);
@@ -155,6 +169,15 @@ export async function DELETE(
       buildingId,
     });
     await deleteScheduleRecord(scheduleId);
+    await writeAuditLog(authContext, {
+      action: "schedule.deleted",
+      entityType: "schedule",
+      entityId: scheduleId,
+      summary: `Deleted the class schedule for ${existingSchedule.subjectName ?? "a room"}.`,
+      buildingId: existingSchedule.buildingId ?? null,
+      changes: { schedule: { from: `${existingSchedule.subjectName ?? "Class"} · ${existingSchedule.dayOfWeek ?? ""} · ${existingSchedule.startTime ?? ""}-${existingSchedule.endTime ?? ""}`, to: null } },
+      metadata: { roomName: existingSchedule.roomName ?? "Room", subjectName: existingSchedule.subjectName ?? "Class", dayOfWeek: existingSchedule.dayOfWeek ?? 0, startTime: existingSchedule.startTime ?? "", endTime: existingSchedule.endTime ?? "", semester: existingSchedule.semester ?? "", academicYear: existingSchedule.academicYear ?? "" },
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

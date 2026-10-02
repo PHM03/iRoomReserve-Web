@@ -43,6 +43,7 @@ import {
 } from "@/lib/schedules/scheduleConflicts";
 import { normalizeScheduleContext } from "@/lib/schedules/scheduleContext";
 import { ApiError } from "@/lib/server/api-error";
+import { writeAuditLog, writeSystemAuditLog, type AuditLogInput } from "@/lib/server/services/audit-logs";
 import type { RequestAuthContext } from "@/lib/server/request-auth";
 import {
   assertCanManageBuilding,
@@ -1706,7 +1707,7 @@ export async function monitorPendingReservations(now: Date = new Date()) {
       const result = await db.runTransaction(async (transaction) => {
         const currentSnapshot = await transaction.get(reservationDoc.ref);
         if (!currentSnapshot.exists) {
-          return { expired: false, notifications: [] as AppNotificationInput[] };
+          return { expired: false, notifications: [] as AppNotificationInput[], auditReservation: null as ReservationRecord | null };
         }
 
         const reservation = {
@@ -1718,7 +1719,7 @@ export async function monitorPendingReservations(now: Date = new Date()) {
           !reservation.date ||
           recipientIds.length === 0
         ) {
-          return { expired: false, notifications: [] as AppNotificationInput[] };
+          return { expired: false, notifications: [] as AppNotificationInput[], auditReservation: null as ReservationRecord | null };
         }
 
         const dayOffset = getMonitoringDayOffset(reservation.date, now);
@@ -1814,11 +1815,37 @@ export async function monitorPendingReservations(now: Date = new Date()) {
           });
         }
 
-        return { expired: isDue, notifications: notificationInputs };
+        return {
+          expired: isDue,
+          notifications: notificationInputs,
+          auditReservation: isDue ? reservation : null,
+        };
       });
 
       if (result.expired) {
         expiredCount += 1;
+        const reservation = result.auditReservation;
+        if (reservation) {
+          await writeSystemAuditLog({
+            action: "reservation.expired",
+            entityType: "reservation",
+            entityId: reservation.id,
+            targetUserId: reservation.userId,
+            campus: reservation.campus,
+            buildingId: reservation.buildingId,
+            buildingName: reservation.buildingName,
+            summary: `Automatically expired the pending reservation for ${reservation.roomName}.`,
+            changes: { status: { from: reservation.status, to: "expired" } },
+            metadata: {
+              roomId: reservation.roomId,
+              roomName: reservation.roomName,
+              date: reservation.date,
+              startTime: reservation.startTime,
+              endTime: reservation.endTime,
+              expirationReason: "pending_approval_deadline",
+            },
+          });
+        }
       }
       queuedNotifications.push(...result.notifications);
     })
@@ -1848,7 +1875,7 @@ export async function expireOpenReservationsForUser(userId: string) {
 
   await Promise.all(
     openSnapshot.docs.map(async (reservationDoc) => {
-      const notification = await db.runTransaction(async (transaction) => {
+      const expiration = await db.runTransaction(async (transaction) => {
         const currentSnapshot = await transaction.get(reservationDoc.ref);
         if (!currentSnapshot.exists) {
           return null;
@@ -1890,12 +1917,31 @@ export async function expireOpenReservationsForUser(userId: string) {
             createdAt: serverTimestamp(),
           }
         );
-        return notificationInput;
+        return { notificationInput, reservation };
       });
 
-      if (notification) {
+      if (expiration) {
         expiredCount += 1;
-        queuedNotifications.push(notification);
+        queuedNotifications.push(expiration.notificationInput);
+        const reservation = expiration.reservation;
+        await writeSystemAuditLog({
+          action: "reservation.expired",
+          entityType: "reservation",
+          entityId: reservation.id,
+          targetUserId: reservation.userId,
+          campus: reservation.campus,
+          buildingId: reservation.buildingId,
+          buildingName: reservation.buildingName,
+          summary: `Automatically expired the approved reservation for ${reservation.roomName} after its end time without completion.`,
+          changes: { status: { from: reservation.status, to: "expired" } },
+          metadata: {
+            roomId: reservation.roomId,
+            roomName: reservation.roomName,
+            date: reservation.date,
+            startTime: reservation.startTime,
+            endTime: reservation.endTime,
+          },
+        });
       }
     })
   );
@@ -3282,8 +3328,9 @@ export async function completeReservationRecord(
 
 export async function confirmFinishedReservationRecord(
   reservationId: string,
-  actingUserId: string
-) {
+  actingUserId: string,
+  auditActor?: RequestAuthContext,
+): Promise<boolean> {
   try {
     const reservationRef = db.collection("reservations").doc(reservationId);
     const reservationSnapshot = await reservationRef.get();
@@ -3297,7 +3344,7 @@ export async function confirmFinishedReservationRecord(
     } as ReservationRecord;
 
     if (reservation.occupancyReleasedAt) {
-      return;
+      return false;
     }
 
     const canConfirmCompletedReservation = reservation.status === "completed";
@@ -3334,6 +3381,35 @@ export async function confirmFinishedReservationRecord(
     });
 
     await batch.commit();
+    const auditEntry: AuditLogInput = {
+      action: "reservation.completion_confirmed",
+      entityType: "reservation",
+      entityId: reservationId,
+      targetUserId: reservation.userId,
+      campus: reservation.campus,
+      buildingId: reservation.buildingId,
+      buildingName: reservation.buildingName,
+      summary: auditActor
+        ? `Confirmed completion for ${reservation.roomName}.`
+        : `Automatically confirmed completion for ${reservation.roomName} after the staff-release timeout.`,
+      changes: {
+        status: { from: reservation.status, to: "completed" },
+        occupancyReleased: { from: false, to: true },
+      },
+      metadata: {
+        roomId: reservation.roomId,
+        roomName: reservation.roomName,
+        date: reservation.date,
+        startTime: reservation.startTime,
+        endTime: reservation.endTime,
+        trigger: auditActor ? "manual_building_confirmation" : "mobile_dashboard_timeout",
+      },
+    };
+    if (auditActor) {
+      await writeAuditLog(auditActor, auditEntry);
+    } else {
+      await writeSystemAuditLog(auditEntry, "Mobile Dashboard Reservation Processor");
+    }
     await updateRoomLifecycleStatus(reservation.roomId);
     await syncReservationStatuses([
       {
@@ -3344,6 +3420,7 @@ export async function confirmFinishedReservationRecord(
         status: "completed",
       },
     ]);
+    return true;
   } catch (error) {
     logReservationServiceError("confirmFinishedReservationRecord", error, {
       reservationId,

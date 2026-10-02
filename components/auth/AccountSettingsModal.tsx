@@ -223,10 +223,29 @@ export default function AccountSettingsModal({
       return;
     }
 
+    const passwordUser = firebaseUser;
+    if (!passwordUser) {
+      setPasswordErrorMessage('You must be signed in to update your password.');
+      return;
+    }
+
     setPasswordSaving(true);
 
     try {
       await changeCurrentUserPassword(currentPassword, newPassword);
+      try {
+        const idToken = await passwordUser.getIdToken();
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ action: 'account.password_changed' }),
+        });
+      } catch (auditError) {
+        console.warn('Password changed, but the audit log could not be written:', auditError);
+      }
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');

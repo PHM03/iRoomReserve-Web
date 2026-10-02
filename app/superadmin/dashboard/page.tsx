@@ -208,11 +208,6 @@ export default function SuperAdminDashboard() {
     setDeletingUser(null);
   };
 
-  const handleLogout = async () => {
-    await logout();
-    router.push('/');
-  };
-
   if (loading || !firebaseUser || profile?.role !== 'Super Admin') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -267,6 +262,11 @@ export default function SuperAdminDashboard() {
   const handleApproveWithBuilding = handleApproveWithCampus;
   const accountEmail = profile?.email ?? firebaseUser.email ?? '';
 
+  const handleLogout = async () => {
+    await logout();
+    router.push('/');
+  };
+
   return (
     <div className="min-h-screen relative isolate">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -283,7 +283,6 @@ export default function SuperAdminDashboard() {
       </div>
 
       <div className="relative z-10">
-      {/* Top Nav */}
       <nav className="glass-nav sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
@@ -300,26 +299,24 @@ export default function SuperAdminDashboard() {
             </div>
 
             <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2">
-                <div
-                  className="relative"
-                  onMouseEnter={() => setShowAccountTooltip(true)}
-                  onMouseLeave={() => setShowAccountTooltip(false)}
-                >
-                  <div className="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
-                    SA
-                  </div>
-                  {showAccountTooltip ? (
-                    <div className="absolute right-0 top-full mt-2 w-56 glass-card !rounded-xl p-3 shadow-xl z-50">
-                      <p className="text-xs font-bold text-black">Super Admin</p>
-                      {accountEmail ? (
-                        <p className="mt-0.5 truncate text-[11px] text-black/70">
-                          {accountEmail}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
+              <div
+                className="relative"
+                onMouseEnter={() => setShowAccountTooltip(true)}
+                onMouseLeave={() => setShowAccountTooltip(false)}
+              >
+                <div className="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+                  SA
                 </div>
+                {showAccountTooltip ? (
+                  <div className="absolute right-0 top-full mt-2 w-56 glass-card !rounded-xl p-3 shadow-xl z-50">
+                    <p className="text-xs font-bold text-black">Super Admin</p>
+                    {accountEmail ? (
+                      <p className="mt-0.5 truncate text-[11px] text-black/70">
+                        {accountEmail}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <button
                 onClick={handleLogout}
@@ -334,7 +331,6 @@ export default function SuperAdminDashboard() {
           </div>
         </div>
       </nav>
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         <div className="glass-card p-4 sm:p-5 mb-6">
@@ -347,14 +343,20 @@ export default function SuperAdminDashboard() {
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <button
+                onClick={() => router.push('/superadmin/audit-logs')}
+                className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white border border-primary hover:bg-[#8f1c1f] transition-all"
+              >
+                Audit Logs
+              </button>
+              <button
                 onClick={() => router.push('/superadmin/admin-dashboard?campus=main')}
-                className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-bold bg-primary/15 text-primary border border-primary/25 hover:bg-primary/25 transition-all"
+                className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white border border-primary hover:bg-[#8f1c1f] transition-all"
               >
                 SDCA Main Campus
               </button>
               <button
                 onClick={() => router.push('/superadmin/admin-dashboard?campus=digi')}
-                className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-bold bg-primary/15 text-primary border border-primary/25 hover:bg-primary/25 transition-all"
+                className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white border border-primary hover:bg-[#8f1c1f] transition-all"
               >
                 SDCA Digital Campus
               </button>

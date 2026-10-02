@@ -14,6 +14,7 @@ import {
   getFeedbackRecordsByBuilding,
   getFeedbackRecordsByUser,
 } from "@/lib/server/services/feedback";
+import { writeAuditLog } from "@/lib/server/services/audit-logs";
 
 export const runtime = "nodejs";
 
@@ -61,6 +62,16 @@ export async function POST(request: NextRequest) {
     assertOwnsResource(authContext, payload.userId);
 
     const id = await createFeedbackRecord(payload, authContext.role, authContext.uid!);
+    await writeAuditLog(authContext, {
+      action: "feedback.submitted",
+      entityType: "feedback",
+      entityId: id,
+      summary: `Submitted feedback for ${payload.roomName}.`,
+      targetUserId: authContext.uid,
+      buildingId: payload.buildingId,
+      buildingName: payload.buildingName,
+      metadata: { roomName: payload.roomName, rating: payload.rating },
+    });
     return NextResponse.json({ id });
   } catch (error) {
     return handleApiError(error);

@@ -47,6 +47,7 @@ export async function seedDefaultBuildings() {
   const existingSnapshot = await db.collection("buildings").get();
   const existingIds = new Set(existingSnapshot.docs.map((buildingDoc) => buildingDoc.id));
   const created: string[] = [];
+  const createdBuildingIds: string[] = [];
   const skipped: string[] = [];
 
   for (const building of DEFAULT_BUILDINGS) {
@@ -62,10 +63,12 @@ export async function seedDefaultBuildings() {
       updatedAt: serverTimestamp(),
     });
     created.push(building.name);
+    createdBuildingIds.push(building.id);
   }
 
   return {
     created,
+    createdBuildingIds,
     skipped
   };
 }

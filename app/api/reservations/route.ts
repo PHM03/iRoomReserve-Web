@@ -11,8 +11,10 @@ import {
   assertAuthenticated,
   assertOwnsResource,
   assertRole,
+  assertVerifiedAuthentication,
 } from "@/lib/server/route-guards";
 import { createReservationSchema } from "@/lib/server/schemas";
+import { writeAuditLog } from "@/lib/server/services/audit-logs";
 import {
   createRecurringReservationRecord,
   createReservationRecord,
@@ -190,8 +192,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authContext = await getRequestAuthContext(request);
-    assertAuthenticated(authContext);
+    const authContext = await getRequestAuthContext(request, { allowCompatibilityHeaders: false });
+    assertVerifiedAuthentication(authContext);
 
     const payload = createReservationSchema.parse(await request.json());
 
@@ -212,6 +214,23 @@ export async function POST(request: NextRequest) {
 
     if (payload.type === "single") {
       const id = await createReservationRecord(payload.reservation);
+      await writeAuditLog(authContext, {
+        action: "reservation.created",
+        entityType: "reservation",
+        entityId: id,
+        targetUserId: payload.reservation.userId,
+        campus: payload.reservation.campus,
+        buildingId: payload.reservation.buildingId,
+        buildingName: payload.reservation.buildingName,
+        summary: `Reserved ${payload.reservation.roomName}`,
+        metadata: {
+          roomId: payload.reservation.roomId,
+          roomName: payload.reservation.roomName,
+          date: payload.reservation.date,
+          startTime: payload.reservation.startTime,
+          endTime: payload.reservation.endTime,
+        },
+      });
       return NextResponse.json({ id });
     }
 
@@ -220,6 +239,26 @@ export async function POST(request: NextRequest) {
       payload.selectedDays,
       payload.startDate,
       payload.endDate
+    );
+    await Promise.all(
+      ids.map((id) =>
+        writeAuditLog(authContext, {
+          action: "reservation.created",
+          entityType: "reservation",
+          entityId: id,
+          targetUserId: payload.reservation.userId,
+          campus: payload.reservation.campus,
+          buildingId: payload.reservation.buildingId,
+          buildingName: payload.reservation.buildingName,
+          summary: `Reserved ${payload.reservation.roomName}`,
+          metadata: {
+            roomId: payload.reservation.roomId,
+            roomName: payload.reservation.roomName,
+            startTime: payload.reservation.startTime,
+            endTime: payload.reservation.endTime,
+          },
+        })
+      )
     );
     return NextResponse.json({ ids });
   } catch (error) {

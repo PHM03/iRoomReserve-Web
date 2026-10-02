@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError, ApiError } from "@/lib/server/api-error";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
-import { assertAuthenticated, assertVerifiedAuthentication } from "@/lib/server/route-guards";
+import { assertVerifiedAuthentication } from "@/lib/server/route-guards";
+import { writeAuditLog } from "@/lib/server/services/audit-logs";
 import {
   deleteReservationDocumentFromStorage,
   uploadReservationDocument,
@@ -37,8 +38,8 @@ function isPendingDocumentPathForUser(path: string, userId: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authContext = await getRequestAuthContext(request, { includeProfile: false });
-    assertAuthenticated(authContext);
+    const authContext = await getRequestAuthContext(request, { includeProfile: false, allowCompatibilityHeaders: false });
+    assertVerifiedAuthentication(authContext);
     const userId = authContext.uid;
     if (!userId) {
       throw new ApiError(401, "unauthenticated", "Authentication is required.");
@@ -62,10 +63,19 @@ export async function POST(request: NextRequest) {
       userId,
     });
 
+    const reservationId = getOptionalString(formData.get("reservationId"));
     const upload = await uploadReservationDocument({
       file: fileEntry,
-      reservationId: getOptionalString(formData.get("reservationId")),
+      reservationId,
       userId,
+    });
+    await writeAuditLog(authContext, {
+      action: "reservation.document_uploaded",
+      entityType: reservationId ? "reservation" : "account",
+      entityId: reservationId ?? userId,
+      targetUserId: userId,
+      summary: "Uploaded reservation concept paper",
+      metadata: { sizeBytes: fileEntry.size },
     });
 
     console.log("[reservation-upload] returning uploaded concept paper", {
@@ -110,6 +120,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     await deleteReservationDocumentFromStorage(path);
+    await writeAuditLog(authContext, {
+      action: "reservation.document_removed",
+      entityType: "account",
+      entityId: userId,
+      targetUserId: userId,
+      summary: "Removed pending reservation concept paper",
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
     return handleApiError(error);

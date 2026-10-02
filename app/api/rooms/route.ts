@@ -8,9 +8,11 @@ import {
   assertAuthenticated,
   assertCanManageBuilding,
   assertRole,
+  assertVerifiedAuthentication,
 } from "@/lib/server/route-guards";
 import { roomInputSchema } from "@/lib/server/schemas";
 import { createRoomRecord } from "@/lib/server/services/rooms";
+import { writeAuditLog } from "@/lib/server/services/audit-logs";
 
 interface RoomRecord {
   id: string;
@@ -165,14 +167,24 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authContext = await getRequestAuthContext(request);
-    assertAuthenticated(authContext);
+    const authContext = await getRequestAuthContext(request, { allowCompatibilityHeaders: false });
+    assertVerifiedAuthentication(authContext);
     assertRole(authContext, [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN]);
 
     const payload = roomInputSchema.parse(await request.json());
     assertCanManageBuilding(authContext, payload.buildingId);
 
     const id = await createRoomRecord(payload);
+    await writeAuditLog(authContext, {
+      action: "room.created",
+      entityType: "room",
+      entityId: id,
+      campus: authContext.campus,
+      buildingId: payload.buildingId,
+      buildingName: payload.buildingName,
+      summary: `Added room ${payload.name}`,
+      metadata: { roomName: payload.name, floor: payload.floor },
+    });
     return NextResponse.json({ id });
   } catch (error) {
     return handleApiError(error);
