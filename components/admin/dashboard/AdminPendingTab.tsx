@@ -183,6 +183,7 @@ export default function AdminPendingTab({
   const [buildingRooms, setBuildingRooms] = useState<Room[]>([]);
   const [revisionReservationId, setRevisionReservationId] = useState<string | null>(null);
   const [revisionRoomId, setRevisionRoomId] = useState('');
+  const [revisionReason, setRevisionReason] = useState('');
   const [revisionError, setRevisionError] = useState('');
   const [revisionSubmitting, setRevisionSubmitting] = useState(false);
   const [expirationMessageReservationId, setExpirationMessageReservationId] = useState<string | null>(null);
@@ -500,6 +501,7 @@ export default function AdminPendingTab({
     setReservationActionError('');
     setRevisionError('');
     setRevisionRoomId('');
+    setRevisionReason('');
     setRevisionReservationId(request.id);
   };
 
@@ -510,6 +512,7 @@ export default function AdminPendingTab({
 
     setRevisionReservationId(null);
     setRevisionRoomId('');
+    setRevisionReason('');
     setRevisionError('');
   };
 
@@ -526,10 +529,12 @@ export default function AdminPendingTab({
       await requestReservationRevision(
         request.id,
         revisionRoomId,
-        request.updatedAt?.toMillis()
+        request.updatedAt?.toMillis(),
+        revisionReason.trim() || undefined,
       );
       setRevisionReservationId(null);
       setRevisionRoomId('');
+      setRevisionReason('');
       await onReload();
     } catch (error) {
       console.warn('Failed to request reservation revision:', error);
@@ -1121,6 +1126,22 @@ export default function AdminPendingTab({
                           </option>
                         ))}
                       </select>
+                    </div>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label htmlFor="revision-reason" style={{ fontSize: '11px', fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '6px' }}>
+                        Reason / instructions for the student
+                      </label>
+                      <textarea
+                        id="revision-reason"
+                        value={revisionReason}
+                        onChange={(event) => setRevisionReason(event.target.value)}
+                        maxLength={500}
+                        rows={3}
+                        disabled={revisionSubmitting}
+                        placeholder="Explain why a different room or revision is needed."
+                        className="glass-input text-sm"
+                        style={{ width: '100%', padding: '10px 12px', boxSizing: 'border-box' }}
+                      />
                     </div>
                     {replacementRooms.length === 0 && (
                       <p style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>

@@ -1,4 +1,5 @@
 import {
+  type User,
   createUserWithEmailAndPassword,
   EmailAuthProvider,
   GoogleAuthProvider,
@@ -77,8 +78,36 @@ export function isAllowedEmail(email: string): boolean {
   return email.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`);
 }
 
+async function writeAuthenticationAudit(user: User, action: 'account.login_succeeded' | 'account.logout') {
+  try {
+    const token = await user.getIdToken();
+    await fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+  } catch {
+    // Sign-in and sign-out must continue if an audit write is temporarily unavailable.
+  }
+}
+
+async function writeFailedLoginAudit(email: string) {
+  try {
+    await fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'account.login_failed', email }),
+    });
+  } catch {
+    // Keep the sign-in response independent from audit service availability.
+  }
+}
+
 export async function loginWithEmail(email: string, password: string) {
-  const credential = await signInWithEmailAndPassword(auth, email, password);
+  const credential = await signInWithEmailAndPassword(auth, email, password).catch(async (error) => {
+    await writeFailedLoginAudit(email);
+    throw error;
+  });
 
   if (!credential.user.emailVerified) {
     await signOut(auth);
@@ -113,6 +142,7 @@ export async function loginWithEmail(email: string, password: string) {
     throw { code: "auth/account-rejected", rejectionReason: profile.rejectionReason };
   }
 
+  await writeAuthenticationAudit(credential.user, 'account.login_succeeded');
   return credential;
 }
 
@@ -220,18 +250,24 @@ export async function loginWithGoogle() {
     });
   }
 
+  await writeAuthenticationAudit(result.user, 'account.login_succeeded');
   return result;
 }
 
 export async function loginSuperAdmin(email: string, password: string) {
-  const credential = await signInWithEmailAndPassword(auth, email, password);
+  const credential = await signInWithEmailAndPassword(auth, email, password).catch(async (error) => {
+    await writeFailedLoginAudit(email);
+    throw error;
+  });
 
   const profile = await getUserProfile(credential.user.uid);
   if (!profile || normalizeRole(profile.role) !== USER_ROLES.SUPER_ADMIN) {
+    await writeFailedLoginAudit(email);
     await signOut(auth);
     throw { code: "auth/not-superadmin" };
   }
 
+  await writeAuthenticationAudit(credential.user, 'account.login_succeeded');
   return credential;
 }
 
@@ -318,6 +354,7 @@ export async function getApprovalApproverDisplayName(input: {
 }
 
 export async function logout() {
+  if (auth.currentUser) await writeAuthenticationAudit(auth.currentUser, 'account.logout');
   return signOut(auth);
 }
 

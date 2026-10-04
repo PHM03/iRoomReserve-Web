@@ -622,7 +622,8 @@ export async function rejectReservation(
 export async function requestReservationRevision(
   reservationId: string,
   proposedRoomId: string,
-  baseUpdatedAtMs?: number
+  baseUpdatedAtMs?: number,
+  reason?: string,
 ): Promise<{ reservationId: string; revisionId: string }> {
   return apiRequest<{ reservationId: string; revisionId: string }>(
     `/api/reservations/${reservationId}`,
@@ -631,6 +632,7 @@ export async function requestReservationRevision(
         action: "request-revision",
         baseUpdatedAtMs,
         proposedRoomId,
+        reason,
       },
       method: "PATCH",
       userId: auth.currentUser?.uid,

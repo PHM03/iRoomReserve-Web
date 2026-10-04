@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import AdminAuditLogsTab from '@/components/admin/dashboard/AdminAuditLogsTab';
@@ -11,12 +11,23 @@ export default function SuperAdminAuditLogsPage() {
   const { firebaseUser, profile, loading, logout } = useAuth();
   const router = useRouter();
   const [showAccountTooltip, setShowAccountTooltip] = useState(false);
+  const accessAttemptLogged = useRef(false);
 
   useEffect(() => {
     if (!loading && (!firebaseUser || profile?.role !== USER_ROLES.SUPER_ADMIN)) {
       router.replace('/');
     }
   }, [firebaseUser, loading, profile?.role, router]);
+
+  useEffect(() => {
+    if (loading || !firebaseUser || profile?.role === USER_ROLES.SUPER_ADMIN || accessAttemptLogged.current) return;
+    accessAttemptLogged.current = true;
+    void firebaseUser.getIdToken().then((token) => fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'security.access_denied', path: '/superadmin/audit-logs' }),
+    })).catch(() => undefined);
+  }, [firebaseUser, loading, profile?.role]);
 
   if (loading || !firebaseUser || profile?.role !== USER_ROLES.SUPER_ADMIN) {
     return (

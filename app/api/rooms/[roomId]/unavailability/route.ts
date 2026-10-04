@@ -41,6 +41,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       buildingId,
       buildingName: typeof roomData.buildingName === "string" ? roomData.buildingName : null,
       campus: typeof roomData.campus === "string" ? roomData.campus : null,
+      changes: { availability: { from: "Available", to: "Blocked" } },
       metadata: { roomName: typeof roomData.name === "string" ? roomData.name : "Room", date: payload.date, startTime: payload.startTime, endTime: payload.endTime },
     });
     return NextResponse.json({ id });
@@ -65,6 +66,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       buildingId,
       buildingName: typeof roomData.buildingName === "string" ? roomData.buildingName : null,
       campus: typeof roomData.campus === "string" ? roomData.campus : null,
+      changes: { availability: { from: "Blocked", to: "Available" } },
       metadata: { roomName: typeof roomData.name === "string" ? roomData.name : "Room", date: payload.date, startTime: payload.startTime, endTime: payload.endTime },
     });
     return NextResponse.json({ ok: true });

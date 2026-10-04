@@ -191,11 +191,22 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let failureAuditContext: Awaited<ReturnType<typeof getRequestAuthContext>> | null = null;
+  let failedReservationDetails: { roomId: string; roomName: string; date?: string; startTime: string; endTime: string } | null = null;
+  let reservationCreated = false;
   try {
     const authContext = await getRequestAuthContext(request, { allowCompatibilityHeaders: false });
+    failureAuditContext = authContext;
     assertVerifiedAuthentication(authContext);
 
     const payload = createReservationSchema.parse(await request.json());
+    failedReservationDetails = {
+      roomId: payload.reservation.roomId,
+      roomName: payload.reservation.roomName,
+      date: "date" in payload.reservation ? payload.reservation.date : undefined,
+      startTime: payload.reservation.startTime,
+      endTime: payload.reservation.endTime,
+    };
 
     assertOwnsResource(authContext, payload.reservation.userId);
 
@@ -214,6 +225,7 @@ export async function POST(request: NextRequest) {
 
     if (payload.type === "single") {
       const id = await createReservationRecord(payload.reservation);
+      reservationCreated = true;
       await writeAuditLog(authContext, {
         action: "reservation.created",
         entityType: "reservation",
@@ -229,8 +241,25 @@ export async function POST(request: NextRequest) {
           date: payload.reservation.date,
           startTime: payload.reservation.startTime,
           endTime: payload.reservation.endTime,
+          organization: payload.reservation.programDepartmentOrganization,
+          purpose: payload.reservation.purpose,
+          eventName: payload.reservation.isEvent === "Yes" ? payload.reservation.purpose : null,
+          conceptPaperAttached: Boolean(payload.reservation.approvalDocumentPath),
         },
       });
+      if (payload.reservation.approvalDocumentPath) {
+        await writeAuditLog(authContext, {
+          action: "reservation.document_uploaded",
+          entityType: "reservation",
+          entityId: id,
+          targetUserId: payload.reservation.userId,
+          campus: payload.reservation.campus,
+          buildingId: payload.reservation.buildingId,
+          buildingName: payload.reservation.buildingName,
+          summary: "Linked the submitted concept paper to this reservation",
+          metadata: { roomId: payload.reservation.roomId, roomName: payload.reservation.roomName },
+        });
+      }
       return NextResponse.json({ id });
     }
 
@@ -240,9 +269,12 @@ export async function POST(request: NextRequest) {
       payload.startDate,
       payload.endDate
     );
+    reservationCreated = true;
     await Promise.all(
-      ids.map((id) =>
-        writeAuditLog(authContext, {
+      ids.map(async (id) => {
+        const createdReservationSnapshot = await db.collection("reservations").doc(id).get();
+        const createdReservationData = createdReservationSnapshot.data() as { date?: string } | undefined;
+        await writeAuditLog(authContext, {
           action: "reservation.created",
           entityType: "reservation",
           entityId: id,
@@ -254,14 +286,58 @@ export async function POST(request: NextRequest) {
           metadata: {
             roomId: payload.reservation.roomId,
             roomName: payload.reservation.roomName,
+            date: createdReservationData?.date ?? null,
+            organization: payload.reservation.programDepartmentOrganization,
+            purpose: payload.reservation.purpose,
+            eventName: payload.reservation.isEvent === "Yes" ? payload.reservation.purpose : null,
+            conceptPaperAttached: Boolean(payload.reservation.approvalDocumentPath),
             startTime: payload.reservation.startTime,
             endTime: payload.reservation.endTime,
           },
-        })
-      )
+        });
+        if (payload.reservation.approvalDocumentPath) {
+          await writeAuditLog(authContext, {
+            action: "reservation.document_uploaded",
+            entityType: "reservation",
+            entityId: id,
+            targetUserId: payload.reservation.userId,
+            campus: payload.reservation.campus,
+            buildingId: payload.reservation.buildingId,
+            buildingName: payload.reservation.buildingName,
+            summary: "Linked the submitted concept paper to this reservation",
+            metadata: { roomId: payload.reservation.roomId, roomName: payload.reservation.roomName },
+          });
+        }
+      })
     );
     return NextResponse.json({ ids });
   } catch (error) {
+    if (!reservationCreated && failureAuditContext?.uid && failureAuditContext.verified) {
+      try {
+        await writeAuditLog(failureAuditContext, {
+          action: "reservation.action_failed",
+          entityType: "account",
+          entityId: failureAuditContext.uid,
+          reservationId: null,
+          targetUserId: failureAuditContext.uid,
+          outcome: "failure",
+          summary: "Reservation submission failed",
+          remarks: error instanceof Error ? error.message.slice(0, 500) : "Request failed",
+          metadata: {
+            attemptedAction: "create",
+            ...(failedReservationDetails ? {
+              roomId: failedReservationDetails.roomId,
+              roomName: failedReservationDetails.roomName,
+              startTime: failedReservationDetails.startTime,
+              endTime: failedReservationDetails.endTime,
+              ...(failedReservationDetails.date ? { date: failedReservationDetails.date } : {}),
+            } : {}),
+          },
+        });
+      } catch {
+        // Keep the original reservation API result if the failure record cannot be written.
+      }
+    }
     return handleApiError(error);
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -26,6 +26,7 @@ type RoleFilter = 'all' | 'students' | 'faculty' | 'utility' | 'dsas' | 'admins'
 export default function SuperAdminDashboard() {
   const { firebaseUser, profile, loading, logout } = useAuth();
   const router = useRouter();
+  const accessAttemptLogged = useRef(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [campusFilter, setCampusFilter] = useState<ReservationCampus | 'all'>('all');
@@ -55,6 +56,16 @@ export default function SuperAdminDashboard() {
       router.push('/');
     }
   }, [loading, firebaseUser, profile, router]);
+
+  useEffect(() => {
+    if (loading || !firebaseUser || profile?.role === USER_ROLES.SUPER_ADMIN || accessAttemptLogged.current) return;
+    accessAttemptLogged.current = true;
+    void firebaseUser.getIdToken().then((token) => fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'security.access_denied', path: '/superadmin/dashboard' }),
+    })).catch(() => undefined);
+  }, [firebaseUser, loading, profile?.role]);
 
   // Real-time listener for ALL users
   useEffect(() => {

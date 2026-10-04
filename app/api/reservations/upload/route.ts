@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { handleApiError, ApiError } from "@/lib/server/api-error";
 import { getRequestAuthContext } from "@/lib/server/request-auth";
 import { assertVerifiedAuthentication } from "@/lib/server/route-guards";
+import { db } from "@/lib/firebase/firebase-admin";
 import { writeAuditLog } from "@/lib/server/services/audit-logs";
 import {
   deleteReservationDocumentFromStorage,
@@ -64,19 +65,49 @@ export async function POST(request: NextRequest) {
     });
 
     const reservationId = getOptionalString(formData.get("reservationId"));
+    const reservation = reservationId
+      ? await db.collection("reservations").doc(reservationId).get()
+      : null;
+    if (reservationId && !reservation?.exists) {
+      throw new ApiError(404, "not_found", "Reservation not found.");
+    }
+    const reservationData = reservation?.data() as {
+      reservationReference?: string;
+      userId?: string;
+      campus?: string;
+      buildingId?: string;
+      buildingName?: string;
+      roomId?: string;
+      roomName?: string;
+    } | undefined;
+    if (reservationId && reservationData?.userId !== userId) {
+      throw new ApiError(403, "forbidden", "You cannot upload a document for this reservation.");
+    }
     const upload = await uploadReservationDocument({
       file: fileEntry,
       reservationId,
       userId,
     });
-    await writeAuditLog(authContext, {
-      action: "reservation.document_uploaded",
-      entityType: reservationId ? "reservation" : "account",
-      entityId: reservationId ?? userId,
-      targetUserId: userId,
-      summary: "Uploaded reservation concept paper",
-      metadata: { sizeBytes: fileEntry.size },
-    });
+    // Pending uploads are linked to their reservation when that reservation is
+    // submitted. Direct uploads to an existing reservation are logged here.
+    if (reservationId) {
+      await writeAuditLog(authContext, {
+        action: "reservation.document_uploaded",
+        entityType: "reservation",
+        entityId: reservationId,
+        reservationReference: reservationData?.reservationReference,
+        targetUserId: userId,
+        campus: reservationData?.campus,
+        buildingId: reservationData?.buildingId,
+        buildingName: reservationData?.buildingName,
+        summary: `Uploaded concept paper for ${reservationData?.roomName ?? "reservation"}`,
+        metadata: {
+          roomId: reservationData?.roomId ?? null,
+          roomName: reservationData?.roomName ?? null,
+          sizeBytes: fileEntry.size,
+        },
+      });
+    }
 
     console.log("[reservation-upload] returning uploaded concept paper", {
       hasFileUrl: Boolean(upload.url),
@@ -120,13 +151,6 @@ export async function DELETE(request: NextRequest) {
     }
 
     await deleteReservationDocumentFromStorage(path);
-    await writeAuditLog(authContext, {
-      action: "reservation.document_removed",
-      entityType: "account",
-      entityId: userId,
-      targetUserId: userId,
-      summary: "Removed pending reservation concept paper",
-    });
     return NextResponse.json({ success: true });
   } catch (error) {
     return handleApiError(error);

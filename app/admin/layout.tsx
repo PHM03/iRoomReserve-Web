@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect } from 'react';
+import React, { Suspense, useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import NavBar from '@/components/layout/NavBar';
@@ -54,6 +54,7 @@ function AdminLayoutInner({ children }: Readonly<AdminLayoutProps>) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const deniedPathsLogged = useRef(new Set<string>());
   const normalizedRole = normalizeRole(profile?.role);
   const isSuperAdminAllowedPage =
     normalizedRole === USER_ROLES.SUPER_ADMIN &&
@@ -93,6 +94,16 @@ function AdminLayoutInner({ children }: Readonly<AdminLayoutProps>) {
     normalizedRole,
     router,
   ]);
+
+  useEffect(() => {
+    if (loading || !firebaseUser || canRenderAdminLayout || deniedPathsLogged.current.has(pathname)) return;
+    deniedPathsLogged.current.add(pathname);
+    void firebaseUser.getIdToken().then((token) => fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'security.access_denied', path: pathname }),
+    })).catch(() => undefined);
+  }, [canRenderAdminLayout, firebaseUser, loading, pathname]);
 
   useEffect(() => {
     const pathTitles: Record<string, string> = {

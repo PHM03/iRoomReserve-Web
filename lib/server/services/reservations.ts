@@ -80,6 +80,7 @@ import {
   MAX_EXPIRATION_MESSAGE_LENGTH,
   normalizeExpirationMessage,
 } from "@/lib/reservations/expiration-message";
+import { createReservationReference } from "@/lib/reservations/reservation-reference";
 
 type ReservationStatus =
   | "pending"
@@ -107,6 +108,7 @@ interface ReservationExpirationMessage {
 
 interface ReservationRecord {
   id: string;
+  reservationReference?: string;
   userId: string;
   userName: string;
   userRole: string;
@@ -1477,6 +1479,7 @@ export async function createReservationRecord(data: ReservationCreateInput) {
     const queuedNotifications: AppNotificationInput[] = [];
 
     batch.set(reservationRef, {
+      reservationReference: createReservationReference(reservationRef.id),
       userId: data.userId,
       userName: data.userName,
       userRole: normalizeRole(data.userRole) ?? data.userRole,
@@ -1584,6 +1587,7 @@ export async function createRecurringReservationRecord(
       const reservationRef = db.collection("reservations").doc();
       createdIds.push(reservationRef.id);
       batch.set(reservationRef, {
+        reservationReference: createReservationReference(reservationRef.id),
         userId: data.userId,
         userName: data.userName,
         date,
@@ -1942,6 +1946,25 @@ export async function expireOpenReservationsForUser(userId: string) {
             endTime: reservation.endTime,
           },
         });
+        if (!reservation.checkedInAt) {
+          await writeSystemAuditLog({
+            action: "reservation.no_show",
+            entityType: "reservation",
+            entityId: reservation.id,
+            targetUserId: reservation.userId,
+            campus: reservation.campus,
+            buildingId: reservation.buildingId,
+            buildingName: reservation.buildingName,
+            summary: `Recorded a no-show for ${reservation.roomName}; the reservation ended without a check-in.`,
+            metadata: {
+              roomId: reservation.roomId,
+              roomName: reservation.roomName,
+              date: reservation.date,
+              startTime: reservation.startTime,
+              endTime: reservation.endTime,
+            },
+          });
+        }
       }
     })
   );

@@ -192,7 +192,7 @@ export async function PATCH(
         break;
     }
     await writeAuditLog(authContext, {
-      action: "account.status_changed",
+      action: Object.hasOwn(changes, "role") ? "account.role_changed" : "account.status_changed",
       entityType: "account",
       entityId: uid,
       targetUserId: uid,
@@ -235,7 +235,7 @@ export async function DELETE(
     const buildingAssignmentsBefore = await getBuildingAssignments();
     await deleteUserProfile(uid);
     await writeAuditLog(authContext, {
-      action: "account.status_changed",
+      action: "account.deleted",
       entityType: "account",
       entityId: uid,
       targetUserId: uid,

@@ -3,12 +3,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { onAllUsers } from '@/lib/auth/auth';
+import { getManagedBuildingIdsForCampus } from '@/lib/buildings/campusAssignments';
+import { onAllRooms, type Room } from '@/lib/rooms/rooms';
 
 interface AuditLog {
   id: string;
   action: string;
   summary: string;
+  outcome?: 'success' | 'failure';
+  remarks?: string | null;
   entityId: string;
+  reservationId?: string | null;
+  reservationReference?: string | null;
   entityType: string;
   category?: string;
   actorName: string;
@@ -28,14 +34,18 @@ interface AuditLog {
 }
 
 const actionLabels: Record<string, string> = {
-  'reservation.created': 'Reservation created',
+  'reservation.created': 'Reservation submitted',
   'reservation.approved': 'Reservation approved',
+  'reservation.endorsed': 'Reservation endorsed',
   'reservation.rejected': 'Reservation rejected',
+  'reservation.returned_for_revision': 'Returned for revision',
+  'reservation.action_failed': 'Reservation action denied or failed',
   'reservation.cancelled': 'Reservation cancelled',
   'reservation.checked_in': 'Reservation check-in',
   'reservation.completed': 'Reservation completed',
   'reservation.completion_confirmed': 'Completion confirmed',
   'reservation.expired': 'Reservation expired',
+  'reservation.no_show': 'No-show recorded',
   'reservation.deleted': 'Reservation deleted',
   'reservation.revision_requested': 'Reservation change requested',
   'reservation.revision_accepted': 'Reservation change accepted',
@@ -62,8 +72,15 @@ const actionLabels: Record<string, string> = {
   'building.created': 'Building created',
   'building.updated': 'Building updated',
   'account.status_changed': 'Account access changed',
+  'account.role_changed': 'Role changed',
+  'account.deleted': 'Account deleted',
   'account.password_changed': 'Password changed',
+  'account.login_succeeded': 'Signed in',
+  'account.login_failed': 'Failed sign-in attempt',
+  'account.logout': 'Signed out',
   'account.profile_updated': 'Profile updated',
+  'audit.exported': 'Audit logs exported',
+  'security.access_denied': 'Protected page access denied',
 };
 
 const categoryOptions = [
@@ -76,19 +93,27 @@ const categoryOptions = [
   'Feedback',
   'Room Status',
   'BLE / Occupancy',
+  'System Configuration',
 ];
 
-function getLogCategory(log: AuditLog) {
-  if (log.category) return log.category;
-  if (log.action.startsWith('reservation.')) return 'Reservation';
-  if (log.action.startsWith('room.unavailability') || log.action === 'room.status_changed') return 'Room Status';
-  if (log.action.startsWith('room.')) return 'Room Management';
-  if (log.action.startsWith('schedule.')) return 'Schedule Management';
-  if (log.action.startsWith('feedback.')) return 'Feedback';
-  if (log.action.startsWith('building.')) return 'Building Management';
-  if (log.action === 'account.password_changed') return 'Authentication';
-  if (log.action.startsWith('account.') || log.action.startsWith('admin_request.')) return 'User Management';
+function getActionCategory(action: string) {
+  if (action.startsWith('reservation.')) return 'Reservation';
+  if (action.startsWith('room.unavailability') || action === 'room.status_changed') return 'Room Status';
+  if (action.startsWith('room.')) return 'Room Management';
+  if (action.startsWith('schedule.')) return 'Schedule Management';
+  if (action.startsWith('feedback.')) return 'Feedback';
+  if (action.startsWith('building.')) return 'Building Management';
+  if (action === 'account.password_changed' || action === 'account.login_succeeded' || action === 'account.login_failed' || action === 'account.logout') return 'Authentication';
+  if (action.startsWith('account.') || action.startsWith('admin_request.')) return 'User Management';
   return 'System Configuration';
+}
+
+function getLogCategory(log: AuditLog) {
+  return log.category ?? getActionCategory(log.action);
+}
+
+function isRoomRelatedAction(action: string) {
+  return action.startsWith('room.') || action.startsWith('reservation.') || action === 'reservation.no_show';
 }
 
 const roleOptions = [
@@ -105,8 +130,14 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Time unavailable';
   return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZone: 'Asia/Manila',
+    timeZoneName: 'short',
   }).format(date);
 }
 
@@ -114,10 +145,23 @@ function localDateKey(value?: string | null) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const year = values.year;
+  const month = values.month;
+  const day = values.day;
   return `${year}-${month}-${day}`;
+}
+
+function reservationReference(log?: AuditLog) {
+  if (!log) return '';
+  if (log.reservationReference) return log.reservationReference;
+  const reservationId = log.reservationId ?? (log.entityType === 'reservation' ? log.entityId : '');
+  if (!reservationId) return '';
+  const year = log.createdAt ? new Intl.DateTimeFormat('en', { timeZone: 'Asia/Manila', year: 'numeric' }).format(new Date(log.createdAt)) : '0000';
+  return `RES-${year}-${reservationId.slice(0, 8).toUpperCase()}`;
 }
 
 function displayRole(role?: string | null) {
@@ -152,6 +196,7 @@ type ActorScope = 'neutral' | 'all' | 'user';
 export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main' | 'digi' }>) {
   const { firebaseUser } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [directoryUsers, setDirectoryUsers] = useState<Array<{
     uid: string;
     name: string;
@@ -168,13 +213,47 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
   const [campusFilter, setCampusFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [selectedReservationId, setSelectedReservationId] = useState('');
+  const [roomFilter, setRoomFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const roomCampus = campus ?? (campusFilter || '');
+  const roomFilterVisible = ['Reservation', 'Room Management', 'Room Status', 'BLE / Occupancy'].includes(categoryFilter) || Boolean(actionFilter && isRoomRelatedAction(actionFilter));
+  const campusBuildingIds = useMemo(() => new Set(
+    roomCampus === 'main' || roomCampus === 'digi' ? getManagedBuildingIdsForCampus(roomCampus) : [],
+  ), [roomCampus]);
+  const scopedRooms = useMemo(
+    () => rooms.filter((room) => campusBuildingIds.has(room.buildingId)),
+    [campusBuildingIds, rooms],
+  );
+
+  const actionOptions = useMemo(() => Object.entries(actionLabels).filter(([action]) =>
+    !categoryFilter || getActionCategory(action) === categoryFilter,
+  ), [categoryFilter]);
+
+  useEffect(() => {
+    if (!firebaseUser) return;
+    return onAllRooms(setRooms);
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!roomFilterVisible) setRoomFilter('');
+  }, [roomFilterVisible]);
+
+  useEffect(() => {
+    if (!actionFilter || actionOptions.some(([action]) => action === actionFilter)) return;
+    setActionFilter('');
+  }, [actionFilter, actionOptions]);
+
+  useEffect(() => {
+    if (roomFilter && !scopedRooms.some((room) => room.id === roomFilter)) setRoomFilter('');
+  }, [roomFilter, scopedRooms]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      if (!firebaseUser || actorScope === 'neutral' || (actorScope === 'user' && !actorFilterUid)) {
+      if (!firebaseUser || (!selectedReservationId && actorScope === 'neutral') || (actorScope === 'user' && !actorFilterUid && !selectedReservationId)) {
         setLogs([]);
         setLoading(false);
         setError('');
@@ -186,8 +265,10 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
         const token = await firebaseUser.getIdToken();
         const searchParams = new URLSearchParams();
         if (campus) searchParams.set('campus', campus);
-        if (actorScope === 'all') searchParams.set('allUsers', 'true');
-        if (actorScope === 'user') searchParams.set('performedBy', actorFilterUid);
+        if (selectedReservationId) searchParams.set('reservationId', selectedReservationId);
+        else if (actorScope === 'all') searchParams.set('allUsers', 'true');
+        else if (actorScope === 'user') searchParams.set('performedBy', actorFilterUid);
+        if (actionFilter) searchParams.set('action', actionFilter);
         const params = searchParams.size ? `?${searchParams.toString()}` : '';
         const response = await fetch(`/api/audit-logs${params}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -204,7 +285,7 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
     };
     void load();
     return () => { cancelled = true; };
-  }, [actorFilterUid, actorScope, campus, firebaseUser]);
+  }, [actionFilter, actorFilterUid, actorScope, campus, firebaseUser, selectedReservationId]);
 
   useEffect(() => {
     if (!firebaseUser) return;
@@ -229,11 +310,12 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
         })) &&
         (!roleFilter || displayRole(log.actorRole) === roleFilter) &&
         (!categoryFilter || getLogCategory(log) === categoryFilter) &&
+        (!roomFilter || (String(log.metadata?.roomId ?? (log.entityType === 'room' ? log.entityId : '')) === roomFilter)) &&
         (!campusFilter || log.campus === campusFilter) &&
         (!dateFrom || (eventDate && eventDate >= dateFrom)) &&
         (!dateTo || (eventDate && eventDate <= dateTo));
     });
-  }, [actorFilterUid, actorSearch, campusFilter, categoryFilter, dateFrom, dateTo, logs, roleFilter]);
+  }, [actorFilterUid, actorSearch, campusFilter, categoryFilter, dateFrom, dateTo, logs, roleFilter, roomFilter]);
 
   const actors = useMemo(() => {
     const uniqueActors = new Map<string, { uid: string; name: string; email: string; role: string }>();
@@ -267,10 +349,59 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
     setCampusFilter('');
     setDateFrom('');
     setDateTo('');
+    setSelectedReservationId('');
+    setRoomFilter('');
+    setActionFilter('');
+  };
+  const openReservationHistory = (reservationId: string) => {
+    setSelectedReservationId(reservationId);
+    setActorScope('neutral');
+    setActorFilterUid('');
+    setActorSearch('');
+    setRoleFilter('');
+    setCategoryFilter('');
+    setCampusFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setRoomFilter('');
+    setActionFilter('');
   };
   const hasActiveFilters = Boolean(
-    actorSearch || actorFilterUid || actorScope !== 'neutral' || roleFilter || categoryFilter || campusFilter || dateFrom || dateTo,
+    actorSearch || actorFilterUid || actorScope !== 'neutral' || roleFilter || categoryFilter || campusFilter || dateFrom || dateTo || selectedReservationId || roomFilter || actionFilter,
   );
+
+  const exportCsv = async () => {
+    if (!firebaseUser || filteredLogs.length === 0) return;
+    const token = await firebaseUser.getIdToken();
+    const filters = {
+      reservationId: selectedReservationId,
+      roomId: roomFilter,
+      action: actionFilter,
+      performedBy: selectedActor?.uid ?? (actorScope === 'all' ? 'all' : ''),
+      from: dateFrom,
+      to: dateTo,
+    };
+    await fetch('/api/audit-logs', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'audit.exported', filters, rowCount: filteredLogs.length }),
+    });
+    const columns = ['timestamp_utc', 'action', 'outcome', 'summary', 'reservationId', 'room', 'actorId', 'actorRole', 'targetUserId', 'campus', 'remarks'];
+    const rows = filteredLogs.map((log) => [
+      log.createdAt ?? '', log.action, log.outcome ?? 'success', log.summary,
+      log.reservationId ?? (log.entityType === 'reservation' ? log.entityId : ''),
+      log.metadata?.roomName ?? '', log.actorUid ?? '', log.actorRole ?? '',
+      log.targetUserId ?? '', log.campus ?? '', log.remarks ?? '',
+    ]);
+    const escape = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+    const content = [columns, ...rows].map((row) => row.map(escape).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <section className="rounded-2xl border border-white/40 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.14)] sm:p-7">
@@ -445,16 +576,32 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
       </div>
 
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {roomFilterVisible ? (
+          <label className="text-xs font-semibold text-gray-600">
+            Facility / room
+            <select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)} disabled={!roomCampus} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
+              <option value="">{roomCampus ? 'All rooms in campus' : 'Select a campus first'}</option>
+              {scopedRooms.map((room) => <option key={room.id} value={room.id}>{room.buildingName} · {room.name}</option>)}
+            </select>
+          </label>
+        ) : null}
+        <label className="text-xs font-semibold text-gray-600">
+          Action type
+          <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
+            <option value="">All actions</option>
+            {actionOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
         <label className="text-xs font-semibold text-gray-600">
           Performed by role
-          <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} disabled={actorScope === 'neutral'} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
+          <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
             <option value="">All roles</option>
             {roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
           </select>
         </label>
         <label className="text-xs font-semibold text-gray-600">
           Category
-          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} disabled={actorScope === 'neutral'} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
+          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
             <option value="">All categories</option>
             {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
           </select>
@@ -462,7 +609,7 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
         {!campus ? (
           <label className="text-xs font-semibold text-gray-600">
             Campus
-            <select value={campusFilter} onChange={(event) => setCampusFilter(event.target.value)} disabled={actorScope === 'neutral'} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
+            <select value={campusFilter} onChange={(event) => setCampusFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
               <option value="">All campuses</option>
               <option value="main">Main Campus</option>
               <option value="digi">Digital Campus</option>
@@ -471,23 +618,27 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
         ) : null}
         <label className="text-xs font-semibold text-gray-600">
           From
-          <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} disabled={actorScope === 'neutral'} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`} />
+          <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`} />
         </label>
         <label className="text-xs font-semibold text-gray-600">
           To
-          <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} disabled={actorScope === 'neutral'} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`} />
+          <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`} />
         </label>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
         <span>
-          {actorScope === 'neutral'
-            ? 'Choose a user scope to load audit events'
+          {selectedReservationId
+            ? `Showing history for ${reservationReference(logs[0]) || selectedReservationId}`
+            : actorScope === 'neutral'
+              ? 'Choose a user scope to load audit events'
             : `Showing ${filteredLogs.length} of ${logs.length} events`}
         </span>
-        <button type="button" onClick={clearFilters} className="font-semibold text-[#a12124] transition hover:underline">
-          Clear filters
-        </button>
+        <div className="flex gap-4">
+          {selectedReservationId ? <button type="button" onClick={() => { setSelectedReservationId(''); setActorScope('all'); }} className="font-semibold text-[#a12124] transition hover:underline">All activity</button> : null}
+          <button type="button" onClick={() => void exportCsv()} disabled={filteredLogs.length === 0} className="font-semibold text-[#a12124] transition hover:underline disabled:text-gray-400">Export CSV</button>
+          <button type="button" onClick={clearFilters} className="font-semibold text-[#a12124] transition hover:underline">Clear filters</button>
+        </div>
       </div>
 
       {loading ? <p className="py-12 text-center text-sm text-gray-600">Loading audit logs…</p> : null}
@@ -530,6 +681,20 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
                     <p className="font-semibold text-gray-900">{actionLabels[log.action] ?? log.action}</p>
                     <p className="mt-1 inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">{getLogCategory(log)}</p>
                     <p className="mt-0.5 text-gray-600">{log.summary}</p>
+                    <p className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${log.outcome === 'failure' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {log.outcome === 'failure' ? 'Failed / denied' : 'Success'}
+                    </p>
+                    {(log.reservationId || log.entityType === 'reservation') ? (
+                      <button
+                        type="button"
+                        title={`Open history for ${log.reservationId ?? log.entityId}`}
+                        onClick={() => openReservationHistory(log.reservationId ?? log.entityId)}
+                        className="mt-1 text-xs font-semibold text-[#a12124] underline-offset-2 hover:underline"
+                      >
+                        {reservationReference(log)}
+                      </button>
+                    ) : null}
+                    {log.remarks ? <p className="mt-1 text-xs text-gray-600">Reason / remarks: {log.remarks}</p> : null}
                     {Object.entries(log.changes ?? {}).length > 0 ? (
                       <ul className="mt-2 space-y-0.5 text-xs text-gray-500">
                         {Object.entries(log.changes ?? {}).map(([field, change]) => (
@@ -542,6 +707,9 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
                         {String(log.metadata.date)}{log.metadata.startTime ? ` · ${log.metadata.startTime}${log.metadata.endTime ? `–${log.metadata.endTime}` : ''}` : ''}
                       </p>
                     ) : null}
+                    {log.metadata?.organization ? <p className="mt-1 text-xs text-gray-500">Organization: {String(log.metadata.organization)}</p> : null}
+                    {log.metadata?.purpose ? <p className="mt-1 text-xs text-gray-500">Purpose: {String(log.metadata.eventName ?? log.metadata.purpose)}</p> : null}
+                    {log.metadata?.proposedRoomName ? <p className="mt-1 text-xs text-gray-500">Proposed room: {String(log.metadata.proposedRoomName)}</p> : null}
                   </td>
                   <td className="px-4 py-4">
                     <p className="font-medium text-gray-900">{log.actorName}</p>
@@ -558,8 +726,8 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
                     ) : <span className="text-gray-400">—</span>}
                   </td>
                   <td className="px-4 py-4 text-gray-700">
-                    <p>{log.buildingName ?? (log.campus === 'digi' ? 'Digital Campus' : log.campus === 'main' ? 'Main Campus' : 'Account')}</p>
-                    {log.metadata?.roomName ? <p className="mt-0.5 text-xs text-gray-500">{String(log.metadata.roomName)}</p> : null}
+                    <p>{String(log.metadata?.roomName ?? log.buildingName ?? (log.campus === 'digi' ? 'Digital Campus' : log.campus === 'main' ? 'Main Campus' : 'Account'))}</p>
+                    {log.metadata?.roomName && log.buildingName ? <p className="mt-0.5 text-xs text-gray-500">{log.buildingName}</p> : null}
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 text-gray-600">{formatDate(log.createdAt)}</td>
                 </tr>

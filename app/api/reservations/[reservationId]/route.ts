@@ -95,6 +95,7 @@ const reservationActionSchema = z.discriminatedUnion("action", [
     action: z.literal("request-revision"),
     proposedRoomId: z.string().trim().min(1),
     baseUpdatedAtMs: z.number().int().nonnegative().optional(),
+    reason: z.string().trim().max(500).optional(),
   }),
   z.object({
     action: z.literal("accept-revision"),
@@ -107,6 +108,7 @@ const reservationActionSchema = z.discriminatedUnion("action", [
 ]);
 
 interface ReservationAuditInfo {
+  reservationReference?: string;
   buildingId?: string;
   buildingName?: string;
   campus?: string;
@@ -119,6 +121,10 @@ interface ReservationAuditInfo {
   userName?: string;
   status?: string;
   checkedInAt?: unknown;
+  purpose?: string;
+  programDepartmentOrganization?: string;
+  currentStep?: number;
+  approvalFlow?: Array<{ role?: string }>;
 }
 
 async function writeReservationAuditAction(
@@ -130,6 +136,7 @@ async function writeReservationAuditAction(
   reservationOverride?: ReservationAuditInfo,
   extraMetadata?: Record<string, string | number | boolean | null>,
   category?: "Reservation" | "BLE / Occupancy",
+  remarks?: string | null,
 ) {
   const snapshot = reservationOverride
     ? null
@@ -145,6 +152,7 @@ async function writeReservationAuditAction(
     "reservation.completed",
     "reservation.completion_confirmed",
     "reservation.revision_requested",
+    "reservation.returned_for_revision",
     "reservation.revision_accepted",
     "reservation.revision_cancelled",
     "reservation.deleted",
@@ -155,8 +163,23 @@ async function writeReservationAuditAction(
   if (action === "reservation.checked_in" && before) {
     changes.checkedIn = { from: Boolean(before.checkedInAt), to: !reservationOverride && Boolean(data?.checkedInAt) };
   }
-  if (action === "reservation.revision_requested") {
+  if (before && data && [
+    "reservation.revision_accepted",
+    "reservation.revision_requested",
+    "reservation.returned_for_revision",
+  ].includes(action)) {
+    for (const field of ["roomId", "roomName", "date", "startTime", "endTime"] as const) {
+      const from = before[field] ?? null;
+      const to = data[field] ?? null;
+      if (from !== to) changes[field] = { from, to };
+    }
+  }
+  if (action === "reservation.revision_requested" || action === "reservation.returned_for_revision") {
     changes.revisionStatus = { from: null, to: "requested" };
+    const proposedRoomId = extraMetadata?.proposedRoomId;
+    if (typeof proposedRoomId === "string") {
+      changes.proposedRoomId = { from: data?.roomId ?? null, to: proposedRoomId };
+    }
   } else if (action === "reservation.revision_accepted") {
     changes.revisionStatus = { from: "requested", to: "accepted" };
   } else if (action === "reservation.revision_cancelled") {
@@ -166,12 +189,14 @@ async function writeReservationAuditAction(
     action,
     entityType: "reservation",
     entityId: reservationId,
+    reservationReference: data?.reservationReference,
     targetUserId: data?.userId,
     campus: data?.campus,
     buildingId: data?.buildingId,
     buildingName: data?.buildingName,
     summary,
     changes,
+    remarks,
     category,
     metadata: {
       roomId: data?.roomId ?? null,
@@ -179,7 +204,8 @@ async function writeReservationAuditAction(
       date: data?.date ?? null,
       startTime: data?.startTime ?? null,
       endTime: data?.endTime ?? null,
-      requester: data?.userName ?? null,
+      purpose: data?.purpose ?? null,
+      organization: data?.programDepartmentOrganization ?? null,
       ...extraMetadata,
     },
   });
@@ -218,12 +244,15 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ reservationId: string }> }
 ) {
+  let attemptedAction = "unknown";
+  let reservationMutationCompleted = false;
   try {
     const { reservationId } = await params;
     const authContext = await getRequestAuthContext(request, { allowCompatibilityHeaders: false });
     assertVerifiedAuthentication(authContext);
 
     const payload = reservationActionSchema.parse(await request.json());
+    attemptedAction = payload.action;
 
     const beforeSnapshot = payload.action === "presence-heartbeat"
       ? null
@@ -237,7 +266,8 @@ export async function PATCH(
       reservationOverride?: ReservationAuditInfo,
       extraMetadata?: Record<string, string | number | boolean | null>,
       category?: "Reservation" | "BLE / Occupancy",
-    ) => writeReservationAuditAction(id, context, action, summary, beforeData, reservationOverride, extraMetadata, category);
+      remarks?: string | null,
+    ) => writeReservationAuditAction(id, context, action, summary, beforeData, reservationOverride, extraMetadata, category, remarks);
 
     switch (payload.action) {
       case "approve": {
@@ -248,11 +278,18 @@ export async function PATCH(
           throw new ApiError(403, "forbidden", "Approver email does not match the authenticated user.");
         }
         await approveReservationRecord(reservationId, authContext.email, authContext);
+        reservationMutationCompleted = true;
+        const approvedSnapshot = await db.collection("reservations").doc(reservationId).get();
+        const approvedData = approvedSnapshot.data() as ReservationAuditInfo | undefined;
+        const currentStep = Number(beforeData?.currentStep ?? 0);
+        const approvingStepRole = beforeData?.approvalFlow?.[currentStep]?.role ?? "unknown";
         await auditReservationAction(
           reservationId,
           authContext,
-          "reservation.approved",
-          "Approved reservation",
+          approvedData?.status === "approved" ? "reservation.approved" : "reservation.endorsed",
+          approvedData?.status === "approved" ? "Approved reservation" : `Endorsed reservation (${approvingStepRole})`,
+          undefined,
+          { approvalStepRole: approvingStepRole },
         );
         break;
       }
@@ -269,11 +306,16 @@ export async function PATCH(
           payload.reason,
           authContext
         );
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
           "reservation.rejected",
           "Rejected reservation",
+          undefined,
+          { approvalStepRole: beforeData?.approvalFlow?.[Number(beforeData.currentStep ?? 0)]?.role ?? "unknown" },
+          undefined,
+          payload.reason,
         );
         break;
       }
@@ -282,6 +324,7 @@ export async function PATCH(
           throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
         }
         await cancelReservationRecord(reservationId, payload.userId, authContext);
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
@@ -296,6 +339,7 @@ export async function PATCH(
           authContext,
           payload.revisionId
         );
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
@@ -314,6 +358,7 @@ export async function PATCH(
           payload.userId,
           payload.method
         );
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
@@ -328,6 +373,7 @@ export async function PATCH(
           throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
         }
         await disconnectReservationBeaconRecord(reservationId, payload.userId);
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
@@ -347,6 +393,7 @@ export async function PATCH(
           payload.userId,
           payload.beaconId
         );
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
@@ -370,6 +417,7 @@ export async function PATCH(
           rssi: payload.rssi,
           userId: payload.userId,
         });
+        reservationMutationCompleted = true;
         return NextResponse.json(result);
       }
       case "stop-monitor":
@@ -377,6 +425,7 @@ export async function PATCH(
           throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
         }
         await stopReservationPresenceMonitorRecord(reservationId, payload.userId);
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
@@ -392,6 +441,7 @@ export async function PATCH(
           throw new ApiError(403, "forbidden", "Authenticated user does not match the reservation owner.");
         }
         await completeReservationRecord(reservationId, payload.userId);
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
@@ -417,6 +467,7 @@ export async function PATCH(
 
         assertCanManageBuilding(authContext, reservation.buildingId);
         await confirmFinishedReservationRecord(reservationId, authContext.uid!, authContext);
+        reservationMutationCompleted = true;
         break;
       }
       case "delete":
@@ -450,6 +501,7 @@ export async function PATCH(
 
         if (authContext.uid === reservation.userId) {
           await deleteReservationRecord(reservationId, reservation.userId);
+          reservationMutationCompleted = true;
           await auditReservationAction(
             reservationId,
             authContext,
@@ -474,6 +526,7 @@ export async function PATCH(
 
         assertCanManageBuilding(authContext, reservation.buildingId);
         await deleteReservationRecord(reservationId, reservation.userId);
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
@@ -488,6 +541,7 @@ export async function PATCH(
           authContext,
           payload.message
         );
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
@@ -502,13 +556,16 @@ export async function PATCH(
           payload.proposedRoomId,
           payload.baseUpdatedAtMs
         );
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
-          "reservation.revision_requested",
-          "Requested reservation change",
+          "reservation.returned_for_revision",
+          "Returned reservation for revision",
           undefined,
-          { proposedRoomId: payload.proposedRoomId },
+          { proposedRoomId: payload.proposedRoomId, proposedRoomName: result.proposedRoomName },
+          undefined,
+          payload.reason ?? null,
         );
         return NextResponse.json({ ok: true, ...result });
       }
@@ -518,6 +575,7 @@ export async function PATCH(
           authContext,
           payload.revisionId
         );
+        reservationMutationCompleted = true;
         await auditReservationAction(
           reservationId,
           authContext,
@@ -534,6 +592,24 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    // Record failed reservation actions when the request is authenticated. This
+    // includes denied approval attempts; logging must never hide the API error.
+    try {
+      const authContext = await getRequestAuthContext(request, { allowCompatibilityHeaders: false });
+      if (!reservationMutationCompleted && authContext.uid && authContext.verified) {
+        await writeAuditLog(authContext, {
+          action: "reservation.action_failed",
+          entityType: "reservation",
+          entityId: (await params).reservationId,
+          outcome: "failure",
+          summary: `Reservation action failed: ${attemptedAction}`,
+          remarks: error instanceof Error ? error.message.slice(0, 500) : "Request failed",
+          metadata: { attemptedAction },
+        });
+      }
+    } catch {
+      // Preserve the original response if the secondary audit write fails.
+    }
     return handleApiError(error);
   }
 }
