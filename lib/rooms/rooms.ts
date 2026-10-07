@@ -180,7 +180,8 @@ export async function updateRoomStatus(
 
 export function onRoomsByBuilding(
   buildingId: string,
-  callback: (rooms: Room[]) => void
+  callback: (rooms: Room[]) => void,
+  onError?: (error: unknown) => void
 ): Unsubscribe {
   const roomQuery = query(
     collection(db, "rooms"),
@@ -218,6 +219,7 @@ export function onRoomsByBuilding(
         error,
       });
       console.warn("Firestore listener error (rooms):", error);
+      onError?.(error);
     }
   );
   return listener.wrap(unsubscribe);

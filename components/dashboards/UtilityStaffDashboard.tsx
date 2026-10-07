@@ -25,6 +25,7 @@ import {
   onReservationsByBuilding,
   Reservation,
 } from '@/lib/reservations/reservations';
+import RoomScheduleTimeline from '@/components/rooms/schedules/RoomScheduleTimeline';
 import {
   getLocalDateString,
   resolveRoomStatus,
@@ -38,7 +39,7 @@ import {
   onSchedulesByBuilding,
   Schedule,
 } from '@/lib/schedules/schedules';
-import { formatClockTime, formatTimeRange } from '@/lib/utils/dateTime';
+import { formatClockTime, formatDate, formatTimeRange } from '@/lib/utils/dateTime';
 
 interface UtilityStaffDashboardProps {
   firstName: string;
@@ -54,6 +55,13 @@ type TimetableEntry = {
   roomName: string;
   startTime: string;
   purpose?: string;
+};
+
+type RoomScheduleFeed = 'reservations' | 'rooms';
+type RoomScheduleErrors = {
+  buildingId: string;
+  reservations: string | null;
+  rooms: string | null;
 };
 
 const TIMETABLE_DAYS = [
@@ -277,6 +285,17 @@ function StatCard({
       ) : null}
     </div>
   );
+}
+
+function shiftDate(dateValue: string, dayOffset: number) {
+  const [year, month, day] = dateValue.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + dayOffset);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 function UtilityBleBeaconSummary({
@@ -585,6 +604,13 @@ export default function UtilityStaffDashboard({
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [adminRequests, setAdminRequests] = useState<AdminRequest[]>([]);
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState(() => getLocalDateString());
+  const [scheduleDataBuildingId, setScheduleDataBuildingId] = useState('');
+  const [roomScheduleErrors, setRoomScheduleErrors] = useState<RoomScheduleErrors>({
+    buildingId: '',
+    reservations: null,
+    rooms: null,
+  });
 
   useEffect(() => {
     if (!buildingId || !uid) {
@@ -592,10 +618,36 @@ export default function UtilityStaffDashboard({
     }
 
     let cancelled = false;
+    let roomsLoaded = false;
+    let reservationsLoaded = false;
+    const markRoomScheduleReady = () => {
+      if (roomsLoaded && reservationsLoaded) {
+        setScheduleDataBuildingId(buildingId);
+      }
+    };
+    const updateRoomScheduleError = (feed: RoomScheduleFeed, error: unknown | null) => {
+      const message = error === null
+        ? null
+        : error instanceof Error
+          ? error.message
+          : `Unable to load building ${feed}.`;
+      setRoomScheduleErrors((current) => {
+        const currentBuildingErrors = current.buildingId === buildingId
+          ? current
+          : { buildingId, reservations: null, rooms: null };
+        return { ...currentBuildingErrors, [feed]: message };
+      });
+    };
 
     const unsubscribeRooms = onRoomsByBuilding(buildingId, (nextRooms) => {
       if (cancelled) return;
       setRooms(nextRooms);
+      updateRoomScheduleError('rooms', null);
+      roomsLoaded = true;
+      markRoomScheduleReady();
+    }, (error) => {
+      if (cancelled) return;
+      updateRoomScheduleError('rooms', error);
     });
     const unsubscribeSchedules = onSchedulesByBuilding(
       buildingId,
@@ -609,6 +661,13 @@ export default function UtilityStaffDashboard({
       (nextReservations) => {
         if (cancelled) return;
         setReservations(nextReservations);
+        updateRoomScheduleError('reservations', null);
+        reservationsLoaded = true;
+        markRoomScheduleReady();
+      },
+      (error) => {
+        if (cancelled) return;
+        updateRoomScheduleError('reservations', error);
       }
     );
     const unsubscribeRequests = onAdminRequestsByBuilding(
@@ -629,6 +688,9 @@ export default function UtilityStaffDashboard({
   }, [buildingId, uid]);
 
   const today = new Date();
+  const roomScheduleError = roomScheduleErrors.buildingId === buildingId
+    ? roomScheduleErrors.rooms ?? roomScheduleErrors.reservations
+    : null;
   const todayDateString = getLocalDateString(today);
   const todayReservations = reservations.filter(
     (reservation) =>
@@ -895,6 +957,38 @@ export default function UtilityStaffDashboard({
             </div>
           )}
         </section>
+
+        <div className="mb-10 space-y-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="mr-1 text-xs font-bold text-black/55">
+              {formatDate(selectedScheduleDate)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedScheduleDate((date) => shiftDate(date, -1))}
+              aria-label="Show previous day"
+              className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
+            >
+              Previous day
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedScheduleDate((date) => shiftDate(date, 1))}
+              aria-label="Show next day"
+              className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
+            >
+              Next day
+            </button>
+          </div>
+
+          <RoomScheduleTimeline
+            error={roomScheduleError}
+            isLoading={scheduleDataBuildingId !== buildingId && !roomScheduleError}
+            reservations={scheduleDataBuildingId === buildingId ? reservations : []}
+            rooms={scheduleDataBuildingId === buildingId ? rooms : []}
+            selectedDate={selectedScheduleDate}
+          />
+        </div>
       </div>
     </main>
   );

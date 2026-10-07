@@ -434,7 +434,8 @@ export function onPendingReservationsByApprover(
 
 export function onReservationsByBuilding(
   buildingId: string,
-  callback: (reservations: Reservation[]) => void
+  callback: (reservations: Reservation[]) => void,
+  onError?: (error: unknown) => void
 ): Unsubscribe {
   const reservationsQuery = query(
     collection(db, "reservations"),
@@ -469,6 +470,7 @@ export function onReservationsByBuilding(
         error,
       });
       console.warn("Firestore listener error (reservations by building):", error);
+      onError?.(error);
     }
   );
   return listener.wrap(unsubscribe);

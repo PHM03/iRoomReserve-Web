@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import BleSummaryCard from '@/components/ui/BleSummaryCard';
 import MyReservationTimetable from '@/components/rooms/schedules/MyReservationTimetable';
+import RoomScheduleTimeline from '@/components/rooms/schedules/RoomScheduleTimeline';
 import type { AdminTab } from '@/components/layout/NavBar';
 import {
   fetchAdminDashboardSnapshot,
@@ -14,7 +15,8 @@ import {
   type Reservation,
 } from '@/lib/reservations/reservations';
 import type { Room } from '@/lib/rooms/rooms';
-import { formatTimeRange } from '@/lib/utils/dateTime';
+import { getLocalDateString } from '@/lib/rooms/roomStatus';
+import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
 import { formatReservationDates, RoleBadge, StatusBadge } from './shared';
 
 type RoomStatusFilter = 'All' | 'Available' | 'Reserved' | 'Occupied' | 'Unavailable';
@@ -176,6 +178,17 @@ function isExpiredReservation(request: Reservation) {
   return reservationDates.every((date) => date < todayDateKey);
 }
 
+function shiftDate(dateValue: string, dayOffset: number) {
+  const [year, month, day] = dateValue.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + dayOffset);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
 export default function AdminOverviewTab({
   allReservations,
   approverEmail,
@@ -203,12 +216,59 @@ export default function AdminOverviewTab({
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [reservationActionError, setReservationActionError] = useState('');
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState(() => getLocalDateString());
+  const [scheduleRooms, setScheduleRooms] = useState<Room[]>([]);
+  const [scheduleReservations, setScheduleReservations] = useState<Reservation[]>([]);
+  const [scheduleDataBuildingId, setScheduleDataBuildingId] = useState('');
+  const [scheduleDataDate, setScheduleDataDate] = useState('');
+  const [scheduleLoading, setScheduleLoading] = useState(true);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const normalizedRoomSearch = roomSearch.trim();
 
   useEffect(() => {
     setPreviewRooms(rooms);
   }, [rooms]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    setScheduleLoading(true);
+    setScheduleError(null);
+
+    void fetchAdminDashboardSnapshot(buildingId, {
+      includeApprovedReservations: true,
+      includePendingRequests: false,
+      includeRoomHistory: false,
+      includeRooms: true,
+      includeSchedules: false,
+      includeSummary: false,
+      reservationDate: selectedScheduleDate,
+    })
+      .then((snapshot) => {
+        if (isCancelled) return;
+        setScheduleRooms(snapshot.rooms);
+        setScheduleReservations(snapshot.allReservations);
+        setScheduleDataBuildingId(buildingId);
+        setScheduleDataDate(selectedScheduleDate);
+      })
+      .catch((error) => {
+        if (isCancelled) return;
+        setScheduleRooms([]);
+        setScheduleReservations([]);
+        setScheduleDataBuildingId(buildingId);
+        setScheduleDataDate(selectedScheduleDate);
+        setScheduleError(
+          error instanceof Error ? error.message : 'Unable to load the room schedule.'
+        );
+      })
+      .finally(() => {
+        if (!isCancelled) setScheduleLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [buildingId, selectedScheduleDate]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -663,6 +723,50 @@ export default function AdminOverviewTab({
             </div>
           )}
         </DashboardSection>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="mr-1 text-xs font-bold text-black/55">
+            {formatDate(selectedScheduleDate)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedScheduleDate((date) => shiftDate(date, -1))}
+            aria-label="Show previous day"
+            className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
+          >
+            Previous day
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedScheduleDate((date) => shiftDate(date, 1))}
+            aria-label="Show next day"
+            className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
+          >
+            Next day
+          </button>
+        </div>
+
+        <RoomScheduleTimeline
+          error={scheduleDataBuildingId === buildingId && scheduleDataDate === selectedScheduleDate ? scheduleError : null}
+          isLoading={
+            scheduleLoading ||
+            scheduleDataBuildingId !== buildingId ||
+            scheduleDataDate !== selectedScheduleDate
+          }
+          reservations={
+            scheduleDataBuildingId === buildingId && scheduleDataDate === selectedScheduleDate
+              ? scheduleReservations
+              : []
+          }
+          rooms={
+            scheduleDataBuildingId === buildingId && scheduleDataDate === selectedScheduleDate
+              ? scheduleRooms
+              : []
+          }
+          selectedDate={selectedScheduleDate}
+        />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
