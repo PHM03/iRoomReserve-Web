@@ -144,6 +144,7 @@ interface ReservationRecord {
   adminUid: string | null;
   recurringGroupId?: string;
   checkedInAt?: FirestoreTimestampLike | null;
+  reservationStartedAt?: FirestoreTimestampLike | null;
   completedAt?: FirestoreTimestampLike | null;
   expiredAt?: FirestoreTimestampLike | null;
   expirationReason?: string | null;
@@ -2880,6 +2881,8 @@ export async function checkInReservationRecord(
 
       transaction.update(reservationRef, {
         checkedInAt: serverTimestamp(),
+        reservationStartedAt:
+          latestReservation.reservationStartedAt ?? serverTimestamp(),
         checkInMethod: normalizedMethod,
         updatedAt: serverTimestamp(),
       });

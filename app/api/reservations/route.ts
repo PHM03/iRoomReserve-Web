@@ -24,9 +24,11 @@ export const runtime = "nodejs";
 
 type ReservationQueryRecord = {
   buildingId?: string;
+  checkedInAt?: unknown;
   createdAt?: unknown;
   date?: string;
   id: string;
+  reservationStartedAt?: unknown;
   startTime?: string;
   status?: string;
 } & Record<string, unknown>;
@@ -50,6 +52,45 @@ function getTimestampSeconds(value: unknown) {
   }
 
   return 0;
+}
+
+async function restoreHistoricalCheckInTimes<T extends ReservationQueryRecord>(
+  reservations: T[],
+): Promise<T[]> {
+  const missingStart = reservations.filter(
+    (reservation) =>
+      reservation.status === "completed" &&
+      !reservation.reservationStartedAt &&
+      !reservation.checkedInAt,
+  );
+  if (missingStart.length === 0) return reservations;
+
+  const ids = missingStart.map((reservation) => reservation.id);
+  const chunks = Array.from({ length: Math.ceil(ids.length / 30) }, (_, index) =>
+    ids.slice(index * 30, (index + 1) * 30),
+  );
+  const auditSnapshots = await Promise.all(
+    chunks.map((chunk) =>
+      db.collection("auditLogs").where("reservationId", "in", chunk).get(),
+    ),
+  );
+  const starts = new Map<string, { seconds: number; timestamp: unknown }>();
+  auditSnapshots.forEach((snapshot) => {
+    snapshot.docs.forEach((auditDoc) => {
+      const audit = auditDoc.data();
+      if (audit.action !== "reservation.checked_in" || typeof audit.reservationId !== "string") return;
+      const seconds = getTimestampSeconds(audit.createdAt);
+      const current = starts.get(audit.reservationId);
+      if (seconds > 0 && (!current || seconds < current.seconds)) {
+        starts.set(audit.reservationId, { seconds, timestamp: audit.createdAt });
+      }
+    });
+  });
+
+  return reservations.map((reservation) => {
+    const timestamp = starts.get(reservation.id)?.timestamp;
+    return timestamp ? { ...reservation, reservationStartedAt: timestamp } : reservation;
+  });
 }
 
 function sortReservations(
@@ -184,7 +225,7 @@ export async function GET(request: NextRequest) {
         ? reservations.sort(sortReservations)
         : groupReservationsForDisplay(reservations);
 
-    return NextResponse.json(normalizedReservations);
+    return NextResponse.json(await restoreHistoricalCheckInTimes(normalizedReservations));
   } catch (error) {
     return handleApiError(error);
   }
