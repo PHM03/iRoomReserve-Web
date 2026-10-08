@@ -406,7 +406,7 @@ export function useAdminDashboard({ activeTab }: UseAdminDashboardOptions) {
     );
 
     if (activeReservation) {
-      return activeReservation.checkedInAt
+      return activeReservation.checkedInAt && !activeReservation.occupancyReleasedAt
         ? {
           status: 'Occupied',
           detail: `Checked in: ${activeReservation.userName}`

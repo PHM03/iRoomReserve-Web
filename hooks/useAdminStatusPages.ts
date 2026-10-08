@@ -663,6 +663,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
 
       if (
         activeReservation.checkedInAt &&
+        !activeReservation.occupancyReleasedAt &&
         activeCheckInMethod === 'bluetooth' &&
         !heartbeatHealthy
       ) {
@@ -672,7 +673,7 @@ export function useAdminStatusPages(options: UseAdminStatusPagesOptions = {}) {
         };
       }
 
-      return activeReservation.checkedInAt
+      return activeReservation.checkedInAt && !activeReservation.occupancyReleasedAt
         ? {
           status: 'Occupied',
           detail: `Checked in: ${activeReservation.userName}`

@@ -70,7 +70,7 @@ export default function RoomList({
           ? `${reservation.status === 'completed' ? 'Completed · awaiting finish' : reservation.status} · ${formatReservationWindow(reservation)}`
           : 'No active reservation';
         const requester = reservation?.userName ?? '—';
-        const occupancy = reservation?.checkedInAt
+        const occupancy = reservation?.checkedInAt && !reservation.occupancyReleasedAt
           ? 'Checked in'
           : reservation
             ? 'Not checked in'

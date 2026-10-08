@@ -123,7 +123,7 @@ export function useBluetoothReservationCheckIn() {
         return;
       }
 
-      if (reservation.checkedInAt) {
+      if (reservation.checkedInAt && !reservation.occupancyReleasedAt) {
         pushToast('This reservation has already been checked in.', 'error');
         return;
       }

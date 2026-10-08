@@ -1198,8 +1198,8 @@ function getRoomStatusPayload(
     } as const;
   }
 
-  const checkedInReservation = approvedReservations.find((reservation) =>
-    Boolean(reservation.checkedInAt)
+  const checkedInReservation = approvedReservations.find(
+    (reservation) => Boolean(reservation.checkedInAt) && !reservation.occupancyReleasedAt,
   );
   const preferredReservation = preferredReservationId
     ? approvedReservations.find(
@@ -1211,21 +1211,26 @@ function getRoomStatusPayload(
   const selectedCheckInMethod = normalizeRoomCheckInMethod(
     selectedReservation.checkInMethod
   );
+  const selectedReservationIsCheckedIn =
+    Boolean(selectedReservation.checkedInAt) &&
+    !selectedReservation.occupancyReleasedAt;
 
   return {
-    status: selectedReservation.checkedInAt ? "Occupied" : "Reserved",
+    status: selectedReservationIsCheckedIn ? "Occupied" : "Reserved",
     beaconConnected:
-      Boolean(selectedReservation.checkedInAt) &&
+      selectedReservationIsCheckedIn &&
       selectedCheckInMethod === "bluetooth",
     beaconDeviceName: null,
     beaconLastConnectedAt:
-      selectedCheckInMethod === "bluetooth"
+      selectedReservationIsCheckedIn && selectedCheckInMethod === "bluetooth"
         ? selectedReservation.checkedInAt ?? null
         : null,
     reservedBy: selectedReservation.userId ?? null,
     activeReservationId: selectedReservation.id,
-    checkedInAt: selectedReservation.checkedInAt ?? null,
-    checkInMethod: selectedCheckInMethod ?? null,
+    checkedInAt: selectedReservationIsCheckedIn
+      ? selectedReservation.checkedInAt ?? null
+      : null,
+    checkInMethod: selectedReservationIsCheckedIn ? selectedCheckInMethod ?? null : null,
   } as const;
 }
 
@@ -2840,10 +2845,8 @@ export async function checkInReservationRecord(
         !canReservationCheckIn({
           status: latestReservation.status,
           date: latestReservation.date,
-          checkedInAt:
-            latestReservation.checkedInAt as Parameters<
-              typeof canReservationCheckIn
-            >[0]["checkedInAt"],
+          checkedInAt: latestReservation.checkedInAt,
+          occupancyReleasedAt: latestReservation.occupancyReleasedAt,
         })
       ) {
         throw new ApiError(
@@ -2879,11 +2882,15 @@ export async function checkInReservationRecord(
         );
       }
 
+    const firstCheckInAt =
+      latestReservation.checkedInAt ??
+      latestReservation.reservationStartedAt ??
+      serverTimestamp();
       transaction.update(reservationRef, {
-        checkedInAt: serverTimestamp(),
-        reservationStartedAt:
-          latestReservation.reservationStartedAt ?? serverTimestamp(),
+        checkedInAt: firstCheckInAt,
+        reservationStartedAt: latestReservation.reservationStartedAt ?? firstCheckInAt,
         checkInMethod: normalizedMethod,
+        occupancyReleasedAt: null,
         updatedAt: serverTimestamp(),
       });
       transaction.update(roomRef, {
@@ -2974,8 +2981,7 @@ export async function disconnectReservationBeaconRecord(
     const batch = db.batch();
 
     batch.update(reservationRef, {
-      checkedInAt: null,
-      checkInMethod: null,
+      occupancyReleasedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
@@ -3033,7 +3039,11 @@ export async function startReservationPresenceMonitorRecord(
         "You cannot start monitoring for this reservation."
       );
     }
-    if (reservation.status !== "approved" || !reservation.checkedInAt) {
+    if (
+      reservation.status !== "approved" ||
+      !reservation.checkedInAt ||
+      reservation.occupancyReleasedAt
+    ) {
       throw new ApiError(
         400,
         "invalid_status",
@@ -3375,7 +3385,9 @@ export async function confirmFinishedReservationRecord(
 
     const canConfirmCompletedReservation = reservation.status === "completed";
     const canForceFinishCheckedInApprovedReservation =
-      reservation.status === "approved" && Boolean(reservation.checkedInAt);
+      reservation.status === "approved" &&
+      Boolean(reservation.checkedInAt) &&
+      !reservation.occupancyReleasedAt;
 
     if (
       !canConfirmCompletedReservation &&
@@ -3391,7 +3403,6 @@ export async function confirmFinishedReservationRecord(
     const batch = db.batch();
 
     batch.update(reservationRef, {
-      checkedInAt: null,
       checkInMethod: null,
       completedAt:
         reservation.status === "completed"

@@ -907,7 +907,7 @@ export default function UtilityStaffDashboard({
                 const roomStatus = resolveRoomStatus(
                   reservationRoom ?? {
                     id: reservation.roomId,
-                    status: reservation.checkedInAt ? 'Occupied' : 'Reserved',
+                    status: reservation.checkedInAt && !reservation.occupancyReleasedAt ? 'Occupied' : 'Reserved',
                   },
                   reservations,
                   { now: today }

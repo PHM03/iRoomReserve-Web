@@ -48,7 +48,7 @@ function getRecentActivityStatus(
   const reservationDates = getReservationDateList(reservation);
   const isPastApprovedReservation =
     reservation.status === 'approved' &&
-    !reservation.checkedInAt &&
+    (!reservation.checkedInAt || Boolean(reservation.occupancyReleasedAt)) &&
     reservationDates.length > 0 &&
     reservationDates.every((date) => date < currentDate);
 

@@ -70,6 +70,7 @@ export interface Reservation {
   isRecurringRequest?: boolean;
   occurrenceCount?: number;
   checkedInAt?: Timestamp | null;
+  reservationStartedAt?: Timestamp | null;
   expiredAt?: ReservationTimestampLike;
   expirationReason?: string | null;
   expirationMessage?: {
@@ -97,6 +98,7 @@ export type ReservationInput = Omit<
   | "activeRevisionStatus"
   | "revisionScope"
   | "checkedInAt"
+  | "reservationStartedAt"
   | "expiredAt"
   | "expirationReason"
   | "expirationMessage"

@@ -162,7 +162,7 @@ export default function AdminRoomStatusSection({
               <dl className="mt-4 grid grid-cols-1 gap-3 border-t border-dark/10 pt-3 sm:grid-cols-2">
                 {field('Reservation', reservationLabel)}
                 {field('Requester', displayedReservation?.userName ?? '—')}
-                {field('Occupancy / check-in', displayedReservation?.checkedInAt ? 'Checked in' : 'Not checked in')}
+                {field('Occupancy / check-in', displayedReservation?.checkedInAt && !displayedReservation.occupancyReleasedAt ? 'Checked in' : 'Not checked in')}
                 {field('BLE beacon health', bleLabel(room))}
                 {field('Active class', schedule ? `${getScheduleDisplayTitle(schedule)} · ${scheduleWindow}` : 'No active class')}
                 {field('Active time block', blockWindow ?? 'None')}

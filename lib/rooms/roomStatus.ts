@@ -311,12 +311,15 @@ export function isReservationScheduledForToday(
 }
 
 export function canReservationCheckIn(
-  reservation: Pick<RoomStatusReservationLike, "status" | "date" | "checkedInAt">,
+  reservation: Pick<
+    RoomStatusReservationLike,
+    "status" | "date" | "checkedInAt" | "occupancyReleasedAt"
+  >,
   now: Date = new Date()
 ): boolean {
   return (
     reservation.status === "approved" &&
-    !reservation.checkedInAt &&
+    (!reservation.checkedInAt || Boolean(reservation.occupancyReleasedAt)) &&
     isReservationScheduledForToday(reservation, now)
   );
 }
@@ -357,7 +360,7 @@ export function getPrimaryRoomReservation(
   }
 
   const checkedInReservation = approvedReservations.find((reservation) =>
-    Boolean(reservation.checkedInAt)
+    Boolean(reservation.checkedInAt) && !reservation.occupancyReleasedAt
   );
 
   if (checkedInReservation) {
@@ -448,7 +451,7 @@ export function resolveRoomOperationalState(
   } = options;
   const condition = getAdministrativeRoomCondition(room.status);
   const reservation = getCurrentRoomReservation(room, reservations, now, timeZone);
-  const checkedIn = Boolean(reservation?.checkedInAt);
+  const checkedIn = Boolean(reservation?.checkedInAt) && !reservation?.occupancyReleasedAt;
 
   if (condition === "Unavailable") {
     return {
@@ -506,7 +509,12 @@ export function resolveRoomOperationalState(
 export function getReservationRoomStatus(
   reservation: Pick<
     RoomStatusReservationLike,
-    "id" | "status" | "date" | "checkedInAt" | "checkInMethod"
+    | "id"
+    | "status"
+    | "date"
+    | "checkedInAt"
+    | "occupancyReleasedAt"
+    | "checkInMethod"
   >,
   room?: RoomStatusRoomLike | null,
   options: {
@@ -522,12 +530,14 @@ export function getReservationRoomStatus(
   const checkInMethod = normalizeRoomCheckInMethod(
     reservation.checkInMethod ?? room?.checkInMethod
   );
+  const currentlyCheckedIn =
+    Boolean(reservation.checkedInAt) && !reservation.occupancyReleasedAt;
   const bluetoothDisconnected =
-    Boolean(reservation.checkedInAt) &&
+    currentlyCheckedIn &&
     checkInMethod === "bluetooth" &&
     !isRoomReservationHeartbeatHealthy(room ?? {}, connectionTimeoutMs, now);
 
-  if (reservation.checkedInAt && !bluetoothDisconnected) {
+  if (currentlyCheckedIn && !bluetoothDisconnected) {
     return "Occupied";
   }
 
@@ -561,8 +571,10 @@ export function resolveRoomStatus(
   const checkInMethod = normalizeRoomCheckInMethod(
     reservation?.checkInMethod ?? room.checkInMethod
   );
+  const currentlyCheckedIn =
+    Boolean(reservation?.checkedInAt) && !reservation?.occupancyReleasedAt;
   const bluetoothDisconnected =
-    Boolean(reservation?.checkedInAt) &&
+    currentlyCheckedIn &&
     checkInMethod === "bluetooth" &&
     !isRoomReservationHeartbeatHealthy(room, connectionTimeoutMs, now);
 
@@ -619,7 +631,10 @@ export function resolveRoomStatus(
   }
 
   if (reservation) {
-    const status = reservation.checkedInAt ? "Occupied" : "Reserved";
+    const status =
+      reservation.checkedInAt && !reservation.occupancyReleasedAt
+        ? "Occupied"
+        : "Reserved";
     return {
       status,
       reservation,

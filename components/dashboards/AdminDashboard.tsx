@@ -300,6 +300,7 @@ export default function AdminDashboard({
 
         if (
           activeReservation.checkedInAt &&
+          !activeReservation.occupancyReleasedAt &&
           activeCheckInMethod === 'bluetooth' &&
           !heartbeatHealthy
         ) {
@@ -309,7 +310,7 @@ export default function AdminDashboard({
           };
         }
 
-        return activeReservation.checkedInAt
+        return activeReservation.checkedInAt && !activeReservation.occupancyReleasedAt
           ? {
             status: 'Occupied',
             detail: `Checked in: ${activeReservation.userName}`
