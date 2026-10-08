@@ -201,6 +201,15 @@ textarea {
   color: #7f1d1d;
 }
 
+.status-scheduling-dropdown {
+  overflow: hidden;
+}
+
+.status-scheduling-dropdown .dashboard-dropdown-item:hover {
+  background: #a12124;
+  color: #ffffff;
+}
+
 .dashboard-table-shell {
   background: #ffffff;
   border: 1px solid #e5e7eb;

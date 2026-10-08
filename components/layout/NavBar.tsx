@@ -560,10 +560,15 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   </button>
                 ))}
 
-                <div ref={dropdownRef} className="relative flex shrink-0 items-center">
+                <div
+                  ref={dropdownRef}
+                  className="relative flex shrink-0 items-center"
+                  onMouseEnter={() => setIsStatusMenuOpen(true)}
+                  onMouseLeave={() => setIsStatusMenuOpen(false)}
+                >
                   <button
                     type="button"
-                    onClick={() => setIsStatusMenuOpen((current) => !current)}
+                    onClick={() => setIsStatusMenuOpen(true)}
                     className={`flex items-center gap-2 ${adminLinkPaddingClasses} py-2 ${getNavItemClasses(
                       isStatusSchedulingActive
                     )}`}
@@ -578,13 +583,13 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   </button>
 
                   {isStatusMenuOpen ? (
-                    <div className="dashboard-dropdown absolute left-0 top-full z-50 mt-2 w-64 rounded-2xl p-2">
+                    <div className="dashboard-dropdown status-scheduling-dropdown absolute left-0 top-full z-50 w-64 rounded-2xl">
                       {visibleStatusSchedulingLinks.map((link) => (
                         <Link
                           key={link.href}
                           href={getStatusSchedulingHref(link.href)}
                           onClick={closeMenus}
-                          className={`dashboard-dropdown-item flex w-full items-center rounded-xl px-3 py-2.5 text-sm ${getNavItemClasses(
+                          className={`dashboard-dropdown-item flex w-full items-center px-5 py-2.5 text-sm ${getNavItemClasses(
                             pathname === link.href
                           )}`}
                           style={navbarBoldStyle}
