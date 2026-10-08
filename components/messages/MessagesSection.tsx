@@ -919,7 +919,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                     >
                       {message.subject && (
                         <p
-                          className={`mb-1 text-[11px] font-bold uppercase tracking-wide ${
+                          className={`mb-1 break-words [overflow-wrap:anywhere] text-[11px] font-bold uppercase tracking-wide ${
                             isMe ? 'text-white/75' : 'text-black/45'
                           }`}
                         >
@@ -927,7 +927,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                         </p>
                       )}
                       <p
-                        className={`text-sm leading-relaxed ${
+                        className={`break-words [overflow-wrap:anywhere] text-sm leading-relaxed ${
                           isOpen
                             ? `whitespace-pre-wrap ${isMe ? 'text-white' : 'text-black'}`
                             : isMe
