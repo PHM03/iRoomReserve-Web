@@ -338,8 +338,7 @@ export function onPendingReservationsByBuilding(
   const reservationsQuery = query(
     collection(db, "reservations"),
     where("buildingId", "==", buildingId),
-    where("status", "==", "pending"),
-    orderBy("createdAt", "desc")
+    where("status", "==", "pending")
   );
 
   const listener = createGuardedSnapshotCallback(callback);

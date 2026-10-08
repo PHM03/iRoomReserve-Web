@@ -263,7 +263,7 @@ export default function AdminFloorFilter({
           id={buttonId}
           disabled={disabled}
           onClick={handleButtonClick}
-          className={`flex ${fullWidth ? 'w-full' : 'min-w-44'} items-center justify-between gap-3 rounded-xl border border-white/55 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all hover:bg-white focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25 disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`flex ${fullWidth ? 'w-full' : 'min-w-44'} items-center justify-between gap-3 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all hover:border-gray-400 hover:bg-gray-50 focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25 disabled:cursor-not-allowed disabled:opacity-60 ${
             elevated && isOpen ? 'shadow-[0_18px_44px_rgba(15,23,42,0.18)]' : ''
           }`}
           aria-haspopup="listbox"

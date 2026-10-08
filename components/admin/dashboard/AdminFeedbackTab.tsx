@@ -744,7 +744,7 @@ export default function AdminFeedbackTab({
                 className={`flex-1 rounded-xl px-4 py-2.5 text-xs font-extrabold transition-colors sm:text-sm ${
                   dashboardView === view
                     ? 'bg-primary text-white shadow-sm'
-                    : 'text-black/60 hover:bg-white hover:text-black'
+                    : 'bg-gray-50 text-black/60 ring-1 ring-gray-300 hover:bg-gray-100 hover:text-black hover:ring-gray-400'
                 }`}
               >
                 {label}
@@ -1131,7 +1131,7 @@ export default function AdminFeedbackTab({
                     className={`flex-1 rounded-xl px-4 py-2 text-xs font-extrabold transition-colors sm:text-sm ${
                       reviewView === view
                         ? 'bg-primary text-white shadow-sm'
-                        : 'text-black/60 hover:bg-white hover:text-black'
+                        : 'bg-gray-50 text-black/60 ring-1 ring-gray-300 hover:bg-gray-100 hover:text-black hover:ring-gray-400'
                     }`}
                   >
                     {label}

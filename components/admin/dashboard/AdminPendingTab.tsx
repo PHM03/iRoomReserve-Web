@@ -637,7 +637,7 @@ export default function AdminPendingTab({
   return (
     <div>
       {/* Ã¢â€â‚¬Ã¢â€â‚¬ Header with building switcher Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */}
-      <div className="relative z-[60] mb-6 flex w-full flex-col gap-3 rounded-2xl border border-white/35 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)]  transition-all duration-300 hover:bg-white hover:shadow-2xl lg:flex-row lg:items-center lg:justify-between">
+      <div className="relative z-[60] mb-6 flex w-full flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-6 py-4 shadow-[0_24px_60px_rgba(15,23,42,0.17)]  transition-all duration-300 hover:bg-white hover:shadow-2xl lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3 min-w-0">
             <h3 className="text-xl font-bold text-gray-900">Pending Reservations</h3>
@@ -678,6 +678,7 @@ export default function AdminPendingTab({
         className="mb-5 w-full"
         style={{
           background: '#ffffff',
+          border: '1px solid #d1d5db',
           borderRadius: '12px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
           padding: '12px 20px',

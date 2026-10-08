@@ -282,7 +282,7 @@ function DateFilterControls({
             className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all ${
               preset === datePreset.key
                 ? 'border border-primary bg-primary text-white shadow-sm'
-                : 'border border-dark/10 bg-white text-black/55 hover:text-primary'
+                : 'border border-gray-300 bg-gray-50 text-black/65 hover:border-gray-400 hover:bg-gray-100 hover:text-primary'
             }`}
           >
             {datePreset.label}
@@ -1235,7 +1235,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                 className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all ${
                   activeTab === tab.key
                     ? 'border border-primary bg-primary text-white'
-                    : 'border border-dark/10 bg-white text-gray-700 hover:text-primary'
+                    : 'border border-gray-300 bg-gray-50 text-gray-700 hover:border-gray-400 hover:bg-gray-100 hover:text-primary'
                 }`}
               >
                 {tab.label}
@@ -1306,7 +1306,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search by name, subject, or message..."
-                className="w-full rounded-2xl border border-white/45 bg-white py-3 pl-11 pr-10 text-sm text-black shadow-sm  placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
+                className="w-full rounded-2xl border border-gray-300 bg-white py-3 pl-11 pr-10 text-sm text-black shadow-sm  placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
               {searchQuery && (
                 <button
@@ -1351,7 +1351,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                 value={reservationSearch}
                 onChange={(event) => setReservationSearch(event.target.value)}
                 placeholder="Search by room, building, requester, or status..."
-                className="w-full rounded-2xl border border-white/45 bg-white py-3 pl-11 pr-10 text-sm text-black shadow-sm  placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
+                className="w-full rounded-2xl border border-gray-300 bg-white py-3 pl-11 pr-10 text-sm text-black shadow-sm  placeholder:text-black/35 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
               {reservationSearch && (
                 <button

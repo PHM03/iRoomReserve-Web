@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 
 import type { Reservation } from '@/lib/reservations/reservations';
 import type { Room } from '@/lib/rooms/rooms';
@@ -36,6 +36,7 @@ const HOUR_MINUTES = 60;
 const ROOM_LABEL_WIDTH = 180;
 const TIMELINE_MIN_WIDTH = 840;
 const LANE_HEIGHT = 56;
+const MAX_VISIBLE_ROOMS = 5;
 
 function parseTimeMinutes(value: string) {
   const normalized = extractTimeString(value);
@@ -119,6 +120,8 @@ export default function RoomScheduleTimeline({
   rooms,
   selectedDate,
 }: Readonly<RoomScheduleTimelineProps>) {
+  const [roomSearch, setRoomSearch] = useState('');
+
   if (isLoading) {
     return (
       <section className="glass-card rounded-2xl p-5" aria-live="polite">
@@ -149,6 +152,12 @@ export default function RoomScheduleTimeline({
     );
   }
 
+  const normalizedRoomSearch = roomSearch.trim().toLocaleLowerCase();
+  const matchingRooms = rooms.filter((room) =>
+    room.name.toLocaleLowerCase().includes(normalizedRoomSearch)
+  );
+  const displayedRooms = matchingRooms.slice(0, MAX_VISIBLE_ROOMS);
+
   const visibleReservations = getVisibleReservations(reservations, selectedDate);
   const reservationsByRoom = new Map<string, TimelineReservation[]>();
   visibleReservations.forEach((reservation) => {
@@ -157,7 +166,7 @@ export default function RoomScheduleTimeline({
     reservationsByRoom.set(reservation.reservation.roomId, roomReservations);
   });
 
-  const roomsWithReservations = rooms.map((room) => ({
+  const roomsWithReservations = displayedRooms.map((room) => ({
     room,
     reservations: positionOverlappingReservations(
       reservationsByRoom.get(room.id) ?? []
@@ -185,11 +194,29 @@ export default function RoomScheduleTimeline({
 
   return (
     <section className="glass-card overflow-hidden rounded-2xl p-4 sm:p-5">
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-extrabold text-black">Room Schedule</h3>
           <p className="mt-0.5 text-xs font-bold text-black/50">{formatDate(selectedDate)}</p>
         </div>
+        <label className="w-full sm:w-72">
+          <span className="sr-only">Search rooms by name</span>
+          <input
+            type="search"
+            value={roomSearch}
+            onChange={(event) => setRoomSearch(event.target.value)}
+            placeholder="Search rooms by name..."
+            className="glass-input w-full px-3 py-2 text-sm"
+          />
+        </label>
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-bold text-black/55" aria-live="polite">
+          Showing {displayedRooms.length} of {matchingRooms.length}
+          {normalizedRoomSearch ? ' matching' : ''} room{matchingRooms.length === 1 ? '' : 's'}
+          {matchingRooms.length > MAX_VISIBLE_ROOMS ? ' · Search to find more' : ''}
+        </p>
         {visibleReservations.length === 0 ? (
           <p className="text-xs font-bold text-black/50">
             No approved reservations for this date.
@@ -230,6 +257,25 @@ export default function RoomScheduleTimeline({
               })}
             </div>
           </div>
+
+          {displayedRooms.length === 0 ? (
+            <div
+              className="grid border-b border-white/35 last:border-b-0"
+              style={{
+                gridTemplateColumns: `${ROOM_LABEL_WIDTH}px minmax(${TIMELINE_MIN_WIDTH}px, 1fr)`,
+              }}
+            >
+              <div className="sticky left-0 z-10 flex min-w-0 items-center border-r border-white/35 bg-white px-3 py-2">
+                <span className="text-xs font-bold text-black/55">No matching rooms</span>
+              </div>
+              <div
+                className="relative flex items-center bg-white/60 px-3 text-xs text-black/50"
+                style={{ minWidth: timelineWidth, height: 68 }}
+              >
+                Try a different room name.
+              </div>
+            </div>
+          ) : null}
 
           {roomsWithReservations.map(({ room, reservations: roomReservations }) => {
             const laneCount = Math.max(

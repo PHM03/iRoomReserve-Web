@@ -21,9 +21,11 @@ import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
 import { dismissAccountConfigurationReminder } from '@/lib/auth/auth';
 import {
   expireOpenReservations,
+  onPendingReservationsByBuilding,
   onReservationsByUser,
   type Reservation,
 } from '@/lib/reservations/reservations';
+import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
 import AccountSettingsModal from '@/components/auth/AccountSettingsModal';
 
 export type AdminTab =
@@ -129,7 +131,7 @@ function NavCountBadge({ count, label }: Readonly<{ count: number; label: string
 
   return (
     <span
-      className="inline-flex min-w-4 items-center justify-center rounded-full border border-primary/20 bg-primary/10 px-1 py-0.5 text-[9px] font-bold leading-none text-primary"
+      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-primary bg-primary px-1 text-[11px] font-ui-bold leading-none text-white"
       aria-label={`${count} ${label}`}
     >
       {count}
@@ -150,9 +152,10 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [isMobileStatusMenuOpen, setIsMobileStatusMenuOpen] = useState(false);
   const { firebaseUser, profile } = useAuth();
-  const { setSelectedBuildingId } = useAdminTab();
+  const { selectedBuildingId, setSelectedBuildingId } = useAdminTab();
   const uid = firebaseUser?.uid;
   const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
+  const [pendingReservationCount, setPendingReservationCount] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -173,6 +176,12 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
   const isStudentRole = normalizedRole === USER_ROLES.STUDENT;
   const isAdmin = normalizedRole === USER_ROLES.ADMIN;
   const isBuildingAdmin = normalizedRole === USER_ROLES.BUILDING_ADMIN;
+  const managedBuildings = getManagedBuildingsForCampus(profile?.campus);
+  const pendingCountBuildingId = managedBuildings.some(
+    (building) => building.id === selectedBuildingId
+  )
+    ? selectedBuildingId
+    : managedBuildings[0]?.id ?? '';
   const isAdminRoute = pathname.startsWith('/admin');
   const isStatusSchedulingActive =
     isAdminRoute || activeTab === 'status-scheduling';
@@ -237,6 +246,18 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
       unsubscribeFeedback();
     };
   }, [isAdmin, isUtilityRole, uid]);
+
+  useEffect(() => {
+    if (!isAdmin || !pendingCountBuildingId) {
+      setPendingReservationCount(0);
+      return;
+    }
+
+    setPendingReservationCount(0);
+    return onPendingReservationsByBuilding(pendingCountBuildingId, (reservations) => {
+      setPendingReservationCount(reservations.length);
+    });
+  }, [isAdmin, pendingCountBuildingId]);
 
   useEffect(() => {
     if (!uid) {
@@ -546,13 +567,19 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                     className={`flex shrink-0 items-center ${adminLinkPaddingClasses} py-2 ${getNavItemClasses(
                       !isAdminRoute && activeTab === link.tab
                     )}`}
-                    style={navbarLinkStyle}
+                    style={navbarBoldStyle}
                   >
                     <span
                       className="inline-flex items-center gap-1.5 whitespace-nowrap"
-                      style={navbarLinkStyle}
+                      style={navbarBoldStyle}
                     >
-                      <span>{link.label}</span>
+                      <span style={navbarBoldStyle}>{link.label}</span>
+                      {link.tab === 'pending' ? (
+                        <NavCountBadge
+                          count={pendingReservationCount}
+                          label="pending reservations"
+                        />
+                      ) : null}
                       {link.tab === 'inbox' ? (
                         <NavCountBadge count={unreadMessageCount} label="unread messages" />
                       ) : null}
@@ -572,11 +599,11 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                     className={`flex items-center gap-2 ${adminLinkPaddingClasses} py-2 ${getNavItemClasses(
                       isStatusSchedulingActive
                     )}`}
-                    style={navbarLinkStyle}
+                    style={navbarBoldStyle}
                     aria-haspopup="menu"
                     aria-expanded={isStatusMenuOpen}
                   >
-                    <span className="whitespace-nowrap" style={navbarLinkStyle}>
+                    <span className="whitespace-nowrap" style={navbarBoldStyle}>
                       Status &amp; Scheduling
                     </span>
                     <ChevronDownIcon open={isStatusMenuOpen} />
@@ -612,7 +639,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   style={navbarLinkStyle}
                 >
                   <span className="inline-flex items-center gap-1.5">
-                    <span>{link.label}</span>
+                    <span style={navbarBoldStyle}>{link.label}</span>
                     {link.href === '/dashboard/feedback' ? (
                       <NavCountBadge count={pendingFeedbackCount} label="feedback pending" />
                     ) : null}
@@ -634,7 +661,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                 <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                <span>Super Admin Dashboard</span>
+                <span style={navbarBoldStyle}>Super Admin Dashboard</span>
               </Link>
             ) : null}
             <div className="flex items-center space-x-2">
@@ -872,10 +899,16 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                     className={`flex w-full items-center px-3 py-2.5 text-left ${getNavItemClasses(
                       !isAdminRoute && activeTab === link.tab
                     )}`}
-                    style={navbarLinkStyle}
+                    style={navbarBoldStyle}
                   >
-                    <span className="flex items-center gap-1.5">
-                      <span>{link.label}</span>
+                    <span className="flex items-center gap-1.5" style={navbarBoldStyle}>
+                      <span style={navbarBoldStyle}>{link.label}</span>
+                      {link.tab === 'pending' ? (
+                        <NavCountBadge
+                          count={pendingReservationCount}
+                          label="pending reservations"
+                        />
+                      ) : null}
                       {link.tab === 'inbox' ? (
                         <NavCountBadge count={unreadMessageCount} label="unread messages" />
                       ) : null}
@@ -892,9 +925,9 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                     className={`flex w-full items-center justify-between px-3 py-2.5 text-left ${getNavItemClasses(
                       isStatusSchedulingActive
                     )}`}
-                    style={navbarLinkStyle}
+                    style={navbarBoldStyle}
                   >
-                    <span>Status &amp; Scheduling</span>
+                    <span style={navbarBoldStyle}>Status &amp; Scheduling</span>
                     <ChevronDownIcon open={isMobileStatusMenuOpen} />
                   </button>
 
@@ -927,7 +960,7 @@ const NavBar: React.FC<Readonly<NavBarProps>> = ({
                   style={navbarLinkStyle}
                 >
                   <span className="inline-flex items-center gap-1.5">
-                    <span>{link.label}</span>
+                    <span style={navbarBoldStyle}>{link.label}</span>
                     {link.href === '/dashboard/feedback' ? (
                       <NavCountBadge count={pendingFeedbackCount} label="feedback pending" />
                     ) : null}

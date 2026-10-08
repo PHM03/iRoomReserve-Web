@@ -388,7 +388,7 @@ export default function AdminRoomHistoryTab({
               <select
                 value={historyYearFilter}
                 onChange={(event) => setHistoryYearFilter(event.target.value)}
-                className="rounded-xl border border-white/55 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
+                className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
               >
                 <option value="all">All Years</option>
                 {availableHistoryYears.map((year) => (
@@ -401,7 +401,7 @@ export default function AdminRoomHistoryTab({
               <select
                 value={historyMonthFilter}
                 onChange={(event) => setHistoryMonthFilter(event.target.value)}
-                className="rounded-xl border border-white/55 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
+                className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
               >
                 <option value="all">All Months</option>
                 {MONTH_FILTER_OPTIONS.map((month, index) => (
@@ -420,7 +420,7 @@ export default function AdminRoomHistoryTab({
                 className={`rounded-lg px-3 py-2 text-xs font-bold transition-all ${
                   historyFilter === filter.key
                     ? 'border border-primary bg-primary text-white'
-                    : 'border border-gray-200 bg-white text-gray-700 hover:text-primary'
+                    : 'border border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50 hover:text-primary'
                 }`}
               >
                 {filter.label}

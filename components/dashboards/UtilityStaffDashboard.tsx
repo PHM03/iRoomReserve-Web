@@ -39,7 +39,7 @@ import {
   onSchedulesByBuilding,
   Schedule,
 } from '@/lib/schedules/schedules';
-import { formatClockTime, formatDate, formatTimeRange } from '@/lib/utils/dateTime';
+import { formatClockTime, formatTimeRange } from '@/lib/utils/dateTime';
 
 interface UtilityStaffDashboardProps {
   firstName: string;
@@ -960,9 +960,13 @@ export default function UtilityStaffDashboard({
 
         <div className="mb-10 space-y-3">
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <span className="mr-1 text-xs font-bold text-black/55">
-              {formatDate(selectedScheduleDate)}
-            </span>
+            <input
+              type="date"
+              aria-label="Choose schedule date"
+              value={selectedScheduleDate}
+              onChange={(event) => setSelectedScheduleDate(event.target.value)}
+              className="glass-input px-2 py-2 text-xs font-bold text-black"
+            />
             <button
               type="button"
               onClick={() => setSelectedScheduleDate((date) => shiftDate(date, -1))}

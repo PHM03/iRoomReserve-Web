@@ -16,7 +16,7 @@ import {
 } from '@/lib/reservations/reservations';
 import type { Room } from '@/lib/rooms/rooms';
 import { getLocalDateString } from '@/lib/rooms/roomStatus';
-import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
+import { formatTimeRange } from '@/lib/utils/dateTime';
 import { formatReservationDates, RoleBadge, StatusBadge } from './shared';
 
 type RoomStatusFilter = 'All' | 'Available' | 'Reserved' | 'Occupied' | 'Unavailable';
@@ -727,9 +727,13 @@ export default function AdminOverviewTab({
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <span className="mr-1 text-xs font-bold text-black/55">
-            {formatDate(selectedScheduleDate)}
-          </span>
+          <input
+            type="date"
+            aria-label="Choose schedule date"
+            value={selectedScheduleDate}
+            onChange={(event) => setSelectedScheduleDate(event.target.value)}
+            className="glass-input px-2 py-2 text-xs font-bold text-black"
+          />
           <button
             type="button"
             onClick={() => setSelectedScheduleDate((date) => shiftDate(date, -1))}

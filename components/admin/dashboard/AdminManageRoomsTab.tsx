@@ -782,7 +782,7 @@ export default function AdminManageRoomsTab({
             </div>
 
             {hasAnyRooms && (
-                <div className="flex flex-col gap-3 rounded-2xl border border-white/35 bg-white p-3 shadow-lg  sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-lg  sm:flex-row sm:items-center sm:justify-between">
                     <div className="relative sm:w-1/2">
                         <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-black/50" />
                         <input
@@ -1205,7 +1205,7 @@ export default function AdminManageRoomsTab({
                         <div
                             key={room.id}
                             ref={editingRoomId === room.id ? editingRoomContainerRef : null}
-                            className={`scroll-mt-24 rounded-2xl border border-white/70 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg sm:p-5 ${editingRoomId === room.id ? 'md:col-span-2 xl:col-span-3' : ''}`}
+                            className={`scroll-mt-24 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg sm:p-5 ${editingRoomId === room.id ? 'md:col-span-2 xl:col-span-3' : ''}`}
                         >
                             {editingRoomId === room.id ? (
                                 <div className="space-y-5">
