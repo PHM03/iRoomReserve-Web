@@ -2290,7 +2290,7 @@ export async function approveReservationRecord(
         addNotification(batch, queuedNotifications, {
           recipientUid: approvalResult.groupedReservations[0].userId,
           type: "system",
-          title: "DSAS Stage Approved",
+          title: "DSAS Approved",
           message: `The DSAS-designated Professor approved your reservation for ${
             approvalResult.groupedReservations[0].roomName
           } on ${formatGroupedScheduleSummary(
