@@ -1,5 +1,7 @@
 'use client';
 
+import SoftSelect from '@/components/ui/SoftSelect';
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -473,7 +475,7 @@ export default function SuperAdminDashboard() {
             </label>
             <label className="flex flex-col gap-1.5 text-xs font-bold text-black">
               Status
-              <select
+              <SoftSelect
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
                 className="glass-input h-10 w-full px-3 text-sm"
@@ -481,11 +483,11 @@ export default function SuperAdminDashboard() {
                 <option value="pending">Pending</option>
                 <option value="complete">Complete</option>
                 <option value="disabled">Disabled ({disabledUsers.length})</option>
-              </select>
+              </SoftSelect>
             </label>
             <label className="flex flex-col gap-1.5 text-xs font-bold text-black">
               Roles
-              <select
+              <SoftSelect
                 value={roleFilter}
                 onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
                 className="glass-input h-10 w-full px-3 text-sm"
@@ -496,12 +498,12 @@ export default function SuperAdminDashboard() {
                 <option value="dsas">DSAS ({facultyProfessors.filter((user) => user.designation === 'DSAS').length})</option>
                 <option value="utility">Utility Staff ({utilityUsers.length})</option>
                 <option value="admins">Admins ({administrators.length})</option>
-              </select>
+              </SoftSelect>
             </label>
             {roleFilter === 'utility' ? (
               <label className="flex flex-col gap-1.5 text-xs font-bold text-black">
                 Campus
-                <select
+                <SoftSelect
                   value={campusFilter}
                   onChange={(event) => setCampusFilter(event.target.value as ReservationCampus | 'all')}
                   className="glass-input h-10 w-full px-3 text-sm"
@@ -509,7 +511,7 @@ export default function SuperAdminDashboard() {
                   <option value="all">All campuses</option>
                   <option value="main">SDCA Main Campus</option>
                   <option value="digi">SDCA Digital Campus</option>
-                </select>
+                </SoftSelect>
               </label>
             ) : null}
           </div>

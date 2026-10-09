@@ -1,5 +1,7 @@
 'use client';
 
+import SoftSelect from '@/components/ui/SoftSelect';
+
 import { useEffect, useMemo, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
@@ -356,7 +358,7 @@ export default function TodayClassSchedulesPanel(
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <select
+          <SoftSelect
             aria-label="Select day"
             className="text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             value={selectedDay}
@@ -374,7 +376,7 @@ export default function TodayClassSchedulesPanel(
                 {option.label}
               </option>
             ))}
-          </select>
+          </SoftSelect>
           <button
             type="button"
             onClick={() => handleDayStep(1)}
@@ -391,7 +393,7 @@ export default function TodayClassSchedulesPanel(
       <div className="flex flex-wrap gap-2 mb-4">
         {props.scope === 'campus' ? (
           <>
-            <select
+            <SoftSelect
               aria-label="Select Campus"
               className="text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               value={selectedCampus ?? ''}
@@ -412,7 +414,7 @@ export default function TodayClassSchedulesPanel(
               <option value="">Select Campus</option>
               <option value="SDCA Digital Campus">SDCA Digital Campus</option>
               <option value="SDCA Main Campus">SDCA Main Campus</option>
-            </select>
+            </SoftSelect>
 
             {selectedCampus === 'SDCA Main Campus' ? (
               <AdminBuildingSelect
@@ -448,7 +450,7 @@ export default function TodayClassSchedulesPanel(
         )}
 
         {activeBuilding ? (
-          <select
+          <SoftSelect
             aria-label="Select Floor"
             className="text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             value={selectedFloor ?? ''}
@@ -468,11 +470,11 @@ export default function TodayClassSchedulesPanel(
                 {option.label}
               </option>
             ))}
-          </select>
+          </SoftSelect>
         ) : null}
 
         {selectedFloor ? (
-          <select
+          <SoftSelect
             aria-label="Select Room"
             className="text-sm rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             value={selectedRoom ?? ''}
@@ -502,7 +504,7 @@ export default function TodayClassSchedulesPanel(
                 {room.name}
               </option>
             ))}
-          </select>
+          </SoftSelect>
         ) : null}
       </div>
 

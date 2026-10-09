@@ -1,5 +1,7 @@
 'use client';
 
+import SoftSelect from '@/components/ui/SoftSelect';
+
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -507,7 +509,7 @@ export default function MyReservationsPage() {
 
       {/* Year / Month Filters */}
       <div className="mb-4 flex w-full flex-wrap items-center gap-3 rounded-xl bg-white px-5 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
-        <select
+        <SoftSelect
           value={selectedYear}
           onChange={(event) =>
             setSelectedYear(event.target.value === 'all' ? 'all' : Number(event.target.value))
@@ -520,9 +522,9 @@ export default function MyReservationsPage() {
               {year}
             </option>
           ))}
-        </select>
+        </SoftSelect>
 
-        <select
+        <SoftSelect
           value={selectedMonth}
           onChange={(event) =>
             setSelectedMonth(event.target.value === 'all' ? 'all' : Number(event.target.value))
@@ -535,7 +537,7 @@ export default function MyReservationsPage() {
               {month}
             </option>
           ))}
-        </select>
+        </SoftSelect>
 
         {(selectedYear !== 'all' || selectedMonth !== 'all') && (
           <button

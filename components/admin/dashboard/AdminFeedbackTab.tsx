@@ -86,6 +86,7 @@ interface BuildingOption {
 
 type FeedbackDashboardView = 'overview' | 'analysis' | 'reviews';
 type FeedbackReviewView = 'reviews' | 'room-analytics';
+const ALL_FEEDBACK_ROOMS_VALUE = '__all_feedback_rooms__';
 
 interface AdminFeedbackTabProps {
   activeBuildingLabel: string;
@@ -197,6 +198,8 @@ export default function AdminFeedbackTab({
   const [feedbackScope, setFeedbackScope] = useState<FeedbackAnalyticsScope>('building');
   const [feedbackFloor, setFeedbackFloor] = useState('');
   const [feedbackRoomId, setFeedbackRoomId] = useState('');
+  const [feedbackRoomSearch, setFeedbackRoomSearch] = useState('');
+  const [isFeedbackRoomSearchOpen, setIsFeedbackRoomSearchOpen] = useState(false);
   const [starFilter, setStarFilter] = useState<FeedbackReportRating | null>(null);
   const [roleFilter, setRoleFilter] = useState('');
   const [genderFilter, setGenderFilter] = useState('');
@@ -211,9 +214,16 @@ export default function AdminFeedbackTab({
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
   const [generatingReport, setGeneratingReport] = useState<'pdf' | 'xlsx' | 'docx' | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const feedbackRoomSearchRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setFeedbackScope(dashboardView === 'reviews' ? 'room' : 'building');
+    const nextScope = dashboardView === 'reviews' ? 'room' : 'building';
+    setFeedbackScope(nextScope);
+    if (nextScope === 'room') {
+      setFeedbackRoomId('');
+      setFeedbackRoomSearch('');
+      setIsFeedbackRoomSearchOpen(false);
+    }
   }, [dashboardView]);
   const reportMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -229,6 +239,19 @@ export default function AdminFeedbackTab({
     document.addEventListener('pointerdown', handlePointerDown);
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, [reportMenuOpen]);
+
+  useEffect(() => {
+    if (!isFeedbackRoomSearchOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!feedbackRoomSearchRef.current?.contains(event.target as Node)) {
+        setIsFeedbackRoomSearchOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [isFeedbackRoomSearchOpen]);
 
   const analyticsScheduleContext = useMemo(
     () => ({ academicYear: analyticsAcademicYear, semester: analyticsSemester }),
@@ -279,9 +302,19 @@ export default function AdminFeedbackTab({
   const selectedFeedbackFloor = floorOptions.includes(feedbackFloor)
     ? feedbackFloor
     : floorOptions[0] ?? '';
-  const selectedFeedbackRoomId = roomOptions.some((room) => room.id === feedbackRoomId)
-    ? feedbackRoomId
-    : roomOptions[0]?.id ?? '';
+  const selectedFeedbackRoomId = feedbackRoomId === ALL_FEEDBACK_ROOMS_VALUE ||
+    roomOptions.some((room) => room.id === feedbackRoomId)
+      ? feedbackRoomId
+      : '';
+  const selectedFeedbackRoom = roomOptions.find((room) => room.id === selectedFeedbackRoomId);
+  const activeFeedbackRoomSearch = feedbackRoomId && !selectedFeedbackRoomId
+    ? ''
+    : feedbackRoomSearch;
+  const matchingFeedbackRooms = roomOptions.filter((room) => {
+    const query = activeFeedbackRoomSearch.trim().toLowerCase();
+    return !query || room.name.toLowerCase().includes(query) ||
+      (room.buildingName ?? '').toLowerCase().includes(query);
+  });
   const isReviewsListView = dashboardView === 'reviews' && reviewView === 'reviews';
 
   // This is the explicit, serializable snapshot a future report action will
@@ -290,9 +323,13 @@ export default function AdminFeedbackTab({
   const reportFilters: FeedbackAnalyticsReportFilters = useMemo(
     () => createFeedbackAnalyticsReportFilters({
       scope: feedbackScopeId,
-      locationScope: feedbackScope,
+      locationScope: selectedFeedbackRoomId === ALL_FEEDBACK_ROOMS_VALUE
+        ? 'building'
+        : feedbackScope,
       floor: selectedFeedbackFloor,
-      roomId: selectedFeedbackRoomId,
+      roomId: selectedFeedbackRoomId === ALL_FEEDBACK_ROOMS_VALUE
+        ? ''
+        : selectedFeedbackRoomId,
       period: analyticsPeriod,
       academicYear: analyticsAcademicYear,
       semester: analyticsSemester,
@@ -311,8 +348,8 @@ export default function AdminFeedbackTab({
       genderFilter,
       isReviewsListView,
       roleFilter,
-      selectedFeedbackFloor,
       selectedFeedbackRoomId,
+      selectedFeedbackFloor,
       starFilter,
     ],
   );
@@ -382,7 +419,7 @@ export default function AdminFeedbackTab({
   }, [filteredFeedback, selectedPeriodFeedback.configured]);
 
   const hasActiveFilters =
-    reportFilters.locationScope !== 'building' || reportFilters.star !== null || !!reportFilters.role || !!reportFilters.gender;
+    feedbackScope !== 'building' || reportFilters.star !== null || !!reportFilters.role || !!reportFilters.gender;
   const insightPeriodFeedback = selectedPeriodFeedback;
 
   const feedbackInsights = useMemo(
@@ -529,6 +566,8 @@ export default function AdminFeedbackTab({
     setFeedbackScope(dashboardView === 'reviews' ? 'room' : 'building');
     setFeedbackFloor(floorOptions[0] ?? '');
     setFeedbackRoomId('');
+    setFeedbackRoomSearch('');
+    setIsFeedbackRoomSearchOpen(false);
     setStarFilter(null);
     setRoleFilter('');
     setGenderFilter('');
@@ -760,7 +799,14 @@ export default function AdminFeedbackTab({
               <SoftSelect
                 aria-label="Feedback list scope"
                 value={feedbackScope}
-                onChange={(event) => setFeedbackScope(event.target.value as FeedbackAnalyticsScope)}
+                onChange={(event) => {
+                  const nextScope = event.target.value as FeedbackAnalyticsScope;
+                  setFeedbackScope(nextScope);
+                  if (nextScope === 'room') {
+                    setFeedbackRoomId('');
+                    setFeedbackRoomSearch('');
+                  }
+                }}
                 className="glass-input h-8 px-3 text-xs font-bold text-black"
               >
                 {FEEDBACK_ANALYTICS_SCOPES.map((scope) => (
@@ -781,15 +827,86 @@ export default function AdminFeedbackTab({
                 </SoftSelect>
               ) : null}
               {feedbackScope === 'room' ? (
-                <SoftSelect
-                  aria-label="Feedback list room"
-                  value={selectedFeedbackRoomId}
-                  onChange={(event) => setFeedbackRoomId(event.target.value)}
-                  className="glass-input h-8 min-w-[180px] px-3 text-xs font-bold text-black"
-                >
-                  {roomOptions.length === 0 ? <option value="">No rooms</option> : null}
-                  {roomOptions.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
-                </SoftSelect>
+                <div ref={feedbackRoomSearchRef} className="relative min-w-[220px] flex-1 sm:max-w-sm">
+                  <input
+                    type="search"
+                    role="combobox"
+                    aria-label="Search rooms for feedback"
+                    aria-autocomplete="list"
+                    aria-expanded={isFeedbackRoomSearchOpen}
+                    aria-controls="feedback-room-suggestions"
+                    value={selectedFeedbackRoom
+                      ? selectedFeedbackRoom.name
+                      : selectedFeedbackRoomId === ALL_FEEDBACK_ROOMS_VALUE
+                        ? 'All Rooms'
+                        : activeFeedbackRoomSearch}
+                    onFocus={() => setIsFeedbackRoomSearchOpen(true)}
+                    onChange={(event) => {
+                      setFeedbackRoomId('');
+                      setFeedbackRoomSearch(event.target.value);
+                      setIsFeedbackRoomSearchOpen(true);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') setIsFeedbackRoomSearchOpen(false);
+                    }}
+                    placeholder="Search or select a room"
+                    className="glass-input h-8 w-full px-3 text-xs font-bold text-black placeholder:text-black/40"
+                  />
+                  {isFeedbackRoomSearchOpen ? (
+                    <div
+                      id="feedback-room-suggestions"
+                      role="listbox"
+                      aria-label="Rooms in the selected building"
+                      className="absolute left-0 right-0 top-full z-30 mt-2 max-h-56 overflow-y-auto rounded-xl border border-dark/10 bg-white p-1.5 shadow-xl"
+                    >
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={selectedFeedbackRoomId === ALL_FEEDBACK_ROOMS_VALUE}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setFeedbackRoomId(ALL_FEEDBACK_ROOMS_VALUE);
+                          setFeedbackRoomSearch('');
+                          setIsFeedbackRoomSearchOpen(false);
+                        }}
+                        className="mb-1 block w-full rounded-lg border-b border-dark/10 px-3 py-2 text-left text-xs text-black transition-colors hover:bg-primary/10 hover:text-primary"
+                      >
+                        <span className="block font-bold">All Rooms</span>
+                        <span className="mt-0.5 block text-[10px] font-normal text-black/50">
+                          View feedback across every room in this building
+                        </span>
+                      </button>
+                      {matchingFeedbackRooms.length > 0 ? matchingFeedbackRooms.map((room) => (
+                        <button
+                          key={room.id}
+                          type="button"
+                          role="option"
+                          aria-selected={room.id === selectedFeedbackRoomId}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            setFeedbackRoomId(room.id);
+                            setFeedbackRoomSearch(room.name);
+                            setIsFeedbackRoomSearchOpen(false);
+                          }}
+                          className="block w-full rounded-lg px-3 py-2 text-left text-xs text-black transition-colors hover:bg-primary/10 hover:text-primary"
+                        >
+                          <span className="block font-bold">{room.name}</span>
+                          {room.buildingName ? (
+                            <span className="mt-0.5 block text-[10px] font-normal text-black/50">
+                              {room.buildingName}
+                            </span>
+                          ) : null}
+                        </button>
+                      )) : (
+                        <p className="px-3 py-3 text-center text-xs text-black/50">
+                          {roomOptions.length === 0
+                            ? 'No rooms are available in this building.'
+                            : 'No rooms match your search.'}
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 
@@ -853,7 +970,7 @@ export default function AdminFeedbackTab({
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 transition-all"
+                  className="inline-flex items-center gap-1 rounded-lg border border-primary bg-primary px-3 py-1 text-[11px] font-bold text-white shadow-sm transition-all hover:bg-primary/90"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -873,7 +990,9 @@ export default function AdminFeedbackTab({
           ) : !selectedFeedbackSummary ? (
             <div className="glass-card p-6">
               <p className="dashboard-empty-state rounded-xl px-3 py-5 text-center text-xs font-bold text-black/50">
-                No feedback available for this period.
+                {feedbackScope === 'room' && !selectedFeedbackRoomId
+                  ? 'Choose a room above to view its feedback.'
+                  : 'No feedback available for this period.'}
               </p>
             </div>
            ) : (

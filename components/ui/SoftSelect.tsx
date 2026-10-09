@@ -9,7 +9,7 @@ interface SoftSelectProps {
   className?: string;
   disabled?: boolean;
   onChange: (event: { target: { value: string } }) => void;
-  value: string;
+  value: string | number;
 }
 
 export default function SoftSelect({
@@ -44,7 +44,7 @@ export default function SoftSelect({
       label=""
       ariaLabel={ariaLabel}
       options={options}
-      value={value}
+      value={String(value)}
       onChange={(nextValue) => onChange({ target: { value: nextValue } })}
       disabled={disabled}
       elevated={false}
