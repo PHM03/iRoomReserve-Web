@@ -6,6 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import { Feedback, createFeedback, getAverageSentiment, getFeedbackByUser } from '@/lib/feedback/feedback';
 import { Reservation, getReservationsByUser } from '@/lib/reservations/reservations';
 import { getSentimentLabel } from '@/lib/ai/sentiment';
+import { inferCampusFromBuilding, type ReservationCampus } from '@/lib/buildings/campuses';
+import { getRoomsByIds } from '@/lib/rooms/rooms';
 import {
   limitFeedbackCharacters,
   MAX_FEEDBACK_CHARACTERS,
@@ -61,19 +63,18 @@ const EMPTY_CATEGORY_RATINGS: Record<FeedbackCategoryRatingKey, number> = {
 };
 
 interface UsedRoom {
+  campus: ReservationCampus | null;
+  buildingId: string;
   buildingName: string;
   feedbackCount: number;
+  floor: string | null;
   roomId: string;
   roomName: string;
 }
 
-function getRatingText(rating: number) {
-  if (rating === 1) return 'Poor';
-  if (rating === 2) return 'Fair';
-  if (rating === 3) return 'Good';
-  if (rating === 4) return 'Very Good';
-  if (rating === 5) return 'Excellent';
-  return 'Not rated';
+function getMainCampusBuildingCode(buildingId: string, buildingName: string) {
+  const match = `${buildingId} ${buildingName}`.match(/(?:^|[^a-z0-9])gd[\s-]?([123])(?:$|[^0-9])/i);
+  return match ? `gd${match[1]}` : null;
 }
 
 function getCompleteCategoryRatings(
@@ -84,6 +85,78 @@ function getCompleteCategoryRatings(
   }
 
   return { ...ratings } as FeedbackCategoryRatings;
+}
+
+interface RoundedFilterSelectProps {
+  label: string;
+  onChange: (value: string) => void;
+  options: Array<{ label: string; value: string }>;
+  value: string;
+}
+
+function RoundedFilterSelect({ label, onChange, options, value }: RoundedFilterSelectProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selectedOption = options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="glass-input flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm"
+      >
+        <span className="truncate">{selectedOption?.label}</span>
+        <svg className={`h-4 w-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.09 1.032l-4.25 4.5a.75.75 0 01-1.09 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {open && (
+        <div role="listbox" aria-label={label} className="absolute z-30 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-dark/10 bg-white p-1.5 shadow-lg">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                option.value === value ? 'bg-primary/10 font-bold text-primary' : 'text-black hover:bg-dark/5'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function getAspectEntries(
@@ -100,11 +173,18 @@ export default function FeedbackPage() {
 
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [roomFloors, setRoomFloors] = useState<Record<string, string>>({});
   const [selectedFeedbackRoomId, setSelectedFeedbackRoomId] = useState<string | null>(null);
+  const [campusFilter, setCampusFilter] = useState<'all' | ReservationCampus>('all');
+  const [buildingFilter, setBuildingFilter] = useState<'all' | 'gd1' | 'gd2' | 'gd3'>('all');
+  const [floorFilter, setFloorFilter] = useState('all');
+  const [roomSearch, setRoomSearch] = useState('');
+  const [pendingCampusFilter, setPendingCampusFilter] = useState<'all' | ReservationCampus>('all');
+  const [pendingBuildingFilter, setPendingBuildingFilter] = useState<'all' | 'gd1' | 'gd2' | 'gd3'>('all');
+  const [pendingFloorFilter, setPendingFloorFilter] = useState('all');
+  const [pendingRoomSearch, setPendingRoomSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
-  const [rating, setRating] = useState(0);
-  const [hoverRating, setHoverRating] = useState(0);
   const [categoryRatings, setCategoryRatings] =
     useState<Record<FeedbackCategoryRatingKey, number>>(EMPTY_CATEGORY_RATINGS);
   const [hoverCategoryRatings, setHoverCategoryRatings] =
@@ -123,7 +203,11 @@ export default function FeedbackPage() {
   const sentimentPreview = analyzeFeedbackText(deferredComment);
   const sentimentPreviewLabel = sentimentPreview.sentimentClassification;
   const selectedCategoryRatings = getCompleteCategoryRatings(categoryRatings);
-  const hasSentimentPreview = rating > 0 || Boolean(trimmedComment);
+  const ratedCategoryCount = FEEDBACK_CATEGORY_KEYS.filter((key) => categoryRatings[key] > 0).length;
+  const overallRating = ratedCategoryCount > 0
+    ? Number((FEEDBACK_CATEGORY_KEYS.reduce((sum, key) => sum + categoryRatings[key], 0) / ratedCategoryCount).toFixed(1))
+    : 0;
+  const hasSentimentPreview = overallRating > 0 || Boolean(trimmedComment);
   const previewPositiveAspects = getAspectEntries(sentimentPreview.detectedAspects, 'positive');
   const previewNegativeAspects = getAspectEntries(sentimentPreview.detectedAspects, 'negative');
 
@@ -141,9 +225,22 @@ export default function FeedbackPage() {
           getReservationsByUser(firebaseUser.uid),
         ]);
 
-        if (!cancelled) {
-          setFeedbackList(nextFeedback);
-          setReservations(nextReservations);
+        if (cancelled) return;
+
+        setFeedbackList(nextFeedback);
+        setReservations(nextReservations);
+
+        try {
+          const roomIds = [...new Set([
+            ...nextFeedback.map((feedback) => feedback.roomId),
+            ...nextReservations.map((reservation) => reservation.roomId),
+          ])];
+          const rooms = await getRoomsByIds(roomIds);
+          if (!cancelled) {
+            setRoomFloors(Object.fromEntries(rooms.map((room) => [room.id, room.floor])));
+          }
+        } catch (error) {
+          console.error('Failed to load room floors for feedback filters:', error);
         }
       } catch (error) {
         console.error('Failed to load feedback page data:', error);
@@ -203,13 +300,27 @@ export default function FeedbackPage() {
   const visiblePendingFeedback = pendingFeedback.filter(
     (reservation) => !showForm || reservation.id !== selectedReservation?.id
   );
+  const pendingFloors = [...new Set(visiblePendingFeedback
+    .map((reservation) => roomFloors[reservation.roomId])
+    .filter((floor): floor is string => Boolean(floor)))].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+  const normalizedPendingRoomSearch = pendingRoomSearch.trim().toLocaleLowerCase();
+  const filteredPendingFeedback = visiblePendingFeedback.filter((reservation) => {
+    const matchesCampus = pendingCampusFilter === 'all' || reservation.campus === pendingCampusFilter;
+    const matchesBuilding = pendingCampusFilter !== 'main' || pendingBuildingFilter === 'all' || getMainCampusBuildingCode(reservation.buildingId, reservation.buildingName) === pendingBuildingFilter;
+    const matchesFloor = pendingFloorFilter === 'all' || roomFloors[reservation.roomId] === pendingFloorFilter;
+    const matchesSearch = !normalizedPendingRoomSearch || `${reservation.roomName} ${reservation.buildingName}`.toLocaleLowerCase().includes(normalizedPendingRoomSearch);
+    return matchesCampus && matchesBuilding && matchesFloor && matchesSearch;
+  });
   const usedRooms = useMemo(() => {
     const roomsById = new Map<string, UsedRoom>();
 
     completedReservations.forEach((reservation) => {
       roomsById.set(reservation.roomId, {
+        campus: reservation.campus ?? inferCampusFromBuilding({ id: reservation.buildingId, name: reservation.buildingName }),
+        buildingId: reservation.buildingId,
         buildingName: reservation.buildingName,
         feedbackCount: 0,
+        floor: roomFloors[reservation.roomId] ?? null,
         roomId: reservation.roomId,
         roomName: reservation.roomName,
       });
@@ -217,8 +328,11 @@ export default function FeedbackPage() {
 
     feedbackList.forEach((feedback) => {
       const room = roomsById.get(feedback.roomId) ?? {
+        campus: inferCampusFromBuilding({ id: feedback.buildingId, name: feedback.buildingName }),
+        buildingId: feedback.buildingId,
         buildingName: feedback.buildingName,
         feedbackCount: 0,
+        floor: roomFloors[feedback.roomId] ?? null,
         roomId: feedback.roomId,
         roomName: feedback.roomName,
       };
@@ -229,7 +343,17 @@ export default function FeedbackPage() {
     return [...roomsById.values()].sort((left, right) =>
       left.roomName.localeCompare(right.roomName)
     );
-  }, [completedReservations, feedbackList]);
+  }, [completedReservations, feedbackList, roomFloors]);
+  const normalizedRoomSearch = roomSearch.trim().toLocaleLowerCase();
+  const reviewedRooms = usedRooms.filter((room) => room.feedbackCount > 0);
+  const availableFloors = [...new Set(reviewedRooms.map((room) => room.floor).filter((floor): floor is string => Boolean(floor)))].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+  const filteredUsedRooms = reviewedRooms.filter((room) => {
+    const matchesCampus = campusFilter === 'all' || room.campus === campusFilter;
+    const matchesBuilding = campusFilter !== 'main' || buildingFilter === 'all' || getMainCampusBuildingCode(room.buildingId, room.buildingName) === buildingFilter;
+    const matchesFloor = floorFilter === 'all' || room.floor === floorFilter;
+    const matchesSearch = !normalizedRoomSearch || `${room.roomName} ${room.buildingName}`.toLocaleLowerCase().includes(normalizedRoomSearch);
+    return matchesCampus && matchesBuilding && matchesFloor && matchesSearch;
+  });
   const selectedRoomFeedback = selectedFeedbackRoomId
     ? feedbackList.filter((feedback) => feedback.roomId === selectedFeedbackRoomId)
     : [];
@@ -252,8 +376,6 @@ export default function FeedbackPage() {
   const handleCloseFeedback = () => {
     setShowForm(false);
     setSelectedReservation(null);
-    setRating(0);
-    setHoverRating(0);
     setCategoryRatings(EMPTY_CATEGORY_RATINGS);
     setHoverCategoryRatings(EMPTY_CATEGORY_RATINGS);
     setComment('');
@@ -266,8 +388,6 @@ export default function FeedbackPage() {
   const handleOpenFeedback = (reservation: Reservation) => {
     setSelectedReservation(reservation);
     setShowForm(true);
-    setRating(0);
-    setHoverRating(0);
     setCategoryRatings(EMPTY_CATEGORY_RATINGS);
     setHoverCategoryRatings(EMPTY_CATEGORY_RATINGS);
     setComment('');
@@ -279,7 +399,7 @@ export default function FeedbackPage() {
   const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!firebaseUser || !selectedReservation || rating === 0 || !selectedCategoryRatings || !trimmedComment) {
+    if (!firebaseUser || !selectedReservation || !selectedCategoryRatings || !trimmedComment) {
       return;
     }
 
@@ -298,7 +418,7 @@ export default function FeedbackPage() {
         userName: displayName,
         showSubmitterName: !postAnonymously,
         message: trimmedComment,
-        rating,
+        rating: overallRating,
         categoryRatings: selectedCategoryRatings,
       });
 
@@ -420,12 +540,16 @@ export default function FeedbackPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <label className="block text-sm font-bold text-black">Overall Rating</label>
-                      <p className="text-xs text-black/55">This remains the primary room score.</p>
+                      <p className="text-xs text-black/55">Automatically averaged from the category ratings.</p>
                     </div>
-                    <span className="text-xs font-bold text-black/60">{getRatingText(rating)}</span>
+                    <span className="text-xs font-bold text-black/60">
+                      {overallRating > 0 ? `${overallRating.toFixed(1)} / 5 · ${ratedCategoryCount}/5 rated` : 'Not rated'}
+                    </span>
                   </div>
                   <div className="mt-3">
-                    {renderInteractiveStars(rating, hoverRating, setRating, setHoverRating)}
+                    <div className="flex items-center gap-1.5" aria-label={`Overall rating: ${overallRating > 0 ? `${overallRating.toFixed(1)} out of 5` : 'not rated'}`}>
+                      {renderStars(Math.round(overallRating), 'w-8 h-8')}
+                    </div>
                   </div>
                 </section>
 
@@ -613,7 +737,7 @@ export default function FeedbackPage() {
 
                 <button
                   type="submit"
-                  disabled={submitting || rating === 0 || !selectedCategoryRatings || !trimmedComment}
+                  disabled={submitting || !selectedCategoryRatings || !trimmedComment}
                   className="btn-primary w-full py-3 px-4 flex items-center justify-center"
                 >
                   {submitting ? (
@@ -659,27 +783,84 @@ export default function FeedbackPage() {
               <p className="text-xs text-black/40 mt-0.5">No completed reservations awaiting your feedback.</p>
             </div>
           ) : (
-            <div className="space-y-2.5">
-              {visiblePendingFeedback.map((reservation) => (
-                <div
-                  key={reservation.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-dark/8 bg-white p-4 transition-shadow hover:shadow-sm"
-                >
-                  <div className="min-w-0">
-                    <h4 className="text-sm font-bold text-black truncate">{reservation.roomName}</h4>
-                    <p className="text-xs text-black/55 mt-0.5">
-                      {reservation.buildingName} · {formatDate(reservation.date)} · {formatTimeRange(reservation.startTime, reservation.endTime)}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleOpenFeedback(reservation)}
-                    className="btn-primary shrink-0 px-4 py-2 text-xs"
-                  >
-                    Rate Now
-                  </button>
+            <>
+              <div className="mb-3 space-y-2">
+                <input
+                  type="search"
+                  aria-label="Search pending feedback by room or building"
+                  value={pendingRoomSearch}
+                  onChange={(event) => setPendingRoomSearch(event.target.value)}
+                  placeholder="Search rooms..."
+                  className="glass-input w-full rounded-xl px-3 py-2 text-sm"
+                />
+                <div className={`grid grid-cols-2 gap-2 ${pendingCampusFilter === 'main' ? 'sm:grid-cols-3' : ''}`}>
+                  <RoundedFilterSelect
+                    label="Filter pending feedback by campus"
+                    value={pendingCampusFilter}
+                    onChange={(value) => {
+                      const nextCampus = value as 'all' | ReservationCampus;
+                      setPendingCampusFilter(nextCampus);
+                      if (nextCampus !== 'main') setPendingBuildingFilter('all');
+                    }}
+                    options={[
+                      { value: 'all', label: 'All campuses' },
+                      { value: 'digi', label: 'SDCA Digital Campus' },
+                      { value: 'main', label: 'SDCA Main Campus' },
+                    ]}
+                  />
+                  {pendingCampusFilter === 'main' && (
+                    <RoundedFilterSelect
+                      label="Filter pending feedback by Main Campus building"
+                      value={pendingBuildingFilter}
+                      onChange={(value) => setPendingBuildingFilter(value as 'all' | 'gd1' | 'gd2' | 'gd3')}
+                      options={[
+                        { value: 'all', label: 'All buildings' },
+                        { value: 'gd1', label: 'GD1' },
+                        { value: 'gd2', label: 'GD2' },
+                        { value: 'gd3', label: 'GD3' },
+                      ]}
+                    />
+                  )}
+                  <RoundedFilterSelect
+                    label="Filter pending feedback by floor"
+                    value={pendingFloorFilter}
+                    onChange={setPendingFloorFilter}
+                    options={[
+                      { value: 'all', label: 'All floors' },
+                      ...pendingFloors.map((floor) => ({ value: floor, label: floor })),
+                    ]}
+                  />
                 </div>
-              ))}
-            </div>
+              </div>
+              {filteredPendingFeedback.length === 0 ? (
+                <div className="dashboard-empty-state rounded-2xl p-6 text-center">
+                  <p className="text-sm font-bold text-black/50">No matching reservations found</p>
+                  <p className="text-xs text-black/40 mt-0.5">Try changing your search or filters.</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {filteredPendingFeedback.map((reservation) => (
+                    <div
+                      key={reservation.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-dark/8 bg-white p-4 transition-shadow hover:shadow-sm"
+                    >
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold text-black truncate">{reservation.roomName}</h4>
+                        <p className="text-xs text-black/55 mt-0.5">
+                          {reservation.buildingName} · {formatDate(reservation.date)} · {formatTimeRange(reservation.startTime, reservation.endTime)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleOpenFeedback(reservation)}
+                        className="btn-primary shrink-0 px-4 py-2 text-xs"
+                      >
+                        Rate Now
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -690,9 +871,9 @@ export default function FeedbackPage() {
               <h2 className="text-base font-bold text-gray-800">
                 {selectedFeedbackRoomId ? selectedFeedbackRoom?.roomName || 'Room Feedback' : 'Your Previous Reviews'}
               </h2>
-              {selectedFeedbackRoomId === null && usedRooms.length > 0 && (
+              {selectedFeedbackRoomId === null && filteredUsedRooms.length > 0 && (
                 <span className="inline-flex items-center rounded-full border border-dark/10 bg-dark/5 px-2 py-0.5 text-[10px] font-bold text-black/55">
-                  {usedRooms.length}
+                  {filteredUsedRooms.length}
                 </span>
               )}
               {selectedFeedbackRoomId !== null && selectedRoomFeedback.length > 0 && (
@@ -722,24 +903,87 @@ export default function FeedbackPage() {
                 <p className="text-xs text-black/40 mt-0.5">Rooms you have completed reservations for will appear here.</p>
               </div>
             ) : (
-              <div className="space-y-2.5">
-                {usedRooms.map((room) => (
-                  <button
-                    key={room.roomId}
-                    type="button"
-                    onClick={() => setSelectedFeedbackRoomId(room.roomId)}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-dark/8 bg-white p-4 text-left transition-shadow hover:shadow-sm"
-                  >
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-bold text-black truncate">{room.roomName}</h4>
-                      <p className="text-xs text-black/55 mt-0.5">{room.buildingName}</p>
+              <>
+                <div className="mb-3 space-y-2">
+                  <input
+                    type="search"
+                    aria-label="Search previous reviews by room or building"
+                    value={roomSearch}
+                    onChange={(event) => setRoomSearch(event.target.value)}
+                    placeholder="Search rooms..."
+                    className="glass-input w-full rounded-xl px-3 py-2 text-sm"
+                  />
+                  <div className={`grid grid-cols-2 gap-2 ${campusFilter === 'main' ? 'sm:grid-cols-3' : ''}`}>
+                  <div>
+                    <RoundedFilterSelect
+                      label="Filter previous reviews by campus"
+                      value={campusFilter}
+                      onChange={(value) => {
+                        const nextCampus = value as 'all' | ReservationCampus;
+                        setCampusFilter(nextCampus);
+                        if (nextCampus !== 'main') setBuildingFilter('all');
+                      }}
+                      options={[
+                        { value: 'all', label: 'All campuses' },
+                        { value: 'digi', label: 'SDCA Digital Campus' },
+                        { value: 'main', label: 'SDCA Main Campus' },
+                      ]}
+                    />
+                  </div>
+                  {campusFilter === 'main' && (
+                    <div>
+                      <RoundedFilterSelect
+                        label="Filter previous reviews by Main Campus building"
+                        value={buildingFilter}
+                        onChange={(value) => setBuildingFilter(value as 'all' | 'gd1' | 'gd2' | 'gd3')}
+                        options={[
+                          { value: 'all', label: 'All buildings' },
+                          { value: 'gd1', label: 'GD1' },
+                          { value: 'gd2', label: 'GD2' },
+                          { value: 'gd3', label: 'GD3' },
+                        ]}
+                      />
                     </div>
-                    <span className="shrink-0 rounded-full border border-dark/10 bg-dark/3 px-2.5 py-1 text-[10px] font-bold text-black/60">
-                      {room.feedbackCount} review{room.feedbackCount === 1 ? '' : 's'}
-                    </span>
-                  </button>
-                ))}
-              </div>
+                  )}
+                  <div>
+                    <RoundedFilterSelect
+                      label="Filter previous reviews by floor"
+                      value={floorFilter}
+                      onChange={setFloorFilter}
+                      options={[
+                        { value: 'all', label: 'All floors' },
+                        ...availableFloors.map((floor) => ({ value: floor, label: floor })),
+                      ]}
+                    />
+                  </div>
+                  </div>
+                </div>
+                {filteredUsedRooms.length === 0 ? (
+                  <div className="dashboard-empty-state rounded-2xl p-6 text-center">
+                    <p className="text-sm font-bold text-black/50">No matching reviews found</p>
+                    <p className="text-xs text-black/40 mt-0.5">Only rooms with submitted reviews appear here. Try changing your search or filters.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {filteredUsedRooms.map((room) => (
+                      <button
+                        key={room.roomId}
+                        type="button"
+                        onClick={() => setSelectedFeedbackRoomId(room.roomId)}
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-dark/8 bg-white p-4 text-left transition-shadow hover:shadow-sm"
+                      >
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-bold text-black truncate">{room.roomName}</h4>
+                          <p className="text-xs text-black/55 mt-0.5">{room.buildingName}</p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-dark/10 bg-dark/3 px-2.5 py-1 text-[10px] font-bold text-black/60">
+                          {room.feedbackCount} review{room.feedbackCount === 1 ? '' : 's'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )
           ) : selectedRoomFeedback.length === 0 ? (
             <div className="dashboard-empty-state rounded-2xl p-8 text-center">
