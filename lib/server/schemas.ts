@@ -366,7 +366,7 @@ export const feedbackCreateSchema = z.object({
     MAX_FEEDBACK_CHARACTERS,
     `Feedback must be ${MAX_FEEDBACK_CHARACTERS} characters or fewer.`,
   ),
-  rating: z.number().int().min(1).max(5),
+  rating: z.number().min(1).max(5),
   categoryRatings: feedbackCategoryRatingsSchema,
 });
 

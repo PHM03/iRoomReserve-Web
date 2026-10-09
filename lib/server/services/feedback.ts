@@ -255,6 +255,7 @@ export async function createFeedbackRecord(
     .join(" ") || "User";
   const feedbackText = data.message.trim();
   const analytics = analyzeFeedbackText(feedbackText);
+  const rating = Number((Object.values(data.categoryRatings).reduce((sum, value) => sum + value, 0) / 5).toFixed(1));
   const sentiment = analytics.sentiment;
   const sentimentClassification = analytics.sentimentClassification;
   const createdAt = serverTimestamp();
@@ -262,6 +263,7 @@ export async function createFeedbackRecord(
   const feedbackRef = db.collection("feedback").doc();
   const feedbackData = {
     ...data,
+    rating,
     userName: trustedUserName,
     showSubmitterName: data.showSubmitterName === true,
     categoryRatings: data.categoryRatings,
@@ -272,8 +274,8 @@ export async function createFeedbackRecord(
     extracted_keywords: analytics.extractedKeywords,
     feedbackText,
     feedback_text: feedbackText,
-    overallRating: data.rating,
-    overall_rating: data.rating,
+    overallRating: rating,
+    overall_rating: rating,
     text: feedbackText,
     message: feedbackText,
     compoundScore: sentiment.compound,
