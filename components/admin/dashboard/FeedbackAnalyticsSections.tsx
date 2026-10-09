@@ -1,3 +1,4 @@
+import SoftSelect from '@/components/ui/SoftSelect';
 import { useMemo, useRef, useState, type MouseEvent } from 'react';
 import {
   FEEDBACK_ASPECT_KEYS,
@@ -423,7 +424,7 @@ export function LocationPerformanceSection({
       <div className="mb-4 grid gap-2 rounded-xl border border-dark/10 bg-white p-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="flex min-w-0 flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-black/50">
           Floor
-          <select
+          <SoftSelect
             aria-label="Location performance floor"
             value={selectedFloor}
             onChange={(event) => {
@@ -438,11 +439,11 @@ export function LocationPerformanceSection({
                 {showBuildingContext ? `${floor.name} — ${floor.buildingId}` : floor.name}
               </option>
             ))}
-          </select>
+          </SoftSelect>
         </label>
         <label className="flex min-w-0 flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-black/50">
           Room
-          <select
+          <SoftSelect
             aria-label="Location performance room"
             value={selectedRoom}
             onChange={(event) => setRoomFilter(event.target.value)}
@@ -454,11 +455,11 @@ export function LocationPerformanceSection({
                 {showBuildingContext ? `${room.name} — ${room.buildingId}` : room.name}
               </option>
             ))}
-          </select>
+          </SoftSelect>
         </label>
         <label className="flex min-w-0 flex-col gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-black/50">
           Category
-          <select
+          <SoftSelect
             aria-label="Location performance category"
             value={categoryFilter}
             onChange={(event) => setCategoryFilter(event.target.value as FeedbackCategoryRatingKey | typeof ALL_LOCATION_FILTER)}
@@ -466,7 +467,7 @@ export function LocationPerformanceSection({
           >
             <option value={ALL_LOCATION_FILTER}>All</option>
             {FEEDBACK_CATEGORY_KEYS.map((key) => <option key={key} value={key}>{FEEDBACK_CATEGORY_LABELS[key]}</option>)}
-          </select>
+          </SoftSelect>
         </label>
       </div>
 

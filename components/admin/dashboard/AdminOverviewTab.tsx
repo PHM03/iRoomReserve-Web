@@ -516,11 +516,11 @@ export default function AdminOverviewTab({
                     key={filter}
                     type="button"
                     onClick={() => setRoomStatusFilter(filter)}
-                    className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
-                      isActive
-                        ? 'bg-primary/10 text-primary shadow-sm ring-1 ring-primary/15'
+                      className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
+                        isActive
+                        ? 'bg-primary text-white shadow-sm ring-1 ring-primary/30'
                         : 'text-black/60 hover:bg-dark/5 hover:text-black'
-                    }`}
+                      }`}
                   >
                     {filter}
                   </button>
@@ -725,53 +725,52 @@ export default function AdminOverviewTab({
         </DashboardSection>
       </div>
 
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <input
-            type="date"
-            aria-label="Choose schedule date"
-            value={selectedScheduleDate}
-            onChange={(event) => setSelectedScheduleDate(event.target.value)}
-            className="glass-input px-2 py-2 text-xs font-bold text-black"
-          />
-          <button
-            type="button"
-            onClick={() => setSelectedScheduleDate((date) => shiftDate(date, -1))}
-            aria-label="Show previous day"
-            className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
-          >
-            Previous day
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedScheduleDate((date) => shiftDate(date, 1))}
-            aria-label="Show next day"
-            className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
-          >
-            Next day
-          </button>
-        </div>
-
-        <RoomScheduleTimeline
-          error={scheduleDataBuildingId === buildingId && scheduleDataDate === selectedScheduleDate ? scheduleError : null}
-          isLoading={
-            scheduleLoading ||
-            scheduleDataBuildingId !== buildingId ||
-            scheduleDataDate !== selectedScheduleDate
-          }
-          reservations={
-            scheduleDataBuildingId === buildingId && scheduleDataDate === selectedScheduleDate
-              ? scheduleReservations
-              : []
-          }
-          rooms={
-            scheduleDataBuildingId === buildingId && scheduleDataDate === selectedScheduleDate
-              ? scheduleRooms
-              : []
-          }
-          selectedDate={selectedScheduleDate}
-        />
-      </div>
+      <RoomScheduleTimeline
+        headerControls={(
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <input
+              type="date"
+              aria-label="Choose schedule date"
+              value={selectedScheduleDate}
+              onChange={(event) => setSelectedScheduleDate(event.target.value)}
+              className="glass-input rounded-lg px-2 py-2 text-xs font-bold text-black"
+            />
+            <button
+              type="button"
+              onClick={() => setSelectedScheduleDate((date) => shiftDate(date, -1))}
+              aria-label="Show previous day"
+              className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
+            >
+              Previous day
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedScheduleDate((date) => shiftDate(date, 1))}
+              aria-label="Show next day"
+              className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
+            >
+              Next day
+            </button>
+          </div>
+        )}
+        error={scheduleDataBuildingId === buildingId && scheduleDataDate === selectedScheduleDate ? scheduleError : null}
+        isLoading={
+          scheduleLoading ||
+          scheduleDataBuildingId !== buildingId ||
+          scheduleDataDate !== selectedScheduleDate
+        }
+        reservations={
+          scheduleDataBuildingId === buildingId && scheduleDataDate === selectedScheduleDate
+            ? scheduleReservations
+            : []
+        }
+        rooms={
+          scheduleDataBuildingId === buildingId && scheduleDataDate === selectedScheduleDate
+            ? scheduleRooms
+            : []
+        }
+        selectedDate={selectedScheduleDate}
+      />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
         <BleSummaryCard

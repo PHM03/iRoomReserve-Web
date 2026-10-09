@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import BuildingSection from '@/components/room-status/BuildingSection';
 import CampusSelector from '@/components/room-status/CampusSelector';
 import FloorAccordion from '@/components/room-status/FloorAccordion';
@@ -407,19 +408,33 @@ export default function RoomStatusPage() {
             className="glass-input h-9 px-3 text-xs font-bold text-black placeholder:text-black/35"
           />
         </label>
-        <label className={labelClassName()}>
-          Floor
-          <select value={floorFilter} onChange={(event) => setFloorFilter(event.target.value)} className="glass-input h-9 px-2 text-xs font-bold text-black">
-            <option value="All">All floors</option>
-            {floorOptions.map((floor) => <option key={floor} value={floor}>{floor}</option>)}
-          </select>
-        </label>
-        <label className={labelClassName()}>
-          Activity
-          <select value={activityFilter} onChange={(event) => setActivityFilter(event.target.value as ActivityFilter)} className="glass-input h-9 px-2 text-xs font-bold text-black">
-            {ACTIVITY_FILTERS.map((activity) => <option key={activity} value={activity}>{activity}</option>)}
-          </select>
-        </label>
+        <div className={labelClassName()}>
+          <span>Floor</span>
+          <AdminFloorFilter
+            label=""
+            placeholder="Select floor"
+            options={[
+              { value: 'All', label: 'All floors' },
+              ...floorOptions.map((floor) => ({ value: floor, label: floor })),
+            ]}
+            value={floorFilter}
+            onChange={setFloorFilter}
+            fullWidth
+            className="w-full"
+          />
+        </div>
+        <div className={labelClassName()}>
+          <span>Activity</span>
+          <AdminFloorFilter
+            label=""
+            placeholder="Select activity"
+            options={ACTIVITY_FILTERS.map((activity) => ({ value: activity, label: activity }))}
+            value={activityFilter}
+            onChange={(value) => setActivityFilter(value as ActivityFilter)}
+            fullWidth
+            className="w-full"
+          />
+        </div>
         <span className="text-[11px] font-bold text-black/45 sm:ml-auto">{filteredRoomStatuses.length} of {roomStatuses.length} rooms</span>
       </div>
 

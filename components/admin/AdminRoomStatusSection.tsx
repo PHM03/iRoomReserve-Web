@@ -125,11 +125,13 @@ export default function AdminRoomStatusSection({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
           <label className="flex-1 min-w-[160px]"><span className="sr-only">Search rooms</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search rooms…" className="glass-input h-9 w-full px-3 text-xs font-bold text-black placeholder:text-black/35" /></label>
           <AdminFloorFilter label="Filter by Floor:" options={floorsWithAll} value={floorFilter} onChange={setFloorFilter} />
-          <label className="flex items-center gap-2 text-xs font-bold text-black/65">Activity
-            <select value={activityFilter} onChange={(event) => setActivityFilter(event.target.value as ActivityFilter)} className="glass-input h-9 px-2 text-xs font-bold text-black">
-              {(['All', 'Available', 'Unavailable', 'Reserved', 'Occupied'] as ActivityFilter[]).map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
-          </label>
+          <AdminFloorFilter
+            label="Activity"
+            options={(['All', 'Available', 'Unavailable', 'Reserved', 'Occupied'] as ActivityFilter[]).map((value) => ({ value, label: value }))}
+            value={activityFilter}
+            onChange={(value) => setActivityFilter(value as ActivityFilter)}
+            triggerClassName="min-w-[140px] rounded-xl px-3 py-1.5 text-xs shadow-none"
+          />
           <span className="text-[11px] font-bold text-black/45 sm:ml-auto">{filtered.length} of {buildingRooms.length} rooms</span>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

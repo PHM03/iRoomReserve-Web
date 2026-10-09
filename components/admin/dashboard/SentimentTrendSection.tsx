@@ -1,5 +1,7 @@
 'use client';
 
+import SoftSelect from '@/components/ui/SoftSelect';
+
 import { useMemo, useState } from 'react';
 import type { Feedback } from '@/lib/feedback/feedback';
 import {
@@ -212,7 +214,7 @@ export default function SentimentTrendSection({
         </div>
         {!hideControls && !controlledPeriod ? <label className="flex items-center gap-2 text-xs font-bold text-black/60">
           <span className="whitespace-nowrap">Period:</span>
-          <select
+          <SoftSelect
             aria-label="Room analytics period"
             value={period}
             onChange={(event) => setPeriod(event.target.value as SentimentTrendPeriod)}
@@ -225,13 +227,13 @@ export default function SentimentTrendSection({
                   : option[0].toUpperCase() + option.slice(1)}
               </option>
             ))}
-          </select>
+          </SoftSelect>
         </label> : null}
         {!hideControls && !controlledPeriod && period === 'semester' ? (
           <>
             <label className="flex items-center gap-2 text-xs font-bold text-black/60">
               <span className="whitespace-nowrap">Academic Year:</span>
-              <select
+              <SoftSelect
                 aria-label="Room analytics academic year"
                 value={academicYear}
                 onChange={(event) => setAcademicYear(event.target.value as ScheduleAcademicYear)}
@@ -240,11 +242,11 @@ export default function SentimentTrendSection({
                 {SCHEDULE_ACADEMIC_YEARS.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
-              </select>
+              </SoftSelect>
             </label>
             <label className="flex items-center gap-2 text-xs font-bold text-black/60">
               <span className="whitespace-nowrap">Semester:</span>
-              <select
+              <SoftSelect
                 aria-label="Room analytics semester"
                 value={semester}
                 onChange={(event) => setSemester(event.target.value as ScheduleSemester)}
@@ -253,7 +255,7 @@ export default function SentimentTrendSection({
                 {SCHEDULE_SEMESTERS.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
-              </select>
+              </SoftSelect>
             </label>
           </>
         ) : null}

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
+import BleSummaryCard from '@/components/ui/BleSummaryCard';
 import { getManagedBuildingOptionLabel } from '@/components/admin/dashboard/shared';
 import Link from 'next/link';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -11,16 +12,6 @@ import {
   onAdminRequestsByBuilding,
 } from '@/lib/admin/adminRequests';
 import { getManagedBuildingsForCampus } from '@/lib/buildings/campusAssignments';
-import {
-  BLE_MONITOR_REFRESH_INTERVAL_MS,
-  formatBleTimestamp,
-  getBeaconConfiguredRooms,
-} from '@/lib/occupancy/bleMonitor';
-import {
-  DEFAULT_OCCUPANCY_PAYLOAD,
-  type OccupancyPayload,
-} from '@/lib/occupancy/occupancy';
-import { fetchOccupancySnapshot } from '@/lib/occupancy/occupancyClient';
 import {
   onReservationsByBuilding,
   Reservation,
@@ -39,7 +30,7 @@ import {
   onSchedulesByBuilding,
   Schedule,
 } from '@/lib/schedules/schedules';
-import { formatClockTime, formatTimeRange } from '@/lib/utils/dateTime';
+import { formatTimeRange } from '@/lib/utils/dateTime';
 
 interface UtilityStaffDashboardProps {
   firstName: string;
@@ -58,6 +49,7 @@ type TimetableEntry = {
 };
 
 type RoomScheduleFeed = 'reservations' | 'rooms';
+type RoomStatusFilter = 'All' | 'Available' | 'Reserved' | 'Occupied' | 'Unavailable';
 type RoomScheduleErrors = {
   buildingId: string;
   reservations: string | null;
@@ -97,26 +89,30 @@ const TIMETABLE_DAYS = [
   },
 ] as const;
 
-const ROOM_STATUS_SUMMARIES = [
-  {
-    description: 'Ready for the next reservation.',
-    dotClassName: 'bg-green-500',
-    glowClassName: 'shadow-green-500/10 hover:shadow-green-500/20',
-    label: 'Available',
-  },
-  {
-    description: 'Approved classes or reservations are holding the room.',
-    dotClassName: 'bg-blue-500',
-    glowClassName: 'shadow-blue-500/10 hover:shadow-blue-500/20',
-    label: 'Reserved',
-  },
-  {
-    description: 'A checked-in reservation is actively using the room.',
-    dotClassName: 'bg-primary',
-    glowClassName: 'shadow-primary/10 hover:shadow-primary/20',
-    label: 'Occupied',
-  },
-] as const;
+const ROOM_STATUS_FILTERS: RoomStatusFilter[] = [
+  'All',
+  'Available',
+  'Reserved',
+  'Occupied',
+  'Unavailable',
+];
+
+const ROOM_STATUS_PREVIEW_LIMIT = 5;
+
+function getRoomStatusAccent(status: string) {
+  switch (status) {
+    case 'Available':
+      return 'bg-green-500';
+    case 'Reserved':
+      return 'bg-blue-500';
+    case 'Occupied':
+      return 'bg-primary';
+    case 'Unavailable':
+      return 'bg-red-500';
+    default:
+      return 'bg-gray-400';
+  }
+}
 
 function CalendarIcon({ className = 'h-5 w-5' }: IconProps) {
   return (
@@ -129,25 +125,6 @@ function CalendarIcon({ className = 'h-5 w-5' }: IconProps) {
     >
       <path
         d="M8 7V3m8 4V3M4 11h16M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-      />
-    </svg>
-  );
-}
-
-function RefreshIcon({ className = 'h-4 w-4' }: IconProps) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path
-        d="M4 4v6h6M20 20v-6h-6M5.5 15a7 7 0 0011.9 2.4L20 14M4 10l2.6-3.4A7 7 0 0118.5 9"
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={2}
@@ -173,21 +150,6 @@ function WarningIcon({ className = 'h-7 w-7' }: IconProps) {
       />
     </svg>
   );
-}
-
-function formatRefreshTime(value: Date | null) {
-  if (!value) {
-    return 'Not refreshed yet';
-  }
-
-  return formatClockTime(value, { includeSeconds: true });
-}
-
-function formatRefreshCountdown(milliseconds: number) {
-  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-  const minutes = Math.floor(totalSeconds / 60).toString();
-  const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-  return `${minutes}:${seconds}`;
 }
 
 function getReservationDates(reservation: Reservation) {
@@ -298,203 +260,6 @@ function shiftDate(dateValue: string, dayOffset: number) {
   ].join('-');
 }
 
-function UtilityBleBeaconSummary({
-  className = '',
-  detailsHref = '/dashboard/ble-beacon',
-  pollIntervalMs = BLE_MONITOR_REFRESH_INTERVAL_MS,
-  rooms = [],
-}: Readonly<{
-  className?: string;
-  detailsHref?: string;
-  pollIntervalMs?: number;
-  rooms?: Pick<
-    Room,
-    'id' | 'name' | 'beaconConnected' | 'beaconId' | 'bleBeaconId'
-  >[];
-}>) {
-  const [occupancyData, setOccupancyData] = useState<OccupancyPayload>(
-    DEFAULT_OCCUPANCY_PAYLOAD
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
-  const [nextRefreshAt, setNextRefreshAt] = useState<number | null>(null);
-  const [millisecondsUntilRefresh, setMillisecondsUntilRefresh] = useState(
-    pollIntervalMs
-  );
-  const [refreshScheduleVersion, setRefreshScheduleVersion] = useState(0);
-
-  const totalBeacons = getBeaconConfiguredRooms(rooms).length;
-  const totalActiveBeacons = getBeaconConfiguredRooms(rooms).filter(
-    (room) => 'beaconConnected' in room && room.beaconConnected === true
-  ).length;
-  const totalInactiveBeacons = Math.max(0, totalBeacons - totalActiveBeacons);
-
-  const refreshCard = useCallback(
-    async (mode: 'initial' | 'manual' | 'background' = 'initial') => {
-      if (mode === 'initial') {
-        setIsLoading(true);
-      }
-
-      if (mode === 'manual') {
-        setIsRefreshing(true);
-      }
-
-      try {
-        const nextOccupancyData = await fetchOccupancySnapshot({
-          force: mode === 'manual',
-        });
-        setOccupancyData(nextOccupancyData);
-
-        setErrorMessage(null);
-        setLastRefreshedAt(new Date());
-      } catch (error) {
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : 'Unable to load BLE beacon data right now.'
-        );
-      } finally {
-        if (mode === 'initial') {
-          setIsLoading(false);
-        }
-
-        if (mode === 'manual') {
-          setIsRefreshing(false);
-        }
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    void refreshCard('initial');
-  }, [refreshCard]);
-
-  useEffect(() => {
-    const scheduleNextRefresh = () => {
-      setNextRefreshAt(Date.now() + pollIntervalMs);
-    };
-
-    scheduleNextRefresh();
-
-    const intervalId = window.setInterval(() => {
-      void refreshCard('background');
-      scheduleNextRefresh();
-    }, pollIntervalMs);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [pollIntervalMs, refreshCard, refreshScheduleVersion]);
-
-  useEffect(() => {
-    if (nextRefreshAt === null) {
-      setMillisecondsUntilRefresh(0);
-      return;
-    }
-
-    const updateCountdown = () => {
-      setMillisecondsUntilRefresh(Math.max(0, nextRefreshAt - Date.now()));
-    };
-
-    updateCountdown();
-
-    const countdownIntervalId = window.setInterval(updateCountdown, 1000);
-
-    return () => {
-      window.clearInterval(countdownIntervalId);
-    };
-  }, [nextRefreshAt]);
-
-  const handleManualRefresh = useCallback(() => {
-    void refreshCard('manual');
-    setRefreshScheduleVersion((currentValue) => currentValue + 1);
-  }, [refreshCard]);
-
-  const summaryStats = [
-    {
-      label: 'Total Beacons',
-      value: totalBeacons,
-    },
-    {
-      label: 'Total Active Beacons',
-      value: totalActiveBeacons,
-    },
-    {
-      label: 'Total Inactive',
-      value: totalInactiveBeacons,
-    },
-    {
-      label: 'Last Updated',
-      value: formatBleTimestamp(occupancyData.timestamp),
-    },
-  ];
-
-  return (
-    <section
-      className={`group rounded-2xl border border-white/35 border-t-2 border-t-primary bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10  transition-all duration-300 hover:bg-white hover:shadow-2xl ${className}`.trim()}
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="text-lg font-bold text-gray-900">
-            BLE Beacon Summary
-          </h3>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2 sm:justify-end">
-          <Link
-            href={detailsHref}
-            className="rounded-2xl border border-white/45 bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow-sm  transition-all duration-300 hover:border-primary/30 hover:bg-white hover:text-primary"
-          >
-            View Details
-          </Link>
-          <button
-            type="button"
-            onClick={handleManualRefresh}
-            disabled={isRefreshing}
-            className="inline-flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-bold text-primary shadow-sm  transition-all duration-300 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RefreshIcon />
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-        <p>Last refreshed: {formatRefreshTime(lastRefreshedAt)}</p>
-        <p>Next refresh in {formatRefreshCountdown(millisecondsUntilRefresh)}</p>
-      </div>
-
-      {isLoading ? (
-        <div className="dashboard-empty-state mt-4 rounded-2xl px-4 py-3 text-sm text-gray-500">
-          Loading BLE beacon summary...
-        </div>
-      ) : null}
-
-      {errorMessage ? (
-        <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary shadow-sm ">
-          {errorMessage}
-        </div>
-      ) : null}
-
-      <div className="dashboard-table-shell mt-5 grid grid-cols-1 divide-y divide-white/35 rounded-2xl  transition-colors duration-300 group-hover:!bg-white sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
-        {summaryStats.map((stat) => (
-          <div key={stat.label} className="min-h-[96px] p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
-              {stat.label}
-            </p>
-            <p className="mt-3 text-2xl font-bold text-gray-900">
-              {stat.value}
-            </p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function UtilityReservationTimetable({
   className = '',
   currentUserId,
@@ -601,6 +366,8 @@ export default function UtilityStaffDashboard({
   const buildingName = selectedManagedBuilding?.name;
 
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomStatusSearch, setRoomStatusSearch] = useState('');
+  const [roomStatusFilter, setRoomStatusFilter] = useState<RoomStatusFilter>('All');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [adminRequests, setAdminRequests] = useState<AdminRequest[]>([]);
@@ -707,6 +474,14 @@ export default function UtilityStaffDashboard({
       now: today,
     }),
   }));
+  const normalizedRoomStatusSearch = roomStatusSearch.trim().toLocaleLowerCase();
+  const matchingRoomStatuses = roomStatuses.filter(({ room, resolved }) => {
+    const matchesFilter = roomStatusFilter === 'All' || resolved.status === roomStatusFilter;
+    const matchesSearch = !normalizedRoomStatusSearch || `${room.name} ${room.floor} ${room.roomType} ${room.buildingName}`.toLocaleLowerCase().includes(normalizedRoomStatusSearch);
+    return matchesFilter && matchesSearch;
+  });
+  const visibleRoomStatuses = matchingRoomStatuses.slice(0, ROOM_STATUS_PREVIEW_LIMIT);
+  const hasMoreRoomStatuses = matchingRoomStatuses.length > ROOM_STATUS_PREVIEW_LIMIT;
   const availableCount = roomStatuses.filter(
     ({ resolved }) => resolved.status === 'Available'
   ).length;
@@ -829,47 +604,115 @@ export default function UtilityStaffDashboard({
           ))}
         </div>
 
-        <section className="mb-10 rounded-2xl border border-white/35 bg-white p-4 shadow-md shadow-primary/10 sm:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
+        <section className="mb-10 rounded-2xl border border-white/35 bg-white p-4 shadow-md shadow-primary/10 sm:p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="text-base font-bold leading-tight text-gray-900 sm:text-lg">
-                Room Status Overview
-              </h3>
+              <h3 className="text-sm font-extrabold text-black">Live Room Status</h3>
+              <p className="mt-0.5 text-[11px] font-bold text-black/50">
+                {visibleRoomStatuses.length} shown{hasMoreRoomStatuses ? ` of ${matchingRoomStatuses.length}` : ''}
+              </p>
             </div>
             <Link
               href="/dashboard/room-status"
-              className="inline-flex shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-white px-3 py-2 text-xs font-bold text-primary shadow-xl  transition-all duration-300 hover:bg-primary/10 hover:shadow-2xl sm:px-4 sm:text-sm"
+              className="rounded-lg px-2 py-1 text-[11px] font-bold text-primary transition-all hover:bg-primary/5"
             >
-              Open Room Status
+              View all
             </Link>
           </div>
 
-          <div className="dashboard-table-shell grid grid-cols-1 divide-y divide-white/35 rounded-2xl  sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            {ROOM_STATUS_SUMMARIES.map((status) => (
-              <div
-                key={status.label}
-                className={`p-5 shadow-xl transition-all duration-300 hover:bg-white ${status.glowClassName}`.trim()}
+          <div className="mb-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+            <label className="relative block">
+              <span className="sr-only">Search rooms</span>
+              <svg
+                className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/35"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
               >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full ${status.dotClassName}`}
-                  />
-                  <p className="text-sm font-bold text-gray-900">
-                    {status.label}
-                  </p>
-                </div>
-                <p className="mt-2 text-sm text-gray-500">
-                  {status.description}
-                </p>
-              </div>
-            ))}
+                <circle cx="11" cy="11" r="7" strokeWidth="2" />
+                <path d="M20 20l-3.5-3.5" strokeLinecap="round" strokeWidth="2" />
+              </svg>
+              <input
+                type="search"
+                value={roomStatusSearch}
+                onChange={(event) => setRoomStatusSearch(event.target.value)}
+                placeholder="Search rooms"
+                className="glass-input h-9 w-full bg-dark/5 pl-7 pr-3 text-xs font-bold text-black placeholder:text-black/35"
+              />
+            </label>
+
+            <div className="flex min-w-0 gap-1 overflow-x-auto rounded-xl border border-dark/10 bg-white p-1 shadow-inner">
+              {ROOM_STATUS_FILTERS.map((filter) => {
+                const isActive = roomStatusFilter === filter;
+                return (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setRoomStatusFilter(filter)}
+                    className={`whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-bold transition-all ${
+                      isActive
+                        ? 'bg-primary text-white shadow-sm ring-1 ring-primary/30'
+                        : 'text-black/60 hover:bg-dark/5 hover:text-black'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {roomScheduleError ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+              {roomScheduleError}
+            </p>
+          ) : scheduleDataBuildingId !== buildingId ? (
+            <p className="dashboard-empty-state rounded-2xl px-3 py-3 text-center text-xs font-bold text-black/60">
+              Loading room preview...
+            </p>
+          ) : visibleRoomStatuses.length === 0 ? (
+            <p className="dashboard-empty-state rounded-2xl px-3 py-5 text-center text-xs font-bold text-black/60">
+              No rooms match this view.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {visibleRoomStatuses.map(({ room, resolved }) => (
+                <div
+                  key={room.id}
+                  className="dashboard-row grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-2"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${getRoomStatusAccent(resolved.status)}`} />
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-extrabold text-black">{room.name}</p>
+                      <p className="truncate text-[10px] font-bold text-black/50">
+                        {room.floor} | Cap {room.capacity}{resolved.detail ? ` | ${resolved.detail}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <StatusBadge status={resolved.status} />
+                </div>
+              ))}
+              {hasMoreRoomStatuses ? (
+                <Link
+                  href="/dashboard/room-status"
+                  className="block w-full rounded-lg px-2 py-1.5 text-center text-[11px] font-bold text-primary transition-all hover:bg-primary/5"
+                >
+                  View full room list
+                </Link>
+              ) : null}
+            </div>
+          )}
         </section>
 
-        <UtilityBleBeaconSummary
+        <BleSummaryCard
           className="mb-10"
+          compactActiveLabel="Active Beacons"
+          compactOnlineLabel="Online Beacons"
           detailsHref="/dashboard/ble-beacon"
           rooms={rooms}
+          variant="compact"
         />
 
         <UtilityReservationTimetable
@@ -878,7 +721,7 @@ export default function UtilityStaffDashboard({
           reservations={reservations}
         />
 
-        <section className="rounded-2xl border border-white/35 bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10  transition-all duration-300 hover:bg-white hover:shadow-2xl">
+        <section className="mb-6 rounded-2xl border border-white/35 bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10  transition-all duration-300 hover:bg-white hover:shadow-2xl">
           <div className="flex items-center justify-between gap-4 border-b border-white/30 pb-4">
             <h3 className="text-lg font-bold text-gray-900">
               Today&apos;s Room Reservations
@@ -958,41 +801,41 @@ export default function UtilityStaffDashboard({
           )}
         </section>
 
-        <div className="mb-10 space-y-3">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <input
-              type="date"
-              aria-label="Choose schedule date"
-              value={selectedScheduleDate}
-              onChange={(event) => setSelectedScheduleDate(event.target.value)}
-              className="glass-input px-2 py-2 text-xs font-bold text-black"
-            />
-            <button
-              type="button"
-              onClick={() => setSelectedScheduleDate((date) => shiftDate(date, -1))}
-              aria-label="Show previous day"
-              className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
-            >
-              Previous day
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedScheduleDate((date) => shiftDate(date, 1))}
-              aria-label="Show next day"
-              className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
-            >
-              Next day
-            </button>
-          </div>
-
-          <RoomScheduleTimeline
-            error={roomScheduleError}
-            isLoading={scheduleDataBuildingId !== buildingId && !roomScheduleError}
-            reservations={scheduleDataBuildingId === buildingId ? reservations : []}
-            rooms={scheduleDataBuildingId === buildingId ? rooms : []}
-            selectedDate={selectedScheduleDate}
-          />
-        </div>
+        <RoomScheduleTimeline
+          className="mb-10"
+          error={roomScheduleError}
+          headerControls={(
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <input
+                type="date"
+                aria-label="Choose schedule date"
+                value={selectedScheduleDate}
+                onChange={(event) => setSelectedScheduleDate(event.target.value)}
+                className="glass-input rounded-lg px-2 py-2 text-xs font-bold text-black"
+              />
+              <button
+                type="button"
+                onClick={() => setSelectedScheduleDate((date) => shiftDate(date, -1))}
+                aria-label="Show previous day"
+                className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
+              >
+                Previous day
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedScheduleDate((date) => shiftDate(date, 1))}
+                aria-label="Show next day"
+                className="rounded-lg border border-dark/10 bg-white px-3 py-2 text-xs font-bold text-black/70 shadow-sm transition-colors hover:bg-dark/5"
+              >
+                Next day
+              </button>
+            </div>
+          )}
+          isLoading={scheduleDataBuildingId !== buildingId && !roomScheduleError}
+          reservations={scheduleDataBuildingId === buildingId ? reservations : []}
+          rooms={scheduleDataBuildingId === buildingId ? rooms : []}
+          selectedDate={selectedScheduleDate}
+        />
       </div>
     </main>
   );

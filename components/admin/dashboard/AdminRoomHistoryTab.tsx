@@ -1,5 +1,7 @@
 'use client';
 
+import SoftSelect from '@/components/ui/SoftSelect';
+
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
@@ -385,7 +387,7 @@ export default function AdminRoomHistoryTab({
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <select
+              <SoftSelect
                 value={historyYearFilter}
                 onChange={(event) => setHistoryYearFilter(event.target.value)}
                 className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
@@ -396,9 +398,9 @@ export default function AdminRoomHistoryTab({
                     {year}
                   </option>
                 ))}
-              </select>
+              </SoftSelect>
 
-              <select
+              <SoftSelect
                 value={historyMonthFilter}
                 onChange={(event) => setHistoryMonthFilter(event.target.value)}
                 className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
@@ -409,7 +411,7 @@ export default function AdminRoomHistoryTab({
                     {month}
                   </option>
                 ))}
-              </select>
+              </SoftSelect>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
+import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import AdminClassSchedulesSection from '@/components/admin/AdminClassSchedulesSection';
 import { useAuth } from '@/context/AuthContext';
 import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
@@ -446,77 +447,68 @@ export default function AssignedRoomScheduleSection({
           </div>
           {showLocationFilters ? (
             <div className="grid w-full gap-3 sm:max-w-2xl sm:grid-cols-3">
-              <AdminBuildingSelect
-                label="Building"
-                options={buildingOptions}
-                value={effectiveSelectedBuildingId}
-                onChange={handleBuildingChange}
-                disabled={roomsLoading || buildingOptions.length === 0}
-                fullWidth
-              />
-              <div>
-                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-gray-500">
-                  Floor
-                </label>
-                <select
-                  aria-label="Schedule floor"
-                  value={effectiveSelectedFloor}
-                  onChange={(event) => handleFloorChange(event.target.value)}
-                  disabled={roomsLoading || floorOptions.length === 0}
-                  className="glass-input w-full px-4 py-2.5 text-sm"
-                >
-                  {floorOptions.map((floor) => (
-                    <option key={floor.value} value={floor.value}>
-                      {floor.label}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Building</span>
+                <AdminBuildingSelect
+                  label=""
+                  options={buildingOptions}
+                  value={effectiveSelectedBuildingId}
+                  onChange={handleBuildingChange}
+                  disabled={roomsLoading || buildingOptions.length === 0}
+                  fullWidth
+                  className="w-full"
+                  triggerClassName="h-14 py-1"
+                />
               </div>
-              <div>
-                <label
-                  className="mb-2 block text-xs font-bold uppercase tracking-wide text-gray-500"
-                  htmlFor="assigned-schedule-room"
-                >
-                  Room
-                </label>
-                <select
-                  id="assigned-schedule-room"
-                  aria-label="Assigned schedule room"
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Floor</span>
+                <AdminFloorFilter
+                  label=""
+                  placeholder="Select Floor"
+                  options={floorOptions}
+                  value={effectiveSelectedFloor}
+                  onChange={handleFloorChange}
+                  disabled={roomsLoading || floorOptions.length === 0}
+                  fullWidth
+                  className="w-full"
+                  triggerClassName="h-14 py-1"
+                />
+              </div>
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Room</span>
+                <AdminFloorFilter
+                  label=""
+                  placeholder="Select Room"
+                  options={scheduleRooms.map((room) => ({
+                    value: room.id,
+                    label: getAssignedRoomDisplayLabel(room),
+                  }))}
                   value={selectedRoomId}
-                  onChange={(event) => handleAssignedRoomChange(event.target.value)}
+                  onChange={handleAssignedRoomChange}
                   disabled={roomsLoading || scheduleRooms.length === 0}
-                  className="glass-input w-full px-4 py-2.5 text-sm"
-                >
-                  {scheduleRooms.map((room) => (
-                    <option key={room.id} value={room.id}>
-                      {getAssignedRoomDisplayLabel(room)}
-                    </option>
-                  ))}
-                </select>
+                  fullWidth
+                  className="w-full"
+                  triggerClassName="h-14 py-1"
+                />
               </div>
             </div>
           ) : (
             <div className="w-full sm:max-w-sm">
-              <label
-                className="mb-2 block text-xs font-bold uppercase tracking-wide text-gray-500"
-                htmlFor="assigned-schedule-room"
-              >
-                Room
-              </label>
-              <select
-                id="assigned-schedule-room"
-                aria-label="Assigned schedule room"
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-500">Room</span>
+              <AdminFloorFilter
+                label=""
+                placeholder="Select Room"
+                options={scheduleRooms.map((room) => ({
+                  value: room.id,
+                  label: getAssignedRoomDisplayLabel(room),
+                }))}
                 value={selectedRoomId}
-                onChange={(event) => handleAssignedRoomChange(event.target.value)}
+                onChange={handleAssignedRoomChange}
                 disabled={roomsLoading || scheduleRooms.length === 0}
-                className="glass-input w-full px-4 py-2.5 text-sm"
-              >
-                {scheduleRooms.map((room) => (
-                  <option key={room.id} value={room.id}>
-                    {getAssignedRoomDisplayLabel(room)}
-                  </option>
-                ))}
-              </select>
+                fullWidth
+                className="w-full"
+                triggerClassName="h-14 py-1"
+              />
             </div>
           )}
         </div>

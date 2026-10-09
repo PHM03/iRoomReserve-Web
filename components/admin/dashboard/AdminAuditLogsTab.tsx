@@ -1,5 +1,7 @@
 'use client';
 
+import SoftSelect from '@/components/ui/SoftSelect';
+
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { onAllUsers } from '@/lib/auth/auth';
@@ -579,41 +581,41 @@ export default function AdminAuditLogsTab({ campus }: Readonly<{ campus?: 'main'
         {roomFilterVisible ? (
           <label className="text-xs font-semibold text-gray-600">
             Facility / room
-            <select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)} disabled={!roomCampus} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
+            <SoftSelect value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)} disabled={!roomCampus} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
               <option value="">{roomCampus ? 'All rooms in campus' : 'Select a campus first'}</option>
               {scopedRooms.map((room) => <option key={room.id} value={room.id}>{room.buildingName} · {room.name}</option>)}
-            </select>
+            </SoftSelect>
           </label>
         ) : null}
         <label className="text-xs font-semibold text-gray-600">
           Action type
-          <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
+          <SoftSelect value={actionFilter} onChange={(event) => setActionFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
             <option value="">All actions</option>
             {actionOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
+          </SoftSelect>
         </label>
         <label className="text-xs font-semibold text-gray-600">
           Performed by role
-          <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
+          <SoftSelect value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
             <option value="">All roles</option>
             {roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
-          </select>
+          </SoftSelect>
         </label>
         <label className="text-xs font-semibold text-gray-600">
           Category
-          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
+          <SoftSelect value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
             <option value="">All categories</option>
             {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
-          </select>
+          </SoftSelect>
         </label>
         {!campus ? (
           <label className="text-xs font-semibold text-gray-600">
             Campus
-            <select value={campusFilter} onChange={(event) => setCampusFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
+            <SoftSelect value={campusFilter} onChange={(event) => setCampusFilter(event.target.value)} disabled={actorScope === 'neutral' && !selectedReservationId} className={`${filterControlClass} mt-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400`}>
               <option value="">All campuses</option>
               <option value="main">Main Campus</option>
               <option value="digi">Digital Campus</option>
-            </select>
+            </SoftSelect>
           </label>
         ) : null}
         <label className="text-xs font-semibold text-gray-600">

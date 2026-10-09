@@ -15,6 +15,7 @@ interface AdminBuildingSelectProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  triggerClassName?: string;
   menuAlign?: 'left' | 'right';
   fullWidth?: boolean;
 }
@@ -27,6 +28,7 @@ export default function AdminBuildingSelect({
   placeholder = 'Select Building',
   className = '',
   disabled = false,
+  triggerClassName = '',
   menuAlign = 'left',
   fullWidth = false,
 }: Readonly<AdminBuildingSelectProps>) {
@@ -39,6 +41,7 @@ export default function AdminBuildingSelect({
       placeholder={placeholder}
       className={className}
       disabled={disabled}
+      triggerClassName={triggerClassName}
       menuAlign={menuAlign}
       fullWidth={fullWidth}
     />

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 
 import type { Reservation } from '@/lib/reservations/reservations';
 import type { Room } from '@/lib/rooms/rooms';
@@ -10,7 +10,9 @@ import {
 } from '@/lib/utils/dateTime';
 
 interface RoomScheduleTimelineProps {
+  className?: string;
   error?: string | null;
+  headerControls?: ReactNode;
   isLoading?: boolean;
   reservations: readonly Reservation[];
   rooms: readonly Room[];
@@ -114,17 +116,41 @@ function formatHourLabel(minutes: number) {
 }
 
 export default function RoomScheduleTimeline({
+  className,
   error,
+  headerControls,
   isLoading = false,
   reservations,
   rooms,
   selectedDate,
 }: Readonly<RoomScheduleTimelineProps>) {
   const [roomSearch, setRoomSearch] = useState('');
+  const scheduleHeader = (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h3 className="text-base font-extrabold text-black">Room Schedule</h3>
+        <p className="mt-0.5 text-xs font-bold text-black/50">{formatDate(selectedDate)}</p>
+      </div>
+      <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+        {headerControls}
+        <label className="w-full sm:w-72">
+          <span className="sr-only">Search rooms by name</span>
+          <input
+            type="search"
+            value={roomSearch}
+            onChange={(event) => setRoomSearch(event.target.value)}
+            placeholder="Search rooms by name..."
+            className="glass-input w-full px-3 py-2 text-sm"
+          />
+        </label>
+      </div>
+    </div>
+  );
 
   if (isLoading) {
     return (
-      <section className="glass-card rounded-2xl p-5" aria-live="polite">
+      <section className={`glass-card rounded-2xl p-5 ${className ?? ''}`} aria-live="polite">
+        {scheduleHeader}
         <p className="dashboard-empty-state rounded-xl px-4 py-6 text-center text-sm font-bold text-black/60">
           Loading room schedule...
         </p>
@@ -134,7 +160,8 @@ export default function RoomScheduleTimeline({
 
   if (error) {
     return (
-      <section className="glass-card rounded-2xl p-5" role="alert">
+      <section className={`glass-card rounded-2xl p-5 ${className ?? ''}`} role="alert">
+        {scheduleHeader}
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
           {error}
         </p>
@@ -144,7 +171,8 @@ export default function RoomScheduleTimeline({
 
   if (rooms.length === 0) {
     return (
-      <section className="glass-card rounded-2xl p-5">
+      <section className={`glass-card rounded-2xl p-5 ${className ?? ''}`}>
+        {scheduleHeader}
         <p className="dashboard-empty-state rounded-xl px-4 py-6 text-center text-sm font-bold text-black/60">
           No rooms available for this schedule.
         </p>
@@ -193,23 +221,8 @@ export default function RoomScheduleTimeline({
   );
 
   return (
-    <section className="glass-card overflow-hidden rounded-2xl p-4 sm:p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-extrabold text-black">Room Schedule</h3>
-          <p className="mt-0.5 text-xs font-bold text-black/50">{formatDate(selectedDate)}</p>
-        </div>
-        <label className="w-full sm:w-72">
-          <span className="sr-only">Search rooms by name</span>
-          <input
-            type="search"
-            value={roomSearch}
-            onChange={(event) => setRoomSearch(event.target.value)}
-            placeholder="Search rooms by name..."
-            className="glass-input w-full px-3 py-2 text-sm"
-          />
-        </label>
-      </div>
+    <section className={`glass-card overflow-hidden rounded-2xl p-4 sm:p-5 ${className ?? ''}`}>
+      {scheduleHeader}
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-bold text-black/55" aria-live="polite">

@@ -77,6 +77,27 @@ function getMainCampusBuildingCode(buildingId: string, buildingName: string) {
   return match ? `gd${match[1]}` : null;
 }
 
+type PendingDateRange = 'none' | 'recent' | 'week' | 'month' | 'year' | 'all';
+
+function isWithinPendingDateRange(dateValue: string, range: PendingDateRange) {
+  if (range === 'none' || range === 'all') return true;
+
+  const parsedDate = new Date(dateValue.length === 10 ? `${dateValue}T00:00:00` : dateValue);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+
+  const daysByRange: Record<Exclude<PendingDateRange, 'none' | 'all'>, number> = {
+    recent: 1,
+    week: 7,
+    month: 30,
+    year: 365,
+  };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const oldestIncludedDate = new Date(today);
+  oldestIncludedDate.setDate(today.getDate() - daysByRange[range] + 1);
+  return parsedDate >= oldestIncludedDate && parsedDate <= today;
+}
+
 function getCompleteCategoryRatings(
   ratings: Record<FeedbackCategoryRatingKey, number>
 ): FeedbackCategoryRatings | null {
@@ -175,14 +196,15 @@ export default function FeedbackPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [roomFloors, setRoomFloors] = useState<Record<string, string>>({});
   const [selectedFeedbackRoomId, setSelectedFeedbackRoomId] = useState<string | null>(null);
-  const [campusFilter, setCampusFilter] = useState<'all' | ReservationCampus>('all');
+  const [campusFilter, setCampusFilter] = useState<'none' | 'all' | ReservationCampus>('none');
   const [buildingFilter, setBuildingFilter] = useState<'all' | 'gd1' | 'gd2' | 'gd3'>('all');
-  const [floorFilter, setFloorFilter] = useState('all');
+  const [floorFilter, setFloorFilter] = useState('none');
   const [roomSearch, setRoomSearch] = useState('');
-  const [pendingCampusFilter, setPendingCampusFilter] = useState<'all' | ReservationCampus>('all');
-  const [pendingBuildingFilter, setPendingBuildingFilter] = useState<'all' | 'gd1' | 'gd2' | 'gd3'>('all');
-  const [pendingFloorFilter, setPendingFloorFilter] = useState('all');
+  const [pendingCampusFilter, setPendingCampusFilter] = useState<'none' | 'all' | ReservationCampus>('none');
+  const [pendingBuildingFilter, setPendingBuildingFilter] = useState<'none' | 'all' | 'gd1' | 'gd2' | 'gd3'>('none');
+  const [pendingFloorFilter, setPendingFloorFilter] = useState('none');
   const [pendingRoomSearch, setPendingRoomSearch] = useState('');
+  const [pendingDateRange, setPendingDateRange] = useState<PendingDateRange>('none');
   const [showForm, setShowForm] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [categoryRatings, setCategoryRatings] =
@@ -304,12 +326,17 @@ export default function FeedbackPage() {
     .map((reservation) => roomFloors[reservation.roomId])
     .filter((floor): floor is string => Boolean(floor)))].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
   const normalizedPendingRoomSearch = pendingRoomSearch.trim().toLocaleLowerCase();
+  const hasPendingFilter = pendingCampusFilter !== 'none'
+    && pendingFloorFilter !== 'none'
+    && pendingDateRange !== 'none'
+    && (pendingCampusFilter !== 'main' || pendingBuildingFilter !== 'none');
   const filteredPendingFeedback = visiblePendingFeedback.filter((reservation) => {
-    const matchesCampus = pendingCampusFilter === 'all' || reservation.campus === pendingCampusFilter;
-    const matchesBuilding = pendingCampusFilter !== 'main' || pendingBuildingFilter === 'all' || getMainCampusBuildingCode(reservation.buildingId, reservation.buildingName) === pendingBuildingFilter;
-    const matchesFloor = pendingFloorFilter === 'all' || roomFloors[reservation.roomId] === pendingFloorFilter;
+    const matchesDateRange = isWithinPendingDateRange(reservation.date, pendingDateRange);
+    const matchesCampus = pendingCampusFilter === 'none' || pendingCampusFilter === 'all' || reservation.campus === pendingCampusFilter;
+    const matchesBuilding = pendingCampusFilter !== 'main' || pendingBuildingFilter === 'none' || pendingBuildingFilter === 'all' || getMainCampusBuildingCode(reservation.buildingId, reservation.buildingName) === pendingBuildingFilter;
+    const matchesFloor = pendingFloorFilter === 'none' || pendingFloorFilter === 'all' || roomFloors[reservation.roomId] === pendingFloorFilter;
     const matchesSearch = !normalizedPendingRoomSearch || `${reservation.roomName} ${reservation.buildingName}`.toLocaleLowerCase().includes(normalizedPendingRoomSearch);
-    return matchesCampus && matchesBuilding && matchesFloor && matchesSearch;
+    return matchesDateRange && matchesCampus && matchesBuilding && matchesFloor && matchesSearch;
   });
   const usedRooms = useMemo(() => {
     const roomsById = new Map<string, UsedRoom>();
@@ -347,10 +374,11 @@ export default function FeedbackPage() {
   const normalizedRoomSearch = roomSearch.trim().toLocaleLowerCase();
   const reviewedRooms = usedRooms.filter((room) => room.feedbackCount > 0);
   const availableFloors = [...new Set(reviewedRooms.map((room) => room.floor).filter((floor): floor is string => Boolean(floor)))].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+  const hasReviewedFilter = campusFilter !== 'none' || floorFilter !== 'none' || Boolean(normalizedRoomSearch);
   const filteredUsedRooms = reviewedRooms.filter((room) => {
-    const matchesCampus = campusFilter === 'all' || room.campus === campusFilter;
+    const matchesCampus = campusFilter === 'none' || campusFilter === 'all' || room.campus === campusFilter;
     const matchesBuilding = campusFilter !== 'main' || buildingFilter === 'all' || getMainCampusBuildingCode(room.buildingId, room.buildingName) === buildingFilter;
-    const matchesFloor = floorFilter === 'all' || room.floor === floorFilter;
+    const matchesFloor = floorFilter === 'none' || floorFilter === 'all' || room.floor === floorFilter;
     const matchesSearch = !normalizedRoomSearch || `${room.roomName} ${room.buildingName}`.toLocaleLowerCase().includes(normalizedRoomSearch);
     return matchesCampus && matchesBuilding && matchesFloor && matchesSearch;
   });
@@ -759,17 +787,17 @@ export default function FeedbackPage() {
       )}
 
       {/* ── Two-column grid: Rate Now (left) + Your Feedback (right) ── */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="flex flex-col gap-6">
         {/* ── Left column: Rate Your Experience ──────────────── */}
         <div className="rounded-2xl border border-white/50 bg-white p-5 shadow-sm ">
           <div className="flex items-center gap-2 mb-4">
-            {visiblePendingFeedback.length > 0 && (
+            {hasPendingFilter && filteredPendingFeedback.length > 0 && (
               <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
             )}
             <h2 className="text-base font-bold text-gray-800">Rate Your Experience</h2>
-            {visiblePendingFeedback.length > 0 && (
+            {hasPendingFilter && filteredPendingFeedback.length > 0 && (
               <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
-                {visiblePendingFeedback.length}
+                {filteredPendingFeedback.length}
               </span>
             )}
           </div>
@@ -793,16 +821,17 @@ export default function FeedbackPage() {
                   placeholder="Search rooms..."
                   className="glass-input w-full rounded-xl px-3 py-2 text-sm"
                 />
-                <div className={`grid grid-cols-2 gap-2 ${pendingCampusFilter === 'main' ? 'sm:grid-cols-3' : ''}`}>
+                <div className={`grid grid-cols-2 gap-2 ${pendingCampusFilter === 'main' ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
                   <RoundedFilterSelect
                     label="Filter pending feedback by campus"
                     value={pendingCampusFilter}
                     onChange={(value) => {
-                      const nextCampus = value as 'all' | ReservationCampus;
+                      const nextCampus = value as 'none' | 'all' | ReservationCampus;
                       setPendingCampusFilter(nextCampus);
-                      if (nextCampus !== 'main') setPendingBuildingFilter('all');
+                      if (nextCampus !== 'main') setPendingBuildingFilter('none');
                     }}
                     options={[
+                      { value: 'none', label: 'Select campus' },
                       { value: 'all', label: 'All campuses' },
                       { value: 'digi', label: 'SDCA Digital Campus' },
                       { value: 'main', label: 'SDCA Main Campus' },
@@ -812,8 +841,9 @@ export default function FeedbackPage() {
                     <RoundedFilterSelect
                       label="Filter pending feedback by Main Campus building"
                       value={pendingBuildingFilter}
-                      onChange={(value) => setPendingBuildingFilter(value as 'all' | 'gd1' | 'gd2' | 'gd3')}
+                      onChange={(value) => setPendingBuildingFilter(value as 'none' | 'all' | 'gd1' | 'gd2' | 'gd3')}
                       options={[
+                        { value: 'none', label: 'Select building' },
                         { value: 'all', label: 'All buildings' },
                         { value: 'gd1', label: 'GD1' },
                         { value: 'gd2', label: 'GD2' },
@@ -826,13 +856,32 @@ export default function FeedbackPage() {
                     value={pendingFloorFilter}
                     onChange={setPendingFloorFilter}
                     options={[
+                      { value: 'none', label: 'Select floor' },
                       { value: 'all', label: 'All floors' },
                       ...pendingFloors.map((floor) => ({ value: floor, label: floor })),
                     ]}
                   />
+                  <RoundedFilterSelect
+                    label="Filter pending feedback by time period"
+                    value={pendingDateRange}
+                    onChange={(value) => setPendingDateRange(value as PendingDateRange)}
+                    options={[
+                      { value: 'none', label: 'Select time period' },
+                      { value: 'recent', label: 'Recent' },
+                      { value: 'week', label: 'Week' },
+                      { value: 'month', label: 'Month' },
+                      { value: 'year', label: 'Year' },
+                      { value: 'all', label: 'All time' },
+                    ]}
+                  />
                 </div>
               </div>
-              {filteredPendingFeedback.length === 0 ? (
+              {!hasPendingFilter ? (
+                <div className="dashboard-empty-state rounded-2xl p-6 text-center">
+                  <p className="text-sm font-bold text-black/50">Complete the filters to view reservations</p>
+                  <p className="text-xs text-black/40 mt-0.5">Select a campus, floor, and time period. For Main Campus, also select a building. Search is optional.</p>
+                </div>
+              ) : filteredPendingFeedback.length === 0 ? (
                 <div className="dashboard-empty-state rounded-2xl p-6 text-center">
                   <p className="text-sm font-bold text-black/50">No matching reservations found</p>
                   <p className="text-xs text-black/40 mt-0.5">Try changing your search or filters.</p>
@@ -871,7 +920,7 @@ export default function FeedbackPage() {
               <h2 className="text-base font-bold text-gray-800">
                 {selectedFeedbackRoomId ? selectedFeedbackRoom?.roomName || 'Room Feedback' : 'Your Previous Reviews'}
               </h2>
-              {selectedFeedbackRoomId === null && filteredUsedRooms.length > 0 && (
+              {selectedFeedbackRoomId === null && hasReviewedFilter && filteredUsedRooms.length > 0 && (
                 <span className="inline-flex items-center rounded-full border border-dark/10 bg-dark/5 px-2 py-0.5 text-[10px] font-bold text-black/55">
                   {filteredUsedRooms.length}
                 </span>
@@ -919,11 +968,12 @@ export default function FeedbackPage() {
                       label="Filter previous reviews by campus"
                       value={campusFilter}
                       onChange={(value) => {
-                        const nextCampus = value as 'all' | ReservationCampus;
+                        const nextCampus = value as 'none' | 'all' | ReservationCampus;
                         setCampusFilter(nextCampus);
                         if (nextCampus !== 'main') setBuildingFilter('all');
                       }}
                       options={[
+                        { value: 'none', label: 'Select campus' },
                         { value: 'all', label: 'All campuses' },
                         { value: 'digi', label: 'SDCA Digital Campus' },
                         { value: 'main', label: 'SDCA Main Campus' },
@@ -951,6 +1001,7 @@ export default function FeedbackPage() {
                       value={floorFilter}
                       onChange={setFloorFilter}
                       options={[
+                        { value: 'none', label: 'Select floor' },
                         { value: 'all', label: 'All floors' },
                         ...availableFloors.map((floor) => ({ value: floor, label: floor })),
                       ]}
@@ -958,7 +1009,12 @@ export default function FeedbackPage() {
                   </div>
                   </div>
                 </div>
-                {filteredUsedRooms.length === 0 ? (
+                {!hasReviewedFilter ? (
+                  <div className="dashboard-empty-state rounded-2xl p-6 text-center">
+                    <p className="text-sm font-bold text-black/50">Choose a filter to view your reviews</p>
+                    <p className="text-xs text-black/40 mt-0.5">Select a campus or floor, or search for a room or building.</p>
+                  </div>
+                ) : filteredUsedRooms.length === 0 ? (
                   <div className="dashboard-empty-state rounded-2xl p-6 text-center">
                     <p className="text-sm font-bold text-black/50">No matching reviews found</p>
                     <p className="text-xs text-black/40 mt-0.5">Only rooms with submitted reviews appear here. Try changing your search or filters.</p>

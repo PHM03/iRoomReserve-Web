@@ -1,5 +1,7 @@
 'use client';
 
+import SoftSelect from '@/components/ui/SoftSelect';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import {
@@ -624,7 +626,7 @@ export default function AdminFeedbackTab({
               <div className="flex flex-wrap items-center gap-3 sm:ml-auto sm:justify-end">
               <label className="flex items-center gap-2 text-xs font-bold text-black/60">
                 <span className="whitespace-nowrap">Period:</span>
-                <select
+                <SoftSelect
                   aria-label="Feedback analytics period"
                   value={analyticsPeriod}
                   onChange={(event) =>
@@ -639,13 +641,13 @@ export default function AdminFeedbackTab({
                         : period[0].toUpperCase() + period.slice(1)}
                     </option>
                   ))}
-                </select>
+                </SoftSelect>
               </label>
               {analyticsPeriod === 'semester' ? (
                 <>
                   <label className="flex items-center gap-2 text-xs font-bold text-black/60">
                     <span className="whitespace-nowrap">Academic Year:</span>
-                    <select
+                    <SoftSelect
                       aria-label="Feedback analytics academic year"
                       value={analyticsAcademicYear}
                       onChange={(event) => setAnalyticsAcademicYear(event.target.value as ScheduleAcademicYear)}
@@ -654,11 +656,11 @@ export default function AdminFeedbackTab({
                       {SCHEDULE_ACADEMIC_YEARS.map((academicYear) => (
                         <option key={academicYear} value={academicYear}>{academicYear}</option>
                       ))}
-                    </select>
+                    </SoftSelect>
                   </label>
                   <label className="flex items-center gap-2 text-xs font-bold text-black/60">
                     <span className="whitespace-nowrap">Semester:</span>
-                    <select
+                    <SoftSelect
                       aria-label="Feedback analytics semester"
                       value={analyticsSemester}
                       onChange={(event) => setAnalyticsSemester(event.target.value as ScheduleSemester)}
@@ -667,7 +669,7 @@ export default function AdminFeedbackTab({
                       {SCHEDULE_SEMESTERS.map((semester) => (
                         <option key={semester} value={semester}>{semester}</option>
                       ))}
-                    </select>
+                    </SoftSelect>
                   </label>
                 </>
               ) : null}
@@ -755,7 +757,7 @@ export default function AdminFeedbackTab({
           <div className="glass-card space-y-3 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-extrabold text-black/60">Show feedback by:</span>
-              <select
+              <SoftSelect
                 aria-label="Feedback list scope"
                 value={feedbackScope}
                 onChange={(event) => setFeedbackScope(event.target.value as FeedbackAnalyticsScope)}
@@ -766,9 +768,9 @@ export default function AdminFeedbackTab({
                     {scope[0].toUpperCase() + scope.slice(1)}
                   </option>
                 ))}
-              </select>
+              </SoftSelect>
               {feedbackScope === 'floor' ? (
-                <select
+                <SoftSelect
                   aria-label="Feedback list floor"
                   value={selectedFeedbackFloor}
                   onChange={(event) => setFeedbackFloor(event.target.value)}
@@ -776,10 +778,10 @@ export default function AdminFeedbackTab({
                 >
                   {floorOptions.length === 0 ? <option value="">No floors</option> : null}
                   {floorOptions.map((floor) => <option key={floor} value={floor}>{floor}</option>)}
-                </select>
+                </SoftSelect>
               ) : null}
               {feedbackScope === 'room' ? (
-                <select
+                <SoftSelect
                   aria-label="Feedback list room"
                   value={selectedFeedbackRoomId}
                   onChange={(event) => setFeedbackRoomId(event.target.value)}
@@ -787,7 +789,7 @@ export default function AdminFeedbackTab({
                 >
                   {roomOptions.length === 0 ? <option value="">No rooms</option> : null}
                   {roomOptions.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
-                </select>
+                </SoftSelect>
               ) : null}
             </div>
 
@@ -815,7 +817,7 @@ export default function AdminFeedbackTab({
 
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-[10px] font-extrabold uppercase tracking-widest text-black/40 shrink-0 w-10">Group</span>
-              <select
+              <SoftSelect
                 aria-label="Feedback role filter"
                 value={roleFilter}
                 onChange={(event) => setRoleFilter(event.target.value)}
@@ -825,8 +827,8 @@ export default function AdminFeedbackTab({
                 {FEEDBACK_ROLE_OPTIONS.map((role) => (
                   <option key={role} value={role}>{role}</option>
                 ))}
-              </select>
-              <select
+              </SoftSelect>
+              <SoftSelect
                 aria-label="Feedback gender filter"
                 value={genderFilter}
                 onChange={(event) => setGenderFilter(event.target.value)}
@@ -836,7 +838,7 @@ export default function AdminFeedbackTab({
                 {USER_GENDER_VALUES.map((gender) => (
                   <option key={gender} value={gender}>{USER_GENDER_LABELS[gender]}</option>
                 ))}
-              </select>
+              </SoftSelect>
             </div>
 
             <div className="flex items-center justify-between pt-1 border-t border-dark/10">

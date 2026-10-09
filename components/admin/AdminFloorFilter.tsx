@@ -19,9 +19,11 @@ interface AdminFloorFilterProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  ariaLabel?: string;
   className?: string;
   disabled?: boolean;
   elevated?: boolean;
+  triggerClassName?: string;
   menuAlign?: 'left' | 'right';
   fullWidth?: boolean;
 }
@@ -109,9 +111,11 @@ export default function AdminFloorFilter({
   value,
   onChange,
   placeholder = 'Select Floor',
+  ariaLabel,
   className = '',
   disabled = false,
   elevated = true,
+  triggerClassName = '',
   menuAlign = 'left',
   fullWidth = false,
 }: Readonly<AdminFloorFilterProps>) {
@@ -263,13 +267,14 @@ export default function AdminFloorFilter({
           id={buttonId}
           disabled={disabled}
           onClick={handleButtonClick}
-          className={`flex ${fullWidth ? 'w-full' : 'min-w-44'} items-center justify-between gap-3 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all hover:border-gray-400 hover:bg-gray-50 focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25 disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`flex ${fullWidth ? 'w-full' : 'min-w-44'} items-center justify-between gap-3 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)] transition-all hover:border-gray-400 hover:bg-gray-50 focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25 disabled:cursor-not-allowed disabled:opacity-60 ${triggerClassName} ${
             elevated && isOpen ? 'shadow-[0_18px_44px_rgba(15,23,42,0.18)]' : ''
           }`}
+          aria-label={ariaLabel || label || placeholder}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
         >
-          <span>{selectedOption?.label ?? placeholder}</span>
+          <span className="min-w-0 line-clamp-2 break-words text-left">{selectedOption?.label ?? placeholder}</span>
           <svg
             className={`h-4 w-4 text-[#a12124] transition-transform ${
               isOpen ? 'rotate-180' : ''

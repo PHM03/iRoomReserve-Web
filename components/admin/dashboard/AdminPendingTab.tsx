@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import {
   sortFloorOptions,
@@ -755,37 +756,28 @@ export default function AdminPendingTab({
           {/* Floor */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-gray-500 shrink-0">Floor</span>
-            <select
-              id="filter-floor"
+            <AdminFloorFilter
+              label=""
+              options={[{ value: '', label: 'All Floors' }, ...floorOptions]}
               value={floorFilter}
-              onChange={(e) => {
-                setFloorFilter(e.target.value);
-              }}
-              className="glass-input text-sm"
-              style={{
-                padding: '6px 12px',
-                minWidth: '150px'
-              }}
-            >
-              <option value="">All Floors</option>
-              {floorOptions.map((floor) => (
-                <option key={floor.value} value={floor.value}>
-                  {floor.label}
-                </option>
-              ))}
-            </select>
+              onChange={setFloorFilter}
+              triggerClassName="min-w-[150px] rounded-xl px-3 py-1.5 text-sm shadow-none"
+            />
           </div>
 
           {/* Room */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-gray-500 shrink-0">Room</span>
-            <select id="filter-room" value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)} className="glass-input text-sm" style={{
-              padding: '6px 12px',
-              minWidth: '140px'
-            }}>
-              <option value="">All Rooms</option>
-              {roomOptions.map((room) => <option key={room} value={room}>{room}</option>)}
-            </select>
+            <AdminFloorFilter
+              label=""
+              options={[
+                { value: '', label: 'All Rooms' },
+                ...roomOptions.map((room) => ({ value: room, label: room })),
+              ]}
+              value={roomFilter}
+              onChange={setRoomFilter}
+              triggerClassName="min-w-[140px] rounded-xl px-3 py-1.5 text-sm shadow-none"
+            />
           </div>
 
           <button
