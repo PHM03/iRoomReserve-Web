@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AuthAlert from '@/components/auth/AuthAlert';
 import Toast from '@/components/ui/Toast';
+import LoadingScreen from '@/components/ui/LoadingScreen';
 import { loginWithEmail, loginWithGoogle, saveUserProfile, getAuthErrorMessage, resendVerificationEmail, getUserProfile, logout } from '@/lib/auth/auth';
 
 function LoginForm() {
@@ -311,7 +312,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-black">Loading...</div>}>
+    <Suspense fallback={<LoadingScreen />}>
       <LoginForm />
     </Suspense>
   );

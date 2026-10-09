@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, Suspense } from 'react';
 import Image from 'next/image';
+import LoadingScreen from '@/components/ui/LoadingScreen';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AuthAlert from '@/components/auth/AuthAlert';
 import Toast from '@/components/ui/Toast';
@@ -361,7 +362,7 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-black">Loading...</div>}>
+    <Suspense fallback={<LoadingScreen />}>
       <RegisterForm />
     </Suspense>
   );
