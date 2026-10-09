@@ -1172,7 +1172,7 @@ export default function AdminFeedbackTab({
                 <section key={reviewer.id} className="glass-card overflow-hidden" aria-label={`Reviews from ${reviewer.name}`}>
                   <button
                     type="button"
-                    className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 p-4 text-left transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-inset sm:grid-cols-[minmax(0,1.4fr)_minmax(100px,.7fr)_minmax(140px,.8fr)_auto]"
+                    className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 gap-y-2 p-4 text-left transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-inset sm:grid-cols-[minmax(0,1.4fr)_minmax(140px,.8fr)_auto]"
                     onClick={() => setExpandedReviewId(isReviewerExpanded ? null : reviewer.id)}
                     aria-expanded={isReviewerExpanded}
                     aria-controls={`reviewer-reviews-${reviewer.id}`}
@@ -1188,14 +1188,13 @@ export default function AdminFeedbackTab({
                             {previewFeedback.overallRating}/5
                           </span>
                         </div>
-                        <p className="mt-1 line-clamp-2 text-sm italic leading-relaxed text-black/70">
-                          “{previewFeedback.message || previewFeedback.text || 'No comment provided.'}”
+                        <p className="mt-1 truncate text-sm font-semibold leading-relaxed text-black/70">
+                          {previewFeedback.roomName}
+                        </p>
+                        <p className="text-xs leading-relaxed text-black/50">
+                          {previewFeedback.buildingName}
                         </p>
                       </div>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-black/45">Reviews</p>
-                      <p className="mt-1 text-sm font-bold text-black">{reviewer.feedback.length}</p>
                     </div>
                     <div className="flex items-center gap-2 sm:justify-self-end">
                       <div>
