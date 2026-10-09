@@ -2,24 +2,24 @@ import Image from "next/image";
 
 export default function LoadingScreen() {
   return (
-    <main className="loading-screen" role="status" aria-live="polite" aria-label="Loading e-RoomReserve">
+    <main className="loading-screen" role="status" aria-live="polite" aria-label="Loading eRoomReserve">
       <div className="loading-content">
         <div className="loading-logo" aria-hidden="true">
           <Image
-            src="/images/eroomreserve-navbar-icon.png"
+            src="/images/eroomreserve-loading-logo.png"
             alt=""
-            width={512}
-            height={512}
+            width={480}
+            height={480}
             priority
             className="loading-logo-image"
           />
-          <svg className="loading-logo-outline" viewBox="0 0 512 512" fill="none">
-            <path className="loading-logo-outline-track" d="M108 393V169L200 108H312L403 169V393H108Z" />
-            <path className="loading-logo-outline-progress" d="M108 393V169L200 108H312L403 169V393H108Z" />
+          <svg className="loading-logo-outline" viewBox="0 0 480 480" fill="none">
+            <path className="loading-logo-outline-track" d="M143 352 L143 201 L211 157 M277 157 L340 201 L340 352 L143 352" />
+            <path className="loading-logo-outline-progress" d="M143 352 L143 201 L211 157 M277 157 L340 201 L340 352 L143 352" />
           </svg>
         </div>
-        <h1 className="loading-brand">e-Room<span>Reserve</span></h1>
-        <p className="loading-status">Preparing your space</p>
+        <h1 className="loading-brand"><span>e</span>RoomReserve</h1>
+        <p className="loading-status">Preparing your workspace</p>
         <div className="loading-track" aria-hidden="true">
           <div className="loading-bar" />
         </div>

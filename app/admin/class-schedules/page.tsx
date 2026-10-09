@@ -493,9 +493,9 @@ export default function AdminClassSchedulesPage() {
                 aria-disabled={!hasActiveScheduleFilters}
                 className={`rounded-lg border px-[14px] py-2 text-sm font-bold transition-all duration-200 ease-in-out ${
                   clearButtonPressed
-                    ? 'border-[#8B0000] bg-[#8B0000] text-white'
+                    ? 'border-primary bg-primary text-white'
                     : hasActiveScheduleFilters
-                      ? 'cursor-pointer border-[#8B0000] bg-transparent text-[#8B0000] pointer-events-auto hover:bg-[#fff0f0]'
+                      ? 'pointer-events-auto cursor-pointer border-primary bg-primary text-white shadow-sm hover:bg-primary/90'
                       : 'pointer-events-none cursor-default border-[#cccccc] bg-transparent text-[#999999]'
                 }`}
               >
