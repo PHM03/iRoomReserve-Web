@@ -405,7 +405,6 @@ export default function AdminDashboard({
 
       {activeTab === 'dashboard' && (
         <AdminOverviewTab
-          allReservations={allReservations}
           approverEmail={approverEmail}
           availableCount={summaryAvailableCount}
           buildingId={buildingId}

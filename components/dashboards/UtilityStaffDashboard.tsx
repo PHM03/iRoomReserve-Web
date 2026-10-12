@@ -40,14 +40,6 @@ type IconProps = {
   className?: string;
 };
 
-type TimetableEntry = {
-  buildingName: string;
-  endTime: string;
-  roomName: string;
-  startTime: string;
-  purpose?: string;
-};
-
 type RoomScheduleFeed = 'reservations' | 'rooms';
 type RoomStatusFilter = 'All' | 'Available' | 'Reserved' | 'Occupied' | 'Unavailable';
 type RoomScheduleErrors = {
@@ -55,39 +47,6 @@ type RoomScheduleErrors = {
   reservations: string | null;
   rooms: string | null;
 };
-
-const TIMETABLE_DAYS = [
-  {
-    label: 'Monday',
-    shortLabel: 'Mon',
-    value: 1,
-  },
-  {
-    label: 'Tuesday',
-    shortLabel: 'Tue',
-    value: 2,
-  },
-  {
-    label: 'Wednesday',
-    shortLabel: 'Wed',
-    value: 3,
-  },
-  {
-    label: 'Thursday',
-    shortLabel: 'Thu',
-    value: 4,
-  },
-  {
-    label: 'Friday',
-    shortLabel: 'Fri',
-    value: 5,
-  },
-  {
-    label: 'Saturday',
-    shortLabel: 'Sat',
-    value: 6,
-  },
-] as const;
 
 const ROOM_STATUS_FILTERS: RoomStatusFilter[] = [
   'All',
@@ -152,76 +111,6 @@ function WarningIcon({ className = 'h-7 w-7' }: IconProps) {
   );
 }
 
-function getReservationDates(reservation: Reservation) {
-  const dates = reservation.dates?.length ? reservation.dates : [reservation.date];
-  return [...new Set(dates.filter(Boolean))];
-}
-
-function getWeekdayValue(dateValue: string) {
-  const [year, month, day] = dateValue.split('-').map(Number);
-
-  if (!year || !month || !day) {
-    return null;
-  }
-
-  const weekday = new Date(year, month - 1, day).getDay();
-  return weekday >= 1 && weekday <= 6 ? weekday : null;
-}
-
-function buildEntriesByDay(
-  reservations: Reservation[],
-  currentUserId?: string | null
-) {
-  const entriesByDay = new Map<number, Map<string, TimetableEntry>>();
-
-  TIMETABLE_DAYS.forEach((day) => {
-    entriesByDay.set(day.value, new Map());
-  });
-
-  reservations.forEach((reservation) => {
-    if (
-      !currentUserId ||
-      reservation.userId !== currentUserId ||
-      reservation.status !== 'approved'
-    ) {
-      return;
-    }
-
-    getReservationDates(reservation).forEach((date) => {
-      const weekday = getWeekdayValue(date);
-
-      if (!weekday) {
-        return;
-      }
-
-      const dayEntries = entriesByDay.get(weekday);
-
-      if (!dayEntries) {
-        return;
-      }
-
-      const key = [
-        reservation.roomId,
-        reservation.buildingId,
-        reservation.startTime,
-        reservation.endTime,
-      ].join(':');
-
-      if (!dayEntries.has(key)) {
-        dayEntries.set(key, {
-          buildingName: reservation.buildingName,
-          endTime: reservation.endTime,
-          roomName: reservation.roomName,
-          startTime: reservation.startTime,
-          purpose: reservation.purpose,
-        });
-      }
-    });
-  });
-
-  return entriesByDay;
-}
-
 function StatCard({
   detail,
   label,
@@ -258,92 +147,6 @@ function shiftDate(dateValue: string, dayOffset: number) {
     String(date.getMonth() + 1).padStart(2, '0'),
     String(date.getDate()).padStart(2, '0'),
   ].join('-');
-}
-
-function UtilityReservationTimetable({
-  className = '',
-  currentUserId,
-  reservations,
-}: Readonly<{
-  className?: string;
-  currentUserId?: string | null;
-  reservations: Reservation[];
-}>) {
-  const entriesByDay = buildEntriesByDay(reservations, currentUserId);
-
-  return (
-    <section
-      className={`group rounded-2xl border border-white/35 bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10  transition-all duration-300 hover:bg-white hover:shadow-2xl ${className}`.trim()}
-    >
-      <div className="mb-5">
-        <h3 className="text-lg font-bold text-gray-900">
-          Reservation Timetable
-        </h3>
-      </div>
-
-      <div className="overflow-x-auto">
-        <div className="grid min-w-[780px] grid-cols-6 gap-3">
-          {TIMETABLE_DAYS.map((day) => {
-            const entries = [
-              ...(entriesByDay.get(day.value)?.values() ?? []),
-            ].sort(
-              (left, right) =>
-                left.startTime.localeCompare(right.startTime) ||
-                left.roomName.localeCompare(right.roomName, undefined, {
-                  numeric: true,
-                })
-            );
-
-            return (
-              <div
-                key={day.value}
-                className="flex min-h-[190px] flex-col rounded-2xl border border-white/35 bg-white p-3 shadow-lg  transition-all duration-300 group-hover:bg-white hover:bg-white hover:shadow-xl"
-              >
-                <div className="border-b border-white/30 pb-2">
-                  <p className="text-sm font-bold text-gray-900">
-                    {day.shortLabel}
-                  </p>
-                  <p className="text-[11px] text-gray-400">{day.label}</p>
-                </div>
-
-                {entries.length === 0 ? (
-                  <div className="dashboard-empty-state mt-3 flex flex-1 items-center justify-center rounded-2xl px-2 py-6">
-                    <p className="text-center text-xs font-bold text-gray-400">
-                      No reservations
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mt-3 space-y-2">
-                    {entries.map((entry) => (
-                      <div
-                        key={`${entry.buildingName}:${entry.roomName}:${entry.startTime}:${entry.endTime}`}
-                        className="rounded-2xl border border-primary/15 bg-primary/10 p-3 shadow-sm shadow-primary/10 "
-                      >
-                        <p className="truncate text-sm font-bold text-gray-900">
-                          {entry.roomName}
-                        </p>
-                        <p className="mt-1 truncate text-xs text-gray-500">
-                          {entry.buildingName}
-                        </p>
-                        <p className="mt-2 text-xs font-bold text-primary">
-                          {formatTimeRange(entry.startTime, entry.endTime)}
-                        </p>
-                        {entry.purpose ? (
-                          <p className="mt-1 truncate text-[11px] text-gray-500">
-                            {entry.purpose}
-                          </p>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
 }
 
 export default function UtilityStaffDashboard({
@@ -713,12 +516,6 @@ export default function UtilityStaffDashboard({
           detailsHref="/dashboard/ble-beacon"
           rooms={rooms}
           variant="compact"
-        />
-
-        <UtilityReservationTimetable
-          className="mb-10"
-          currentUserId={uid}
-          reservations={reservations}
         />
 
         <section className="mb-6 rounded-2xl border border-white/35 bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,0.17)] shadow-primary/10  transition-all duration-300 hover:bg-white hover:shadow-2xl">

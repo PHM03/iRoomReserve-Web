@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import BleSummaryCard from '@/components/ui/BleSummaryCard';
-import MyReservationTimetable from '@/components/rooms/schedules/MyReservationTimetable';
 import RoomScheduleTimeline from '@/components/rooms/schedules/RoomScheduleTimeline';
 import type { AdminTab } from '@/components/layout/NavBar';
 import {
@@ -22,7 +21,6 @@ import { formatReservationDates, RoleBadge, StatusBadge } from './shared';
 type RoomStatusFilter = 'All' | 'Available' | 'Reserved' | 'Occupied' | 'Unavailable';
 
 interface AdminOverviewTabProps {
-  allReservations: Reservation[];
   approverEmail?: string | null;
   availableCount: number;
   buildingId: string;
@@ -190,7 +188,6 @@ function shiftDate(dateValue: string, dayOffset: number) {
 }
 
 export default function AdminOverviewTab({
-  allReservations,
   approverEmail,
   availableCount,
   buildingId,
@@ -772,28 +769,19 @@ export default function AdminOverviewTab({
         selectedDate={selectedScheduleDate}
       />
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-        <BleSummaryCard
-          activeBeaconsOverride={dashboardSummary?.activeBeacons}
-          buildingName={buildingName}
-          compactActiveLabel="Active Beacons"
-          compactOnlineLabel="Online Beacons"
-          connectedBeaconsOverride={dashboardSummary?.activeBeacons}
-          detailsHref="/admin/ble-status"
-          onlineBeaconsOverride={dashboardSummary?.onlineBeacons}
-          onRefreshData={onReload}
-          rooms={rooms}
-          totalBeaconsOverride={dashboardSummary?.totalBeacons}
-          variant="compact"
-        />
-
-        <MyReservationTimetable
-          compact
-          compactVariant="today"
-          currentUserId={currentUserId}
-          reservations={allReservations}
-        />
-      </div>
+      <BleSummaryCard
+        activeBeaconsOverride={dashboardSummary?.activeBeacons}
+        buildingName={buildingName}
+        compactActiveLabel="Active Beacons"
+        compactOnlineLabel="Online Beacons"
+        connectedBeaconsOverride={dashboardSummary?.activeBeacons}
+        detailsHref="/admin/ble-status"
+        onlineBeaconsOverride={dashboardSummary?.onlineBeacons}
+        onRefreshData={onReload}
+        rooms={rooms}
+        totalBeaconsOverride={dashboardSummary?.totalBeacons}
+        variant="compact"
+      />
     </div>
   );
 }
