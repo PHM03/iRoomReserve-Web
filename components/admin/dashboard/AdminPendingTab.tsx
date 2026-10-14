@@ -19,7 +19,7 @@ import { isBuildingAdminActionableReservation } from '@/lib/reservations/reserva
 import { getRoomsByBuilding, type Room } from '@/lib/rooms/rooms';
 import { DAY_NAMES, getSchedulesByRoomId, type Schedule } from '@/lib/schedules/schedules';
 import { extractTimeString, formatTimeRange } from '@/lib/utils/dateTime';
-import { formatReservationDates, RoleBadge, getManagedBuildingOptionLabel } from './shared';
+import { formatReservationDates, formatReservationSchedule, RoleBadge, getManagedBuildingOptionLabel } from './shared';
 import { formatOtherEquipment } from '@/lib/reservations/equipment';
 import { getMonitoringDayOffset } from '@/lib/reservations/reservation-monitoring';
 import { normalizeRole, USER_ROLES } from '@/lib/auth/roles';
@@ -128,8 +128,16 @@ function timeRangesOverlap(
 }
 
 function findClassScheduleConflict(request: Reservation, schedules: Schedule[]) {
-  for (const date of getReservationDates(request)) {
-    const dayOfWeek = getDayOfWeekFromDate(date);
+  const occurrences = request.slots?.length
+    ? request.slots
+    : getReservationDates(request).map((date) => ({
+        date,
+        startTime: request.startTime,
+        endTime: request.endTime,
+      }));
+
+  for (const occurrence of occurrences) {
+    const dayOfWeek = getDayOfWeekFromDate(occurrence.date);
     if (dayOfWeek === null) continue;
 
     const schedule = schedules.find(
@@ -137,8 +145,8 @@ function findClassScheduleConflict(request: Reservation, schedules: Schedule[]) 
         candidate.roomId === request.roomId &&
         candidate.dayOfWeek === dayOfWeek &&
         timeRangesOverlap(
-          request.startTime,
-          request.endTime,
+          occurrence.startTime,
+          occurrence.endTime,
           candidate.startTime,
           candidate.endTime
         )
@@ -146,7 +154,7 @@ function findClassScheduleConflict(request: Reservation, schedules: Schedule[]) 
 
     if (schedule) {
       return {
-        date,
+        date: occurrence.date,
         dayName: DAY_NAMES[dayOfWeek],
         roomName: schedule.roomName || request.roomName,
         schedule,
@@ -1194,6 +1202,7 @@ export default function AdminPendingTab({
                 const isEditingExpirationMessage = expirationMessageReservationId === request.id;
                 const dateLabel = formatReservationDates(request.dates, request.date);
                 const timeLabel = formatTimeRange(request.startTime, request.endTime);
+                const scheduleLabel = formatReservationSchedule(request);
                 const completedAdvisorApproval = getCompletedApprovalRecord(
                   request.approvals,
                   'advisor'
@@ -1268,8 +1277,7 @@ export default function AdminPendingTab({
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', columnGap: '14px', rowGap: '10px', flexWrap: 'wrap', minWidth: 0 }}>
                         <span style={{ fontSize: '13px', color: '#222', fontWeight: 600 }}>{request.roomName}</span>
-                         <span style={{ fontSize: '13px', color: '#555' }}>{dateLabel}</span>
-                         <span style={{ fontSize: '13px', color: '#555' }}>{timeLabel}</span>
+                         <span style={{ fontSize: '13px', color: '#555' }}>{scheduleLabel}</span>
                          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>{badge.label}</span>
                          {(!isExpired || isExpanded) && (
                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', columnGap: '12px', rowGap: '8px', flexWrap: 'wrap' }}>
@@ -1387,8 +1395,12 @@ export default function AdminPendingTab({
                     }}>
                       {[
                         { label: 'ROOM', main: request.roomName, sub: request.buildingName },
-                        { label: 'DATE', main: dateLabel },
-                        { label: 'TIME', main: timeLabel },
+                        ...(request.slots?.length
+                          ? [{ label: 'DATES & TIMES', main: scheduleLabel }]
+                          : [
+                              { label: 'DATE', main: dateLabel },
+                              { label: 'TIME', main: timeLabel },
+                            ]),
                         { label: 'PURPOSE', main: request.purpose || 'Not specified' },
                       ].map(({ label, main, sub }) => (
                         <div key={label} style={{

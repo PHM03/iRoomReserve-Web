@@ -3,6 +3,7 @@
 import type { SubmitEvent } from 'react';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import RecurringDatesPicker from '@/components/rooms/RecurringDatesPicker';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DaySchedulePanel from '@/components/rooms/schedules/DaySchedulePanel';
 import RoomAvailabilityPicker from '@/components/rooms/RoomAvailabilityPicker';
@@ -28,9 +29,11 @@ import {
 import {
   createReservation,
   createRecurringReservation,
+  createRecurringReservationWithSlots,
   deleteUploadedReservationDocument,
   onReservationsByBuildingIds,
   type Reservation,
+  type RecurringReservationSlot,
   uploadReservationDocument,
   validateReservationApprover,
 } from '@/lib/reservations/reservations';
@@ -75,6 +78,7 @@ const WEEKDAY_OPTIONS = [
   { label: 'Fri', value: 5 },
   { label: 'Sat', value: 6 },
 ];
+type RecurrenceMode = 'weekly' | 'specific-dates';
 const DAY_LABELS_BY_VALUE = new Map(
   WEEKDAY_OPTIONS.map((day) => [day.value, day.label])
 );
@@ -145,7 +149,7 @@ const PAST_TIME_MESSAGE =
 const CLASS_SCHEDULE_CONFLICT_MESSAGE =
   'A class schedule occupies this room during the selected time. Please choose another time or room.';
 const NO_RECURRING_DATES_MESSAGE =
-  'No reservation dates match the selected recurring schedule. Choose another date range or weekday.';
+  'Choose at least one date for this recurring reservation.';
 
 function toLocalIsoDate(date: Date): string {
   const year = date.getFullYear();
@@ -330,7 +334,9 @@ export default function ReserveRoomPage() {
   const [validatingApprover, setValidatingApprover] = useState(false);
   const [submitPhase, setSubmitPhase] = useState<'idle' | 'validating-email' | 'creating-reservation'>('idle');
   const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceMode, setRecurrenceMode] = useState<RecurrenceMode>('weekly');
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [selectedRecurringSlots, setSelectedRecurringSlots] = useState<RecurringReservationSlot[]>([]);
   const [recurringEndDate, setRecurringEndDate] = useState('');
   const [equipment, setEquipment] = useState<Record<string, number>>({ ...INITIAL_EQUIPMENT });
   const [otherEquipment, setOtherEquipment] = useState('');
@@ -811,43 +817,70 @@ export default function ReserveRoomPage() {
     return matchesType && matchesAvailability;
   });
   const selectedRecurringDays = selectedDays.filter(isSelectableRecurringDay);
+  const hasRecurringSchedule = recurrenceMode === 'weekly'
+    ? selectedRecurringDays.length > 0 && Boolean(recurringEndDate)
+    : selectedRecurringSlots.length > 0;
   const previewDates = isRecurring ? getPreviewDates() : [];
+  const recurringOccurrences = previewDates.map((date) => {
+    const selectedSlot = recurrenceMode === 'specific-dates'
+      ? selectedRecurringSlots.find((slot) => slot.date === date)
+      : undefined;
+    return {
+      date,
+      startTime: selectedSlot?.startTime ?? startTime,
+      endTime: selectedSlot?.endTime ?? endTime,
+    };
+  });
+  const recurringTimeIssueDates = recurrenceMode === 'specific-dates'
+    ? recurringOccurrences
+        .filter((slot) => !isTimeRangeValid(selectedCampus, slot.startTime, slot.endTime))
+        .map((slot) => slot.date)
+    : [];
   const recurringRoomConflictDates =
-    isRecurring && startTime && endTime
-      ? previewDates.filter((date) => hasTimeConflict(date, startTime, endTime, bookedSlots))
+    isRecurring
+      ? recurringOccurrences
+          .filter(({ date, startTime: slotStart, endTime: slotEnd }) =>
+            slotStart && slotEnd && hasTimeConflict(date, slotStart, slotEnd, bookedSlots)
+          )
+          .map((slot) => slot.date)
       : [];
   const recurringScheduleConflictDates =
-    isRecurring && startTime && endTime
-      ? previewDates.filter((date) => {
+    isRecurring
+      ? recurringOccurrences.filter(({ date, startTime: slotStart, endTime: slotEnd }) => {
+          if (!slotStart || !slotEnd) return false;
           const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
           return roomSchedules.some((schedule) =>
             scheduleConflictsWithReservationSlot(schedule, {
               buildingId: selectedBuildingId,
               dayOfWeek,
-              endTime,
+              endTime: slotEnd,
               roomId: selectedRoomId,
-              startTime,
+              startTime: slotStart,
             })
           );
-        })
+        }).map((slot) => slot.date)
       : [];
   const recurringUserConflictDates =
-    isRecurring && startTime && endTime
-      ? previewDates.filter((date) =>
+    isRecurring
+      ? recurringOccurrences.filter(({ date, startTime: slotStart, endTime: slotEnd }) =>
+          slotStart && slotEnd &&
           userActiveSlots.some(
             (slot) =>
               slot.date === date &&
               slot.roomId !== selectedRoomId &&
-              startTime < slot.endTime &&
-              endTime > slot.startTime
+              slotStart < slot.endTime &&
+              slotEnd > slot.startTime
           )
-        )
+        ).map((slot) => slot.date)
       : [];
   const recurringPastTimeDates =
-    isRecurring && startTime
-      ? previewDates.filter((date) => isPastTimeSelection(date, startTime, now))
+    isRecurring
+      ? recurringOccurrences
+          .filter(({ date, startTime: slotStart }) => slotStart && isPastTimeSelection(date, slotStart, now))
+          .map((slot) => slot.date)
       : [];
   const hasRecurringAvailabilityIssue =
+    recurringTimeIssueDates.length > 0 ||
     recurringRoomConflictDates.length > 0 ||
     recurringScheduleConflictDates.length > 0 ||
     recurringUserConflictDates.length > 0 ||
@@ -887,7 +920,9 @@ export default function ReserveRoomPage() {
     setApprovalEmailError('');
     setCreatedCount(0);
     setIsRecurring(false);
+    setRecurrenceMode('weekly');
     setSelectedDays([]);
+    setSelectedRecurringSlots([]);
     setRecurringEndDate('');
     setEquipment({ ...INITIAL_EQUIPMENT });
     setOtherEquipment('');
@@ -900,6 +935,10 @@ export default function ReserveRoomPage() {
   }
 
   function getPreviewDates(): string[] {
+    if (recurrenceMode === 'specific-dates') {
+      return selectedRecurringSlots.map((slot) => slot.date).sort();
+    }
+
     if (!reservationDate || !recurringEndDate || selectedRecurringDays.length === 0) {
       return [];
     }
@@ -920,30 +959,34 @@ export default function ReserveRoomPage() {
   }
 
   function getRecurringAvailabilityMessage(): string {
-    if (!isRecurring || !startTime || !endTime) {
+    if (!isRecurring || (recurrenceMode === 'weekly' && (!startTime || !endTime))) {
       return '';
     }
 
-    if (reservationDate && recurringEndDate && selectedRecurringDays.length > 0 && previewDates.length === 0) {
+    if (!hasRecurringSchedule || previewDates.length === 0) {
       return NO_RECURRING_DATES_MESSAGE;
     }
 
+    if (recurringTimeIssueDates.length > 0) {
+      return 'Choose a valid start and end time for every selected date.';
+    }
+
     if (recurringPastTimeDates.length > 0) {
-      return `The selected recurring range includes a past timeslot on ${formatConflictDates(
+      return `The selected recurring dates include a past timeslot on ${formatConflictDates(
         recurringPastTimeDates
       )}. Choose a future 1-hour slot.`;
     }
 
     if (recurringRoomConflictDates.length > 0) {
-      return `The room is not available for this weekly timeslot on ${formatConflictDates(
+      return `The room is not available for this timeslot on ${formatConflictDates(
         recurringRoomConflictDates
-      )}. Choose another time or date range.`;
+      )}. Choose another time or date.`;
     }
 
     if (recurringScheduleConflictDates.length > 0) {
       return `A class schedule blocks this room during the selected timeslot on ${formatConflictDates(
         recurringScheduleConflictDates
-      )}. Choose another time or date range.`;
+      )}. Choose another time or date.`;
     }
 
     if (recurringUserConflictDates.length > 0) {
@@ -957,7 +1000,7 @@ export default function ReserveRoomPage() {
 
   function canProceedToEquipment(): boolean {
     if (
-      !isSelectedRoomAvailable ||
+      (!isRecurring && !isSelectedRoomAvailable) ||
       !startTime ||
       !endTime ||
       !programDepartmentOrganization ||
@@ -968,13 +1011,7 @@ export default function ReserveRoomPage() {
     }
 
     if (isRecurring) {
-      return (
-        !!reservationDate &&
-        !!recurringEndDate &&
-        selectedRecurringDays.length > 0 &&
-        previewDates.length > 0 &&
-        !hasRecurringAvailabilityIssue
-      );
+      return !!reservationDate && hasRecurringSchedule && previewDates.length > 0 && !hasRecurringAvailabilityIssue;
     }
 
     if (!reservationDate) {
@@ -1409,13 +1446,15 @@ export default function ReserveRoomPage() {
           campus: 'main' as const,
         };
 
-        if (isRecurring && selectedRecurringDays.length > 0 && recurringEndDate) {
-          const ids = await createRecurringReservation(
-            reservationData,
-            selectedRecurringDays,
-            reservationDate,
-            recurringEndDate
-          );
+        if (isRecurring && previewDates.length > 0) {
+          const ids = recurrenceMode === 'specific-dates'
+            ? await createRecurringReservationWithSlots(reservationData, recurringOccurrences)
+            : await createRecurringReservation(
+                reservationData,
+                selectedRecurringDays,
+                reservationDate,
+                recurringEndDate
+              );
           setCreatedCount(ids.length);
         } else {
           await createReservation({
@@ -1430,13 +1469,15 @@ export default function ReserveRoomPage() {
           campus: 'digi' as const,
         };
 
-        if (isRecurring && selectedRecurringDays.length > 0 && recurringEndDate) {
-          const ids = await createRecurringReservation(
-            reservationData,
-            selectedRecurringDays,
-            reservationDate,
-            recurringEndDate
-          );
+        if (isRecurring && previewDates.length > 0) {
+          const ids = recurrenceMode === 'specific-dates'
+            ? await createRecurringReservationWithSlots(reservationData, recurringOccurrences)
+            : await createRecurringReservation(
+                reservationData,
+                selectedRecurringDays,
+                reservationDate,
+                recurringEndDate
+              );
           setCreatedCount(ids.length);
         } else {
           await createReservation({
@@ -1712,7 +1753,7 @@ export default function ReserveRoomPage() {
                             onClick={() => toggleRoomFilter(chip.key)}
                             className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
                               isActive
-                                ? 'border border-primary/25 bg-primary/15 text-primary'
+                                ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
                                 : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
                             }`}
                           >
@@ -1725,7 +1766,7 @@ export default function ReserveRoomPage() {
                         onClick={() => setActiveRoomFilters([])}
                         className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
                           activeRoomFilters.length === 0
-                            ? 'border border-primary/25 bg-primary/15 text-primary'
+                            ? 'bg-primary text-white shadow-[0_8px_24px_rgba(161,33,36,0.22)]'
                             : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
                         }`}
                       >
@@ -1920,7 +1961,7 @@ export default function ReserveRoomPage() {
                     <div>
                       <span className="text-sm font-bold text-black">Recurring Reservation</span>
                       <p className="mt-0.5 text-[10px] text-black">
-                        Book the same time slot on multiple days
+                        Choose a weekly pattern or pick individual dates and times
                       </p>
                     </div>
                     <button
@@ -1929,7 +1970,9 @@ export default function ReserveRoomPage() {
                         setIsRecurring((prev) => !prev);
                         if (isRecurring) {
                           setSelectedDays([]);
+                          setSelectedRecurringSlots([]);
                           setRecurringEndDate('');
+                          setRecurrenceMode('weekly');
                         }
                       }}
                       className={`relative h-6 w-11 rounded-full transition-all ${
@@ -1946,54 +1989,162 @@ export default function ReserveRoomPage() {
 
                   {isRecurring ? (
                     <>
-                      <div>
-                        <label className="mb-2 block text-sm font-bold text-black">
-                          Select Days of the Week
-                        </label>
-                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                          {WEEKDAY_OPTIONS.map((day) => (
-                            <button
-                              key={day.value}
-                              type="button"
-                              onClick={() => toggleDay(day.value)}
-                              className={`flex-1 rounded-xl py-2.5 text-xs font-bold transition-all ${
-                                selectedDays.includes(day.value)
-                                  ? 'border border-primary/30 bg-primary/20 text-primary'
-                                  : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
-                              }`}
-                            >
-                              {day.label}
-                            </button>
-                          ))}
-                        </div>
+                      <div className="grid grid-cols-2 gap-2 rounded-xl bg-dark/5 p-1">
+                        {([
+                          { label: 'Weekly pattern', value: 'weekly' as const },
+                          { label: 'Specific dates', value: 'specific-dates' as const },
+                        ]).map((mode) => (
+                          <button
+                            key={mode.value}
+                            type="button"
+                            onClick={() => setRecurrenceMode(mode.value)}
+                            className={`rounded-lg px-3 py-2 text-xs font-bold transition-all ${
+                              recurrenceMode === mode.value
+                                ? 'bg-primary text-white shadow-sm'
+                                : 'text-black/70 hover:bg-white/70'
+                            }`}
+                          >
+                            {mode.label}
+                          </button>
+                        ))}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      {recurrenceMode === 'weekly' ? (
+                        <>
+                          <div>
+                            <label className="mb-2 block text-sm font-bold text-black">
+                              Select Days of the Week
+                            </label>
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                              {WEEKDAY_OPTIONS.map((day) => (
+                                <button
+                                  key={day.value}
+                                  type="button"
+                                  onClick={() => toggleDay(day.value)}
+                                  className={`flex-1 rounded-xl py-2.5 text-xs font-bold transition-all ${
+                                    selectedDays.includes(day.value)
+                                      ? 'border border-primary/30 bg-primary/20 text-primary'
+                                      : 'border border-dark/10 bg-dark/5 text-black hover:bg-primary/10 hover:text-primary'
+                                  }`}
+                                >
+                                  {day.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="mb-1.5 block text-sm font-bold text-black">
+                                Start Date
+                              </label>
+                              <input
+                                type="date"
+                                value={reservationDate}
+                                onChange={(event) => setReservationDate(event.target.value)}
+                                className="glass-input w-full px-4 py-3"
+                                min={toLocalIsoDate(now)}
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1.5 block text-sm font-bold text-black">
+                                End Date
+                              </label>
+                              <input
+                                type="date"
+                                value={recurringEndDate}
+                                onChange={(event) => setRecurringEndDate(event.target.value)}
+                                className="glass-input w-full px-4 py-3"
+                                min={reservationDate || toLocalIsoDate(now)}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      ) : (
                         <div>
                           <label className="mb-1.5 block text-sm font-bold text-black">
-                            Start Date
+                            Choose Reservation Dates
                           </label>
-                          <input
-                            type="date"
-                            value={reservationDate}
-                            onChange={(event) => setReservationDate(event.target.value)}
-                            className="glass-input w-full px-4 py-3"
-                            min={toLocalIsoDate(now)}
+                          <RecurringDatesPicker
+                            bookedSlots={bookedSlots}
+                            minDate={now}
+                            selectedDates={selectedRecurringSlots.map((slot) => slot.date)}
+                            onChange={(dates) => {
+                              setSelectedRecurringSlots((slots) => {
+                                const existingSlots = new Map(slots.map((slot) => [slot.date, slot]));
+                                return dates.map((date) => existingSlots.get(date) ?? {
+                                  date,
+                                  startTime,
+                                  endTime,
+                                });
+                              });
+                            }}
                           />
+                          {selectedRecurringSlots.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                              {selectedRecurringSlots.map((slot) => {
+                                const startOptions = campusTimeOptions.filter(
+                                  (time) =>
+                                    selectedCampus !== null &&
+                                    reservationTimeToMinutes(time) <= CAMPUS_TIME_RANGES[selectedCampus].endMinutes - 60 &&
+                                    !isPastTimeSelection(slot.date, time, now)
+                                );
+                                const endOptions = slot.startTime
+                                  ? campusTimeOptions.filter(
+                                      (time) => reservationTimeToMinutes(time) >= reservationTimeToMinutes(slot.startTime) + 60
+                                    )
+                                  : [];
+
+                                return (
+                                  <div key={slot.date} className="grid grid-cols-1 gap-2 rounded-xl border border-dark/10 bg-white/80 p-2 sm:grid-cols-[minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_auto] sm:items-center">
+                                    <span className="text-xs font-bold text-black">{formatDate(slot.date)}</span>
+                                    <select
+                                      aria-label={`Start time for ${formatDate(slot.date)}`}
+                                      value={slot.startTime}
+                                      onChange={(event) => {
+                                        const nextStartTime = event.target.value;
+                                        setSelectedRecurringSlots((slots) => slots.map((current) => current.date === slot.date
+                                          ? {
+                                              ...current,
+                                              startTime: nextStartTime,
+                                              endTime: current.endTime && reservationTimeToMinutes(current.endTime) >= reservationTimeToMinutes(nextStartTime) + 60
+                                                ? current.endTime
+                                                : '',
+                                            }
+                                          : current));
+                                      }}
+                                      className="glass-input reservation-time-select w-full px-2.5 py-2 text-xs"
+                                    >
+                                      <option value="">Start time</option>
+                                      {startOptions.map((time) => <option key={time} value={time}>{formatTime(time)}</option>)}
+                                    </select>
+                                    <select
+                                      aria-label={`End time for ${formatDate(slot.date)}`}
+                                      value={slot.endTime}
+                                      disabled={!slot.startTime}
+                                      onChange={(event) => setSelectedRecurringSlots((slots) => slots.map((current) => current.date === slot.date
+                                        ? { ...current, endTime: event.target.value }
+                                        : current))}
+                                      className="glass-input reservation-time-select w-full px-2.5 py-2 text-xs disabled:opacity-50"
+                                    >
+                                      <option value="">End time</option>
+                                      {endOptions.map((time) => <option key={time} value={time}>{formatTime(time)}</option>)}
+                                    </select>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedRecurringSlots((slots) => slots.filter((current) => current.date !== slot.date))}
+                                      className="rounded-lg px-2 py-2 text-xs font-bold text-black/60 hover:bg-red-50 hover:text-primary"
+                                      aria-label={`Remove ${formatDate(slot.date)}`}
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <label className="mb-1.5 block text-sm font-bold text-black">
-                            End Date
-                          </label>
-                          <input
-                            type="date"
-                            value={recurringEndDate}
-                            onChange={(event) => setRecurringEndDate(event.target.value)}
-                            className="glass-input w-full px-4 py-3"
-                            min={reservationDate || toLocalIsoDate(now)}
-                          />
-                        </div>
-                      </div>
+                      )}
 
                       {previewDates.length > 0 && (
                         <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
@@ -2006,12 +2157,14 @@ export default function ReserveRoomPage() {
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
-                            {previewDates.slice(0, 20).map((date) => (
+                            {recurringOccurrences.slice(0, 20).map(({ date, startTime: slotStart, endTime: slotEnd }) => (
                               <span
                                 key={date}
                                 className="rounded-lg border border-dark/10 bg-dark/5 px-2 py-0.5 text-[10px] font-bold text-black"
                               >
-                                {formatDate(date)}
+                                {slotStart && slotEnd
+                                  ? `${formatDate(date)} · ${formatTime(slotStart)}–${formatTime(slotEnd)}`
+                                  : formatDate(date)}
                               </span>
                             ))}
                             {previewDates.length > 20 && (
@@ -2032,7 +2185,7 @@ export default function ReserveRoomPage() {
                     <div>
                       <div className="mb-1.5 flex items-center justify-between">
                         <label className="block text-sm font-bold text-black">Date</label>
-                        <div className="flex items-center gap-3 text-[11px] font-bold text-black">
+                        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[11px] font-bold text-black">
                           <span className="inline-flex items-center gap-1.5">
                             <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
                             Available
@@ -2040,6 +2193,10 @@ export default function ReserveRoomPage() {
                           <span className="inline-flex items-center gap-1.5">
                             <span className="inline-block h-2 w-2 rounded-full bg-amber-500 ring-2 ring-amber-200/80" />
                             Partially booked
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="inline-block h-2 w-2 rounded-full bg-primary" />
+                            Selected
                           </span>
                         </div>
                       </div>
@@ -2119,7 +2276,7 @@ export default function ReserveRoomPage() {
                             setEndTime('');
                           }
                         }}
-                        className="glass-input w-full px-4 py-3"
+                        className="glass-input reservation-time-select w-full px-4 py-3"
                       >
                         <option value="">Select start time</option>
                         {startTimeOptions.map((time) => (
@@ -2149,7 +2306,7 @@ export default function ReserveRoomPage() {
                         value={endTime}
                         onChange={(event) => setEndTime(event.target.value)}
                         disabled={!startTime}
-                        className="glass-input w-full px-4 py-3"
+                        className="glass-input reservation-time-select w-full px-4 py-3"
                       >
                         <option value="">{startTime ? 'Select end time' : 'Choose start time first'}</option>
                         {endTimeOptions.map((time) => (
@@ -2268,7 +2425,7 @@ export default function ReserveRoomPage() {
               </div>
             )}
 
-            {selectedRoom && selectedRoomAvailability !== 'Occupied' && currentStep === 3 && (
+            {selectedRoom && (isRecurring || selectedRoomAvailability !== 'Occupied') && currentStep === 3 && (
               <div>
                 <div className="mb-4 flex items-center gap-2">
                   <button
@@ -2289,7 +2446,9 @@ export default function ReserveRoomPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15" />
                       </svg>
                       <span className="text-xs font-bold text-primary">
-                        Recurring: {previewDates.length} reservations ({selectedRecurringDays.map((day) => DAY_LABELS_BY_VALUE.get(day) ?? `Day ${day}`).join(', ')})
+                        Recurring: {previewDates.length} reservations ({recurrenceMode === 'weekly'
+                          ? selectedRecurringDays.map((day) => DAY_LABELS_BY_VALUE.get(day) ?? `Day ${day}`).join(', ')
+                          : 'specific dates with individual times'})
                       </span>
                     </div>
                   </div>
@@ -2581,7 +2740,7 @@ export default function ReserveRoomPage() {
               </div>
             )}
 
-            {selectedRoom && selectedRoomAvailability === 'Occupied' && currentStep === 3 && (
+            {selectedRoom && !isRecurring && selectedRoomAvailability === 'Occupied' && currentStep === 3 && (
               <div className="dashboard-empty-state rounded-2xl p-8 text-center">
                 <p className="text-sm font-bold text-black">
                   This room is no longer available.

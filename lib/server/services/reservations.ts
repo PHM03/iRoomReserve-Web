@@ -1567,13 +1567,67 @@ export async function createRecurringReservationRecord(
   data: Omit<ReservationCreateInput, "date">,
   selectedDays: number[],
   startDate: string,
-  endDate: string
+  endDate: string,
+  selectedSlots?: Array<{ date: string; startTime: string; endTime: string }>
 ) {
   try {
-    const dates = getDatesForDays(startDate, endDate, selectedDays);
-    await assertReservationDatesAvailable(data, dates);
-
+    const occurrences = selectedSlots
+      ? [...selectedSlots].sort((left, right) => left.date.localeCompare(right.date))
+      : getDatesForDays(startDate, endDate, selectedDays).map((date) => ({
+          date,
+          startTime: data.startTime,
+          endTime: data.endTime,
+        }));
+    if (occurrences.length === 0) {
+      throw new ApiError(
+        400,
+        "invalid_recurring_dates",
+        "No dates match the recurring reservation schedule."
+      );
+    }
+    if (selectedSlots) {
+      const hasDuplicateDates = new Set(occurrences.map(({ date }) => date)).size !== occurrences.length;
+      const campus = await resolveReservationCampus(data);
+      const allowedStartMinutes = 7 * 60;
+      const allowedEndMinutes = campus === "main" ? 21 * 60 : 17 * 60;
+      const hasInvalidOccurrence = occurrences.some(({ date, startTime, endTime }) => {
+        const parsedDate = new Date(`${date}T00:00:00`);
+        const startMinutes = timeStringToMinutes(startTime);
+        const endMinutes = timeStringToMinutes(endTime);
+        return (
+          Number.isNaN(parsedDate.getTime()) ||
+          getLocalDateString(parsedDate) !== date ||
+          parsedDate.getDay() === 0 ||
+          date < getManilaDateKey() ||
+          startMinutes < allowedStartMinutes ||
+          endMinutes > allowedEndMinutes ||
+          startMinutes % 60 !== 0 ||
+          endMinutes % 60 !== 0 ||
+          endMinutes - startMinutes < 60
+        );
+      });
+      if (hasDuplicateDates || hasInvalidOccurrence) {
+        throw new ApiError(
+          400,
+          "invalid_recurring_slots",
+          "Choose one valid future time slot for each date, Monday through Saturday."
+        );
+      }
+    }
     const campus = await resolveReservationCampus(data);
+    const availabilityGroups = new Map<string, { startTime: string; endTime: string; dates: string[] }>();
+    occurrences.forEach(({ date, startTime, endTime }) => {
+      const key = `${startTime}-${endTime}`;
+      const group = availabilityGroups.get(key) ?? { startTime, endTime, dates: [] };
+      group.dates.push(date);
+      availabilityGroups.set(key, group);
+    });
+    await Promise.all(
+      [...availabilityGroups.values()].map(({ startTime, endTime, dates }) =>
+        assertReservationDatesAvailable({ ...data, startTime, endTime }, dates)
+      )
+    );
+
     const approvalFlow = buildApprovalFlow(
       await getReservationApproverInput(data, campus)
     );
@@ -1589,7 +1643,7 @@ export async function createRecurringReservationRecord(
     const queuedNotifications: AppNotificationInput[] = [];
     const createdIds: string[] = [];
 
-    dates.forEach((date) => {
+    occurrences.forEach(({ date, startTime, endTime }) => {
       const reservationRef = db.collection("reservations").doc();
       createdIds.push(reservationRef.id);
       batch.set(reservationRef, {
@@ -1603,8 +1657,8 @@ export async function createRecurringReservationRecord(
         buildingId: data.buildingId,
         buildingName: data.buildingName,
         campus,
-        startTime: data.startTime,
-        endTime: data.endTime,
+        startTime,
+        endTime,
         programDepartmentOrganization: data.programDepartmentOrganization,
         purpose: data.purpose,
         isEvent: data.isEvent,
@@ -1643,22 +1697,23 @@ export async function createRecurringReservationRecord(
       });
     });
 
-    const dayNames = selectedDays
-      .filter((day) => day >= 1 && day <= 6)
-      .map((day) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day])
-      .join(", ");
+    const selectedSlotLabels = occurrences.slice(0, 3).map(({ date, startTime, endTime }) =>
+      `${formatNotificationDate(date)} (${formatTimeRange(startTime, endTime)})`
+    ).join(", ");
+    const remainingSelectedSlotCount = occurrences.length - Math.min(occurrences.length, 3);
+    const recurringScheduleLabel = selectedSlots
+      ? `on ${selectedSlotLabels}${remainingSelectedSlotCount > 0 ? `, and ${remainingSelectedSlotCount} more dates` : ""}`
+      : `every ${selectedDays
+          .filter((day) => day >= 1 && day <= 6)
+          .map((day) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day])
+          .join(", ")} from ${formatNotificationDate(startDate)} to ${formatNotificationDate(endDate)}`;
 
     firstApproverIds.forEach((recipientUid) => {
       addNotification(batch, queuedNotifications, {
         recipientUid,
         type: "new_reservation",
         title: "New Recurring Reservation",
-        message: `${data.userName} reserved ${data.roomName} every ${dayNames} from ${formatNotificationDate(
-          startDate
-        )} to ${formatNotificationDate(endDate)} (${formatTimeRange(
-          data.startTime,
-          data.endTime
-        )}) - ${dates.length} dates.`,
+        message: `${data.userName} reserved ${data.roomName} ${recurringScheduleLabel}${selectedSlots ? "" : ` (${formatTimeRange(data.startTime, data.endTime)})`} - ${occurrences.length} dates.`,
         buildingId: data.buildingId,
         reservationId: createdIds[0],
       });
@@ -1674,6 +1729,7 @@ export async function createRecurringReservationRecord(
       startDate,
       endDate,
       selectedDays,
+      selectedSlots: selectedSlots ?? null,
       userId: data.userId,
     });
     throw error;

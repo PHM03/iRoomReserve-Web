@@ -304,12 +304,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ id });
     }
 
-    const ids = await createRecurringReservationRecord(
-      payload.reservation,
-      payload.selectedDays,
-      payload.startDate,
-      payload.endDate
-    );
+    const ids = "selectedSlots" in payload
+      ? await createRecurringReservationRecord(
+          payload.reservation,
+          [],
+          "",
+          "",
+          payload.selectedSlots
+        )
+      : await createRecurringReservationRecord(
+          payload.reservation,
+          payload.selectedDays,
+          payload.startDate,
+          payload.endDate
+        );
     reservationCreated = true;
     await Promise.all(
       ids.map(async (id) => {

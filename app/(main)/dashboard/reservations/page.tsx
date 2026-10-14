@@ -651,8 +651,13 @@ export default function MyReservationsPage() {
                         <StatusBadge status={roomStatus} />
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-black/60">
-                        <span>{formatReservationDates(reservation.dates, reservation.date)}</span>
-                        <span>{formatTimeRange(reservation.startTime, reservation.endTime)}</span>
+                        <span>
+                          {reservation.slots?.length
+                            ? reservation.slots
+                                .map((slot) => `${formatDate(slot.date)} · ${formatTimeRange(slot.startTime, slot.endTime)}`)
+                                .join('; ')
+                            : `${formatReservationDates(reservation.dates, reservation.date)} · ${formatTimeRange(reservation.startTime, reservation.endTime)}`}
+                        </span>
                         {submittedOn && <span>{submittedOn}</span>}
                       </div>
                       <p className="mt-3 text-sm leading-relaxed text-black/80">{reservation.purpose}</p>

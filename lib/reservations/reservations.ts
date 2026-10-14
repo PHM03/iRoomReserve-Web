@@ -66,6 +66,7 @@ export interface Reservation {
   adminUid: string | null;
   recurringGroupId?: string;
   dates?: string[];
+  slots?: RecurringReservationSlot[];
   groupedReservationIds?: string[];
   isRecurringRequest?: boolean;
   occurrenceCount?: number;
@@ -87,6 +88,7 @@ export interface Reservation {
 export type ReservationInput = Omit<
   Reservation,
   | "id"
+  | "slots"
   | "approvalFlow"
   | "currentStep"
   | "approvals"
@@ -116,6 +118,12 @@ export type ReservationCreateInput =
 export type RecurringReservationCreateInput =
   | (Omit<ReservationCreateBaseInput, "date"> & DigiReservationApproverInput)
   | (Omit<ReservationCreateBaseInput, "date"> & MainReservationApproverInput);
+
+export interface RecurringReservationSlot {
+  date: string;
+  startTime: string;
+  endTime: string;
+}
 
 export interface UploadedReservationDocument {
   bucket: string;
@@ -208,6 +216,24 @@ export async function createRecurringReservation(
       selectedDays,
       startDate,
       endDate,
+    },
+    method: "POST",
+    role: data.userRole as never,
+    userId: data.userId,
+  });
+
+  return payload.ids;
+}
+
+export async function createRecurringReservationWithSlots(
+  data: RecurringReservationCreateInput,
+  selectedSlots: RecurringReservationSlot[]
+): Promise<string[]> {
+  const payload = await apiRequest<{ ids: string[] }>("/api/reservations", {
+    body: {
+      type: "recurring",
+      reservation: data,
+      selectedSlots,
     },
     method: "POST",
     role: data.userRole as never,

@@ -402,6 +402,11 @@ export default function MemberDashboard({
                     reservation,
                     currentDateTime.date
                   );
+                  const scheduleLabel = reservation.slots?.length
+                    ? reservation.slots
+                        .map((slot) => `${formatDate(slot.date)} | ${formatTimeRange(slot.startTime, slot.endTime)}`)
+                        .join('; ')
+                    : `${formatDate(reservation.date)} | ${formatTimeRange(reservation.startTime, reservation.endTime)}`;
 
                   return (
                     <div
@@ -416,7 +421,7 @@ export default function MemberDashboard({
                           {reservation.roomName} | {reservation.buildingName}
                         </h4>
                         <p className="text-xs text-black mt-0.5">
-                          {formatDate(reservation.date)} | {formatTimeRange(reservation.startTime, reservation.endTime)}
+                          {scheduleLabel}
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-2">

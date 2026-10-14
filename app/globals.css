@@ -250,6 +250,10 @@ textarea {
     inset 0 1px 0 rgba(15, 23, 42, 0.02);
 }
 
+.reservation-time-select {
+  border-radius: 20px;
+}
+
 .glass-input:focus {
   background: #ffffff;
   border-color: #a12124;
@@ -780,16 +784,20 @@ select option {
 }
 
 .schedule-slot-selected {
-  background: rgba(161, 33, 36, 0.13);
-  color: #7f1d1d;
-  border-color: rgba(161, 33, 36, 0.62);
-  box-shadow: inset 0 0 0 1px rgba(161, 33, 36, 0.28);
+  background: #a12124;
+  color: #ffffff;
+  border-color: #7f1d1d;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 2px 8px rgba(161, 33, 36, 0.2);
+}
+
+.schedule-slot-selected .text-green-600 {
+  color: #ffffff;
 }
 
 .schedule-slot-selected.schedule-slot-available:hover {
-  background: rgba(161, 33, 36, 0.18);
-  border-color: rgba(161, 33, 36, 0.7);
-  box-shadow: inset 0 0 0 1px rgba(161, 33, 36, 0.3), 0 2px 8px rgba(161, 33, 36, 0.12);
+  background: #8f1c1f;
+  border-color: #7f1d1d;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24), 0 2px 8px rgba(161, 33, 36, 0.28);
 }
 
 .schedule-slot-unavailable.schedule-slot-selected {

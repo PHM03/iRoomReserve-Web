@@ -1,4 +1,4 @@
-import { formatDate } from '@/lib/utils/dateTime';
+import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
 
 interface RoleBadgeProps {
   role: string;
@@ -170,4 +170,23 @@ export function getManagedBuildingOptionLabel(building: { id: string; name: stri
 export function formatReservationDates(dates?: string[], fallbackDate?: string) {
   const dateList = dates?.length ? dates : fallbackDate ? [fallbackDate] : [];
   return dateList.map((date) => formatDate(date)).join(', ');
+}
+
+export function formatReservationSchedule(reservation: {
+  date?: string;
+  dates?: string[];
+  endTime: string;
+  slots?: Array<{ date: string; startTime: string; endTime: string }>;
+  startTime: string;
+}) {
+  if (reservation.slots?.length) {
+    return reservation.slots
+      .map((slot) => `${formatDate(slot.date)} · ${formatTimeRange(slot.startTime, slot.endTime)}`)
+      .join('; ');
+  }
+
+  return `${formatReservationDates(reservation.dates, reservation.date)} · ${formatTimeRange(
+    reservation.startTime,
+    reservation.endTime
+  )}`;
 }

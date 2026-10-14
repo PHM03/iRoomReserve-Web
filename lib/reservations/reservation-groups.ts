@@ -7,11 +7,14 @@ type ReservationLike = {
   date?: string;
   id: string;
   recurringGroupId?: string;
+  startTime?: string;
+  endTime?: string;
   status?: string;
 };
 
 export type GroupedReservation<T extends ReservationLike> = T & {
   dates?: string[];
+  slots?: Array<{ date: string; startTime: string; endTime: string }>;
   groupedReservationIds?: string[];
   isRecurringRequest?: boolean;
   occurrenceCount?: number;
@@ -111,6 +114,14 @@ export function groupReservationsForDisplay<T extends ReservationLike>(
         .map((reservation) => reservation.date)
         .filter((value): value is string => typeof value === "string")
         .sort(sortDatesAscending);
+      representative.slots = sortedReservations
+        .filter(
+          (reservation): reservation is T & { date: string; startTime: string; endTime: string } =>
+            typeof reservation.date === "string" &&
+            typeof reservation.startTime === "string" &&
+            typeof reservation.endTime === "string"
+        )
+        .map(({ date, startTime, endTime }) => ({ date, startTime, endTime }));
       representative.groupedReservationIds = sortedReservations.map(
         (reservation) => reservation.id
       );

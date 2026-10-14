@@ -352,7 +352,7 @@ export default function DaySchedulePanel({
 
   function getStatusPillClasses(status: SlotStatus, selected: boolean): string {
     if (selected && status === 'available') {
-      return 'border border-primary/20 bg-primary/10 text-primary';
+      return 'border border-white/40 bg-white/20 text-white';
     }
 
     switch (status) {
@@ -542,7 +542,7 @@ export default function DaySchedulePanel({
           Past
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm border border-primary/45 bg-primary/15" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm border border-primary bg-primary" />
           Selected
         </span>
         <span className="inline-flex items-center gap-1.5">

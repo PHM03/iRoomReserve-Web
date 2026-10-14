@@ -15,8 +15,7 @@ import {
 } from '@/lib/reservations/reservations';
 import type { Room } from '@/lib/rooms/rooms';
 import { getLocalDateString } from '@/lib/rooms/roomStatus';
-import { formatTimeRange } from '@/lib/utils/dateTime';
-import { formatReservationDates, RoleBadge, StatusBadge } from './shared';
+import { formatReservationSchedule, RoleBadge, StatusBadge } from './shared';
 
 type RoomStatusFilter = 'All' | 'Available' | 'Reserved' | 'Occupied' | 'Unavailable';
 
@@ -629,9 +628,7 @@ export default function AdminOverviewTab({
                           {isExpired ? <StatusBadge status="Expired" /> : null}
                         </div>
                         <p className="mt-1 line-clamp-2 text-[11px] font-bold text-black/55">
-                          {request.roomName} |{' '}
-                          {formatReservationDates(request.dates, request.date)} |{' '}
-                          {formatTimeRange(request.startTime, request.endTime)}
+                          {request.roomName} | {formatReservationSchedule(request)}
                         </p>
                         {request.purpose ? (
                           <p className="mt-1 truncate text-[11px] text-black/50">

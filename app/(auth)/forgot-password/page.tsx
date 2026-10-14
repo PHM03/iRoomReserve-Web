@@ -107,7 +107,7 @@ export default function ForgotPasswordPage() {
                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                <p className="font-bold">Reset link sent!</p>
+                <p className="font-bold text-[#166534]">Reset link sent!</p>
                 <p className="mt-1 text-black">
                   Check your email inbox for a password reset link. If you don&apos;t see it, check your spam folder.
                 </p>

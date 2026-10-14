@@ -308,7 +308,7 @@ const recurringReservationPayloadSchema = z.discriminatedUnion("campus", [
   mainReservationBaseSchema,
 ]);
 
-export const createReservationSchema = z.discriminatedUnion("type", [
+export const createReservationSchema = z.union([
   z.object({
     type: z.literal("single"),
     reservation: z.preprocess(
@@ -325,6 +325,21 @@ export const createReservationSchema = z.discriminatedUnion("type", [
     selectedDays: z.array(z.number().int().min(0).max(6)).min(1),
     startDate: dateString,
     endDate: dateString,
+  }),
+  z.object({
+    type: z.literal("recurring"),
+    reservation: z.preprocess(
+      normalizeReservationPayload,
+      recurringReservationPayloadSchema
+    ),
+    selectedSlots: z.array(z.object({
+      date: dateString,
+      startTime: timeString,
+      endTime: timeString,
+    }).refine((slot) => slot.startTime < slot.endTime, {
+      message: "The end time must be after the start time.",
+      path: ["endTime"],
+    })).min(1),
   }),
 ]);
 
