@@ -92,10 +92,10 @@ export default function ForgotPasswordPage() {
           {/* Success State */}
           {success ? (
             <div className="text-center">
-              <div className="mb-4 p-4 bg-green-500/10 border border-green-500/30 rounded-xl text-green-300 text-sm">
+              <div className="mb-4 p-4 bg-green-500/10 border border-green-500/30 rounded-xl text-green-800 text-sm">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 mx-auto mb-2 text-green-400"
+                  className="h-6 w-6 mx-auto mb-2 text-green-700"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
