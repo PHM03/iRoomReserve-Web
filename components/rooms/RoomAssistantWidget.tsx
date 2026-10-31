@@ -1,6 +1,25 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { apiRequest } from '@/lib/api/client';
+import {
+  buildReservationChatClarificationMessage,
+  canCheckReservationChatAvailability,
+  hasReservationRoomSearchCriteria,
+  getMissingReservationChatFields,
+  getMissingReservationScheduleFields,
+  mergeReservationChatExtractions,
+  type ReservationChatExtraction,
+  type ReservationChatTurn,
+} from '@/lib/ai/reservationChat';
+import {
+  getQuickReservationFollowUpRequirements,
+  getQuickReservationMissingDetails,
+  isQuickReservationStartInPast,
+  type QuickReservationDraft,
+  isQuickReservationTimeRangeValid,
+  type QuickReservationTimeRanges,
+} from '@/lib/ai/quickReservation';
 
 import {
   getNextContiguousScheduleSelection,
@@ -11,6 +30,7 @@ import {
   ASSISTANT_ROOM_TYPE_OPTIONS,
   checkAssistantRoomAvailability,
   findAlternativeAssistantRooms,
+  findAssistantRoomAutocompleteMatches,
   findAssistantRoomMatchesForDatePreference,
   formatAssistantTimeslot,
   getAssistantRoomTypeLabel,
@@ -31,7 +51,9 @@ import {
   validateAssistantTimeslot,
 } from '@/lib/ai/roomAssistantRealtime';
 import { getCampusName } from '@/lib/buildings/campusAssignments';
+import { inferCampusFromBuilding } from '@/lib/buildings/campuses';
 import type { ReservationCampus } from '@/lib/buildings/campuses';
+import { isRoomAdministrativelyUnavailable } from '@/lib/rooms/roomStatus';
 import { getRoomFeedbackSummaries } from '@/lib/feedback/feedback';
 import type { RoomFeedbackSummary } from '@/lib/feedback/feedback-summaries';
 import {
@@ -72,6 +94,8 @@ type AssistantStep =
   | 'entry'
   | 'features'
   | 'results'
+  | 'reservation-chat'
+  | 'quick-reservation'
   | 'timeslot-suggestions'
   | 'type'
   | 'unavailable-actions';
@@ -83,7 +107,13 @@ interface RoomAssistantWidgetProps {
   dataError?: string | null;
   onOpenWithoutCampus: () => void;
   onSelectCampus: (campus: ReservationCampus) => void;
-  onSelectRoom: (roomId: string) => void;
+  onSelectRoom: (roomId: string, preserveDateTime?: boolean) => void;
+  onChatReservationHandoff: (draft: ReservationChatExtraction & { roomId: string }) => void;
+  onQuickReservationHandoff: (draft: QuickReservationDraft) => void;
+  quickRequiresConceptPaper: boolean;
+  quickRequiresMainCampusApproval: boolean;
+  quickTimeRanges: QuickReservationTimeRanges;
+  existingReservationDraft: { isEvent: boolean; organization: string; program: string; purpose: string };
   onSelectTimeslot: (timeslot: Required<AssistantTimeslot>) => void;
   reservations: ReadonlyArray<{
     date: string;
@@ -95,6 +125,7 @@ interface RoomAssistantWidgetProps {
     status: 'pending' | 'approved' | 'expired' | 'rejected' | 'completed' | 'cancelled';
   }>;
   schedules: ReadonlyArray<AssistantScheduleRecord>;
+  autocompleteRooms: AssistantRoomRecord[];
   rooms: AssistantRoomRecord[];
   selectedRoom?: AssistantRoomRecord | null;
   timeslot: AssistantTimeslot;
@@ -116,6 +147,7 @@ const CAMPUS_OPTIONS: AssistantOption[] = [
 ];
 
 const ENTRY_OPTIONS: AssistantOption[] = [
+  { label: 'Reserve with chat', value: 'reservation-chat' },
   {
     label: 'Check availability',
     value: 'check-selected-room'
@@ -578,9 +610,16 @@ export default function RoomAssistantWidget({
   onOpenWithoutCampus,
   onSelectCampus,
   onSelectRoom,
+  onChatReservationHandoff,
+  onQuickReservationHandoff,
+  quickRequiresConceptPaper,
+  quickRequiresMainCampusApproval,
+  quickTimeRanges,
+  existingReservationDraft,
   onSelectTimeslot,
   reservations,
   schedules,
+  autocompleteRooms,
   rooms,
   selectedRoom = null,
   timeslot,
@@ -607,14 +646,46 @@ export default function RoomAssistantWidget({
   const [dateTimeDraft, setDateTimeDraft] = useState<AssistantTimeslot>({});
   const [selectedDateTimeSlots, setSelectedDateTimeSlots] = useState<ReservationTimeSlot[]>([]);
   const [dateTimeError, setDateTimeError] = useState('');
+  const [roomSearchQuery, setRoomSearchQuery] = useState('');
+  const [roomSuggestionsOpen, setRoomSuggestionsOpen] = useState(false);
+  const [activeRoomSuggestionIndex, setActiveRoomSuggestionIndex] = useState(-1);
+  const [roomSuggestionChecks, setRoomSuggestionChecks] = useState<Record<string, {
+    available: boolean | null;
+    date: string;
+    endTime: string;
+    error?: boolean;
+    startTime: string;
+  }>>({});
   const [preferences, setPreferences] = useState<AssistantPreferences>({ requiredFeatures: [] });
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
   const [step, setStep] = useState<AssistantStep>('entry');
+  const [chatInput, setChatInput] = useState('');
+  const [chatTurns, setChatTurns] = useState<ReservationChatTurn[]>([]);
+  const [chatExtraction, setChatExtraction] = useState<ReservationChatExtraction | null>(null);
+  const [chatSelectedRoomId, setChatSelectedRoomId] = useState('');
+  const [chatAlternativeRoomIds, setChatAlternativeRoomIds] = useState<string[] | null>(null);
+  const [chatReservationDetailsMinimized, setChatReservationDetailsMinimized] = useState(false);
+  const [chatAvailability, setChatAvailability] = useState<{ available: boolean; message: string } | null>(null);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const flowGenerationRef = useRef(0);
+  const [quickRoomQuery, setQuickRoomQuery] = useState('');
+  const [quickRoom, setQuickRoom] = useState<AssistantRoomRecord | null>(null);
+  const [quickDate, setQuickDate] = useState('');
+  const [quickStartTime, setQuickStartTime] = useState('');
+  const [quickEndTime, setQuickEndTime] = useState('');
+  const [quickPurpose, setQuickPurpose] = useState('');
+  const [quickOrganization, setQuickOrganization] = useState('');
+  const [quickIsEvent, setQuickIsEvent] = useState(false);
+  const [quickAvailability, setQuickAvailability] = useState<{ available: boolean; message: string } | null>(null);
+  const [quickBusy, setQuickBusy] = useState(false);
+  const [quickError, setQuickError] = useState('');
   const [isBotTyping, setIsBotTyping] = useState(false);
   const [activePromptId, setActivePromptId] = useState<string | null>(
     initialConversation.activePromptId
   );
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  const roomSuggestionsRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const replyTimeoutsRef = useRef<number[]>([]);
   const dragStartRef = useRef<{
@@ -636,6 +707,15 @@ export default function RoomAssistantWidget({
     () => (campusTimeRange ? getReservationTimeSlots(campusTimeRange) : []),
     [campusTimeRange]
   );
+  const roomSuggestions = useMemo(
+    () => findAssistantRoomAutocompleteMatches(autocompleteRooms, roomSearchQuery),
+    [autocompleteRooms, roomSearchQuery]
+  );
+  const selectableRoomSuggestionIndexes = roomSuggestions.flatMap((room, index) =>
+    isRoomAdministrativelyUnavailable(room.status) ? [] : [index]
+  );
+  const roomSuggestionAvailabilityKnown =
+    !dataLoading && !dataError && validateAssistantTimeslot(timeslot) === 'valid';
 
   function clearReplyTimers() {
     replyTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
@@ -644,6 +724,7 @@ export default function RoomAssistantWidget({
   }
 
   function resetConversation() {
+    flowGenerationRef.current += 1;
     const nextEntryMessage = createEntryPromptMessage(selectedRoom, timeslot);
 
     clearReplyTimers();
@@ -652,15 +733,457 @@ export default function RoomAssistantWidget({
     setDateTimeDraft({});
     setSelectedDateTimeSlots([]);
     setDateTimeError('');
+    setRoomSearchQuery('');
+    setRoomSuggestionsOpen(false);
+    setActiveRoomSuggestionIndex(-1);
     setPreferences({ requiredFeatures: [] });
     setSelectedFeatures([]);
     setStep('entry');
+    setChatInput('');
+    setChatTurns([]);
+    setChatExtraction(null);
+    setChatSelectedRoomId('');
+    setChatAlternativeRoomIds(null);
+    setChatReservationDetailsMinimized(false);
+    setChatAvailability(null);
+    setChatError('');
+    setChatBusy(false);
+    setQuickRoomQuery('');
+    setQuickRoom(null);
+    setQuickDate('');
+    setQuickStartTime('');
+    setQuickEndTime('');
+    setQuickPurpose('');
+    setQuickOrganization('');
+    setQuickIsEvent(false);
+    setQuickAvailability(null);
+    setQuickError('');
+    setQuickBusy(false);
     setActivePromptId(nextEntryMessage.id);
   }
 
   function appendUserMessage(text: string) {
     const message = createMessage(text, 'user', 'text');
     setMessages((currentMessages) => [...currentMessages, message]);
+  }
+
+  function handleRoomSearchChange(value: string) {
+    setRoomSearchQuery(value);
+    setRoomSuggestionsOpen(value.trim().length >= 2);
+    setActiveRoomSuggestionIndex(-1);
+  }
+
+  function selectAutocompleteRoom(room: AssistantRoomRecord) {
+    if (isRoomAdministrativelyUnavailable(room.status)) return;
+    setRoomSearchQuery(room.label || room.roomId);
+    setRoomSuggestionsOpen(false);
+    setActiveRoomSuggestionIndex(-1);
+    onSelectRoom(room.roomId, true);
+    setIsOpen(false);
+  }
+
+  const chatRoomSuggestions = useMemo(() => {
+    if (!chatExtraction || (!hasReservationRoomSearchCriteria(chatExtraction) && chatAlternativeRoomIds === null)) return [];
+    let matches = chatAlternativeRoomIds !== null
+      ? chatAlternativeRoomIds
+          .map((roomId) => autocompleteRooms.find((room) => room.roomId === roomId))
+          .filter((room): room is AssistantRoomRecord => Boolean(room))
+          .map((room) => ({ ...room, score: 0 }))
+      : chatExtraction.roomQuery
+        ? findAssistantRoomAutocompleteMatches(autocompleteRooms, chatExtraction.roomQuery)
+        : autocompleteRooms.map((room) => ({ ...room, score: 0 }));
+    if (chatAlternativeRoomIds === null) {
+      if (chatExtraction.campus) {
+        matches = matches.filter((room) => inferCampusFromBuilding({
+          id: room.originalRoom.buildingId,
+          name: room.originalRoom.buildingName,
+        }) === chatExtraction.campus);
+      }
+      if (chatExtraction.buildingQuery) {
+        const query = chatExtraction.buildingQuery.toLowerCase();
+        matches = matches.filter((room) => `${room.building} ${room.originalRoom.buildingName ?? ''}`.toLowerCase().includes(query));
+      }
+      if (chatExtraction.roomType) {
+        matches = matches.filter((room) => room.type === chatExtraction.roomType);
+      }
+      if (chatExtraction.minCapacity) {
+        const minCapacity = Number(chatExtraction.minCapacity);
+        if (Number.isFinite(minCapacity)) matches = matches.filter((room) => room.capacity >= minCapacity);
+      }
+      if (chatExtraction.requiredFeatures.length) {
+        matches = matches.filter((room) => chatExtraction.requiredFeatures.every((feature) =>
+          room.features.some((available) => available.toLowerCase().includes(feature.toLowerCase()))));
+      }
+    }
+    return matches.slice(0, 8);
+  }, [autocompleteRooms, chatAlternativeRoomIds, chatExtraction]);
+  const visibleChatRoomSuggestions =
+    chatReservationDetailsMinimized && chatSelectedRoomId
+      ? chatRoomSuggestions.filter((room) => room.roomId === chatSelectedRoomId)
+      : chatRoomSuggestions;
+  const quickRoomSuggestions = useMemo(
+    () => quickRoomQuery.trim().length >= 2
+      ? findAssistantRoomAutocompleteMatches(autocompleteRooms, quickRoomQuery)
+      : [],
+    [autocompleteRooms, quickRoomQuery]
+  );
+
+  async function validateQuickReservation() {
+    if (!quickRoom || !quickDate || !quickStartTime || !quickEndTime || quickBusy) {
+      setQuickError('Select a room, date, start time, and end time first.');
+      return;
+    }
+    if (isRoomAdministrativelyUnavailable(quickRoom.status)) {
+      setQuickError(`${quickRoom.label || quickRoom.roomId} is unavailable for reservations. Choose another room.`);
+      return;
+    }
+    setQuickBusy(true);
+    const operationGeneration = flowGenerationRef.current;
+    setQuickError('');
+    setQuickAvailability(null);
+    if (isQuickReservationStartInPast(quickDate, quickStartTime)) {
+      setQuickAvailability({ available: false, message: 'That reservation time has already started or passed. Choose a future timeslot.' });
+      setQuickBusy(false);
+      return;
+    }
+    const roomCampus = inferCampusFromBuilding({ id: quickRoom.originalRoom.buildingId, name: quickRoom.originalRoom.buildingName });
+    if (!isQuickReservationTimeRangeValid(roomCampus, quickStartTime, quickEndTime, quickTimeRanges)) {
+      setQuickAvailability({ available: false, message: `Choose a valid ${roomCampus ? getCampusName(roomCampus) : 'campus'} reservation time using the standard one-hour reservation slots.` });
+      setQuickBusy(false);
+      return;
+    }
+    try {
+      const result = await apiRequest<{ checks: Array<{ available: boolean; message: string; roomId: string }> }>('/api/ai/room-reservation', {
+        body: { action: 'check-availability', date: quickDate, startTime: quickStartTime, endTime: quickEndTime, roomIds: [quickRoom.roomId] },
+      });
+      if (operationGeneration !== flowGenerationRef.current) return;
+      const check = result.checks.find((item) => item.roomId === quickRoom.roomId);
+      if (!check) {
+        setQuickAvailability({ available: false, message: 'Could not verify this room.' });
+      } else {
+        setQuickAvailability({ available: check.available, message: check.message });
+      }
+    } catch (error) {
+      if (operationGeneration !== flowGenerationRef.current) return;
+      setQuickError(error instanceof Error ? error.message : 'Availability validation failed.');
+    } finally {
+      if (operationGeneration === flowGenerationRef.current) setQuickBusy(false);
+    }
+  }
+
+  async function submitReservationChat() {
+    const text = chatInput.trim();
+    if (!text || chatBusy) return;
+    const nextTurns = [...chatTurns, { role: 'user' as const, content: text }];
+    setChatTurns(nextTurns);
+    setChatInput('');
+    setChatBusy(true);
+    const operationGeneration = flowGenerationRef.current;
+    setChatError('');
+    setChatAvailability(null);
+    setMessages((current) => [...current, createMessage(text, 'user', 'text')]);
+    try {
+      const now = new Date();
+      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const result = await apiRequest<{ extraction: ReservationChatExtraction }>('/api/ai/room-reservation', {
+        body: { action: 'extract', localDate, messages: nextTurns, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+      });
+      if (operationGeneration !== flowGenerationRef.current) return;
+      const extraction = mergeReservationChatExtractions(chatExtraction, result.extraction);
+      const priorChatSelection = autocompleteRooms.find((room) => room.roomId === chatSelectedRoomId) ?? selectedRoom;
+      const normalizeRoomText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+      const findUniqueExactRoom = (query: string, campus?: ReservationCampus) => {
+        const normalizedQuery = normalizeRoomText(query);
+        if (!normalizedQuery) return null;
+        const exactMatches = autocompleteRooms.filter((room) => {
+          const nameMatches = [room.label, room.originalRoom.name]
+            .some((value) => normalizeRoomText(value) === normalizedQuery);
+          const roomCampus = inferCampusFromBuilding({
+            id: room.originalRoom.buildingId,
+            name: room.originalRoom.buildingName,
+          });
+          return nameMatches && (!campus || roomCampus === campus);
+        });
+        return exactMatches.length === 1 ? exactMatches[0] : null;
+      };
+
+      const explicitReference = text.match(/\broom\s*#?\s*[a-z0-9-]+/i)?.[0] ?? '';
+      const alternativeRequest =
+        /\b(other|another|different)\s+rooms?\b|\balternative(?:s)?\b|\bsimilar(?:\s+to)?\b/i.test(text);
+      const referenceRoom = alternativeRequest
+        ? (priorChatSelection && (!explicitReference || findUniqueExactRoom(explicitReference)?.roomId === priorChatSelection.roomId)
+            ? priorChatSelection
+            : findUniqueExactRoom(explicitReference) ??
+              findUniqueExactRoom(extraction.roomQuery, extraction.campus || undefined) ??
+              findUniqueExactRoom(chatExtraction?.roomQuery ?? '', chatExtraction?.campus || undefined))
+        : null;
+
+      let nextExtraction = extraction;
+      let nextSelectedRoomId = '';
+      let nextAlternativeRoomIds: string[] | null = null;
+      let nextChatAvailability: { available: boolean; message: string } | null = null;
+
+      if (alternativeRequest && referenceRoom) {
+        const requestedTimeslot = {
+          date: extraction.date,
+          startTime: extraction.startTime,
+          endTime: extraction.endTime,
+        };
+        let alternatives = findAlternativeAssistantRooms(
+          autocompleteRooms,
+          reservations,
+          referenceRoom,
+          requestedTimeslot,
+          null,
+          schedules
+        ).slice(0, 4);
+        const hasCompleteSchedule = !getMissingReservationScheduleFields(extraction)
+          .some((field) => field !== 'room or room type');
+        let availabilityWasVerified = false;
+        if (alternatives.length > 0 && hasCompleteSchedule && !isAssistantTimeslotInPast(requestedTimeslot)) {
+          try {
+            alternatives = await getServerAvailableRecommendations(
+              alternatives,
+              requestedTimeslot as Required<AssistantTimeslot>
+            );
+            availabilityWasVerified = true;
+          } catch {
+            // Keep the live room matches available for a manual server-side preview.
+          }
+        }
+        nextAlternativeRoomIds = alternatives.map((room) => room.roomId);
+        nextExtraction = {
+          ...extraction,
+          assistantMessage: alternatives.length > 0
+            ? availabilityWasVerified
+              ? `Here are rooms similar to ${referenceRoom.label || referenceRoom.roomId} that are available at that time. Select one to continue.`
+              : `Here are similar live rooms to ${referenceRoom.label || referenceRoom.roomId}. Select one to check its availability.`
+            : availabilityWasVerified
+              ? `I could not find a similar room available at that time. Try another time or a different room.`
+              : `I could not find a similar room in the live room list. Try a different room.` ,
+        };
+      } else if (!alternativeRequest) {
+        const priorRoomCampus = priorChatSelection ? inferCampusFromBuilding({
+          id: priorChatSelection.originalRoom.buildingId,
+          name: priorChatSelection.originalRoom.buildingName,
+        }) : chatExtraction?.campus || undefined;
+        const exactRoomQuery = extraction.roomQuery || explicitReference;
+        const exactRoom = findUniqueExactRoom(
+          exactRoomQuery,
+          extraction.campus || priorRoomCampus || undefined
+        );
+        if (exactRoom) {
+          const exactRoomCampus = inferCampusFromBuilding({
+            id: exactRoom.originalRoom.buildingId,
+            name: exactRoom.originalRoom.buildingName,
+          });
+          const campusName = exactRoomCampus ? getCampusName(exactRoomCampus) : '';
+          const buildingName = exactRoom.building || exactRoom.originalRoom.buildingName || exactRoom.originalRoom.buildingId;
+          nextSelectedRoomId = exactRoom.roomId;
+          if (
+            isRoomAdministrativelyUnavailable(exactRoom.status) &&
+            getMissingReservationChatFields(extraction).length === 0
+          ) {
+            nextChatAvailability = {
+              available: false,
+              message: `${exactRoom.label || exactRoom.roomId} is unavailable for reservations. Ask me for similar rooms or choose another room.`,
+            };
+          }
+          nextExtraction = {
+            ...extraction,
+            assistantMessage: isRoomAdministrativelyUnavailable(exactRoom.status)
+              ? `${exactRoom.label || exactRoom.roomId} at ${[campusName, buildingName].filter(Boolean).join(' · ')} is unavailable for reservations. Ask me for similar rooms or choose another room.`
+              : `I found ${exactRoom.label || exactRoom.roomId} at ${[campusName, buildingName].filter(Boolean).join(' · ')}. I selected it so you can check availability.`,
+            buildingQuery: extraction.buildingQuery || buildingName,
+            campus: extraction.campus || exactRoomCampus || '',
+          };
+        } else {
+          const selectedRoomCampus = priorChatSelection ? inferCampusFromBuilding({
+            id: priorChatSelection.originalRoom.buildingId,
+            name: priorChatSelection.originalRoom.buildingName,
+          }) : null;
+          const sameSelectedRoom = priorChatSelection && (
+            !extraction.roomQuery ||
+            [priorChatSelection.roomId, priorChatSelection.label, priorChatSelection.originalRoom.name]
+              .some((value) => normalizeRoomText(value) === normalizeRoomText(extraction.roomQuery))
+          );
+          const selectedRoomMatchesCampus = !extraction.campus || selectedRoomCampus === extraction.campus;
+          nextSelectedRoomId = sameSelectedRoom && selectedRoomMatchesCampus ? priorChatSelection.roomId : '';
+        }
+      }
+
+      if (nextExtraction.intent === 'reservation' && !nextChatAvailability) {
+        const missingDetails = getMissingReservationChatFields(nextExtraction);
+        if (missingDetails.length || !alternativeRequest) {
+          nextExtraction = {
+            ...nextExtraction,
+            assistantMessage: buildReservationChatClarificationMessage(nextExtraction),
+          };
+        }
+      }
+
+      if (
+        nextExtraction.intent === 'reservation' &&
+        nextSelectedRoomId &&
+        canCheckReservationChatAvailability(nextExtraction, true)
+      ) {
+        const resolvedRoom = autocompleteRooms.find((room) => room.roomId === nextSelectedRoomId);
+        const resolvedCampus = resolvedRoom ? inferCampusFromBuilding({
+          id: resolvedRoom.originalRoom.buildingId,
+          name: resolvedRoom.originalRoom.buildingName,
+        }) : null;
+        const requestedTimeslot = {
+          date: nextExtraction.date,
+          startTime: nextExtraction.startTime,
+          endTime: nextExtraction.endTime,
+        };
+
+        if (isAssistantTimeslotInPast(requestedTimeslot)) {
+          nextChatAvailability = {
+            available: false,
+            message: 'That reservation time has already started or passed. Choose a future timeslot.',
+          };
+        } else if (!isQuickReservationTimeRangeValid(
+          resolvedCampus,
+          nextExtraction.startTime,
+          nextExtraction.endTime,
+          quickTimeRanges
+        )) {
+          nextChatAvailability = {
+            available: false,
+            message: 'Choose a valid one-hour reservation slot within this campus’s existing reservation hours.',
+          };
+        } else {
+          try {
+            const availabilityResult = await apiRequest<{
+              checks: Array<{ available: boolean; message: string; roomId: string }>;
+            }>('/api/ai/room-reservation', {
+              body: {
+                action: 'check-availability',
+                date: nextExtraction.date,
+                startTime: nextExtraction.startTime,
+                endTime: nextExtraction.endTime,
+                roomIds: [nextSelectedRoomId],
+              },
+            });
+            if (operationGeneration !== flowGenerationRef.current) return;
+            const availability = availabilityResult.checks.find((check) => check.roomId === nextSelectedRoomId);
+            nextChatAvailability = availability
+              ? { available: availability.available, message: availability.message }
+              : { available: false, message: 'Could not verify this room.' };
+          } catch (error) {
+            if (operationGeneration !== flowGenerationRef.current) return;
+            nextChatAvailability = null;
+            setChatError(error instanceof Error ? error.message : 'Availability preview failed. Please try again.');
+          }
+        }
+
+        if (nextChatAvailability) {
+          const roomLabel = resolvedRoom?.label || resolvedRoom?.roomId || 'The selected room';
+          nextExtraction = {
+            ...nextExtraction,
+            assistantMessage: nextChatAvailability.available
+              ? `${roomLabel} is available for your requested schedule. Review the draft and continue to the reservation form.`
+              : `${roomLabel} is unavailable for this request: ${nextChatAvailability.message} Ask me for similar rooms or choose another room.`,
+          };
+        }
+      }
+
+      setChatExtraction(nextExtraction);
+      setChatAlternativeRoomIds(nextAlternativeRoomIds);
+      setChatSelectedRoomId(nextSelectedRoomId);
+      setChatReservationDetailsMinimized(false);
+      setChatAvailability(null);
+      if (nextChatAvailability) setChatAvailability(nextChatAvailability);
+      const assistantTurn = { role: 'assistant' as const, content: nextExtraction.assistantMessage };
+      setChatTurns([...nextTurns, assistantTurn]);
+      setMessages((current) => [...current, createMessage(assistantTurn.content, 'system', 'text')]);
+    } catch (error) {
+      if (operationGeneration !== flowGenerationRef.current) return;
+      setChatTurns(nextTurns);
+      setChatError(error instanceof Error ? error.message : 'The reservation assistant could not process that message.');
+    } finally {
+      if (operationGeneration === flowGenerationRef.current) setChatBusy(false);
+    }
+  }
+
+  async function previewChatAvailability() {
+    if (!chatExtraction || !chatSelectedRoomId || chatBusy) return;
+    if (!canCheckReservationChatAvailability(chatExtraction, Boolean(chatSelectedRoomId))) {
+      setChatError(buildReservationChatClarificationMessage(chatExtraction));
+      return;
+    }
+    const chatRoom = autocompleteRooms.find((room) => room.roomId === chatSelectedRoomId);
+    if (isAssistantTimeslotInPast({
+      date: chatExtraction.date,
+      startTime: chatExtraction.startTime,
+      endTime: chatExtraction.endTime,
+    })) {
+      setChatError('That reservation time has already started or passed. Choose a future timeslot.');
+      setChatAvailability(null);
+      return;
+    }
+    if (chatRoom) {
+      const campus = inferCampusFromBuilding({ id: chatRoom.originalRoom.buildingId, name: chatRoom.originalRoom.buildingName });
+      if (!isQuickReservationTimeRangeValid(campus, chatExtraction.startTime, chatExtraction.endTime, quickTimeRanges)) {
+        setChatError('Choose a valid one-hour reservation slot within this campus’s existing reservation hours.');
+        setChatAvailability(null);
+        return;
+      }
+    }
+    setChatBusy(true);
+    const operationGeneration = flowGenerationRef.current;
+    setChatError('');
+    try {
+      const result = await apiRequest<{ checks: Array<{ available: boolean; message: string; roomId: string }> }>('/api/ai/room-reservation', {
+        body: { action: 'check-availability', date: chatExtraction.date, startTime: chatExtraction.startTime, endTime: chatExtraction.endTime, roomIds: [chatSelectedRoomId] },
+      });
+      if (operationGeneration !== flowGenerationRef.current) return;
+      const check = result.checks.find((item) => item.roomId === chatSelectedRoomId);
+      setChatAvailability(check ? { available: check.available, message: check.message } : { available: false, message: 'Could not verify this room.' });
+    } catch (error) {
+      if (operationGeneration !== flowGenerationRef.current) return;
+      setChatError(error instanceof Error ? error.message : 'Availability preview failed.');
+    } finally {
+      if (operationGeneration === flowGenerationRef.current) setChatBusy(false);
+    }
+  }
+
+  function handleRoomSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Escape') {
+      setRoomSuggestionsOpen(false);
+      setActiveRoomSuggestionIndex(-1);
+      return;
+    }
+
+    if (!roomSuggestionsOpen || selectableRoomSuggestionIndexes.length === 0) {
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveRoomSuggestionIndex((index) => {
+        const currentPosition = selectableRoomSuggestionIndexes.indexOf(index);
+        const nextPosition = currentPosition < 0
+          ? 0
+          : Math.min(currentPosition + 1, selectableRoomSuggestionIndexes.length - 1);
+        return selectableRoomSuggestionIndexes[nextPosition];
+      });
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveRoomSuggestionIndex((index) => {
+        const currentPosition = selectableRoomSuggestionIndexes.indexOf(index);
+        const previousPosition = currentPosition < 0 ? 0 : Math.max(currentPosition - 1, 0);
+        return selectableRoomSuggestionIndexes[previousPosition];
+      });
+    } else if (event.key === 'Enter' && activeRoomSuggestionIndex >= 0) {
+      event.preventDefault();
+      const room = roomSuggestions[activeRoomSuggestionIndex];
+      if (room) {
+        selectAutocompleteRoom(room);
+      }
+    }
   }
 
   function queueBotMessages(
@@ -692,6 +1215,7 @@ export default function RoomAssistantWidget({
   }
 
   function startGuidedFlow() {
+    flowGenerationRef.current += 1;
     appendUserMessage('Help me choose');
 
     if (!activeCampus) {
@@ -1016,7 +1540,29 @@ export default function RoomAssistantWidget({
     );
   }
 
+  async function getServerAvailableRecommendations(
+    recommendations: AssistantRecommendation[],
+    reservationTimeslot: Required<AssistantTimeslot>
+  ) {
+    if (recommendations.length === 0) return [];
+    const candidates = recommendations.slice(0, 4);
+    const result = await apiRequest<{
+      checks: Array<{ available: boolean; message: string; roomId: string }>;
+    }>('/api/ai/room-reservation', {
+      body: {
+        action: 'check-availability',
+        date: reservationTimeslot.date,
+        startTime: reservationTimeslot.startTime,
+        endTime: reservationTimeslot.endTime,
+        roomIds: candidates.map((room) => room.roomId),
+      },
+    });
+    const availableRoomIds = new Set(result.checks.filter((check) => check.available).map((check) => check.roomId));
+    return candidates.filter((room) => availableRoomIds.has(room.roomId));
+  }
+
   async function handleFeatureSubmit() {
+    const operationGeneration = flowGenerationRef.current;
     if (!activeCampus) {
       setStep('campus');
       queueBotMessages([createCampusPromptMessage()]);
@@ -1103,9 +1649,27 @@ export default function RoomAssistantWidget({
     setActivePromptId(null);
     setIsBotTyping(true);
 
-    const recommendationCards = await attachFeedbackSummaries(
-      datePreferenceResult.recommendations,
-    );
+    let recommendationCards: AssistantRecommendationCard[] = [];
+    try {
+      const availableRecommendations = await getServerAvailableRecommendations(
+        datePreferenceResult.recommendations,
+        resolvedTimeslot
+      );
+      if (operationGeneration !== flowGenerationRef.current) return;
+      recommendationCards = await attachFeedbackSummaries(availableRecommendations);
+      if (operationGeneration !== flowGenerationRef.current) return;
+    } catch (error) {
+      if (operationGeneration !== flowGenerationRef.current) return;
+      queueBotMessages([
+        createMessage(
+          error instanceof Error ? error.message : 'I could not verify room availability right now. Please try again.',
+          'system',
+          'text'
+        ),
+      ]);
+      setStep('entry');
+      return;
+    }
     const dateResolutionMessage =
       datePreference.kind === 'weekday'
         ? createMessage(
@@ -1130,12 +1694,13 @@ export default function RoomAssistantWidget({
       createRecommendationMessage(
         recommendationCards,
         'Here are the matching rooms I found right now:',
-        'I could not find a matching room right now. Try removing one feature or changing the date and time.'
+        'I could not find a suitable reservable room right now. Try removing a feature or changing the date and time.'
       ),
     ]);
   }
 
   async function handleUnavailableAction(value: string) {
+    const operationGeneration = flowGenerationRef.current;
     if (!selectedRoom) {
       setStep('entry');
       queueBotMessages([
@@ -1206,7 +1771,27 @@ export default function RoomAssistantWidget({
     );
     setActivePromptId(null);
     setIsBotTyping(true);
-    const recommendationCards = await attachFeedbackSummaries(recommendations);
+    let recommendationCards: AssistantRecommendationCard[] = [];
+    try {
+      const availableRecommendations = await getServerAvailableRecommendations(
+        recommendations,
+        timeslot as Required<AssistantTimeslot>
+      );
+      if (operationGeneration !== flowGenerationRef.current) return;
+      recommendationCards = await attachFeedbackSummaries(availableRecommendations);
+      if (operationGeneration !== flowGenerationRef.current) return;
+    } catch (error) {
+      if (operationGeneration !== flowGenerationRef.current) return;
+      queueBotMessages([
+        createMessage(
+          error instanceof Error ? error.message : 'I could not verify alternative room availability right now. Please try again.',
+          'system',
+          'text'
+        ),
+      ]);
+      setStep('entry');
+      return;
+    }
 
     queueBotMessages([
       createSearchMessage(),
@@ -1235,6 +1820,48 @@ export default function RoomAssistantWidget({
     }
 
     if (step === 'entry') {
+      if (option.value === 'quick-reservation') {
+        flowGenerationRef.current += 1;
+        setStep('quick-reservation');
+        setQuickRoomQuery(selectedRoom?.label || selectedRoom?.roomId || '');
+        setQuickRoom(selectedRoom);
+        setQuickDate(timeslot.date ?? '');
+        setQuickStartTime(timeslot.startTime ?? '');
+        setQuickEndTime(timeslot.endTime ?? '');
+        setQuickPurpose(existingReservationDraft.purpose);
+        setQuickOrganization(existingReservationDraft.organization);
+        setQuickIsEvent(existingReservationDraft.isEvent);
+        setQuickAvailability(null);
+        setQuickError('');
+        setQuickBusy(false);
+        setMessages((current) => [...current, createMessage('Quick Reservation', 'user', 'text'), createMessage('Select your room and schedule. I will check live availability before collecting the remaining reservation details.', 'system', 'text')]);
+        return;
+      }
+      if (option.value === 'reservation-chat') {
+        flowGenerationRef.current += 1;
+        setStep('reservation-chat');
+        const selectedCampus = selectedRoom ? inferCampusFromBuilding({
+          id: selectedRoom.originalRoom.buildingId,
+          name: selectedRoom.originalRoom.buildingName,
+        }) : null;
+        const existingDetails = [
+          selectedRoom ? `Already selected room: ${selectedRoom.label || selectedRoom.roomId} (actual room ID ${selectedRoom.roomId})${selectedCampus ? ` at ${getCampusName(selectedCampus)}` : ''}, building ${selectedRoom.building || selectedRoom.originalRoom.buildingName}.` : '',
+          timeslot.date && timeslot.startTime && timeslot.endTime ? `Already selected schedule: ${timeslot.date}, ${timeslot.startTime} to ${timeslot.endTime}.` : '',
+          existingReservationDraft.program ? `Already entered program/department/organization: ${existingReservationDraft.program}.` : '',
+          existingReservationDraft.purpose ? `Already entered purpose: ${existingReservationDraft.purpose}.` : '',
+        ].filter(Boolean).join(' ');
+        setChatTurns(existingDetails ? [{ role: 'assistant', content: `Existing reservation form details: ${existingDetails} Preserve these unless the user changes them.` }] : []);
+        setChatSelectedRoomId('');
+        setChatAlternativeRoomIds(null);
+        setChatReservationDetailsMinimized(false);
+        setChatAvailability(null);
+        setChatBusy(false);
+        setChatInput('');
+        setChatExtraction(null);
+        setChatError('');
+        setMessages((current) => [...current, createMessage('Reserve with chat', 'user', 'text'), createMessage('Tell me what room and schedule you need. You can name a room or describe a room type and preferences; I can search both campuses.', 'system', 'text')]);
+        return;
+      }
       if (option.value === 'help-me-choose') {
         startGuidedFlow();
         return;
@@ -1297,7 +1924,7 @@ export default function RoomAssistantWidget({
     }
 
     appendUserMessage(`Select ${getRoomDisplayName(recommendation)}`);
-    onSelectRoom(recommendation.roomId);
+    onSelectRoom(recommendation.roomId, true);
     const timeslotToRestore = getAssistantRoomSelectionTimeslot(timeslot);
     if (timeslotToRestore) {
       onSelectTimeslot(timeslotToRestore);
@@ -1321,16 +1948,83 @@ export default function RoomAssistantWidget({
   }, [isBotTyping, isOpen, messages]);
 
   useEffect(() => {
+    if (!roomSuggestionsOpen || activeRoomSuggestionIndex < 0) {
+      return;
+    }
+
+    roomSuggestionsRef.current
+      ?.querySelector<HTMLElement>(`#assistant-room-option-${activeRoomSuggestionIndex}`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [activeRoomSuggestionIndex, roomSuggestionsOpen]);
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      step !== 'entry' ||
+      !roomSuggestionsOpen ||
+      !roomSuggestionAvailabilityKnown ||
+      roomSuggestions.length === 0
+    ) {
+      return;
+    }
+    let cancelled = false;
+    const eligibleRooms = roomSuggestions.slice(0, 4).filter((room) => {
+      const campus = inferCampusFromBuilding({ id: room.originalRoom.buildingId, name: room.originalRoom.buildingName });
+      return isQuickReservationTimeRangeValid(campus, timeslot.startTime ?? '', timeslot.endTime ?? '', quickTimeRanges);
+    });
+    const roomIds = eligibleRooms.map((room) => room.roomId);
+    if (roomIds.length === 0) return;
+    const timerId = window.setTimeout(() => {
+      void apiRequest<{ checks: Array<{ available: boolean; message: string; roomId: string }> }>('/api/ai/room-reservation', {
+        body: {
+          action: 'check-availability',
+          date: timeslot.date,
+          startTime: timeslot.startTime,
+          endTime: timeslot.endTime,
+          roomIds,
+        },
+      }).then((result) => {
+        if (cancelled) return;
+        setRoomSuggestionChecks((current) => ({
+          ...current,
+          ...Object.fromEntries(result.checks.map((check) => [check.roomId, {
+            available: check.available,
+            date: timeslot.date ?? '',
+            startTime: timeslot.startTime ?? '',
+            endTime: timeslot.endTime ?? '',
+          }])),
+        }));
+      }).catch(() => {
+        if (cancelled) return;
+        setRoomSuggestionChecks((current) => ({
+          ...current,
+          ...Object.fromEntries(roomIds.map((roomId) => [roomId, {
+            available: null,
+            date: timeslot.date ?? '',
+            startTime: timeslot.startTime ?? '',
+            endTime: timeslot.endTime ?? '',
+            error: true,
+          }])),
+        }));
+      });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timerId);
+    };
+  }, [isOpen, quickTimeRanges, roomSuggestionAvailabilityKnown, roomSuggestions, roomSuggestionsOpen, step, timeslot.date, timeslot.endTime, timeslot.startTime]);
+
+  useEffect(() => {
     if (!isOpen || panelBounds) {
       return;
     }
 
-    const width = Math.min(560, window.innerWidth - 32);
-    const height = Math.min(512, window.innerHeight - 32);
+    const width = Math.min(600, window.innerWidth - 32);
+    const height = Math.min(560, window.innerHeight - 96);
     setPanelBounds({
       height,
       left: Math.max(16, window.innerWidth - width - 24),
-      top: Math.max(16, window.innerHeight - height - 24),
+      top: Math.max(80, window.innerHeight - height - 24),
       width,
     });
   }, [isOpen, panelBounds]);
@@ -1436,7 +2130,7 @@ export default function RoomAssistantWidget({
             left: panelBounds.left,
             maxHeight: 'calc(100dvh - 1rem)',
             maxWidth: 'calc(100vw - 1rem)',
-            minHeight: '22rem',
+            minHeight: 'min(22rem, calc(100dvh - 6rem))',
             minWidth: 'min(20rem, calc(100vw - 1rem))',
             top: panelBounds.top,
             width: panelBounds.width,
@@ -1448,8 +2142,8 @@ export default function RoomAssistantWidget({
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold">Room Recommendation Assistant</p>
-                <p className="mt-1 text-[10px] leading-relaxed text-white/78">
+                <p className="text-base font-bold">Room Recommendation Assistant</p>
+                <p className="mt-1 text-xs leading-relaxed text-white/78">
                   Manual room checks and live Firebase recommendations
                 </p>
               </div>
@@ -1458,7 +2152,7 @@ export default function RoomAssistantWidget({
                 <button
                   type="button"
                   onClick={resetConversation}
-                  className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-white/20"
+                  className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-white/20"
                 >
                   Reset
                 </button>
@@ -1510,7 +2204,7 @@ export default function RoomAssistantWidget({
                   )}
 
                   <div
-                    className={`max-w-[85%] rounded-[24px] px-4 py-3 text-sm shadow-sm ${
+                    className={`max-w-[85%] rounded-[24px] px-4 py-3 text-base shadow-sm ${
                       message.role === 'user'
                         ? 'rounded-br-md bg-[linear-gradient(135deg,#a12124_0%,#7a191c_100%)] text-white'
                         : 'rounded-bl-md border border-black/8 bg-[rgba(255,255,255,0.92)] text-black'
@@ -1526,7 +2220,7 @@ export default function RoomAssistantWidget({
                             type="button"
                             onClick={() => handleOptionClick(message.id, option)}
                             disabled={!isCurrentPrompt}
-                            className="rounded-full border border-[#a12124]/18 bg-[#a12124]/8 px-3 py-2 text-left text-xs font-bold text-[#8f1d20] transition-all hover:-translate-y-0.5 hover:bg-[#a12124]/14 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                            className="rounded-full border border-[#a12124]/18 bg-[#a12124]/8 px-3.5 py-2.5 text-left text-sm font-bold text-[#8f1d20] transition-all hover:-translate-y-0.5 hover:bg-[#a12124]/14 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
                           >
                             {option.label}
                           </button>
@@ -1730,6 +2424,311 @@ export default function RoomAssistantWidget({
               </div>
             )}
           </div>
+
+          {step === 'quick-reservation' ? (
+            <div className="max-h-[48vh] space-y-3 overflow-y-auto border-t border-black/8 bg-white p-4">
+              <div>
+                <label htmlFor="quick-room-search" className="mb-1 block text-[10px] font-bold text-black/75">Room · campus · building</label>
+                <input id="quick-room-search" value={quickRoomQuery} onChange={(event) => { setQuickRoomQuery(event.target.value); setQuickRoom(null); setQuickAvailability(null); setQuickError(''); }} placeholder="Search room name, campus, or building" autoComplete="off" className="w-full rounded-xl border border-black/12 bg-[#f8f4ef] px-3 py-2 text-xs outline-none focus:border-[#a12124]/55" />
+                {quickRoomQuery.trim().length >= 2 && !quickRoom && (
+                  <div className="mt-1 max-h-32 overflow-y-auto rounded-xl border border-black/10 bg-white p-1">
+                    {quickRoomSuggestions.length ? quickRoomSuggestions.map((room) => {
+                      const campus = inferCampusFromBuilding({ id: room.originalRoom.buildingId, name: room.originalRoom.buildingName });
+                      const administrativelyUnavailable = isRoomAdministrativelyUnavailable(room.status);
+                      return <button key={room.roomId} type="button" disabled={administrativelyUnavailable} onClick={() => { if (administrativelyUnavailable) return; setQuickRoom(room); setQuickRoomQuery(room.label || room.roomId); setQuickAvailability(null); setQuickError(''); }} className="block w-full rounded-lg px-2.5 py-2 text-left enabled:hover:bg-[#a12124]/6 disabled:cursor-not-allowed disabled:opacity-65">
+                        <span className="block text-xs font-bold">{room.label || room.roomId}</span>
+                        <span className="block text-xs text-black/65">{campus ? getCampusName(campus) : 'Campus unavailable'} · {room.building || room.originalRoom.buildingName || room.originalRoom.buildingId}</span>
+                        {administrativelyUnavailable && <span className="mt-0.5 block text-xs font-bold text-red-800">Unavailable for reservations</span>}
+                      </button>;
+                    }) : <p className="px-2.5 py-2 text-[10px] text-black/60">{dataLoading ? 'Loading live rooms…' : 'No matching live rooms. Try another room, campus, or building.'}</p>}
+                  </div>
+                )}
+                {quickRoom && <p className={`mt-1 text-[10px] ${isRoomAdministrativelyUnavailable(quickRoom.status) ? 'font-bold text-red-800' : 'text-black/65'}`}>{isRoomAdministrativelyUnavailable(quickRoom.status) ? 'Unavailable for reservations: ' : 'Selected: '}{getRoomDisplayName(quickRoom)} · {(() => { const campus = inferCampusFromBuilding({ id: quickRoom.originalRoom.buildingId, name: quickRoom.originalRoom.buildingName }); return campus ? getCampusName(campus) : 'Campus unavailable'; })()} · {quickRoom.building || quickRoom.originalRoom.buildingName || quickRoom.originalRoom.buildingId}</p>}
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <label className="text-[10px] font-bold text-black/75">Date<input type="date" value={quickDate} onChange={(event) => { setQuickDate(event.target.value); setQuickAvailability(null); setQuickError(''); }} className="mt-1 w-full rounded-lg border border-black/12 bg-[#f8f4ef] px-2 py-2 text-xs font-normal" /></label>
+                <label className="text-[10px] font-bold text-black/75">Start time<input type="time" value={quickStartTime} onChange={(event) => { setQuickStartTime(event.target.value); setQuickAvailability(null); setQuickError(''); }} className="mt-1 w-full rounded-lg border border-black/12 bg-[#f8f4ef] px-2 py-2 text-xs font-normal" /></label>
+                <label className="text-[10px] font-bold text-black/75">End time<input type="time" value={quickEndTime} onChange={(event) => { setQuickEndTime(event.target.value); setQuickAvailability(null); setQuickError(''); }} className="mt-1 w-full rounded-lg border border-black/12 bg-[#f8f4ef] px-2 py-2 text-xs font-normal" /></label>
+              </div>
+              <button type="button" disabled={!quickRoom || !quickDate || !quickStartTime || !quickEndTime || quickBusy} onClick={() => void validateQuickReservation()} className="rounded-lg bg-[#a12124] px-3 py-2 text-[10px] font-bold text-white disabled:opacity-45">{quickBusy ? 'Checking…' : 'Validate room and schedule'}</button>
+              {quickAvailability && <p className={`text-[10px] ${quickAvailability.available ? 'text-emerald-800' : 'text-rose-800'}`} role="status">{quickAvailability.message}</p>}
+              {quickError && <p className="text-[10px] text-rose-700" role="alert">{quickError}</p>}
+              {quickAvailability?.available && quickRoom && (
+                <div className="space-y-2 border-t border-black/8 pt-3">
+                  <p className="text-[10px] font-bold text-black/75">Reservation details</p>
+                  <label className="block text-[10px] font-bold text-black/75">Program / department / organization<input value={quickOrganization} onChange={(event) => setQuickOrganization(event.target.value)} maxLength={160} className="mt-1 w-full rounded-lg border border-black/12 bg-[#f8f4ef] px-3 py-2 text-xs font-normal" /></label>
+                  <label className="block text-[10px] font-bold text-black/75">{quickIsEvent ? 'Event name' : 'Purpose'}<input value={quickPurpose} onChange={(event) => setQuickPurpose(event.target.value)} maxLength={100} className="mt-1 w-full rounded-lg border border-black/12 bg-[#f8f4ef] px-3 py-2 text-xs font-normal" /></label>
+                  <label className="flex items-center gap-2 text-[10px] text-black/75"><input type="checkbox" checked={quickIsEvent} onChange={(event) => setQuickIsEvent(event.target.checked)} />This reservation is for an event</label>
+                  <div className="rounded-lg bg-[#f8f4ef] p-3 text-[10px] text-black/70">
+                    <p className="mb-1 font-bold text-black/85">Review reservation</p>
+                    <p>Room: {getRoomDisplayName(quickRoom)}</p>
+                    <p>Campus and building: {(() => { const campus = inferCampusFromBuilding({ id: quickRoom.originalRoom.buildingId, name: quickRoom.originalRoom.buildingName }); return `${campus ? getCampusName(campus) : 'Campus unavailable'} · ${quickRoom.building || quickRoom.originalRoom.buildingName || quickRoom.originalRoom.buildingId}`; })()}</p>
+                    <p>Schedule: {quickDate} · {quickStartTime}–{quickEndTime}</p>
+                    <p>Organization: {quickOrganization || 'Required'}</p>
+                    <p>{quickIsEvent ? 'Event' : 'Purpose'}: {quickPurpose || 'Required'}</p>
+                    {getQuickReservationFollowUpRequirements({
+                      campus: inferCampusFromBuilding({ id: quickRoom.originalRoom.buildingId, name: quickRoom.originalRoom.buildingName }),
+                      isStudent: quickRequiresConceptPaper,
+                      isFaculty: !quickRequiresMainCampusApproval,
+                    }).map((requirement) => <p key={requirement} className="mt-1">Required in the reservation form: {requirement}.</p>)}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => { setQuickAvailability(null); setQuickError(''); }} className="rounded-lg border border-black/15 px-3 py-2 text-[10px] font-bold text-black/70">Edit room or schedule</button>
+                    <button type="button" disabled={getQuickReservationMissingDetails({ organization: quickOrganization, purpose: quickPurpose }).length > 0} onClick={() => {
+                      onQuickReservationHandoff({ roomId: quickRoom.roomId, date: quickDate, startTime: quickStartTime, endTime: quickEndTime, organization: quickOrganization.trim(), purpose: quickPurpose.trim(), isEvent: quickIsEvent });
+                      setIsOpen(false);
+                    }} className="rounded-lg bg-[#a12124] px-3 py-2 text-[10px] font-bold text-white disabled:opacity-45">Continue to reservation form</button>
+                  </div>
+                </div>
+              )}
+              <p className="text-[9px] leading-relaxed text-black/55">Availability is checked again by the reservation form when you submit. Required document uploads and approval routing stay in that form.</p>
+            </div>
+          ) : step === 'reservation-chat' ? (
+            <div className="border-t border-black/8 bg-white p-4">
+              {chatExtraction && (
+                <>
+                  {!chatReservationDetailsMinimized && getMissingReservationChatFields(chatExtraction).some(
+                    (field) => field !== 'room or room type' || !chatSelectedRoomId
+                  ) && (
+                    <p className="mb-2 text-[11px] text-black/65">{chatExtraction.assistantMessage}</p>
+                  )}
+                  <div className="max-h-32 space-y-1 overflow-y-auto">
+                    {visibleChatRoomSuggestions.map((room) => {
+                      const campus = inferCampusFromBuilding({ id: room.originalRoom.buildingId, name: room.originalRoom.buildingName });
+                      const isSelected = chatSelectedRoomId === room.roomId;
+                      const isMinimized = isSelected && chatReservationDetailsMinimized;
+                      return (
+                        <div key={room.roomId} className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs ${isSelected ? 'border-[#a12124] bg-[#a12124]/8' : 'border-black/10 hover:bg-black/5'}`}>
+                          <button type="button" onClick={() => { setChatSelectedRoomId(room.roomId); setChatReservationDetailsMinimized(false); setChatAvailability(isRoomAdministrativelyUnavailable(room.status) ? { available: false, message: `${room.label || room.roomId} is unavailable for reservations. Choose another room.` } : null); setChatError(''); }}
+                            className="min-w-0 flex-1 text-left">
+                            <span className="flex items-center justify-between gap-2 font-bold">
+                              <span>{room.label || room.roomId}{isMinimized ? ' · selected' : ''}</span>
+                              {isRoomAdministrativelyUnavailable(room.status) && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[9px] font-bold text-red-800">Unavailable for reservations</span>}
+                            </span>
+                            {!isMinimized && <span className="mt-0.5 block text-xs text-black/65">{campus ? getCampusName(campus) : 'Campus unavailable'} · {room.building || room.originalRoom.buildingName || room.originalRoom.buildingId}</span>}
+                          </button>
+                          {isSelected && (
+                            <button type="button" onClick={() => setChatReservationDetailsMinimized((current) => !current)}
+                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#a12124]/20 bg-white text-[#8f1d20] hover:bg-[#a12124]/10"
+                              aria-label={`${isMinimized ? 'Expand' : 'Collapse'} selected room details`}
+                              title={isMinimized ? 'Expand selected room details' : 'Collapse selected room details'}>
+                              <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <path
+                                  d={isMinimized ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'}
+                                  stroke="currentColor"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {!chatReservationDetailsMinimized && chatExtraction.date && chatExtraction.startTime && chatExtraction.endTime && (
+                    <div className="mt-2 rounded-lg bg-[#f8f4ef] px-3 py-2 text-xs text-black/65">
+                      <p className="font-bold text-black/80">Reservation draft</p>
+                      {chatSelectedRoomId && (() => {
+                        const room = autocompleteRooms.find((candidate) => candidate.roomId === chatSelectedRoomId);
+                        if (!room) return null;
+                        const campus = inferCampusFromBuilding({ id: room.originalRoom.buildingId, name: room.originalRoom.buildingName });
+                        return <p>Room: {room.label || room.roomId} · {campus ? getCampusName(campus) : 'Campus unavailable'} · {room.building || room.originalRoom.buildingName || room.originalRoom.buildingId}</p>;
+                      })()}
+                      <p>{chatExtraction.date} · {chatExtraction.startTime}–{chatExtraction.endTime}</p>
+                      {chatExtraction.program && <p>Program/Course: {chatExtraction.program}</p>}
+                      {chatExtraction.purpose && <p>Purpose: {chatExtraction.purpose}</p>}
+                      {chatExtraction.organization && <p>Organization: {chatExtraction.organization}</p>}
+                    </div>
+                  )}
+                  {chatAlternativeRoomIds !== null && chatRoomSuggestions.length === 0
+                    ? <p className="mt-2 text-xs text-amber-800">No similar rooms are available in the live room list for that schedule. Try another time or room.</p>
+                    : chatExtraction.roomQuery && chatRoomSuggestions.length === 0 && <p className="mt-2 text-xs text-amber-800">No live rooms match yet. Try another room name or describe a room type.</p>}
+                  {!chatReservationDetailsMinimized && chatAvailability && <p className={`mt-2 text-xs ${chatAvailability.available ? 'text-emerald-800' : 'text-rose-800'}`}>{chatAvailability.message}</p>}
+                  {!chatReservationDetailsMinimized && chatSelectedRoomId && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" disabled={chatBusy} onClick={() => void previewChatAvailability()} className="rounded-lg border border-[#a12124]/25 px-3.5 py-2.5 text-xs font-bold text-[#8f1d20] disabled:opacity-50">Preview availability</button>
+                      <button type="button" disabled={!chatAvailability?.available || chatBusy || !canCheckReservationChatAvailability(chatExtraction, Boolean(chatSelectedRoomId))} onClick={() => {
+                        if (!chatExtraction) return;
+                        onChatReservationHandoff({ ...chatExtraction, roomId: chatSelectedRoomId });
+                        setIsOpen(false);
+                      }} className="rounded-lg bg-[#a12124] px-3.5 py-2.5 text-xs font-bold text-white disabled:opacity-45">Continue to reservation form</button>
+                    </div>
+                  )}
+                </>
+              )}
+              {chatError && <p className="mb-2 text-xs text-rose-700" role="alert">{chatError}</p>}
+              <form className="mt-2 flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); void submitReservationChat(); }}>
+                <label htmlFor="assistant-reservation-chat" className="sr-only">Describe your reservation</label>
+                <textarea id="assistant-reservation-chat" value={chatInput} onChange={(event) => setChatInput(event.target.value)} maxLength={300} rows={2} placeholder="e.g. I need a classroom at Digital Campus tomorrow from 2 to 4 pm" className="min-w-0 flex-1 resize-none rounded-xl border border-black/12 bg-[#f8f4ef] px-3 py-2 text-sm outline-none focus:border-[#a12124]/55" />
+                <button type="submit" disabled={!chatInput.trim() || chatBusy} className="rounded-xl bg-[#a12124] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{chatBusy ? 'Working…' : 'Send'}</button>
+              </form>
+              <p className="mt-1 text-right text-[11px] text-black/45" aria-live="polite">{chatInput.length}/300</p>
+              <p className="mt-1.5 text-[11px] text-black/55">Availability is preliminary; the reservation form checks everything again when you submit.</p>
+            </div>
+          ) : <div className="relative border-t border-black/8 bg-white px-4 pt-3">
+            <label htmlFor="assistant-room-search" className="sr-only">
+              Search rooms by name
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="assistant-room-search"
+                type="text"
+                value={roomSearchQuery}
+                onChange={(event) => handleRoomSearchChange(event.target.value)}
+                onKeyDown={handleRoomSearchKeyDown}
+                onFocus={() => {
+                  if (roomSearchQuery.trim().length >= 2) {
+                    setRoomSuggestionsOpen(true);
+                  }
+                }}
+                placeholder="Type a room name to search"
+                autoComplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={roomSuggestionsOpen && roomSearchQuery.trim().length >= 2}
+                aria-controls={
+                  roomSuggestionsOpen && roomSearchQuery.trim().length >= 2
+                    ? 'assistant-room-suggestions'
+                    : undefined
+                }
+                aria-activedescendant={
+                  activeRoomSuggestionIndex >= 0
+                    ? `assistant-room-option-${activeRoomSuggestionIndex}`
+                    : undefined
+                }
+                className="min-w-0 flex-1 rounded-xl border border-black/12 bg-[#f8f4ef] px-3 py-2.5 text-xs text-black outline-none transition focus:border-[#a12124]/55 focus:ring-2 focus:ring-[#a12124]/15"
+              />
+              {roomSuggestionsOpen && roomSearchQuery.trim().length >= 2 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoomSuggestionsOpen(false);
+                    setActiveRoomSuggestionIndex(-1);
+                  }}
+                  className="shrink-0 rounded-lg px-2 py-2 text-[10px] font-bold text-[#8f1d20] hover:bg-[#a12124]/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a12124]"
+                  aria-label="Dismiss room suggestions"
+                >
+                  Hide
+                </button>
+              )}
+            </div>
+            <p className="mt-1.5 px-1 text-[9px] leading-relaxed text-black/55">
+              Availability is a live preview and is checked again when you submit the reservation.
+            </p>
+
+            {roomSuggestionsOpen && roomSearchQuery.trim().length >= 2 && (
+              <div
+                ref={roomSuggestionsRef}
+                id="assistant-room-suggestions"
+                role="listbox"
+                aria-label="Matching rooms"
+                className="absolute bottom-[calc(100%+0.5rem)] left-4 right-4 z-20 max-h-56 overflow-y-auto rounded-2xl border border-black/10 bg-white p-1.5 shadow-[0_16px_40px_rgba(37,22,17,0.2)]"
+              >
+                {roomSuggestions.length > 0 ? (
+                  roomSuggestions.map((room, index) => {
+                    const campus = inferCampusFromBuilding({
+                      id: room.originalRoom.buildingId,
+                      name: room.originalRoom.buildingName,
+                    });
+                    const serverCheck = roomSuggestionChecks[room.roomId];
+                    const availability = serverCheck &&
+                      serverCheck.date === timeslot.date &&
+                      serverCheck.startTime === timeslot.startTime &&
+                      serverCheck.endTime === timeslot.endTime
+                        ? serverCheck.available
+                        : null;
+                    const availabilityCheckError = availability === null && serverCheck?.error &&
+                      serverCheck.date === timeslot.date &&
+                      serverCheck.startTime === timeslot.startTime &&
+                      serverCheck.endTime === timeslot.endTime;
+                    const campusTimeIsValid = isQuickReservationTimeRangeValid(
+                      campus,
+                      timeslot.startTime ?? '',
+                      timeslot.endTime ?? '',
+                      quickTimeRanges
+                    );
+                    const administrativelyUnavailable = isRoomAdministrativelyUnavailable(room.status);
+                    const isActive = index === activeRoomSuggestionIndex;
+                    const availabilityBadgeClass = administrativelyUnavailable
+                      ? 'bg-red-100 text-red-800'
+                      : availability === true
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : availability === false
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-black/6 text-black/65';
+
+                    return (
+                      <button
+                        id={`assistant-room-option-${index}`}
+                        key={room.roomId}
+                        type="button"
+                        disabled={administrativelyUnavailable}
+                        role="option"
+                        aria-selected={isActive}
+                        onMouseEnter={() => { if (!administrativelyUnavailable) setActiveRoomSuggestionIndex(index); }}
+                        onClick={() => selectAutocompleteRoom(room)}
+                        className={`block w-full rounded-xl px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#a12124] ${
+                          administrativelyUnavailable
+                            ? 'cursor-not-allowed opacity-70'
+                            : isActive ? 'bg-[#a12124]/10' : 'hover:bg-[#a12124]/6'
+                        }`}
+                      >
+                        <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                          <span className="text-xs font-bold text-black">
+                            {getRoomDisplayName(room)}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${availabilityBadgeClass}`}
+                          >
+                            {administrativelyUnavailable
+                              ? 'Unavailable for reservations'
+                              : availability === true
+                              ? 'Available · checked'
+                              : availability === false
+                                ? 'Unavailable'
+                                : roomSuggestionAvailabilityKnown && !campusTimeIsValid
+                                  ? 'Invalid campus timeslot'
+                                : availabilityCheckError
+                                  ? 'Availability check failed'
+                                  : roomSuggestionAvailabilityKnown && index < 4
+                                    ? 'Checking availability…'
+                                    : roomSuggestionAvailabilityKnown
+                                      ? 'Check availability on selection'
+                                      : 'Availability unknown'}
+                          </span>
+                        </span>
+                        <span className="mt-1 block text-[10px] leading-relaxed text-black/65">
+                          {[
+                            campus ? getCampusName(campus) : 'Campus not available',
+                            room.building || room.originalRoom.buildingId || 'Building not available',
+                            room.type !== 'unknown' ? room.typeLabel : null,
+                            room.capacity > 0 ? `Capacity ${room.capacity}` : null,
+                            room.features.length > 0
+                              ? `Facilities: ${room.features.join(', ')}`
+                              : null,
+                          ]
+                            .filter((detail): detail is string => Boolean(detail))
+                            .join(' · ')}
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="px-3 py-3 text-xs text-black/65" aria-live="polite">
+                    {dataLoading
+                      ? 'Loading rooms…'
+                      : dataError
+                        ? 'Room suggestions are unavailable right now.'
+                        : autocompleteRooms.length === 0 && !activeCampus
+                          ? 'No rooms are available in the current live room data.'
+                          : `No rooms match “${roomSearchQuery.trim()}”. Try another spelling.`}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>}
 
           <div className="border-t border-black/8 bg-white px-4 py-3 text-[10px] leading-relaxed text-black/62">
             {dataError

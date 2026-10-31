@@ -3,6 +3,7 @@
 import React from 'react';
 
 interface RoomCardProps {
+  administrativelyUnavailable?: boolean;
   availability: 'Available' | 'Partially booked' | 'Occupied';
   buildingName?: string;
   campusName: string;
@@ -36,6 +37,7 @@ function getAvailabilityClass(availability: RoomCardProps['availability']) {
 }
 
 export default function RoomCard({
+  administrativelyUnavailable = false,
   availability,
   buildingName,
   campusName,
@@ -67,13 +69,20 @@ export default function RoomCard({
             {[buildingName, floor].filter(Boolean).join(' | ')}
           </p>
         </div>
-        <span
-          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${getAvailabilityClass(
-            availability
-          )}`}
-        >
-          {availability === 'Partially booked' ? 'Available' : availability}
-        </span>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          <span
+            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${getAvailabilityClass(
+              availability
+            )}`}
+          >
+            Occupancy: {availability}
+          </span>
+          {administrativelyUnavailable && (
+            <span className="inline-flex items-center rounded-full border border-red-500/30 bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-800">
+              Unavailable for reservations
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 text-xs">

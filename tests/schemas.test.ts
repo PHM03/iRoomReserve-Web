@@ -160,6 +160,21 @@ describe('server schemas', () => {
     expect(result.success).toBe(true);
   });
 
+  it('preserves Program/Course in the Program/Department/Organization field', () => {
+    const result = createReservationSchema.safeParse({
+      type: 'single',
+      reservation: {
+        ...validFacultyReservation,
+        programDepartmentOrganization: 'BSIT',
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success && result.data.type === 'single') {
+      expect(result.data.reservation.programDepartmentOrganization).toBe('BSIT');
+    }
+  });
+
   it('rejects reservation event values other than Yes or No', () => {
     const result = createReservationSchema.safeParse({
       type: 'single',

@@ -5,7 +5,7 @@ import { formatDate, formatTimeRange } from '../utils/dateTime';
 import {
   getManagedBuildingIdsForCampus,
 } from '../buildings/campusAssignments';
-import type { ReservationCampus } from '../buildings/campuses';
+import { inferCampusFromBuilding, type ReservationCampus } from '../buildings/campuses';
 
 export type AssistantRoomTypeValue =
   | 'conference-room'
@@ -386,7 +386,14 @@ export function getAssistantBuildingIds(
     return [activeBuildingId];
   }
 
-  return activeCampus ? getManagedBuildingIdsForCampus(activeCampus) : [];
+  return activeCampus
+    ? getManagedBuildingIdsForCampus(activeCampus)
+    : [
+        ...new Set([
+          ...getManagedBuildingIdsForCampus('main'),
+          ...getManagedBuildingIdsForCampus('digi'),
+        ]),
+      ];
 }
 
 function normalizeText(value?: string | null) {
@@ -672,6 +679,114 @@ export function toAssistantRoomRecord(room: AssistantRoomFeatureRoom): Assistant
     typeLabel: getAssistantRoomTypeLabel(type),
     originalRoom: room,
   };
+}
+
+function normalizeRoomSearchText(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function getEditDistance(left: string, right: string) {
+  const previousRow = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    let diagonal = previousRow[0];
+    previousRow[0] = leftIndex;
+
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const previousValue = previousRow[rightIndex];
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      previousRow[rightIndex] = Math.min(
+        previousRow[rightIndex] + 1,
+        previousRow[rightIndex - 1] + 1,
+        diagonal + substitutionCost
+      );
+      diagonal = previousValue;
+    }
+  }
+
+  return previousRow[right.length];
+}
+
+/** Search actual room records for autocomplete, with a small typo-tolerant fallback. */
+export function findAssistantRoomAutocompleteMatches(
+  rooms: readonly AssistantRoomRecord[],
+  query: string,
+  limit = 8
+) {
+  const normalizedQuery = normalizeRoomSearchText(query);
+  if (normalizedQuery.length < 2 || limit <= 0) {
+    return [];
+  }
+
+  const mainCampusQuery = /\b(?:sdca\s+)?main\s+campus\b/.test(normalizedQuery);
+  const digitalCampusQuery = /\b(?:sdca\s+)?(?:digital|digi)\s+campus\b/.test(normalizedQuery);
+  const requestedCampus: ReservationCampus | null =
+    mainCampusQuery === digitalCampusQuery ? null : mainCampusQuery ? 'main' : 'digi';
+  const roomQuery = requestedCampus
+    ? normalizedQuery
+        .replace(/\bsdca\s+(?=(?:main|digital|digi)\s+campus\b)/g, '')
+        .replace(/\b(?:main|digital|digi)\s+campus\b/g, '')
+        .trim()
+    : normalizedQuery;
+  const normalizedRoomQuery = normalizeRoomSearchText(roomQuery);
+  if (normalizedRoomQuery.length < 2 && !requestedCampus) {
+    return [];
+  }
+
+  return rooms
+    .map((room) => {
+      const campus = inferCampusFromBuilding({
+        id: room.originalRoom.buildingId,
+        name: room.originalRoom.buildingName,
+      });
+      if (requestedCampus && campus !== requestedCampus) {
+        return null;
+      }
+
+      const normalizedName = normalizeRoomSearchText(room.label || room.roomId);
+      const normalizedId = normalizeRoomSearchText(room.roomId);
+      if (!normalizedRoomQuery) {
+        return { matchRank: 4, room };
+      }
+
+      const exact = normalizedName === normalizedRoomQuery || normalizedId === normalizedRoomQuery;
+      const prefix = normalizedName.startsWith(normalizedRoomQuery) || normalizedId.startsWith(normalizedRoomQuery);
+      const partial = normalizedName.includes(normalizedRoomQuery) || normalizedId.includes(normalizedRoomQuery);
+      const queryTokens = normalizedRoomQuery.split(' ');
+      const candidateTokens = `${normalizedName} ${normalizedId}`.split(' ');
+      const fuzzy =
+        !partial &&
+        queryTokens.every((queryToken) => {
+          const typoThreshold = queryToken.length >= 8 ? 2 : queryToken.length >= 5 ? 1 : 0;
+          return candidateTokens.some(
+            (candidateToken) =>
+              candidateToken === queryToken ||
+              (typoThreshold > 0 && getEditDistance(queryToken, candidateToken) <= typoThreshold)
+          );
+        });
+
+      return {
+        matchRank: exact ? 0 : prefix ? 1 : partial ? 2 : fuzzy ? 3 : Number.POSITIVE_INFINITY,
+        room,
+      };
+    })
+    .filter((entry): entry is { matchRank: number; room: AssistantRoomRecord } =>
+      Boolean(entry && Number.isFinite(entry.matchRank))
+    )
+    .sort(
+      (left, right) =>
+        left.matchRank - right.matchRank ||
+        left.room.label.localeCompare(right.room.label) ||
+        left.room.roomId.localeCompare(right.room.roomId)
+    )
+    .slice(0, limit)
+    .map(({ room }) => room);
 }
 
 export function toAssistantReservationRecords(

@@ -9,6 +9,8 @@ import DaySchedulePanel from '@/components/rooms/schedules/DaySchedulePanel';
 import RoomAvailabilityPicker from '@/components/rooms/RoomAvailabilityPicker';
 import RoomCard from '@/components/rooms/RoomCard';
 import RoomAssistantWidget from '@/components/rooms/RoomAssistantWidget';
+import { mapReservationChatDraftToForm, type ReservationChatExtraction } from '@/lib/ai/reservationChat';
+import { mapQuickReservationDraftToForm } from '@/lib/ai/quickReservation';
 import { useAuth } from '@/context/AuthContext';
 import {
   getCampusName,
@@ -59,6 +61,7 @@ import {
 } from '@/lib/reservations/timeSlots';
 import { formatDate, formatTime } from '@/lib/utils/dateTime';
 import { getFloorDisplayLabel } from '@/lib/buildings/floorLabels';
+import { isRoomAdministrativelyUnavailable } from '@/lib/rooms/roomStatus';
 
 type DetailsStep = 2 | 3;
 type RoomFilterKey =
@@ -120,7 +123,7 @@ const FILTER_CHIPS: Array<{ key: RoomFilterKey; label: string }> = [
   },
   {
     key: 'available',
-    label: 'Available'
+    label: 'Not occupied now'
   },
 ];
 const BUILDING_FLOORS: Record<string, string[]> = {
@@ -373,6 +376,7 @@ export default function ReserveRoomPage() {
   const assistantBuildingIds = useMemo(() => {
     return getAssistantBuildingIds(activeBuilding?.id, activeCampus);
   }, [activeBuilding, activeCampus]);
+  const assistantDataBuildingIds = useMemo(() => getAssistantBuildingIds(), []);
 
   useEffect(() => {
     if (!firebaseUser || !activeBuilding) {
@@ -442,14 +446,14 @@ export default function ReserveRoomPage() {
     logAssistantCampusFilter({
       activeBuilding,
       activeCampus,
-      assistantBuildingIds,
+      assistantBuildingIds: assistantDataBuildingIds,
       assistantRoomsCount: assistantRooms.length,
       visibleRoomsCount: rooms.length,
     });
-  }, [activeBuilding, activeCampus, assistantBuildingIds, assistantRooms.length, rooms.length]);
+  }, [activeBuilding, activeCampus, assistantDataBuildingIds, assistantRooms.length, rooms.length]);
 
   useEffect(() => {
-    if (assistantBuildingIds.length === 0) {
+    if (assistantDataBuildingIds.length === 0) {
       setAssistantRooms([]);
       setAssistantReservations([]);
       setAssistantSchedules([]);
@@ -503,23 +507,23 @@ export default function ReserveRoomPage() {
     setAssistantDataLoading(true);
     setAssistantDataError(null);
     logAssistantFirestoreQuery({
-      buildingIds: assistantBuildingIds,
+      buildingIds: assistantDataBuildingIds,
       collection: 'rooms',
     });
     logAssistantFirestoreQuery({
-      buildingIds: assistantBuildingIds,
+      buildingIds: assistantDataBuildingIds,
       collection: 'reservations',
     });
 
     const unsubscribeRooms = onRoomsByBuildingIds(
-      assistantBuildingIds,
+      assistantDataBuildingIds,
       (nextRooms) => {
         if (cancelled) {
           return;
         }
 
         logAssistantFirestoreSnapshot({
-          buildingIds: assistantBuildingIds,
+          buildingIds: assistantDataBuildingIds,
           collection: 'rooms',
           rawDocuments: nextRooms,
         });
@@ -531,14 +535,14 @@ export default function ReserveRoomPage() {
     );
 
     const unsubscribeReservations = onReservationsByBuildingIds(
-      assistantBuildingIds,
+      assistantDataBuildingIds,
       (nextReservations) => {
         if (cancelled) {
           return;
         }
 
         logAssistantFirestoreSnapshot({
-          buildingIds: assistantBuildingIds,
+          buildingIds: assistantDataBuildingIds,
           collection: 'reservations',
           rawDocuments: nextReservations,
         });
@@ -550,7 +554,7 @@ export default function ReserveRoomPage() {
     );
 
     const unsubscribeSchedules = onSchedulesByBuildingIds(
-      assistantBuildingIds,
+      assistantDataBuildingIds,
       (nextSchedules) => {
         if (cancelled) {
           return;
@@ -569,7 +573,7 @@ export default function ReserveRoomPage() {
       unsubscribeReservations();
       unsubscribeSchedules();
     };
-  }, [assistantBuildingIds, authLoading, firebaseUser?.uid]);
+  }, [assistantDataBuildingIds, authLoading, firebaseUser?.uid]);
 
   useEffect(() => {
     if (!selectedRoomParam) {
@@ -672,10 +676,13 @@ export default function ReserveRoomPage() {
     ? rooms.find((room) => room.id === selectedRoomParam) ?? null
     : null;
   const assistantRoomSource = assistantRooms.length > 0 ? assistantRooms : rooms;
-  const recommendationRooms = assistantRoomSource.map((room) => toAssistantRoomRecord(room));
+  const autocompleteRooms = assistantRoomSource.map((room) => toAssistantRoomRecord(room));
+  const recommendationRooms = autocompleteRooms.filter((room) =>
+    assistantBuildingIds.includes(room.originalRoom.buildingId)
+  );
   const assistantReservationRecords = toAssistantReservationRecords(assistantReservations);
   const selectedRecommendationRoom = selectedRoomParam
-    ? recommendationRooms.find((room) => room.roomId === selectedRoomParam) ?? null
+    ? autocompleteRooms.find((room) => room.roomId === selectedRoomParam) ?? null
     : null;
   const selectedCampus = selectedRoom
     ? getRoomCampus(selectedRoom)
@@ -1221,14 +1228,22 @@ export default function ReserveRoomPage() {
     );
   }
 
-  function handleRoomSelect(roomId: string) {
+  function handleRoomSelect(roomId: string, preserveDateTime = false) {
     const nextRoom =
       rooms.find((room) => room.id === roomId) ??
       assistantRooms.find((room) => room.id === roomId) ??
       null;
 
     if (selectedRoomId !== roomId) {
+      const previousTimeslot = preserveDateTime
+        ? { date: reservationDate, endTime, startTime }
+        : null;
       resetReservationDetails();
+      if (previousTimeslot) {
+        setReservationDate(previousTimeslot.date);
+        setStartTime(previousTimeslot.startTime);
+        setEndTime(previousTimeslot.endTime);
+      }
       setBookedSlots([]);
       setBookedSlotsLoading(true);
       setEnrichedSlots([]);
@@ -1837,6 +1852,7 @@ export default function ReserveRoomPage() {
 
                             return (
                               <RoomCard
+                                administrativelyUnavailable={isRoomAdministrativelyUnavailable(room.status)}
                                 key={room.id}
                                 availability={getRoomAvailability(room, assistantReservations, now)}
                                 buildingName={room.buildingName}
@@ -1923,10 +1939,13 @@ export default function ReserveRoomPage() {
                       {selectedRoom.roomType || 'Room'}
                     </span>
                       <span className="glass-badge rounded-full px-3 py-1 text-xs font-bold text-black">
-                        {selectedRoomAvailability === 'Partially booked'
-                          ? 'Available'
-                          : selectedRoomAvailability ?? 'Available'}
+                        Occupancy: {selectedRoomAvailability ?? 'Available'}
                       </span>
+                      {isRoomAdministrativelyUnavailable(selectedRoom.status) && (
+                        <span className="rounded-full border border-red-500/30 bg-red-50 px-3 py-1 text-xs font-bold text-red-800">
+                          Unavailable for reservations
+                        </span>
+                      )}
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <div className="rounded-xl border border-white/45 bg-white p-3 shadow-sm ">
@@ -2779,6 +2798,40 @@ export default function ReserveRoomPage() {
         onOpenWithoutCampus={handleAssistantOpen}
         onSelectCampus={handleAssistantCampusSelect}
         onSelectRoom={handleRoomSelect}
+        onChatReservationHandoff={(draft: ReservationChatExtraction & { roomId: string }) => {
+          const formDraft = mapReservationChatDraftToForm(draft);
+          handleRoomSelect(formDraft.roomId, true);
+          setDetailsStep(3);
+          setReservationDate(formDraft.reservationDate);
+          setStartTime(formDraft.startTime);
+          setEndTime(formDraft.endTime);
+          setPurpose(formDraft.purpose || purpose);
+          setProgramDepartmentOrganization(formDraft.programDepartmentOrganization || programDepartmentOrganization);
+          setIsEventReservation(formDraft.isEventReservation);
+          setTimeError('');
+          setSubmitError('');
+        }}
+        onQuickReservationHandoff={(draft) => {
+          const formDraft = mapQuickReservationDraftToForm(draft);
+          handleRoomSelect(formDraft.roomId, true);
+          setReservationDate(formDraft.reservationDate);
+          setStartTime(formDraft.startTime);
+          setEndTime(formDraft.endTime);
+          setPurpose(formDraft.purpose);
+          setProgramDepartmentOrganization(formDraft.programDepartmentOrganization);
+          setIsEventReservation(formDraft.isEventReservation);
+          setTimeError('');
+          setSubmitError('');
+        }}
+        quickRequiresConceptPaper={isStudentReservation}
+        quickRequiresMainCampusApproval={!isFacultyReservation}
+        quickTimeRanges={CAMPUS_TIME_RANGES}
+        existingReservationDraft={{
+          organization: programDepartmentOrganization,
+          program: programDepartmentOrganization,
+          purpose,
+          isEvent: isEventReservation,
+        }}
         onSelectTimeslot={(nextTimeslot) => {
           setReservationDate(nextTimeslot.date);
           setStartTime(nextTimeslot.startTime);
@@ -2789,6 +2842,7 @@ export default function ReserveRoomPage() {
         reservations={assistantReservationRecords}
         schedules={assistantSchedules}
         rooms={recommendationRooms}
+        autocompleteRooms={autocompleteRooms}
         selectedRoom={selectedRecommendationRoom}
         timeslot={selectedTimeslot}
       />

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ASSISTANT_ROOM_TYPE_OPTIONS,
   checkAssistantRoomAvailability,
+  findAssistantRoomAutocompleteMatches,
   findAlternativeAssistantRooms,
   findAssistantRoomMatchesForDatePreference,
   getAssistantRoomSelectionTimeslot,
@@ -68,6 +69,83 @@ function createReservation(overrides: Record<string, unknown> = {}) {
 }
 
 describe('roomAssistantRealtime', () => {
+  it('loads both campuses for assistant search when no campus is selected', () => {
+    const allCampusIds = getAssistantBuildingIds();
+    const mainCampusIds = getAssistantBuildingIds(null, 'main');
+    const digitalCampusIds = getAssistantBuildingIds(null, 'digi');
+
+    expect(allCampusIds).toEqual([...new Set([...mainCampusIds, ...digitalCampusIds])]);
+  });
+
+  it('matches room autocomplete case-insensitively and ignores extra spaces', () => {
+    const rooms = [
+      toAssistantRoomRecord(createRoom({ id: 'conf-101', name: 'Conference Room 101' })),
+      toAssistantRoomRecord(createRoom({ id: 'conf-102', name: 'Conference Room 102' })),
+      toAssistantRoomRecord(createRoom({ id: 'lab-2', name: 'Computer Lab 2' })),
+    ];
+
+    expect(findAssistantRoomAutocompleteMatches(rooms, '  cOnFeReNcE   rOoM  ')).toHaveLength(2);
+    expect(findAssistantRoomAutocompleteMatches(rooms, 'conference room 101')[0].roomId).toBe('conf-101');
+  });
+
+  it('supports partial and lightly misspelled room names and returns no unrelated rooms', () => {
+    const rooms = [
+      toAssistantRoomRecord(createRoom({ id: 'conf-101', name: 'Conference Room 101' })),
+      toAssistantRoomRecord(createRoom({ id: 'lab-2', name: 'Computer Lab 2' })),
+    ];
+
+    expect(findAssistantRoomAutocompleteMatches(rooms, 'conference')).toHaveLength(1);
+    expect(findAssistantRoomAutocompleteMatches(rooms, 'conferenc room 101')[0].roomId).toBe('conf-101');
+    expect(findAssistantRoomAutocompleteMatches(rooms, 'auditorium')).toEqual([]);
+  });
+
+  it('keeps same-named rooms from both campuses and filters explicit campus terms', () => {
+    const rooms = [
+      toAssistantRoomRecord(
+        createRoom({
+          id: 'main-101',
+          name: 'Conference Room 101',
+          buildingId: 'gd1',
+          buildingName: 'GD1 Main Campus',
+        })
+      ),
+      toAssistantRoomRecord(
+        createRoom({
+          id: 'digital-101',
+          name: 'Conference Room 101',
+          buildingId: 'sdca-digital-campus',
+          buildingName: 'SDCA Digital Campus',
+        })
+      ),
+    ];
+
+    expect(
+      findAssistantRoomAutocompleteMatches(rooms, 'conference room 101').map((room) => room.roomId)
+    ).toEqual(['digital-101', 'main-101']);
+    expect(
+      findAssistantRoomAutocompleteMatches(rooms, 'Main Campus conference room 101').map(
+        (room) => room.roomId
+      )
+    ).toEqual(['main-101']);
+    expect(
+      findAssistantRoomAutocompleteMatches(rooms, 'SDCA Digital Campus conference room 101').map(
+        (room) => room.roomId
+      )
+    ).toEqual(['digital-101']);
+  });
+
+  it('keeps administratively unavailable rooms visible in autocomplete for status display', () => {
+    const unavailableRoom = toAssistantRoomRecord(createRoom({
+      id: 'room-205',
+      name: 'Room 205',
+      status: 'Unavailable',
+    }));
+
+    expect(findAssistantRoomAutocompleteMatches([unavailableRoom], 'Room 205').map((room) => room.roomId))
+      .toEqual(['room-205']);
+    expect(unavailableRoom.status).toBe('Unavailable');
+  });
+
   it('matches reservation weekday rules by excluding Sunday only', () => {
     expect(isReservationDateSelectable(new Date('2026-06-07T00:00:00'))).toBe(false);
     expect(
@@ -158,6 +236,64 @@ describe('roomAssistantRealtime', () => {
     expect(result.available).toBe(false);
     expect(result.availabilityLabel).toBe('taken');
     expect(result.conflictingReservations).toHaveLength(1);
+  });
+
+  it('blocks an administratively unavailable room even when its requested slot has no conflicts', () => {
+    const room = toAssistantRoomRecord(createRoom({ status: 'Unavailable' }));
+    const result = checkAssistantRoomAvailability(
+      room,
+      { date: '2026-11-25', startTime: '08:00', endTime: '09:00' },
+      [],
+      new Date('2026-10-31T08:00:00')
+    );
+
+    expect(result).toMatchObject({ available: false, availabilityLabel: 'unavailable', roomStatus: 'Unavailable' });
+    expect(result.conflictingReservations).toEqual([]);
+    expect(result.conflictingSchedules).toEqual([]);
+  });
+
+  it('keeps current occupancy separate from reservation eligibility for future slots', () => {
+    const room = toAssistantRoomRecord(createRoom({ status: 'Occupied' }));
+    const result = checkAssistantRoomAvailability(
+      room,
+      { date: '2026-11-25', startTime: '08:00', endTime: '09:00' },
+      [],
+      new Date('2026-10-31T08:00:00')
+    );
+
+    expect(result.available).toBe(true);
+    expect(result.availabilityLabel).toBe('available');
+    expect(result.roomStatus).toBe('Occupied');
+  });
+
+  it('excludes administratively unavailable rooms from Help Me Choose and alternatives', () => {
+    const availableRoom = toAssistantRoomRecord(createRoom({ id: 'available-room', status: 'Available' }));
+    const unavailableRoom = toAssistantRoomRecord(createRoom({ id: 'blocked-room', status: 'Unavailable' }));
+    const futureTimeslot = { date: '2026-11-25', startTime: '08:00', endTime: '09:00' };
+
+    expect(findAssistantRoomMatches([availableRoom, unavailableRoom], [], {}, {
+      requiredFeatures: [],
+    }).map((room) => room.roomId)).toEqual(['available-room']);
+    expect(findAlternativeAssistantRooms(
+      [unavailableRoom],
+      [],
+      availableRoom,
+      futureTimeslot,
+      null
+    )).toEqual([]);
+  });
+
+  it('marks an administratively available room with no date conflicts available', () => {
+    const room = toAssistantRoomRecord(createRoom({ status: 'Available' }));
+    const result = checkAssistantRoomAvailability(
+      room,
+      { date: '2026-11-25', startTime: '08:00', endTime: '09:00' },
+      [],
+      new Date('2026-10-31T08:00:00')
+    );
+
+    expect(result.available).toBe(true);
+    expect(result.availabilityLabel).toBe('available');
   });
 
   it('passes the selected date and contiguous time range back to the form after room selection', () => {
