@@ -57,6 +57,7 @@ import {
 import { scheduleConflictsWithReservationSlot } from '@/lib/schedules/scheduleConflicts';
 import {
   getReservationTimeOptions,
+  RESERVATION_CAMPUS_OPERATING_HOURS,
   reservationTimeToMinutes,
 } from '@/lib/reservations/timeSlots';
 import { formatDate, formatTime } from '@/lib/utils/dateTime';
@@ -86,16 +87,7 @@ const DAY_LABELS_BY_VALUE = new Map(
   WEEKDAY_OPTIONS.map((day) => [day.value, day.label])
 );
 const WEEKDAY_VALUES = new Set(WEEKDAY_OPTIONS.map((day) => day.value));
-const CAMPUS_TIME_RANGES: Record<ReservationCampus, { endMinutes: number; startMinutes: number }> = {
-  digi: {
-    startMinutes: 7 * 60,
-    endMinutes: 17 * 60
-  },
-  main: {
-    startMinutes: 7 * 60,
-    endMinutes: 21 * 60
-  },
-};
+const CAMPUS_TIME_RANGES = RESERVATION_CAMPUS_OPERATING_HOURS;
 const FILTER_CHIPS: Array<{ key: RoomFilterKey; label: string }> = [
   {
     key: 'classroom',

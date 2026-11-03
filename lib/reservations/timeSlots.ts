@@ -5,6 +5,14 @@ export interface ReservationTimeRange {
   startMinutes: number;
 }
 
+export const RESERVATION_CAMPUS_OPERATING_HOURS: Record<
+  'digi' | 'main',
+  ReservationTimeRange
+> = {
+  digi: { startMinutes: 7 * 60, endMinutes: 17 * 60 },
+  main: { startMinutes: 7 * 60, endMinutes: 21 * 60 },
+};
+
 export interface ReservationTimeSlot {
   endTime: string;
   startTime: string;

@@ -2,7 +2,14 @@ import { z } from 'zod';
 
 export const reservationChatExtractionSchema = z.object({
   assistantMessage: z.string().trim().min(1).max(600),
-  intent: z.enum(['reservation', 'other', 'unclear']),
+  topicDisposition: z.enum([
+    'supported',
+    'unrelated',
+    'ambiguous',
+    'mixed-supported',
+    'mixed-ambiguous',
+  ]),
+  intent: z.enum(['reservation', 'availability', 'other', 'unclear']),
   roomQuery: z.string().trim().max(160),
   campus: z.enum(['', 'main', 'digi']),
   buildingQuery: z.string().trim().max(120),
@@ -24,9 +31,39 @@ export const reservationChatExtractionSchema = z.object({
   purpose: z.string().trim().max(100),
   organization: z.string().trim().max(160),
   isEvent: z.enum(['', 'Yes', 'No']),
-});
+}).strict();
+
+export const ROOM_ASSISTANT_REFUSAL_MESSAGE =
+  "I'm sorry, but I'm only designed to assist with SDCA room reservations, room recommendations, and checking room availability and schedules. Is there a room or schedule you'd like me to help you with?";
+
+export const ROOM_ASSISTANT_CLARIFICATION_MESSAGE =
+  'I can help with room reservations, recommendations, and schedules. Could you clarify which room-related question you would like me to help with?';
+
+export const reservationChatTurnSchema = z.discriminatedUnion('role', [
+  z.object({
+    role: z.literal('assistant'),
+    content: z.string().trim().min(1).max(700),
+  }).strict(),
+  z.object({
+    role: z.literal('user'),
+    content: z.string().trim().min(1).max(300),
+  }).strict(),
+]);
+
+export const reservationChatExtractionRequestSchema = z.object({
+  action: z.literal('extract'),
+  messages: z.array(reservationChatTurnSchema).min(1).max(12),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  timeZone: z.string().trim().min(1).max(80),
+}).strict();
 
 export type ReservationChatExtraction = z.infer<typeof reservationChatExtractionSchema>;
+
+export function isRoomAssistantDispositionActionable(
+  disposition: ReservationChatExtraction['topicDisposition']
+) {
+  return disposition === 'supported' || disposition === 'mixed-supported';
+}
 
 export function hasReservationRoomSearchCriteria(extraction: ReservationChatExtraction) {
   return Boolean(
@@ -44,7 +81,11 @@ export const RESERVATION_CHAT_RESPONSE_SCHEMA = {
   additionalProperties: false,
   properties: {
     assistantMessage: { type: 'string' },
-    intent: { type: 'string', enum: ['reservation', 'other', 'unclear'] },
+    topicDisposition: {
+      type: 'string',
+      enum: ['supported', 'unrelated', 'ambiguous', 'mixed-supported', 'mixed-ambiguous'],
+    },
+    intent: { type: 'string', enum: ['reservation', 'availability', 'other', 'unclear'] },
     roomQuery: { type: 'string' },
     campus: { type: 'string', enum: ['', 'main', 'digi'] },
     buildingQuery: { type: 'string' },
@@ -64,6 +105,7 @@ export const RESERVATION_CHAT_RESPONSE_SCHEMA = {
   },
   required: [
     'assistantMessage',
+    'topicDisposition',
     'intent',
     'roomQuery',
     'campus',
@@ -100,12 +142,16 @@ export function mergeReservationChatExtractions(
   current: ReservationChatExtraction
 ): ReservationChatExtraction {
   if (!previous) return current;
+  if (!isRoomAssistantDispositionActionable(current.topicDisposition)) return current;
 
   return {
     ...previous,
     ...current,
     assistantMessage: current.assistantMessage || previous.assistantMessage,
-    intent: current.intent === 'unclear' ? previous.intent : current.intent,
+    intent: current.intent === 'unclear' &&
+      (current.topicDisposition === 'supported' || current.topicDisposition === 'mixed-supported')
+      ? previous.intent
+      : current.intent,
     roomQuery: current.roomQuery || previous.roomQuery,
     campus: current.campus || previous.campus,
     buildingQuery: current.buildingQuery || previous.buildingQuery,

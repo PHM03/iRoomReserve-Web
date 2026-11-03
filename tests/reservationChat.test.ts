@@ -9,11 +9,13 @@ import {
   hasReservationRoomSearchCriteria,
   mapReservationChatDraftToForm,
   mergeReservationChatExtractions,
+  reservationChatExtractionRequestSchema,
   reservationChatExtractionSchema,
 } from '../lib/ai/reservationChat';
 
 const completeExtraction = reservationChatExtractionSchema.parse({
   assistantMessage: 'I found matching rooms.',
+  topicDisposition: 'supported' as const,
   intent: 'reservation' as const,
   roomQuery: 'Room 205',
   campus: '',
@@ -144,6 +146,91 @@ describe('reservation chat extraction', () => {
     expect(corrected.purpose).toBe('Group discussion');
     expect(corrected.roomQuery).toBe('Room 205');
     expect(corrected.date).toBe('2026-11-02');
+  });
+
+  it('preserves short date/time follow-ups and applies explicit schedule corrections', () => {
+    const first = reservationChatExtractionSchema.parse({
+      ...completeExtraction,
+      date: '2026-11-02',
+      startTime: '14:00',
+      endTime: '16:00',
+    });
+    const dateOnlyFollowUp = reservationChatExtractionSchema.parse({
+      ...completeExtraction,
+      date: '2026-11-03',
+      roomQuery: '',
+      campus: '',
+      buildingQuery: '',
+      startTime: '',
+      endTime: '',
+      program: '',
+      purpose: '',
+      organization: '',
+      isEvent: '',
+    });
+    const dateCorrected = mergeReservationChatExtractions(first, dateOnlyFollowUp);
+    expect(dateCorrected).toMatchObject({ date: '2026-11-03', startTime: '14:00', endTime: '16:00' });
+
+    const timeCorrection = reservationChatExtractionSchema.parse({
+      ...completeExtraction,
+      roomQuery: '',
+      campus: '',
+      buildingQuery: '',
+      date: '',
+      startTime: '15:00',
+      endTime: '17:00',
+      program: '',
+      purpose: '',
+      organization: '',
+      isEvent: '',
+    });
+    expect(mergeReservationChatExtractions(dateCorrected, timeCorrection)).toMatchObject({
+      roomQuery: 'Room 205',
+      date: '2026-11-03',
+      startTime: '15:00',
+      endTime: '17:00',
+    });
+  });
+
+  it('rejects client-supplied topic classifications and intent fields in extract requests', () => {
+    const request = {
+      action: 'extract' as const,
+      localDate: '2026-11-02',
+      timeZone: 'Asia/Shanghai',
+      messages: [{ role: 'user' as const, content: 'Who is SpongeBob?' }],
+    };
+    expect(reservationChatExtractionRequestSchema.safeParse(request).success).toBe(true);
+    expect(reservationChatExtractionRequestSchema.safeParse({
+      ...request,
+      topicDisposition: 'supported',
+    }).success).toBe(false);
+    expect(reservationChatExtractionRequestSchema.safeParse({
+      ...request,
+      messages: [{ ...request.messages[0], intent: 'reservation' }],
+    }).success).toBe(false);
+  });
+
+  it('does not merge stale supported fields into an unrelated or ambiguous turn', () => {
+    const previous = reservationChatExtractionSchema.parse(completeExtraction);
+    const unrelated = reservationChatExtractionSchema.parse({
+      ...completeExtraction,
+      topicDisposition: 'unrelated',
+      intent: 'other',
+      roomQuery: '',
+      campus: '',
+      buildingQuery: '',
+      date: '',
+      startTime: '',
+      endTime: '',
+      roomType: '',
+      minCapacity: '',
+      requiredFeatures: [],
+      program: '',
+      purpose: '',
+      organization: '',
+      isEvent: '',
+    });
+    expect(mergeReservationChatExtractions(previous, unrelated)).toEqual(unrelated);
   });
 
   it('hands program and purpose to their own form fields without mapping Program to Organization', () => {

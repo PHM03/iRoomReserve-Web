@@ -7,6 +7,7 @@ import {
   normalizeCampus,
   type ReservationCampus,
 } from "@/lib/buildings/campuses";
+import { isCampusManagedBuilding } from "@/lib/buildings/campusAssignments";
 import { formatTimeRange } from "../../utils/dateTime";
 import { normalizeRole, USER_ROLES } from "@/lib/auth/roles";
 import { isMainCampusDsasProfile } from "@/lib/auth/dsas-designation";
@@ -41,7 +42,17 @@ import {
   scheduleConflictsWithReservationSlot,
   type ScheduleAvailabilityContext,
 } from "@/lib/schedules/scheduleConflicts";
-import { normalizeScheduleContext } from "@/lib/schedules/scheduleContext";
+import {
+  isScheduleAcademicYear,
+  isScheduleSemester,
+  normalizeScheduleContext,
+} from "@/lib/schedules/scheduleContext";
+import { RESERVATION_CAMPUS_OPERATING_HOURS } from "@/lib/reservations/timeSlots";
+import {
+  getRoomDayAvailableIntervals,
+  isValidRoomDayInterval,
+  type RoomDayScheduleInterval,
+} from "@/lib/reservations/roomDaySchedule";
 import { ApiError } from "@/lib/server/api-error";
 import { writeAuditLog, writeSystemAuditLog, type AuditLogInput } from "@/lib/server/services/audit-logs";
 import type { RequestAuthContext } from "@/lib/server/request-auth";
@@ -470,6 +481,7 @@ interface ReservationRoomContext {
   activeScheduleContext: ScheduleAvailabilityContext;
   buildingId: string;
   roomStatus: string | null;
+  scheduleContextKnown: boolean;
 }
 
 async function getReservationRoomContext(
@@ -519,6 +531,9 @@ async function getReservationRoomContext(
     academicYear: buildingSnapshot.data()?.activeScheduleAcademicYear,
     semester: buildingSnapshot.data()?.activeScheduleSemester,
   });
+  const scheduleContextKnown =
+    isScheduleAcademicYear(buildingSnapshot.data()?.activeScheduleAcademicYear) &&
+    isScheduleSemester(buildingSnapshot.data()?.activeScheduleSemester);
 
   return {
     activeScheduleContext: {
@@ -527,6 +542,7 @@ async function getReservationRoomContext(
     },
     buildingId,
     roomStatus,
+    scheduleContextKnown,
   };
 }
 
@@ -555,6 +571,151 @@ async function getSchedulesForRoom(
     );
 }
 
+export interface RoomDayScheduleResult {
+  availabilityConfirmed: boolean;
+  availableIntervals: Array<{ endTime: string; startTime: string }>;
+  buildingId: string;
+  campus: ReservationCampus;
+  closedForReservations: boolean;
+  date: string;
+  intervals: RoomDayScheduleInterval[];
+  operatingHours: { endTime: string; startTime: string };
+  roomId: string;
+  roomName: string;
+  roomUnavailable: boolean;
+}
+
+/** Returns a sanitized day schedule for an authenticated room inquiry. */
+export async function getRoomDaySchedule(roomId: string, dateKey: string): Promise<RoomDayScheduleResult> {
+  const roomSnapshot = await db.collection("rooms").doc(roomId).get();
+  if (!roomSnapshot.exists) {
+    throw new ApiError(404, "room_not_found", "That room could not be found.");
+  }
+  const room = roomSnapshot.data() as {
+    buildingId?: unknown;
+    buildingName?: unknown;
+    name?: unknown;
+    status?: unknown;
+  };
+  const buildingId = typeof room.buildingId === "string" ? room.buildingId.trim() : "";
+  if (!buildingId) {
+    throw new ApiError(400, "room_building_missing", "This room has no building assignment.");
+  }
+
+  const buildingSnapshot = await db.collection("buildings").doc(buildingId).get();
+  if (!buildingSnapshot.exists) {
+    throw new ApiError(400, "room_building_missing", "This room's building could not be verified.");
+  }
+  const building = buildingSnapshot.data() as {
+    activeScheduleAcademicYear?: unknown;
+    activeScheduleSemester?: unknown;
+    campus?: unknown;
+    name?: unknown;
+  };
+  const buildingName = typeof building.name === "string" ? building.name :
+    typeof room.buildingName === "string" ? room.buildingName : "";
+  const campus = inferCampusFromBuilding({
+    id: buildingId,
+    name: buildingName,
+    campus: typeof building.campus === "string" ? building.campus : undefined,
+  });
+  if (!campus || !isCampusManagedBuilding(campus, buildingId)) {
+    throw new ApiError(403, "room_building_out_of_scope", "This room is outside the supported campus and building scope.");
+  }
+
+  const scheduleContextKnown =
+    isScheduleAcademicYear(building.activeScheduleAcademicYear) &&
+    isScheduleSemester(building.activeScheduleSemester);
+  const activeScheduleContext = {
+    ...normalizeScheduleContext({
+      academicYear: building.activeScheduleAcademicYear,
+      semester: building.activeScheduleSemester,
+    }),
+    buildingId,
+  };
+  const dayOfWeek = new Date(`${dateKey}T00:00:00.000Z`).getUTCDay();
+  const operatingRange = RESERVATION_CAMPUS_OPERATING_HOURS[campus];
+  const toTime = (minutes: number) =>
+    `${Math.floor(minutes / 60).toString().padStart(2, "0")}:${(minutes % 60).toString().padStart(2, "0")}`;
+  const operatingHours = {
+    startTime: toTime(operatingRange.startMinutes),
+    endTime: toTime(operatingRange.endMinutes),
+  };
+  const [allSchedules, reservations, manualSlots] = await Promise.all([
+    scheduleContextKnown ? getSchedulesForRoom(roomId, activeScheduleContext) : Promise.resolve([] as Schedule[]),
+    getActiveReservationsForRoom(roomId),
+    getManualUnavailableSlotsForRoom(roomId),
+  ]);
+
+  const intervals: RoomDayScheduleInterval[] = [];
+  let sourceDataValid = true;
+  reservations.forEach((reservation) => {
+    if (reservation.date !== dateKey || (reservation.status !== "approved" && reservation.status !== "pending")) return;
+    if (!isValidRoomDayInterval(reservation.startTime, reservation.endTime)) {
+      sourceDataValid = false;
+      return;
+    }
+    intervals.push({
+      startTime: reservation.startTime,
+      endTime: reservation.endTime,
+      kind: reservation.status,
+    });
+  });
+  allSchedules.forEach((schedule) => {
+    if (schedule.dayOfWeek !== dayOfWeek || !isScheduleInActiveContext(schedule, activeScheduleContext)) return;
+    if (!isValidRoomDayInterval(schedule.startTime, schedule.endTime)) {
+      sourceDataValid = false;
+      return;
+    }
+    intervals.push({ startTime: schedule.startTime, endTime: schedule.endTime, kind: "class-schedule" });
+  });
+  manualSlots.forEach((slot) => {
+    if (slot.date !== dateKey) return;
+    if (!isValidRoomDayInterval(slot.startTime, slot.endTime)) {
+      sourceDataValid = false;
+      return;
+    }
+    intervals.push({ startTime: slot.startTime as string, endTime: slot.endTime as string, kind: "manual-unavailability" });
+  });
+
+  const roomUnavailable = isRoomAdministrativelyUnavailable(
+    typeof room.status === "string" ? room.status : null
+  );
+  const sundayClosed = dayOfWeek === 0;
+  if (roomUnavailable) {
+    intervals.push({
+      startTime: operatingHours.startTime,
+      endTime: operatingHours.endTime,
+      kind: "administrative",
+    });
+  }
+  if (sundayClosed) {
+    intervals.push({
+      startTime: operatingHours.startTime,
+      endTime: operatingHours.endTime,
+      kind: "campus-closed",
+    });
+  }
+  const availabilityConfirmed = scheduleContextKnown && sourceDataValid;
+  const availableIntervals = availabilityConfirmed && !roomUnavailable && !sundayClosed
+    ? getRoomDayAvailableIntervals(operatingHours, intervals)
+    : [];
+
+  return {
+    availabilityConfirmed,
+    availableIntervals,
+    buildingId,
+    campus,
+    closedForReservations: sundayClosed,
+    date: dateKey,
+    intervals: intervals.sort((left, right) => left.startTime.localeCompare(right.startTime)),
+    operatingHours,
+    roomId,
+    roomName: typeof room.name === "string" && room.name.trim() ? room.name.trim() : roomId,
+    roomUnavailable,
+  };
+}
+
 export interface ReservationAvailabilityInput {
   userId: string;
   roomId: string;
@@ -565,6 +726,7 @@ export interface ReservationAvailabilityInput {
 
 export interface ReservationAvailabilityOptions {
   excludeReservationIds?: ReadonlySet<string>;
+  requireScheduleContext?: boolean;
   /**
    * When supplied, every availability read participates in the caller's
    * Firestore transaction so a conflicting room/schedule mutation causes a
@@ -595,6 +757,14 @@ export async function assertReservationDatesAvailable(
     input.buildingId,
     options.transaction
   );
+
+  if (options.requireScheduleContext && !roomContext.scheduleContextKnown) {
+    throw new ApiError(
+      409,
+      "schedule_context_unavailable",
+      "Availability could not be confirmed because this building's active recurring schedule is not configured."
+    );
+  }
 
   if (isRoomAdministrativelyUnavailable(roomContext.roomStatus)) {
     throw new ApiError(
@@ -640,11 +810,16 @@ export async function assertReservationDatesAvailable(
         {
           conflictingReservationId: conflictingUserReservation.id,
           date: dateKey,
+          conflictingIntervals: [{
+            startTime: conflictingUserReservation.startTime,
+            endTime: conflictingUserReservation.endTime,
+            kind: "reservation",
+          }],
         }
       );
     }
 
-    const blockedSchedule = roomSchedules.find((schedule) =>
+    const blockedSchedules = roomSchedules.filter((schedule) =>
       scheduleConflictsWithReservationSlot(schedule, {
         buildingId: roomContext.buildingId,
         dayOfWeek,
@@ -654,7 +829,7 @@ export async function assertReservationDatesAvailable(
       })
     );
 
-    if (blockedSchedule) {
+    if (blockedSchedules.length > 0) {
       throw new ApiError(
         409,
         "room_timeslot_unavailable",
@@ -662,11 +837,16 @@ export async function assertReservationDatesAvailable(
         {
           date: dateKey,
           reason: "schedule_conflict",
+          conflictingIntervals: blockedSchedules.map((schedule) => ({
+            startTime: schedule.startTime,
+            endTime: schedule.endTime,
+            kind: "class schedule",
+          })),
         }
       );
     }
 
-    const manualUnavailableSlot = manualUnavailableSlots.find(
+    const manualUnavailableSlotsForDate = manualUnavailableSlots.filter(
       (slot) =>
         slot.date === dateKey &&
         typeof slot.startTime === "string" &&
@@ -674,16 +854,24 @@ export async function assertReservationDatesAvailable(
         slotsOverlap(requestSlot, { startTime: slot.startTime, endTime: slot.endTime })
     );
 
-    if (manualUnavailableSlot) {
+    if (manualUnavailableSlotsForDate.length > 0) {
       throw new ApiError(
         409,
         "room_timeslot_unavailable",
         "This room is unavailable for the selected timeslot/s. Would you like to see alternative rooms?",
-        { date: dateKey, reason: "manual_unavailability" }
+        {
+          date: dateKey,
+          reason: "manual_unavailability",
+          conflictingIntervals: manualUnavailableSlotsForDate.map((slot) => ({
+            startTime: slot.startTime as string,
+            endTime: slot.endTime as string,
+            kind: "restricted",
+          })),
+        }
       );
     }
 
-    const approvedReservation = roomReservations.find(
+    const approvedReservations = roomReservations.filter(
       (reservation) =>
         !options.excludeReservationIds?.has(reservation.id) &&
         reservation.date === dateKey &&
@@ -694,7 +882,7 @@ export async function assertReservationDatesAvailable(
         })
     );
 
-    if (approvedReservation) {
+    if (approvedReservations.length > 0) {
       throw new ApiError(
         409,
         "room_timeslot_unavailable",
@@ -702,6 +890,11 @@ export async function assertReservationDatesAvailable(
         {
           date: dateKey,
           reason: "room_reserved",
+          conflictingIntervals: approvedReservations.map((reservation) => ({
+            startTime: reservation.startTime,
+            endTime: reservation.endTime,
+            kind: "approved reservation",
+          })),
         }
       );
     }

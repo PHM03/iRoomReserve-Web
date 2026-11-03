@@ -8,6 +8,7 @@ import {
   hasReservationRoomSearchCriteria,
   getMissingReservationChatFields,
   getMissingReservationScheduleFields,
+  isRoomAssistantDispositionActionable,
   mergeReservationChatExtractions,
   type ReservationChatExtraction,
   type ReservationChatTurn,
@@ -28,7 +29,6 @@ import RoomAvailabilityPicker from '@/components/rooms/RoomAvailabilityPicker';
 import {
   ASSISTANT_FEATURE_OPTIONS,
   ASSISTANT_ROOM_TYPE_OPTIONS,
-  checkAssistantRoomAvailability,
   findAlternativeAssistantRooms,
   findAssistantRoomAutocompleteMatches,
   findAssistantRoomMatchesForDatePreference,
@@ -40,7 +40,6 @@ import {
   isCompleteTimeslot,
   suggestAssistantTimeslotsForRoom,
   type AssistantScheduleRecord,
-  type AssistantAvailabilityResult,
   type AssistantDatePreference,
   type AssistantPreferences,
   type AssistantRecommendation,
@@ -93,6 +92,7 @@ type AssistantStep =
   | 'date-time'
   | 'entry'
   | 'features'
+  | 'availability-inquiry'
   | 'results'
   | 'reservation-chat'
   | 'quick-reservation'
@@ -189,17 +189,6 @@ const ASSISTANT_WEEKDAY_LABELS = [
   'Thursday',
   'Friday',
   'Saturday',
-];
-
-const UNAVAILABLE_OPTIONS: AssistantOption[] = [
-  {
-    label: 'Try another day/time',
-    value: 'try-another-day-time'
-  },
-  {
-    label: 'See alternative rooms',
-    value: 'see-alternative-rooms'
-  },
 ];
 
 let messageCounter = 0;
@@ -516,15 +505,6 @@ async function attachFeedbackSummaries(
   }));
 }
 
-function createUnavailableOptionsMessage() {
-  return createMessage(
-    'You can try another day and time for this room, or I can show other rooms available at the same time.',
-    'system',
-    'buttons',
-    { options: UNAVAILABLE_OPTIONS }
-  );
-}
-
 function createTimeslotSuggestionMessage(suggestions: AssistantTimeslotSuggestion[]) {
   if (suggestions.length === 0) {
     return createMessage(
@@ -556,50 +536,6 @@ function createEntryFollowUpMessage(selectedRoom: AssistantRoomRecord | null) {
     'buttons',
     { options: ENTRY_OPTIONS }
   );
-}
-
-function buildAvailabilityMessage(
-  selectedRoom: AssistantRoomRecord,
-  availability: AssistantAvailabilityResult,
-  timeslot: Required<AssistantTimeslot>
-) {
-  if (availability.available) {
-    return `Room ${getRoomDisplayName(selectedRoom)} is free at ${formatAssistantTimeslot(
-      timeslot
-    )}! Would you like to reserve it?`;
-  }
-
-  const [firstConflict] = availability.conflictingReservations;
-
-  if (firstConflict) {
-    return `Room ${getRoomDisplayName(selectedRoom)} is already reserved on ${formatAssistantTimeslot(
-      {
-        date: firstConflict.date,
-        endTime: firstConflict.endTime,
-        startTime: firstConflict.startTime,
-      }
-    )}.`;
-  }
-
-  const [firstSchedule] = availability.conflictingSchedules;
-
-  if (firstSchedule) {
-    return `Room ${getRoomDisplayName(
-      selectedRoom
-    )} has a class schedule during ${formatAssistantTimeslot(timeslot)}.`;
-  }
-
-  if (availability.roomStatus === 'Unavailable') {
-    return `Room ${getRoomDisplayName(
-      selectedRoom
-    )} is currently marked as unavailable, so it cannot be reserved for ${formatAssistantTimeslot(
-      timeslot
-    )}.`;
-  }
-
-  return `Room ${getRoomDisplayName(selectedRoom)} is currently ${availability.roomStatus.toLowerCase()} at ${formatAssistantTimeslot(
-    timeslot
-  )}.`;
 }
 
 export default function RoomAssistantWidget({
@@ -668,6 +604,11 @@ export default function RoomAssistantWidget({
   const [chatAvailability, setChatAvailability] = useState<{ available: boolean; message: string } | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState('');
+  const [availabilityTurns, setAvailabilityTurns] = useState<ReservationChatTurn[]>([]);
+  const [availabilityExtraction, setAvailabilityExtraction] = useState<ReservationChatExtraction | null>(null);
+  const [availabilitySelectedRoomId, setAvailabilitySelectedRoomId] = useState('');
+  const [availabilityBusy, setAvailabilityBusy] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState('');
   const flowGenerationRef = useRef(0);
   const [quickRoomQuery, setQuickRoomQuery] = useState('');
   const [quickRoom, setQuickRoom] = useState<AssistantRoomRecord | null>(null);
@@ -748,6 +689,11 @@ export default function RoomAssistantWidget({
     setChatAvailability(null);
     setChatError('');
     setChatBusy(false);
+    setAvailabilityTurns([]);
+    setAvailabilityExtraction(null);
+    setAvailabilitySelectedRoomId('');
+    setAvailabilityBusy(false);
+    setAvailabilityError('');
     setQuickRoomQuery('');
     setQuickRoom(null);
     setQuickDate('');
@@ -821,12 +767,324 @@ export default function RoomAssistantWidget({
     chatReservationDetailsMinimized && chatSelectedRoomId
       ? chatRoomSuggestions.filter((room) => room.roomId === chatSelectedRoomId)
       : chatRoomSuggestions;
+  const availabilityRoomSuggestions = useMemo(() => {
+    const extraction = availabilityExtraction;
+    if (!extraction?.roomQuery) return [];
+    let matches = findAssistantRoomAutocompleteMatches(autocompleteRooms, extraction.roomQuery);
+    if (extraction.campus) {
+      matches = matches.filter((room) => inferCampusFromBuilding({
+        id: room.originalRoom.buildingId,
+        name: room.originalRoom.buildingName,
+      }) === extraction.campus);
+    }
+    if (extraction.buildingQuery) {
+      const buildingQuery = extraction.buildingQuery.toLowerCase();
+      matches = matches.filter((room) =>
+        `${room.building} ${room.originalRoom.buildingName ?? ''}`.toLowerCase().includes(buildingQuery)
+      );
+    }
+    return matches.slice(0, 6);
+  }, [autocompleteRooms, availabilityExtraction]);
   const quickRoomSuggestions = useMemo(
     () => quickRoomQuery.trim().length >= 2
       ? findAssistantRoomAutocompleteMatches(autocompleteRooms, quickRoomQuery)
       : [],
     [autocompleteRooms, quickRoomQuery]
   );
+
+  function startAvailabilityInquiry() {
+    const prompt = "Which room would you like to check? You can provide a specific date and time, or simply select a date to view the room's schedule for the entire day.";
+    flowGenerationRef.current += 1;
+    setStep('availability-inquiry');
+    setChatInput('');
+    setAvailabilityExtraction(null);
+    setAvailabilitySelectedRoomId('');
+    setAvailabilityBusy(false);
+    setAvailabilityError('');
+    setAvailabilityTurns([{ role: 'assistant', content: prompt }]);
+    setMessages((current) => [
+      ...current,
+      createMessage('Check availability', 'user', 'text'),
+      createMessage(prompt, 'system', 'text'),
+    ]);
+  }
+
+  function formatInquiryInterval(date: string, interval: { startTime: string; endTime: string }) {
+    return formatAssistantTimeslot({
+      date,
+      startTime: interval.startTime,
+      endTime: interval.endTime,
+    });
+  }
+
+  async function completeAvailabilityInquiry(
+    extraction: ReservationChatExtraction,
+    room: AssistantRoomRecord,
+    transcript: ReservationChatTurn[],
+    operationGeneration: number
+  ) {
+    if (!extraction.date) return;
+    const roomName = getRoomDisplayName(room);
+    setAvailabilityBusy(true);
+    setAvailabilityError('');
+    try {
+      let assistantMessage: string;
+      if (extraction.startTime && extraction.endTime) {
+        const result = await apiRequest<{
+          checks: Array<{
+            available: boolean;
+            conflictingIntervals?: Array<{ endTime: string; kind: string; startTime: string }>;
+            message: string;
+            roomId: string;
+          }>;
+        }>('/api/ai/room-reservation', {
+          body: {
+            action: 'check-availability',
+            date: extraction.date,
+            endTime: extraction.endTime,
+            roomIds: [room.roomId],
+            startTime: extraction.startTime,
+          },
+        });
+        const check = result.checks.find((candidate) => candidate.roomId === room.roomId);
+        if (!check) throw new Error('I could not verify that room. Please try again.');
+        if (check.available) {
+          assistantMessage = `${roomName} is available for ${formatAssistantTimeslot({
+            date: extraction.date,
+            startTime: extraction.startTime,
+            endTime: extraction.endTime,
+          })}. The server found no conflicting reservation, recurring schedule, or room restriction.`;
+        } else {
+          const conflicts = check.conflictingIntervals ?? [];
+          const conflictText = conflicts.length
+            ? ` Conflicting periods: ${conflicts.map((interval) => `${formatInquiryInterval(extraction.date, interval)} (${interval.kind})`).join('; ')}.`
+            : '';
+          assistantMessage = `${roomName} is unavailable for the requested time. ${check.message}${conflictText} Try another schedule or room.`;
+        }
+      } else {
+        const result = await apiRequest<{
+          schedule: {
+            availabilityConfirmed: boolean;
+            availableIntervals: Array<{ endTime: string; startTime: string }>;
+            closedForReservations: boolean;
+            date: string;
+            intervals: Array<{ endTime: string; kind: string; startTime: string }>;
+            operatingHours: { endTime: string; startTime: string };
+            roomName: string;
+            roomUnavailable: boolean;
+          };
+        }>('/api/ai/room-reservation', {
+          body: { action: 'room-day-schedule', date: extraction.date, roomId: room.roomId },
+        });
+        const schedule = result.schedule;
+        const approved = schedule.intervals.filter((interval) => interval.kind === 'approved');
+        const pending = schedule.intervals.filter((interval) => interval.kind === 'pending');
+        const classes = schedule.intervals.filter((interval) => interval.kind === 'class-schedule');
+        const restrictions = schedule.intervals.filter((interval) =>
+          interval.kind === 'manual-unavailability' || interval.kind === 'administrative' || interval.kind === 'campus-closed'
+        );
+        const lines = [
+          `${schedule.roomName} schedule for ${schedule.date}. Reservation hours: ${schedule.operatingHours.startTime}–${schedule.operatingHours.endTime}.`,
+        ];
+        if (approved.length === 0) {
+          lines.push(pending.length
+            ? 'There are no approved reservations recorded for that date.'
+            : 'There are no recorded reservations for that date.');
+        } else {
+          lines.push(`Occupied (approved reservations): ${approved.map((interval) => formatInquiryInterval(schedule.date, interval)).join('; ')}.`);
+        }
+        if (classes.length) {
+          lines.push(`Recurring class schedule: ${classes.map((interval) => formatInquiryInterval(schedule.date, interval)).join('; ')}.`);
+        }
+        if (restrictions.length) {
+          lines.push(`Restricted: ${restrictions.map((interval) => `${formatInquiryInterval(schedule.date, interval)} (${interval.kind === 'administrative' ? 'room restriction' : interval.kind === 'campus-closed' ? 'campus closed to reservations' : 'manual room restriction'})`).join('; ')}.`);
+        }
+        if (pending.length) {
+          lines.push(`Pending requests (informational; they do not block availability): ${pending.map((interval) => formatInquiryInterval(schedule.date, interval)).join('; ')}.`);
+        }
+        if (schedule.roomUnavailable) {
+          lines.push('This room is administratively unavailable for reservations.');
+        }
+        if (schedule.closedForReservations) {
+          lines.push('The campus is closed to reservations on Sundays.');
+        }
+        if (schedule.availabilityConfirmed) {
+          lines.push(schedule.availableIntervals.length
+            ? `Available periods: ${schedule.availableIntervals.map((interval) => formatInquiryInterval(schedule.date, interval)).join('; ')}.`
+            : 'No available periods can be confirmed within the listed operating hours.');
+        } else {
+          lines.push('I could not confirm available periods because the active recurring schedule data is incomplete or invalid.');
+        }
+        assistantMessage = lines.join(' ');
+      }
+
+      if (operationGeneration !== flowGenerationRef.current) return;
+      const nextExtraction = { ...extraction, assistantMessage };
+      const assistantTurn = { role: 'assistant' as const, content: assistantMessage };
+      setAvailabilityExtraction(nextExtraction);
+      setAvailabilityTurns([...transcript, assistantTurn]);
+      setMessages((current) => [...current, createMessage(assistantMessage, 'system', 'text')]);
+    } catch (error) {
+      if (operationGeneration !== flowGenerationRef.current) return;
+      setAvailabilityError(error instanceof Error ? error.message : 'Availability could not be verified. Please try again.');
+    } finally {
+      if (operationGeneration === flowGenerationRef.current) setAvailabilityBusy(false);
+    }
+  }
+
+  async function submitAvailabilityInquiry() {
+    const text = chatInput.trim();
+    if (!text || availabilityBusy) return;
+    if (dataLoading) {
+      setAvailabilityError('Live room data is still loading. Try again in a moment.');
+      return;
+    }
+    if (dataError) {
+      setAvailabilityError(dataError);
+      return;
+    }
+    const nextTurns = [...availabilityTurns, { role: 'user' as const, content: text }];
+    const operationGeneration = flowGenerationRef.current;
+    setAvailabilityTurns(nextTurns);
+    setChatInput('');
+    setAvailabilityBusy(true);
+    setAvailabilityError('');
+    setMessages((current) => [...current, createMessage(text, 'user', 'text')]);
+    try {
+      const now = new Date();
+      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const result = await apiRequest<{ extraction: ReservationChatExtraction }>('/api/ai/room-reservation', {
+        body: {
+          action: 'extract',
+          localDate,
+          messages: nextTurns,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+      });
+      if (operationGeneration !== flowGenerationRef.current) return;
+      if (!isRoomAssistantDispositionActionable(result.extraction.topicDisposition)) {
+        const assistantTurn = { role: 'assistant' as const, content: result.extraction.assistantMessage };
+        setAvailabilityExtraction(result.extraction);
+        setAvailabilitySelectedRoomId('');
+        setAvailabilityTurns([...nextTurns, assistantTurn]);
+        setMessages((current) => [...current, createMessage(assistantTurn.content, 'system', 'text')]);
+        setAvailabilityBusy(false);
+        return;
+      }
+      const mergedExtraction = mergeReservationChatExtractions(availabilityExtraction, result.extraction);
+      const mentionsTime = /\b(?:at|from|between)\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?\b/i.test(text) ||
+        /\b\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b/i.test(text);
+      const switchesToFullDay =
+        /\b(full day|full schedule|entire day|entire schedule|whole day|whole schedule|all day|daily schedule|day schedule|show .*schedule)\b/i.test(text) &&
+        !mentionsTime &&
+        !result.extraction.startTime &&
+        !result.extraction.endTime;
+      const extraction = switchesToFullDay
+        ? { ...mergedExtraction, startTime: '', endTime: '' }
+        : mergedExtraction;
+      const incompleteTimeRange = Boolean(extraction.startTime) !== Boolean(extraction.endTime) ||
+        (mentionsTime && !extraction.startTime && !extraction.endTime && !switchesToFullDay);
+      if (extraction.intent !== 'availability') {
+        const assistantMessage = extraction.intent === 'reservation'
+          ? 'I can check a room and schedule here. Please tell me the room and date you want to check.'
+          : extraction.assistantMessage;
+        const nextExtraction = { ...extraction, assistantMessage };
+        const assistantTurn = { role: 'assistant' as const, content: assistantMessage };
+        setAvailabilityExtraction(nextExtraction);
+        setAvailabilityTurns([...nextTurns, assistantTurn]);
+        setMessages((current) => [...current, createMessage(assistantMessage, 'system', 'text')]);
+        setAvailabilityBusy(false);
+        return;
+      }
+
+      const normalizeRoomText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const candidates = extraction.roomQuery
+        ? findAssistantRoomAutocompleteMatches(autocompleteRooms, extraction.roomQuery).filter((room) =>
+            (!extraction.campus || inferCampusFromBuilding({
+              id: room.originalRoom.buildingId,
+              name: room.originalRoom.buildingName,
+            }) === extraction.campus) &&
+            (!extraction.buildingQuery || `${room.building} ${room.originalRoom.buildingName ?? ''}`.toLowerCase().includes(extraction.buildingQuery.toLowerCase()))
+          )
+        : [];
+      const normalizedQuery = normalizeRoomText(extraction.roomQuery);
+      const exactCandidates = candidates.filter((room) =>
+        [room.roomId, room.label, room.originalRoom.name].some((value) => normalizeRoomText(value) === normalizedQuery)
+      );
+      const priorSelectedRoom = autocompleteRooms.find((room) => room.roomId === availabilitySelectedRoomId) ?? null;
+      const selectionWasCorrected = Boolean(
+        extraction.roomQuery && availabilityExtraction?.roomQuery &&
+        normalizeRoomText(extraction.roomQuery) !== normalizeRoomText(availabilityExtraction.roomQuery)
+      );
+      const resolvedRoom = exactCandidates.length === 1
+        ? exactCandidates[0]
+        : exactCandidates.length === 0 && candidates.length === 1
+          ? candidates[0]
+          : !extraction.roomQuery || !selectionWasCorrected
+            ? priorSelectedRoom
+            : null;
+
+      let assistantMessage = extraction.assistantMessage;
+      if (!extraction.roomQuery && !resolvedRoom) {
+        assistantMessage = 'Which room would you like to check?';
+      } else if (!resolvedRoom && candidates.length > 1) {
+        assistantMessage = 'I found several matching rooms. Select the room you want to check below.';
+      } else if (!resolvedRoom) {
+        assistantMessage = `I could not find a unique room matching “${extraction.roomQuery}”. Please choose a room from the suggestions or give its exact room name.`;
+      } else if (!extraction.date) {
+        assistantMessage = `What date would you like me to check for ${getRoomDisplayName(resolvedRoom)}?`;
+      } else if (incompleteTimeRange) {
+        assistantMessage = 'Please provide both the start and end time, or ask to see the room’s schedule for the entire day.';
+      }
+
+      const nextExtraction = { ...extraction, assistantMessage };
+      setAvailabilityExtraction(nextExtraction);
+      setAvailabilitySelectedRoomId(resolvedRoom?.roomId ?? '');
+      if (resolvedRoom && extraction.date && !incompleteTimeRange) {
+        await completeAvailabilityInquiry(nextExtraction, resolvedRoom, nextTurns, operationGeneration);
+      } else {
+        const assistantTurn = { role: 'assistant' as const, content: assistantMessage };
+        setAvailabilityTurns([...nextTurns, assistantTurn]);
+        setMessages((current) => [...current, createMessage(assistantMessage, 'system', 'text')]);
+        setAvailabilityBusy(false);
+      }
+    } catch (error) {
+      if (operationGeneration !== flowGenerationRef.current) return;
+      setAvailabilityError(error instanceof Error ? error.message : 'The availability assistant could not process that message.');
+      setAvailabilityBusy(false);
+    }
+  }
+
+  async function selectAvailabilityRoom(room: AssistantRoomRecord) {
+    const extraction = availabilityExtraction;
+    if (!extraction || availabilityBusy) return;
+    const roomName = getRoomDisplayName(room);
+    const selectionText = `Check ${roomName}`;
+    const nextTurns = [...availabilityTurns, { role: 'user' as const, content: selectionText }];
+    const operationGeneration = flowGenerationRef.current;
+    const nextExtraction = { ...extraction, roomQuery: roomName };
+    setAvailabilityExtraction(nextExtraction);
+    setAvailabilitySelectedRoomId(room.roomId);
+    setAvailabilityTurns(nextTurns);
+    setMessages((current) => [...current, createMessage(selectionText, 'user', 'text')]);
+    if (!nextExtraction.date) {
+      const assistantMessage = `What date would you like me to check for ${roomName}?`;
+      const assistantTurn = { role: 'assistant' as const, content: assistantMessage };
+      setAvailabilityExtraction({ ...nextExtraction, assistantMessage });
+      setAvailabilityTurns([...nextTurns, assistantTurn]);
+      setMessages((current) => [...current, createMessage(assistantMessage, 'system', 'text')]);
+      return;
+    }
+    if (Boolean(nextExtraction.startTime) !== Boolean(nextExtraction.endTime)) {
+      const assistantMessage = 'Please provide both the start and end time, or ask to see the room’s schedule for the entire day.';
+      const assistantTurn = { role: 'assistant' as const, content: assistantMessage };
+      setAvailabilityExtraction({ ...nextExtraction, assistantMessage });
+      setAvailabilityTurns([...nextTurns, assistantTurn]);
+      setMessages((current) => [...current, createMessage(assistantMessage, 'system', 'text')]);
+      return;
+    }
+    await completeAvailabilityInquiry(nextExtraction, room, nextTurns, operationGeneration);
+  }
 
   async function validateQuickReservation() {
     if (!quickRoom || !quickDate || !quickStartTime || !quickEndTime || quickBusy) {
@@ -889,6 +1147,17 @@ export default function RoomAssistantWidget({
         body: { action: 'extract', localDate, messages: nextTurns, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
       });
       if (operationGeneration !== flowGenerationRef.current) return;
+      if (!isRoomAssistantDispositionActionable(result.extraction.topicDisposition)) {
+        setChatExtraction(result.extraction);
+        setChatAlternativeRoomIds(null);
+        setChatSelectedRoomId('');
+        setChatReservationDetailsMinimized(false);
+        setChatAvailability(null);
+        const assistantTurn = { role: 'assistant' as const, content: result.extraction.assistantMessage };
+        setChatTurns([...nextTurns, assistantTurn]);
+        setMessages((current) => [...current, createMessage(assistantTurn.content, 'system', 'text')]);
+        return;
+      }
       const extraction = mergeReservationChatExtractions(chatExtraction, result.extraction);
       const priorChatSelection = autocompleteRooms.find((room) => room.roomId === chatSelectedRoomId) ?? selectedRoom;
       const normalizeRoomText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -1408,85 +1677,6 @@ export default function RoomAssistantWidget({
     queueBotMessages([createTypePromptMessage()]);
   }
 
-  function handleSelectedRoomCheck() {
-    appendUserMessage('Check availability');
-
-    if (dataError) {
-      setStep('entry');
-      queueBotMessages([createMessage(dataError, 'system', 'text')]);
-      return;
-    }
-
-    if (dataLoading) {
-      setStep('entry');
-      queueBotMessages([
-        createMessage(
-          'I am still loading live Firebase room data. Try checking again in a moment.',
-          'system',
-          'text'
-        ),
-      ]);
-      return;
-    }
-
-    if (!selectedRoom) {
-      setStep('entry');
-      queueBotMessages([
-        createMessage(
-          'Pick a room from the list first, then I can check it against live availability.',
-          'system',
-          'text'
-        ),
-      ]);
-      return;
-    }
-
-    if (!isCompleteTimeslot(timeslot)) {
-      setStep('entry');
-      queueBotMessages([
-        createMessage(
-          `What date and time are you planning to use ${getRoomDisplayName(
-            selectedRoom
-          )}? Select the date, start time, and end time in the reservation form, then tap Check availability again.`,
-          'system',
-          'text'
-        ),
-      ]);
-      return;
-    }
-
-    const resolvedTimeslot = timeslot as Required<AssistantTimeslot>;
-    const availability = checkAssistantRoomAvailability(
-      selectedRoom,
-      resolvedTimeslot,
-      reservations,
-      new Date(),
-      schedules
-    );
-
-    if (availability.available) {
-      setStep('results');
-      queueBotMessages([
-        createMessage(
-          buildAvailabilityMessage(selectedRoom, availability, resolvedTimeslot),
-          'system',
-          'text'
-        ),
-      ]);
-      return;
-    }
-
-    setStep('unavailable-actions');
-    queueBotMessages([
-      createMessage(
-        buildAvailabilityMessage(selectedRoom, availability, resolvedTimeslot),
-        'system',
-        'text'
-      ),
-      createUnavailableOptionsMessage(),
-    ]);
-  }
-
   function handleTypeSelection(value: AssistantRoomTypeValue | '') {
     const nextPreferences: AssistantPreferences = {
       ...preferences,
@@ -1820,6 +2010,10 @@ export default function RoomAssistantWidget({
     }
 
     if (step === 'entry') {
+      if (option.value === 'check-selected-room') {
+        startAvailabilityInquiry();
+        return;
+      }
       if (option.value === 'quick-reservation') {
         flowGenerationRef.current += 1;
         setStep('quick-reservation');
@@ -1867,7 +2061,6 @@ export default function RoomAssistantWidget({
         return;
       }
 
-      handleSelectedRoomCheck();
       return;
     }
 
@@ -2116,6 +2309,10 @@ export default function RoomAssistantWidget({
       width: panelRect.width,
     };
   }
+
+  const latestAssistantResponse = [...messages]
+    .reverse()
+    .find((message) => message.role === 'system')?.text;
 
   return (
     <>
@@ -2483,13 +2680,63 @@ export default function RoomAssistantWidget({
               )}
               <p className="text-[9px] leading-relaxed text-black/55">Availability is checked again by the reservation form when you submit. Required document uploads and approval routing stay in that form.</p>
             </div>
+          ) : step === 'availability-inquiry' ? (
+            <div className="border-t border-black/8 bg-white p-4">
+              {dataLoading && <p className="mb-2 text-xs text-black/55">Loading live rooms…</p>}
+              {dataError && <p className="mb-2 text-xs text-rose-700" role="alert">{dataError}</p>}
+              {availabilityExtraction?.roomQuery && availabilityRoomSuggestions.length > 0 && (
+                <div className="mb-2 max-h-32 space-y-1 overflow-y-auto">
+                  {availabilityRoomSuggestions.map((room) => {
+                    const campus = inferCampusFromBuilding({
+                      id: room.originalRoom.buildingId,
+                      name: room.originalRoom.buildingName,
+                    });
+                    const selected = availabilitySelectedRoomId === room.roomId;
+                    return (
+                      <button
+                        key={room.roomId}
+                        type="button"
+                        disabled={availabilityBusy}
+                        onClick={() => void selectAvailabilityRoom(room)}
+                        className={`block w-full rounded-lg border px-3 py-2 text-left text-xs disabled:opacity-50 ${selected ? 'border-[#a12124] bg-[#a12124]/8' : 'border-black/10 hover:bg-black/5'}`}
+                      >
+                        <span className="block font-bold">{room.label || room.roomId}</span>
+                        <span className="mt-0.5 block text-black/65">{campus ? getCampusName(campus) : 'Campus unavailable'} · {room.building || room.originalRoom.buildingName || room.originalRoom.buildingId}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {availabilitySelectedRoomId && availabilityExtraction && (
+                <p className="mb-2 text-xs text-black/65">
+                  Selected room: {autocompleteRooms.find((room) => room.roomId === availabilitySelectedRoomId)?.label || availabilitySelectedRoomId}
+                  {availabilityExtraction.date ? ` · ${availabilityExtraction.date}` : ''}
+                  {availabilityExtraction.startTime && availabilityExtraction.endTime ? ` · ${availabilityExtraction.startTime}–${availabilityExtraction.endTime}` : ' · full-day schedule'}
+                </p>
+              )}
+              {availabilityError && <p className="mb-2 text-xs text-rose-700" role="alert">{availabilityError}</p>}
+              <form className="mt-2 flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); void submitAvailabilityInquiry(); }}>
+                <label htmlFor="assistant-availability-inquiry" className="sr-only">Describe the room availability you want to check</label>
+                <textarea
+                  id="assistant-availability-inquiry"
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  maxLength={300}
+                  rows={2}
+                  placeholder="e.g. Check Room 301 tomorrow from 2 PM to 4 PM"
+                  className="min-w-0 flex-1 resize-none rounded-xl border border-black/12 bg-[#f8f4ef] px-3 py-2 text-sm outline-none focus:border-[#a12124]/55"
+                />
+                <button type="submit" disabled={!chatInput.trim() || availabilityBusy || dataLoading} className="rounded-xl bg-[#a12124] px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{availabilityBusy ? 'Checking…' : 'Send'}</button>
+              </form>
+              <p className="mt-1 text-right text-[11px] text-black/45" aria-live="polite">{chatInput.length}/300</p>
+            </div>
           ) : step === 'reservation-chat' ? (
             <div className="border-t border-black/8 bg-white p-4">
               {chatExtraction && (
                 <>
                   {!chatReservationDetailsMinimized && getMissingReservationChatFields(chatExtraction).some(
                     (field) => field !== 'room or room type' || !chatSelectedRoomId
-                  ) && (
+                  ) && chatExtraction.assistantMessage !== latestAssistantResponse && (
                     <p className="mb-2 text-[11px] text-black/65">{chatExtraction.assistantMessage}</p>
                   )}
                   <div className="max-h-32 space-y-1 overflow-y-auto">
