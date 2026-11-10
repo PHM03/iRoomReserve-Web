@@ -263,13 +263,6 @@ export default function AdminDashboard({
         };
       }
 
-      if (room.status === 'Reserved') {
-        return {
-          status: 'Reserved',
-          detail: 'Reserved'
-        };
-      }
-
       const activeClass = isRoomInClass(schedules, room.id);
       if (activeClass) {
         return {
