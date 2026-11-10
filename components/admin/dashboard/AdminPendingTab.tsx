@@ -911,7 +911,7 @@ export default function AdminPendingTab({
                     {confirmModal.step === 'no-conflict' && (
                       <>
                         <p style={{ fontSize: '12px', color: '#15803d', fontWeight: 700, marginBottom: '8px' }}>
-                          No class conflicts. Good to approve!
+                          No schedule conflicts. Good to approve!
                         </p>
                         <p style={{ fontSize: '13px', color: '#666', marginBottom: '24px' }}>
                           This will approve the reservation and notify the requester.

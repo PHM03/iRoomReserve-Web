@@ -218,8 +218,6 @@ export function buildFeedbackInsights(
 
   if (currentMetrics.totalReviews === 0) {
     actionableInsights.push('No feedback available for the selected filters.');
-  } else if (!comparable || previousMetrics.totalReviews < MINIMUM_FEEDBACK_SAMPLE_SIZE) {
-    actionableInsights.push('Not enough previous-period data for comparison.');
   } else if (positiveRateChangePoints !== null && Math.abs(positiveRateChangePoints) >= 0.1) {
     actionableInsights.push(
       `Positive review rate ${positiveRateChangePoints > 0 ? 'increased' : 'decreased'} by ${Math.abs(positiveRateChangePoints).toFixed(1)} percentage points compared with the previous period.`,
