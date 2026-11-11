@@ -94,6 +94,14 @@ export function isSimpleAlternativeRoomRequest(text: string) {
   return isAlternativeRoomRequest(text) && !includesNewSearchDetails;
 }
 
+export function isBroaderRoomSearchRequest(text: string) {
+  return /\b(?:what|which|show|list|find)\b.{0,45}\b(?:rooms?|options?)\b.{0,30}\b(?:available|free)\b|\bany\s+rooms?\s+(?:available|free)\b/i.test(text);
+}
+
+export function isConversationResetRequest(text: string) {
+  return /\b(?:reset\s+(?:everything|all|the\s+chat|the\s+conversation|the\s+assistant)|clear\s+(?:everything|the\s+chat|the\s+conversation)|start\s+over)\b/i.test(text);
+}
+
 export const RESERVATION_CHAT_RESPONSE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -205,7 +213,10 @@ export function canCheckReservationChatAvailability(
   );
 }
 
-export function buildReservationChatClarificationMessage(extraction: ReservationChatExtraction) {
+export function buildReservationChatClarificationMessage(
+  extraction: ReservationChatExtraction,
+  hasSelectedRoom = true
+) {
   const missing = getMissingReservationChatFields(extraction);
   const isMissingProgram = missing.includes('program/course');
   const isMissingPurpose = missing.includes('purpose');
@@ -220,9 +231,13 @@ export function buildReservationChatClarificationMessage(extraction: Reservation
     return 'I have your reservation details, but I still need the purpose of your reservation. What will you use the room for?';
   }
 
-  return missing.length
-    ? `I still need ${missing.join(', ')}. Could you provide those details?`
-    : 'Your reservation details are complete. Select Preview availability to check the room and schedule.';
+  if (missing.length) {
+    return `I still need ${missing.join(', ')}. Could you provide those details?`;
+  }
+
+  return hasSelectedRoom
+    ? 'Your reservation details are complete. Select Preview availability to check the room and schedule.'
+    : 'Your reservation details are ready. Select a specific room from the matching rooms so I can check its availability.';
 }
 
 export function mapReservationChatDraftToForm(

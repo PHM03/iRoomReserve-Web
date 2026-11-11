@@ -7,6 +7,8 @@ import {
   getMissingReservationChatFields,
   getMissingReservationScheduleFields,
   hasReservationRoomSearchCriteria,
+  isBroaderRoomSearchRequest,
+  isConversationResetRequest,
   isAlternativeRoomRequest,
   isRoomTypeHelpRequest,
   isSimpleAlternativeRoomRequest,
@@ -44,6 +46,8 @@ describe('reservation chat extraction', () => {
     expect(isAlternativeRoomRequest('Can you show me more options?')).toBe(true);
     expect(isSimpleAlternativeRoomRequest('Can you suggest others rooms?')).toBe(true);
     expect(isSimpleAlternativeRoomRequest('Can you suggest other rooms next Friday at 10 AM?')).toBe(false);
+    expect(isBroaderRoomSearchRequest('What are the rooms that are available, then?')).toBe(true);
+    expect(isConversationResetRequest('Hello! Reset everything')).toBe(true);
     expect(isAlternativeRoomRequest('Can you recommend a classroom?')).toBe(false);
   });
 
@@ -67,6 +71,21 @@ describe('reservation chat extraction', () => {
       'start time',
       'end time',
     ]);
+  });
+
+  it('asks for a specific room before promising availability when only a room type is known', () => {
+    const extraction = reservationChatExtractionSchema.parse({
+      ...completeExtraction,
+      roomQuery: '',
+      roomType: 'glass-room',
+    });
+
+    expect(buildReservationChatClarificationMessage(extraction, false)).toContain(
+      'Select a specific room from the matching rooms'
+    );
+    expect(buildReservationChatClarificationMessage(extraction, true)).toContain(
+      'Select Preview availability'
+    );
   });
 
   it('extracts a complete reservation with a separate program and purpose', () => {

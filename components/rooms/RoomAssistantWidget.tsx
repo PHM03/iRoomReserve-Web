@@ -11,6 +11,8 @@ import {
   isAlternativeRoomRequest,
   isSimpleAlternativeRoomRequest,
   isRoomTypeHelpRequest,
+  isBroaderRoomSearchRequest,
+  isConversationResetRequest,
   isRoomAssistantDispositionActionable,
   mergeReservationChatExtractions,
   type ReservationChatExtraction,
@@ -760,23 +762,7 @@ export default function RoomAssistantWidget({
     setStep('entry');
     setChatInput('');
     setConversationTurns([{ role: 'assistant', content: nextEntryMessage.text }]);
-    setConversationExtraction(createEmptyConversationExtraction({
-      assistantMessage: nextEntryMessage.text,
-      intent: 'unclear',
-      roomQuery: selectedRoom?.label || selectedRoom?.roomId || '',
-      campus: selectedRoom ? inferCampusFromBuilding({
-        id: selectedRoom.originalRoom.buildingId,
-        name: selectedRoom.originalRoom.buildingName,
-      }) || '' : '',
-      buildingQuery: selectedRoom?.building || selectedRoom?.originalRoom.buildingName || '',
-      date: timeslot.date || '',
-      startTime: timeslot.startTime || '',
-      endTime: timeslot.endTime || '',
-      program: existingReservationDraft.program,
-      purpose: existingReservationDraft.purpose,
-      organization: existingReservationDraft.organization,
-      isEvent: existingReservationDraft.isEvent ? 'Yes' : 'No',
-    }));
+    setConversationExtraction(null);
     setChatSelectedRoomId('');
     setChatAlternativeRoomIds(null);
     setChatReservationDetailsMinimized(false);
@@ -1326,6 +1312,36 @@ export default function RoomAssistantWidget({
     const pendingUserMessage = createMessage(text, 'user', 'text');
     setMessages((current) => [...current, pendingUserMessage]);
     try {
+      if (isConversationResetRequest(text)) {
+        resetConversation();
+        const resetNotice = 'I reset this assistant conversation. Details already entered in the reservation form remain unchanged.';
+        setMessages((current) => [...current, createMessage(resetNotice, 'system', 'text')]);
+        setConversationTurns((current) => appendConversationTurns(current, { role: 'assistant', content: resetNotice }));
+        return;
+      }
+
+      if (
+        isBroaderRoomSearchRequest(text) &&
+        conversationExtraction?.date &&
+        conversationExtraction.startTime &&
+        conversationExtraction.endTime
+      ) {
+        const broaderSearch: ReservationChatExtraction = {
+          ...conversationExtraction,
+          assistantMessage: '',
+          intent: 'recommendation' as const,
+          roomQuery: '',
+          roomType: '',
+          minCapacity: '',
+          requiredFeatures: [],
+        };
+        setChatSelectedRoomId('');
+        setAvailabilitySelectedRoomId('');
+        setChatAvailability(null);
+        await showChatRecommendations(broaderSearch, nextTurns, operationGeneration);
+        return;
+      }
+
       const asksRoomTypeHelp = isRoomTypeHelpRequest(text) && conversationExtraction && (
         conversationExtraction.intent === 'reservation' ||
         conversationExtraction.intent === 'recommendation' ||
@@ -1369,7 +1385,14 @@ export default function RoomAssistantWidget({
         return;
       }
       const extraction = mergeReservationChatExtractions(conversationExtraction, result.extraction);
-      const priorChatSelection = autocompleteRooms.find((room) => room.roomId === chatSelectedRoomId) ?? selectedRoom;
+      const explicitRoomTypeChange = Boolean(result.extraction.roomType) &&
+        /\b(?:change|switch|replace|instead|make)\b/i.test(text);
+      const correctedExtraction = explicitRoomTypeChange
+        ? { ...extraction, roomQuery: '', roomType: result.extraction.roomType }
+        : extraction;
+      const priorChatSelection = explicitRoomTypeChange
+        ? null
+        : autocompleteRooms.find((room) => room.roomId === chatSelectedRoomId) ?? selectedRoom;
       const normalizeRoomText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
       const findUniqueExactRoom = (query: string, campus?: ReservationCampus) => {
@@ -1398,11 +1421,11 @@ export default function RoomAssistantWidget({
         : null;
 
       if (
-        (extraction.intent === 'recommendation' || alternativeRequest) &&
+        (correctedExtraction.intent === 'recommendation' || alternativeRequest) &&
         (!alternativeRequest || !referenceRoom)
       ) {
         await showChatRecommendations(
-          { ...extraction, intent: 'recommendation' },
+          { ...correctedExtraction, intent: 'recommendation' },
           nextTurns,
           operationGeneration,
           alternativeRequest ? chatAlternativeRoomIds ?? [] : []
@@ -1411,22 +1434,22 @@ export default function RoomAssistantWidget({
       }
 
       if (extraction.intent === 'availability') {
-        const candidates = extraction.roomQuery
-          ? findAssistantRoomAutocompleteMatches(autocompleteRooms, extraction.roomQuery).filter((room) =>
-              (!extraction.campus || inferCampusFromBuilding({
+        const candidates = correctedExtraction.roomQuery
+          ? findAssistantRoomAutocompleteMatches(autocompleteRooms, correctedExtraction.roomQuery).filter((room) =>
+              (!correctedExtraction.campus || inferCampusFromBuilding({
                 id: room.originalRoom.buildingId,
                 name: room.originalRoom.buildingName,
-              }) === extraction.campus) &&
-              (!extraction.buildingQuery || `${room.building} ${room.originalRoom.buildingName ?? ''}`.toLowerCase().includes(extraction.buildingQuery.toLowerCase()))
+              }) === correctedExtraction.campus) &&
+              (!correctedExtraction.buildingQuery || `${room.building} ${room.originalRoom.buildingName ?? ''}`.toLowerCase().includes(correctedExtraction.buildingQuery.toLowerCase()))
             )
           : [];
-        const normalizedRoomQuery = normalizeRoomText(extraction.roomQuery);
+        const normalizedRoomQuery = normalizeRoomText(correctedExtraction.roomQuery);
         const exactRoom = candidates.find((room) =>
           [room.roomId, room.label, room.originalRoom.name].some((value) => normalizeRoomText(value) === normalizedRoomQuery)
         );
         const refersToPriorRoom = /\b(that|this|same|selected)\s+room\b/i.test(text);
         const resolvedRoom = exactRoom ?? (
-          refersToPriorRoom || !extraction.roomQuery ? priorChatSelection : null
+          refersToPriorRoom || !correctedExtraction.roomQuery ? priorChatSelection : null
         );
         const hasAmbiguousRoom = !resolvedRoom && candidates.length > 1;
         const assistantMessage = !resolvedRoom
@@ -1439,8 +1462,8 @@ export default function RoomAssistantWidget({
               ? 'Please give me both the start and end time, or ask to see the full-day schedule.'
               : extraction.assistantMessage;
         const nextExtraction = {
-          ...extraction,
-          roomQuery: resolvedRoom ? getRoomDisplayName(resolvedRoom) : extraction.roomQuery,
+          ...correctedExtraction,
+          roomQuery: resolvedRoom ? getRoomDisplayName(resolvedRoom) : correctedExtraction.roomQuery,
           assistantMessage,
         };
 
@@ -1458,7 +1481,7 @@ export default function RoomAssistantWidget({
         return;
       }
 
-      let nextExtraction = extraction;
+      let nextExtraction = correctedExtraction;
       let nextSelectedRoomId = '';
       let nextAlternativeRoomIds: string[] | null = null;
       let nextChatAvailability: { available: boolean; message: string } | null = null;
@@ -1524,10 +1547,10 @@ export default function RoomAssistantWidget({
           id: priorChatSelection.originalRoom.buildingId,
           name: priorChatSelection.originalRoom.buildingName,
         }) : conversationExtraction?.campus || undefined;
-        const exactRoomQuery = extraction.roomQuery || explicitReference;
+        const exactRoomQuery = correctedExtraction.roomQuery || explicitReference;
         const exactRoom = findUniqueExactRoom(
           exactRoomQuery,
-          extraction.campus || priorRoomCampus || undefined
+          correctedExtraction.campus || priorRoomCampus || undefined
         );
         if (exactRoom) {
           const exactRoomCampus = inferCampusFromBuilding({
@@ -1539,7 +1562,7 @@ export default function RoomAssistantWidget({
           nextSelectedRoomId = exactRoom.roomId;
           if (
             isRoomAdministrativelyUnavailable(exactRoom.status) &&
-            getMissingReservationChatFields(extraction).length === 0
+            getMissingReservationChatFields(correctedExtraction).length === 0
           ) {
             nextChatAvailability = {
               available: false,
@@ -1547,12 +1570,12 @@ export default function RoomAssistantWidget({
             };
           }
           nextExtraction = {
-            ...extraction,
+            ...correctedExtraction,
             assistantMessage: isRoomAdministrativelyUnavailable(exactRoom.status)
               ? `${exactRoom.label || exactRoom.roomId} at ${[campusName, buildingName].filter(Boolean).join(' · ')} is unavailable for reservations. Ask me for similar rooms or choose another room.`
               : `I found ${exactRoom.label || exactRoom.roomId} at ${[campusName, buildingName].filter(Boolean).join(' · ')}. I selected it so you can check availability.`,
-            buildingQuery: extraction.buildingQuery || buildingName,
-            campus: extraction.campus || exactRoomCampus || '',
+            buildingQuery: correctedExtraction.buildingQuery || buildingName,
+            campus: correctedExtraction.campus || exactRoomCampus || '',
           };
         } else {
           const selectedRoomCampus = priorChatSelection ? inferCampusFromBuilding({
@@ -1560,11 +1583,11 @@ export default function RoomAssistantWidget({
             name: priorChatSelection.originalRoom.buildingName,
           }) : null;
           const sameSelectedRoom = priorChatSelection && (
-            !extraction.roomQuery ||
+            !correctedExtraction.roomQuery ||
             [priorChatSelection.roomId, priorChatSelection.label, priorChatSelection.originalRoom.name]
-              .some((value) => normalizeRoomText(value) === normalizeRoomText(extraction.roomQuery))
+              .some((value) => normalizeRoomText(value) === normalizeRoomText(correctedExtraction.roomQuery))
           );
-          const selectedRoomMatchesCampus = !extraction.campus || selectedRoomCampus === extraction.campus;
+          const selectedRoomMatchesCampus = !correctedExtraction.campus || selectedRoomCampus === correctedExtraction.campus;
           nextSelectedRoomId = sameSelectedRoom && selectedRoomMatchesCampus ? priorChatSelection.roomId : '';
         }
       }
@@ -1574,7 +1597,10 @@ export default function RoomAssistantWidget({
         if (missingDetails.length || !alternativeRequest) {
           nextExtraction = {
             ...nextExtraction,
-            assistantMessage: buildReservationChatClarificationMessage(nextExtraction),
+            assistantMessage: buildReservationChatClarificationMessage(
+              nextExtraction,
+              Boolean(nextSelectedRoomId)
+            ),
           };
         }
       }
