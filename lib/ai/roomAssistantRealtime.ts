@@ -77,6 +77,8 @@ export interface AssistantReservationRecord {
   roomName: string;
   startTime: string;
   status: Reservation['status'];
+  hasActiveCheckIn?: boolean;
+  isCurrentUser?: boolean;
 }
 
 export type AssistantScheduleRecord = Pick<

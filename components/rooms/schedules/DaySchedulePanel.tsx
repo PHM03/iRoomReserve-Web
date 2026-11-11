@@ -153,7 +153,7 @@ export default function DaySchedulePanel({
       const roomApprovedConflict = roomSlotsForDate.find(
         (slot) =>
           slot.status === 'approved' &&
-          slot.userId !== currentUserId &&
+          !(slot.isCurrentUser ?? slot.userId === currentUserId) &&
           slotsOverlap(slotStart, slotEnd, slot.startTime, slot.endTime)
       );
 
@@ -215,7 +215,7 @@ export default function DaySchedulePanel({
       const roomPendingConflict = roomSlotsForDate.find(
         (slot) =>
           slot.status === 'pending' &&
-          slot.userId !== currentUserId &&
+          !(slot.isCurrentUser ?? slot.userId === currentUserId) &&
           slotsOverlap(slotStart, slotEnd, slot.startTime, slot.endTime)
       );
 

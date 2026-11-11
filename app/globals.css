@@ -473,6 +473,33 @@ textarea {
   box-shadow: var(--assistant-shadow);
 }
 
+.assistant-chat-normal {
+  transition: width 160ms ease, height 160ms ease;
+}
+
+.assistant-chat-expanded {
+  left: 50%;
+  top: 50%;
+  width: min(88vw, 96rem);
+  height: 85dvh;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  transform: translate(-50%, -50%);
+}
+
+@media (max-width: 767px) {
+  .assistant-chat-expanded {
+    left: max(env(safe-area-inset-left), 0.5rem);
+    top: max(env(safe-area-inset-top), 0.5rem);
+    width: calc(100vw - max(env(safe-area-inset-left), 0.5rem) - max(env(safe-area-inset-right), 0.5rem));
+    height: calc(100dvh - max(env(safe-area-inset-top), 0.5rem) - max(env(safe-area-inset-bottom), 0.5rem));
+    max-width: none;
+    max-height: none;
+    transform: none;
+    border-radius: 1.25rem;
+  }
+}
+
 .assistant-bubble-button {
   background:
     radial-gradient(circle at 32% 28%, #ef8d7d 0%, #d8575a 22%, var(--assistant-accent) 55%, var(--assistant-accent-deep) 100%);

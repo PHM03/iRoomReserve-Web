@@ -125,15 +125,17 @@ interface ReservationSlotRecord {
  */
 export function onBookedDatesByRoom(
   roomId: string,
+  buildingId: string,
   callback: (bookedSlots: BookingSlot[]) => void
 ): Unsubscribe {
-  if (!roomId) {
+  if (!roomId || !buildingId) {
     return () => {};
   }
 
   const reservationsQuery = query(
     collection(db, "reservations"),
     where("roomId", "==", roomId),
+    where("buildingId", "==", buildingId),
     where("status", "in", [...BLOCKING_STATUSES])
   );
 
@@ -214,7 +216,28 @@ const VISIBLE_STATUSES = ["approved", "pending"] as const;
  */
 export interface EnrichedBookingSlot extends BookingSlot {
   status: "approved" | "pending" | "manual-unavailable";
+  isCurrentUser?: boolean;
   userId?: string;
+}
+
+export function onManualUnavailableSlotsByRoom(
+  roomId: string,
+  callback: (slots: BookingSlot[]) => void
+): Unsubscribe {
+  if (!roomId) return () => {};
+
+  return onSnapshot(
+    query(collection(db, "roomUnavailability"), where("roomId", "==", roomId)),
+    (snapshot) => {
+      callback(snapshot.docs.flatMap((document) => {
+        const data = document.data() as ReservationSlotRecord;
+        return data.date && data.startTime && data.endTime
+          ? [{ date: data.date, startTime: data.startTime, endTime: data.endTime }]
+          : [];
+      }));
+    },
+    (error) => console.warn("Firestore listener error (manual room unavailability):", error)
+  );
 }
 
 /**
@@ -249,15 +272,17 @@ interface EnrichedReservationRecord {
  */
 export function onEnrichedSlotsByRoom(
   roomId: string,
+  buildingId: string,
   callback: (slots: EnrichedBookingSlot[]) => void
 ): Unsubscribe {
-  if (!roomId) {
+  if (!roomId || !buildingId) {
     return () => {};
   }
 
   const reservationsQuery = query(
     collection(db, "reservations"),
     where("roomId", "==", roomId),
+    where("buildingId", "==", buildingId),
     where("status", "in", [...VISIBLE_STATUSES])
   );
 

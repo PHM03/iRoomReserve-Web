@@ -17,6 +17,8 @@ import {
 const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
 const MAX_CHAT_TURNS = 12;
 const REQUEST_TIMEOUT_MS = 20_000;
+const MAX_TRANSIENT_RETRIES = 1;
+const RETRY_DELAY_MS = 300;
 const EMPTY_ASSISTANT_MESSAGE_FALLBACK =
   'I found your reservation details. Let me check the room and schedule.';
 
@@ -100,11 +102,42 @@ function mapGeminiError(error: unknown): ApiError {
     );
   }
 
+  if ([500, 502, 503, 504].includes(status ?? -1)) {
+    return new ApiError(
+      503,
+      'ai_temporarily_unavailable',
+      'The reservation assistant is temporarily unavailable. Please try again.'
+    );
+  }
+
   return new ApiError(
     502,
     'ai_provider_error',
     'The reservation assistant could not process that message. Please try again.'
   );
+}
+
+function isRetryableGeminiError(error: unknown) {
+  const status =
+    error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
+      ? error.status
+      : undefined;
+  const code =
+    error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+      ? error.code.toUpperCase()
+      : '';
+  const name = error instanceof Error ? error.name : '';
+
+  if (['AbortError', 'TimeoutError'].includes(name) || ['ETIMEDOUT', 'ECONNABORTED'].includes(code)) {
+    return false;
+  }
+
+  return [500, 502, 503, 504].includes(status ?? -1) ||
+    ['ECONNRESET', 'ECONNREFUSED', 'EPIPE'].includes(code);
+}
+
+function waitBeforeRetry() {
+  return new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
 }
 
 export async function extractReservationDetails(input: {
@@ -136,6 +169,7 @@ export async function extractReservationDetails(input: {
     'Set campus to main only when SDCA Main Campus is indicated, and digi only when SDCA Digital Campus is indicated. Otherwise leave campus empty.',
     'Set roomQuery to the room name or number when the user identifies one. If they ask for a room by type or preferences, use roomType and preference fields without fabricating a room name.',
     'Extract program/course (for example, BSIT or BSBA) into program. Extract the room use into purpose. Never put a program/course into organization; organization is a separate field.',
+    'Use intent recommendation when the user wants to find, compare, or filter rooms instead of booking one. Extract room type, capacity, campus, building, facilities, date, and exact time when provided. Do not require program/course or purpose for recommendations. A vague period such as morning is not an exact time; ask for a specific start and end time before reporting availability.',
     'For supported reservation intent, room, date, start time, end time, program/course, and purpose are required. If any are missing, assistantMessage must ask only for the missing information. Do not ask users to repeat details already supplied.',
     'When the user asks whether a specific room is available or asks for that room schedule, set intent to availability. Availability inquiries require an exact room and date. If the user gives no start or end time, leave both time fields empty to request the full-day schedule. If the user gives only one endpoint of a time range, leave both time fields empty and ask for the complete time range. If room or date is missing, ask only for the missing detail.',
     'If the user changes a prior specific-time availability inquiry to a full-day schedule, clear both prior time fields. If they correct a room or date, preserve all other supplied facts.',
@@ -154,19 +188,31 @@ export async function extractReservationDetails(input: {
       apiKey,
       httpOptions: { timeout: REQUEST_TIMEOUT_MS },
     });
-    const response = await ai.models.generateContent({
-      model: process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL,
-      contents: transcript,
-      config: {
-        systemInstruction,
-        maxOutputTokens: 700,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-        responseMimeType: 'application/json',
-        responseJsonSchema: RESERVATION_CHAT_RESPONSE_SCHEMA,
-      },
-    });
+    let response;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        response = await ai.models.generateContent({
+          model: process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL,
+          contents: transcript,
+          config: {
+            systemInstruction,
+            maxOutputTokens: 700,
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            responseMimeType: 'application/json',
+            responseJsonSchema: RESERVATION_CHAT_RESPONSE_SCHEMA,
+          },
+        });
+        break;
+      } catch (error) {
+        if (attempt >= MAX_TRANSIENT_RETRIES || !isRetryableGeminiError(error)) {
+          throw mapGeminiError(error);
+        }
+        await waitBeforeRetry();
+      }
+    }
     structuredText = extractStructuredText(response);
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     throw mapGeminiError(error);
   }
 
@@ -216,7 +262,7 @@ export async function extractReservationDetails(input: {
     }
     if (
       extraction.topicDisposition === 'mixed-supported' &&
-      (!['reservation', 'availability'].includes(extraction.intent) ||
+      (!['recommendation', 'reservation', 'availability'].includes(extraction.intent) ||
         !hasReservationRoomSearchCriteria(extraction) ||
         (extraction.intent === 'availability' && !extraction.roomQuery))
     ) {
@@ -232,7 +278,9 @@ export async function extractReservationDetails(input: {
         ...extraction,
         assistantMessage: extraction.intent === 'reservation'
           ? buildReservationChatClarificationMessage(extraction)
-          : 'I can help with the room-related part of that request. I will check the room and schedule against the reservation records.',
+          : extraction.intent === 'recommendation'
+            ? 'I can help find rooms that match those requirements. I will verify availability against the reservation records.'
+            : 'I can help with the room-related part of that request. I will check the room and schedule against the reservation records.',
       };
     }
     return extraction;

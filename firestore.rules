@@ -163,6 +163,19 @@ service cloud.firestore {
       return canReadManagedBuildingData(buildingId);
     }
 
+    function canReadReservation() {
+      return isSignedIn() && (
+        (
+          resource.data.userId is string &&
+          resource.data.userId == request.auth.uid
+        ) ||
+        (
+          resource.data.buildingId is string &&
+          canReadManagedBuildingData(resource.data.buildingId)
+        )
+      );
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn() && (
         request.auth.uid == userId
@@ -240,8 +253,13 @@ service cloud.firestore {
     }
 
     match /reservations/{docId} {
-      allow read: if request.auth != null;
+      allow read: if canReadReservation();
       allow write: if false;
+    }
+
+    // Reservation lock documents are written only by authenticated server code.
+    match /reservationLocks/{docId} {
+      allow read, write: if false;
     }
 
     // Audit entries are written only by the authenticated server and cannot be

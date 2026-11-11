@@ -53,6 +53,7 @@ import {
   isValidRoomDayInterval,
   type RoomDayScheduleInterval,
 } from "@/lib/reservations/roomDaySchedule";
+import { sanitizeRoomDayScheduleForViewer } from "@/lib/reservations/roomDayScheduleViewer";
 import { ApiError } from "@/lib/server/api-error";
 import { writeAuditLog, writeSystemAuditLog, type AuditLogInput } from "@/lib/server/services/audit-logs";
 import type { RequestAuthContext } from "@/lib/server/request-auth";
@@ -331,6 +332,59 @@ export type ReservationCreateInput =
 
 type FirestoreBatch = ReturnType<(typeof db)["batch"]>;
 
+interface ReservationLockState {
+  roomExists: boolean;
+  roomRef: FirebaseFirestore.DocumentReference;
+  roomVersion: number;
+  userExists: boolean;
+  userRef: FirebaseFirestore.DocumentReference;
+  userVersion: number;
+}
+
+async function readReservationLocks(
+  transaction: Transaction,
+  input: Pick<ReservationAvailabilityInput, "roomId" | "userId">
+): Promise<ReservationLockState> {
+  const roomRef = db.collection("reservationLocks").doc(`room_${input.roomId}`);
+  const userRef = db.collection("reservationLocks").doc(`user_${input.userId}`);
+  const [roomSnapshot, userSnapshot] = await Promise.all([
+    transaction.get(roomRef),
+    transaction.get(userRef),
+  ]);
+  const getVersion = (data: FirebaseFirestore.DocumentData | undefined) =>
+    typeof data?.version === "number" && Number.isSafeInteger(data.version)
+      ? data.version
+      : 0;
+
+  return {
+    roomExists: roomSnapshot.exists,
+    roomRef,
+    roomVersion: getVersion(roomSnapshot.data()),
+    userExists: userSnapshot.exists,
+    userRef,
+    userVersion: getVersion(userSnapshot.data()),
+  };
+}
+
+function writeReservationLocks(
+  transaction: Transaction,
+  locks: ReservationLockState
+) {
+  const roomLock = {
+    version: locks.roomVersion + 1,
+    updatedAt: serverTimestamp(),
+  };
+  const userLock = {
+    version: locks.userVersion + 1,
+    updatedAt: serverTimestamp(),
+  };
+
+  if (locks.roomExists) transaction.update(locks.roomRef, roomLock);
+  else transaction.create(locks.roomRef, roomLock);
+  if (locks.userExists) transaction.update(locks.userRef, userLock);
+  else transaction.create(locks.userRef, userLock);
+}
+
 function logReservationServiceError(
   operation: string,
   error: unknown,
@@ -575,6 +629,7 @@ export interface RoomDayScheduleResult {
   availabilityConfirmed: boolean;
   availableIntervals: Array<{ endTime: string; startTime: string }>;
   buildingId: string;
+  buildingName: string;
   campus: ReservationCampus;
   closedForReservations: boolean;
   date: string;
@@ -705,6 +760,7 @@ export async function getRoomDaySchedule(roomId: string, dateKey: string): Promi
     availabilityConfirmed,
     availableIntervals,
     buildingId,
+    buildingName,
     campus,
     closedForReservations: sundayClosed,
     date: dateKey,
@@ -714,6 +770,10 @@ export async function getRoomDaySchedule(roomId: string, dateKey: string): Promi
     roomName: typeof room.name === "string" && room.name.trim() ? room.name.trim() : roomId,
     roomUnavailable,
   };
+}
+
+export async function getRoomDayScheduleForViewer(roomId: string, dateKey: string) {
+  return sanitizeRoomDayScheduleForViewer(await getRoomDaySchedule(roomId, dateKey));
 }
 
 export interface ReservationAvailabilityInput {
@@ -899,6 +959,29 @@ export async function assertReservationDatesAvailable(
       );
     }
   }
+}
+
+/** Serializes the final availability check with conflicting reservation writes. */
+export async function assertAndLockReservationAvailability(
+  transaction: Transaction,
+  input: ReservationAvailabilityInput,
+  dateKeys: string[]
+) {
+  await assertAndLockReservationAvailabilityChecks(transaction, input, [
+    { input, dateKeys },
+  ]);
+}
+
+export async function assertAndLockReservationAvailabilityChecks(
+  transaction: Transaction,
+  lockInput: ReservationAvailabilityInput,
+  checks: Array<{ input: ReservationAvailabilityInput; dateKeys: string[] }>
+) {
+  const locks = await readReservationLocks(transaction, lockInput);
+  await Promise.all(checks.map(({ input, dateKeys }) =>
+    assertReservationDatesAvailable(input, dateKeys, { transaction })
+  ));
+  writeReservationLocks(transaction, locks);
 }
 
 async function getBuildingManagerIds(buildingId: string) {
@@ -1452,7 +1535,7 @@ async function updateRoomLifecycleStatus(roomId: string) {
 }
 
 function addNotification(
-  batch: FirestoreBatch,
+  batch: FirestoreBatch | Transaction,
   queuedNotifications: AppNotificationInput[],
   input: {
     recipientUid: string;
@@ -1662,8 +1745,6 @@ async function getReservationGroupForMutation(reservation: ReservationRecord) {
 
 export async function createReservationRecord(data: ReservationCreateInput) {
   try {
-    await assertReservationDatesAvailable(data, [data.date]);
-
     const campus = await resolveReservationCampus(data);
     const approvalFlow = buildApprovalFlow(
       await getReservationApproverInput(data, campus)
@@ -1674,10 +1755,13 @@ export async function createReservationRecord(data: ReservationCreateInput) {
       data.buildingId
     );
     const reservationRef = db.collection("reservations").doc();
-    const batch = db.batch();
     const queuedNotifications: AppNotificationInput[] = [];
 
-    batch.set(reservationRef, {
+    await db.runTransaction(async (transaction) => {
+      queuedNotifications.length = 0;
+      await assertAndLockReservationAvailability(transaction, data, [data.date]);
+
+      transaction.set(reservationRef, {
       reservationReference: createReservationReference(reservationRef.id),
       userId: data.userId,
       userName: data.userName,
@@ -1727,22 +1811,22 @@ export async function createReservationRecord(data: ReservationCreateInput) {
       checkInMethod: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+      });
 
-    firstApproverIds.forEach((recipientUid) => {
-      addNotification(batch, queuedNotifications, {
-        recipientUid,
-        type: "new_reservation",
-        title: "New Reservation Request",
-        message: `${data.userName} reserved ${data.roomName} on ${formatReservationScheduleLabel(
-          data
-        )}.`,
-        buildingId: data.buildingId,
-        reservationId: reservationRef.id,
+      firstApproverIds.forEach((recipientUid) => {
+        addNotification(transaction, queuedNotifications, {
+          recipientUid,
+          type: "new_reservation",
+          title: "New Reservation Request",
+          message: `${data.userName} reserved ${data.roomName} on ${formatReservationScheduleLabel(
+            data
+          )}.`,
+          buildingId: data.buildingId,
+          reservationId: reservationRef.id,
+        });
       });
     });
 
-    await batch.commit();
     await sendQueuedPushNotifications(queuedNotifications);
     return reservationRef.id;
   } catch (error) {
@@ -1815,12 +1899,6 @@ export async function createRecurringReservationRecord(
       group.dates.push(date);
       availabilityGroups.set(key, group);
     });
-    await Promise.all(
-      [...availabilityGroups.values()].map(({ startTime, endTime, dates }) =>
-        assertReservationDatesAvailable({ ...data, startTime, endTime }, dates)
-      )
-    );
-
     const approvalFlow = buildApprovalFlow(
       await getReservationApproverInput(data, campus)
     );
@@ -1832,64 +1910,9 @@ export async function createRecurringReservationRecord(
     const recurringGroupId = `recurring_${Date.now()}_${Math.random()
       .toString(36)
       .slice(2, 8)}`;
-    const batch = db.batch();
     const queuedNotifications: AppNotificationInput[] = [];
-    const createdIds: string[] = [];
-
-    occurrences.forEach(({ date, startTime, endTime }) => {
-      const reservationRef = db.collection("reservations").doc();
-      createdIds.push(reservationRef.id);
-      batch.set(reservationRef, {
-        reservationReference: createReservationReference(reservationRef.id),
-        userId: data.userId,
-        userName: data.userName,
-        date,
-        userRole: normalizeRole(data.userRole) ?? data.userRole,
-        roomId: data.roomId,
-        roomName: data.roomName,
-        buildingId: data.buildingId,
-        buildingName: data.buildingName,
-        campus,
-        startTime,
-        endTime,
-        programDepartmentOrganization: data.programDepartmentOrganization,
-        purpose: data.purpose,
-        isEvent: data.isEvent,
-        ...(data.approvalDocumentName
-          ? { approvalDocumentName: data.approvalDocumentName }
-          : {}),
-        ...(data.approvalDocumentPath
-          ? { approvalDocumentPath: data.approvalDocumentPath }
-          : {}),
-        ...(data.approvalDocumentMimeType
-          ? { approvalDocumentMimeType: data.approvalDocumentMimeType }
-          : {}),
-        ...(typeof data.approvalDocumentSize === "number" &&
-        Number.isFinite(data.approvalDocumentSize) &&
-        data.approvalDocumentSize > 0
-          ? { approvalDocumentSize: data.approvalDocumentSize }
-          : {}),
-        ...(data.approvalDocumentUrl
-          ? { approvalDocumentUrl: data.approvalDocumentUrl }
-          : {}),
-        ...(data.equipment ? { equipment: data.equipment } : {}),
-        ...getOtherEquipmentFields(
-          data.otherEquipment,
-          data.otherEquipmentQuantity
-        ),
-        approvalFlow,
-        currentStep: 0,
-        approvals: [],
-        status: "pending",
-        adminUid: null,
-        recurringGroupId,
-        checkedInAt: null,
-        checkInMethod: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    });
-
+    const reservationRefs = occurrences.map(() => db.collection("reservations").doc());
+    const createdIds = reservationRefs.map((reservationRef) => reservationRef.id);
     const selectedSlotLabels = occurrences.slice(0, 3).map(({ date, startTime, endTime }) =>
       `${formatNotificationDate(date)} (${formatTimeRange(startTime, endTime)})`
     ).join(", ");
@@ -1901,18 +1924,82 @@ export async function createRecurringReservationRecord(
           .map((day) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day])
           .join(", ")} from ${formatNotificationDate(startDate)} to ${formatNotificationDate(endDate)}`;
 
-    firstApproverIds.forEach((recipientUid) => {
-      addNotification(batch, queuedNotifications, {
-        recipientUid,
-        type: "new_reservation",
-        title: "New Recurring Reservation",
-        message: `${data.userName} reserved ${data.roomName} ${recurringScheduleLabel}${selectedSlots ? "" : ` (${formatTimeRange(data.startTime, data.endTime)})`} - ${occurrences.length} dates.`,
-        buildingId: data.buildingId,
-        reservationId: createdIds[0],
+    await db.runTransaction(async (transaction) => {
+      queuedNotifications.length = 0;
+      await assertAndLockReservationAvailabilityChecks(
+        transaction,
+        data,
+        [...availabilityGroups.values()].map(({ startTime, endTime, dates }) => ({
+          input: { ...data, startTime, endTime },
+          dateKeys: dates,
+        }))
+      );
+
+      occurrences.forEach(({ date, startTime, endTime }, index) => {
+        const reservationRef = reservationRefs[index];
+        transaction.set(reservationRef, {
+          reservationReference: createReservationReference(reservationRef.id),
+          userId: data.userId,
+          userName: data.userName,
+          date,
+          userRole: normalizeRole(data.userRole) ?? data.userRole,
+          roomId: data.roomId,
+          roomName: data.roomName,
+          buildingId: data.buildingId,
+          buildingName: data.buildingName,
+          campus,
+          startTime,
+          endTime,
+          programDepartmentOrganization: data.programDepartmentOrganization,
+          purpose: data.purpose,
+          isEvent: data.isEvent,
+          ...(data.approvalDocumentName
+            ? { approvalDocumentName: data.approvalDocumentName }
+            : {}),
+          ...(data.approvalDocumentPath
+            ? { approvalDocumentPath: data.approvalDocumentPath }
+            : {}),
+          ...(data.approvalDocumentMimeType
+            ? { approvalDocumentMimeType: data.approvalDocumentMimeType }
+            : {}),
+          ...(typeof data.approvalDocumentSize === "number" &&
+          Number.isFinite(data.approvalDocumentSize) &&
+          data.approvalDocumentSize > 0
+            ? { approvalDocumentSize: data.approvalDocumentSize }
+            : {}),
+          ...(data.approvalDocumentUrl
+            ? { approvalDocumentUrl: data.approvalDocumentUrl }
+            : {}),
+          ...(data.equipment ? { equipment: data.equipment } : {}),
+          ...getOtherEquipmentFields(
+            data.otherEquipment,
+            data.otherEquipmentQuantity
+          ),
+          approvalFlow,
+          currentStep: 0,
+          approvals: [],
+          status: "pending",
+          adminUid: null,
+          recurringGroupId,
+          checkedInAt: null,
+          checkInMethod: null,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      });
+
+      firstApproverIds.forEach((recipientUid) => {
+        addNotification(transaction, queuedNotifications, {
+          recipientUid,
+          type: "new_reservation",
+          title: "New Recurring Reservation",
+          message: `${data.userName} reserved ${data.roomName} ${recurringScheduleLabel}${selectedSlots ? "" : ` (${formatTimeRange(data.startTime, data.endTime)})`} - ${occurrences.length} dates.`,
+          buildingId: data.buildingId,
+          reservationId: createdIds[0],
+        });
       });
     });
 
-    await batch.commit();
     await sendQueuedPushNotifications(queuedNotifications);
     return createdIds;
   } catch (error) {

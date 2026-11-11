@@ -9,7 +9,7 @@ export const reservationChatExtractionSchema = z.object({
     'mixed-supported',
     'mixed-ambiguous',
   ]),
-  intent: z.enum(['reservation', 'availability', 'other', 'unclear']),
+  intent: z.enum(['recommendation', 'reservation', 'availability', 'other', 'unclear']),
   roomQuery: z.string().trim().max(160),
   campus: z.enum(['', 'main', 'digi']),
   buildingQuery: z.string().trim().max(120),
@@ -76,6 +76,24 @@ export function hasReservationRoomSearchCriteria(extraction: ReservationChatExtr
   );
 }
 
+export function isRoomTypeHelpRequest(text: string) {
+  const asksForTypes = /\b(?:what|which|tell me|explain|show me)\b/i.test(text) &&
+    /\b(?:types?|kinds?|categories)\b/i.test(text);
+  const includesReservationDetails = /\b\d+\b|\b(?:today|tomorrow|date|time|program|course|purpose|organization|from|between)\b/i.test(text);
+
+  return asksForTypes && !includesReservationDetails;
+}
+
+export function isAlternativeRoomRequest(text: string) {
+  return /\b(?:other|another|different|more)\s+rooms?\b|\bothers?\s+rooms?\b|\b(?:more|other)\s+(?:options|choices|alternatives)\b|\balternatives?\b|\bsimilar(?:\s+to)?\b/i.test(text);
+}
+
+export function isSimpleAlternativeRoomRequest(text: string) {
+  const includesNewSearchDetails = /\b\d+\b|\b(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|date|time|morning|afternoon|evening|classroom|conference room|glass room|gymnasium|capacity|students|people|seats)\b/i.test(text);
+
+  return isAlternativeRoomRequest(text) && !includesNewSearchDetails;
+}
+
 export const RESERVATION_CHAT_RESPONSE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -85,7 +103,7 @@ export const RESERVATION_CHAT_RESPONSE_SCHEMA = {
       type: 'string',
       enum: ['supported', 'unrelated', 'ambiguous', 'mixed-supported', 'mixed-ambiguous'],
     },
-    intent: { type: 'string', enum: ['reservation', 'availability', 'other', 'unclear'] },
+    intent: { type: 'string', enum: ['recommendation', 'reservation', 'availability', 'other', 'unclear'] },
     roomQuery: { type: 'string' },
     campus: { type: 'string', enum: ['', 'main', 'digi'] },
     buildingQuery: { type: 'string' },

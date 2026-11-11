@@ -72,7 +72,7 @@ describe('reservation request notification stale checks', () => {
         currentStep: 0,
         date: '2026-05-28',
         status: 'pending',
-      }, 'ADMIN@sdca.edu.ph')
+      }, 'ADMIN@sdca.edu.ph', new Date(2026, 4, 28, 8, 0, 0))
     ).toBe(false);
   });
 });

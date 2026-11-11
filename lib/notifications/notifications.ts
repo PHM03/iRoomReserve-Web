@@ -3,7 +3,6 @@ import {
   doc,
   addDoc,
   deleteDoc,
-  getDoc,
   updateDoc,
   query,
   where,
@@ -16,11 +15,8 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebase";
+import { apiRequest } from "@/lib/api/client";
 import { createGuardedSnapshotCallback } from "@/lib/firebase/firestoreListener";
-import {
-  isStaleReservationRequestNotification,
-  type ReservationNotificationTarget,
-} from "@/lib/notifications/staleReservationRequest";
 
 // ─── Types ──────────────────────────────────────────────────────
 export interface Notification {
@@ -157,8 +153,9 @@ export async function deleteNotification(notificationId: string): Promise<void> 
 
 export async function shouldDeleteNotificationOnClick(
   notification: Notification,
-  userEmail?: string | null
+  _userEmail?: string | null
 ): Promise<boolean> {
+  void _userEmail;
   if (
     notification.type !== "new_reservation" ||
     !notification.reservationId?.trim()
@@ -166,18 +163,11 @@ export async function shouldDeleteNotificationOnClick(
     return false;
   }
 
-  const reservationSnapshot = await getDoc(
-    doc(db, "reservations", notification.reservationId)
+  const result = await apiRequest<{ shouldDelete: boolean }>(
+    "/api/notifications/reservation-status",
+    { body: { notificationId: notification.id } }
   );
-
-  if (!reservationSnapshot.exists()) {
-    return true;
-  }
-
-  return isStaleReservationRequestNotification(
-    reservationSnapshot.data() as ReservationNotificationTarget,
-    userEmail
-  );
+  return result.shouldDelete;
 }
 
 // ─── Mark All Notifications as Read for a User ──────────────────

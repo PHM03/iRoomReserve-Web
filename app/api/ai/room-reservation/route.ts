@@ -6,13 +6,14 @@ import { inferCampusFromBuilding } from '@/lib/buildings/campuses';
 import { isCampusManagedBuilding } from '@/lib/buildings/campusAssignments';
 import { RESERVATION_CAMPUS_OPERATING_HOURS } from '@/lib/reservations/timeSlots';
 import { ApiError, handleApiError } from '@/lib/server/api-error';
-import { assertReservationDatesAvailable, getRoomDaySchedule } from '@/lib/server/services/reservations';
+import { assertReservationDatesAvailable, getRoomDaySchedule, getRoomDayScheduleForViewer } from '@/lib/server/services/reservations';
 import { extractReservationDetails } from '@/lib/server/services/room-reservation-ai';
 import { db } from '@/lib/firebase/firebase-admin';
 import { getRequestAuthContext } from '@/lib/server/request-auth';
 import { assertVerifiedAuthentication } from '@/lib/server/route-guards';
 
 export const runtime = "nodejs";
+export const maxDuration = 55;
 
 const availabilityRequestSchema = z.object({
   action: z.literal('check-availability'),
@@ -144,7 +145,7 @@ async function checkRoomAvailability(input: {
       buildingId: room.buildingId,
       buildingName: room.buildingName ?? '',
       campus,
-      message: 'No current reservation, room schedule, manual unavailability, or user timeslot conflict was found.',
+      message: 'No conflicts found. This room is available.',
       roomId: input.roomId,
       roomName: room.name ?? input.roomId,
       status: 'available' as const,
@@ -217,7 +218,7 @@ export async function POST(request: NextRequest) {
 
     if (payload.action === 'room-day-schedule') {
       assertValidDate(payload.date);
-      return NextResponse.json({ schedule: await getRoomDaySchedule(payload.roomId, payload.date) });
+      return NextResponse.json({ schedule: await getRoomDayScheduleForViewer(payload.roomId, payload.date) });
     }
 
     assertValidDate(payload.date);

@@ -217,10 +217,39 @@ describe('Gemini room reservation extraction', () => {
       config: expect.objectContaining({
         responseJsonSchema: expect.objectContaining({
           properties: expect.objectContaining({
-            intent: { type: 'string', enum: ['reservation', 'availability', 'other', 'unclear'] },
+            intent: { type: 'string', enum: ['recommendation', 'reservation', 'availability', 'other', 'unclear'] },
           }),
         }),
         systemInstruction: expect.stringContaining('set intent to availability'),
+      }),
+    }));
+  });
+
+  it('recognizes room recommendation intent without requiring reservation-only fields', async () => {
+    const recommendationExtraction = {
+      ...validExtraction,
+      assistantMessage: 'What exact start and end time should I check?',
+      intent: 'recommendation',
+      roomQuery: '',
+      roomType: 'class-room',
+      minCapacity: '30',
+      date: '2026-11-04',
+      startTime: '',
+      endTime: '',
+      program: '',
+      purpose: '',
+    };
+    generateContent.mockResolvedValue(geminiResponse(recommendationExtraction));
+
+    await expect(extractReservationDetails(input)).resolves.toEqual(recommendationExtraction);
+    expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({
+      config: expect.objectContaining({
+        responseJsonSchema: expect.objectContaining({
+          properties: expect.objectContaining({
+            intent: { type: 'string', enum: ['recommendation', 'reservation', 'availability', 'other', 'unclear'] },
+          }),
+        }),
+        systemInstruction: expect.stringContaining('Use intent recommendation'),
       }),
     }));
   });
@@ -379,6 +408,26 @@ describe('Gemini room reservation extraction', () => {
     expect(caught).toBeInstanceOf(ApiError);
     expect(caught).toMatchObject({ status: 503, code: 'ai_rate_limited' });
     expect((caught as Error).message).not.toContain('private quota response');
+    expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries one transient provider failure without duplicating the extraction request', async () => {
+    generateContent
+      .mockRejectedValueOnce({ status: 503, message: 'temporary provider failure' })
+      .mockResolvedValueOnce(geminiResponse(validExtraction));
+
+    await expect(extractReservationDetails(input)).resolves.toEqual(validExtraction);
+    expect(generateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a permanent provider error', async () => {
+    generateContent.mockRejectedValue({ status: 403, message: 'permanent provider failure' });
+
+    await expect(extractReservationDetails(input)).rejects.toMatchObject({
+      status: 503,
+      code: 'ai_credentials_invalid',
+    });
+    expect(generateContent).toHaveBeenCalledTimes(1);
   });
 
   it('maps model timeouts to a retryable assistant message', async () => {

@@ -7,6 +7,9 @@ import {
   getMissingReservationChatFields,
   getMissingReservationScheduleFields,
   hasReservationRoomSearchCriteria,
+  isAlternativeRoomRequest,
+  isRoomTypeHelpRequest,
+  isSimpleAlternativeRoomRequest,
   mapReservationChatDraftToForm,
   mergeReservationChatExtractions,
   reservationChatExtractionRequestSchema,
@@ -33,6 +36,17 @@ const completeExtraction = reservationChatExtractionSchema.parse({
 });
 
 describe('reservation chat extraction', () => {
+  it('recognizes room type questions and requests for additional rooms', () => {
+    expect(isRoomTypeHelpRequest('Can you tell me what are the types?')).toBe(true);
+    expect(isRoomTypeHelpRequest('What types of rooms do you have?')).toBe(true);
+    expect(isRoomTypeHelpRequest('I need a room, what are the types? I want it on Nov 25 from 8 AM to 9 AM for BSIT.')).toBe(false);
+    expect(isAlternativeRoomRequest('Can you suggest others rooms?')).toBe(true);
+    expect(isAlternativeRoomRequest('Can you show me more options?')).toBe(true);
+    expect(isSimpleAlternativeRoomRequest('Can you suggest others rooms?')).toBe(true);
+    expect(isSimpleAlternativeRoomRequest('Can you suggest other rooms next Friday at 10 AM?')).toBe(false);
+    expect(isAlternativeRoomRequest('Can you recommend a classroom?')).toBe(false);
+  });
+
   it('accepts an extracted draft without requiring campus selection', () => {
     const result = reservationChatExtractionSchema.parse(completeExtraction);
     expect(result.campus).toBe('');

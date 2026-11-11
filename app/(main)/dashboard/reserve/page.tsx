@@ -9,6 +9,7 @@ import DaySchedulePanel from '@/components/rooms/schedules/DaySchedulePanel';
 import RoomAvailabilityPicker from '@/components/rooms/RoomAvailabilityPicker';
 import RoomCard from '@/components/rooms/RoomCard';
 import RoomAssistantWidget from '@/components/rooms/RoomAssistantWidget';
+import { apiRequest } from '@/lib/api/client';
 import { mapReservationChatDraftToForm, type ReservationChatExtraction } from '@/lib/ai/reservationChat';
 import { mapQuickReservationDraftToForm } from '@/lib/ai/quickReservation';
 import { useAuth } from '@/context/AuthContext';
@@ -26,23 +27,20 @@ import {
   getAssistantListenerFailureState,
   getAssistantBuildingIds,
   toAssistantRoomRecord,
-  toAssistantReservationRecords,
+  type AssistantReservationRecord,
 } from '@/lib/ai/roomAssistantRealtime';
 import {
   createReservation,
   createRecurringReservation,
   createRecurringReservationWithSlots,
   deleteUploadedReservationDocument,
-  onReservationsByBuildingIds,
-  type Reservation,
   type RecurringReservationSlot,
   uploadReservationDocument,
   validateReservationApprover,
 } from '@/lib/reservations/reservations';
 import {
   hasTimeConflict,
-  onBookedDatesByRoom,
-  onEnrichedSlotsByRoom,
+  onManualUnavailableSlotsByRoom,
   onActiveReservationsByUser,
   type BookingSlot,
   type EnrichedBookingSlot,
@@ -249,7 +247,7 @@ function getRoomCampus(room: Room): ReservationCampus | null {
 
 function getRoomAvailability(
   room: Room,
-  reservations: Reservation[],
+  reservations: AssistantReservationRecord[],
   now: Date,
 ): 'Available' | 'Partially booked' | 'Occupied' {
   const currentDate = toLocalIsoDate(now);
@@ -257,20 +255,14 @@ function getRoomAvailability(
   const approvedReservations = reservations.filter(
     (reservation) => reservation.roomId === room.id && reservation.status === 'approved'
   );
-  const checkedInReservation = approvedReservations.find(
-    (reservation) => Boolean(reservation.checkedInAt) && !reservation.occupancyReleasedAt
-  );
+  const checkedInReservation = approvedReservations.find((reservation) => reservation.hasActiveCheckIn);
 
   if (checkedInReservation) {
     return 'Occupied';
   }
 
   const hasCurrentDayBooking = approvedReservations.some((reservation) => {
-    const reservationDates = reservation.dates?.length
-      ? reservation.dates
-      : [reservation.date];
-
-    return reservationDates.includes(currentDate) && reservation.endTime > currentTime;
+    return reservation.date === currentDate && reservation.endTime > currentTime;
   });
 
   if (hasCurrentDayBooking) {
@@ -351,24 +343,43 @@ export default function ReserveRoomPage() {
   const approvalDocumentInputRef = useRef<HTMLInputElement>(null);
   const [approvalEmailError, setApprovalEmailError] = useState('');
   const [approvalEmails, setApprovalEmails] = useState({ advisorEmail: '' });
-  const [bookedSlots, setBookedSlots] = useState<BookingSlot[]>([]);
-  const [bookedSlotsLoading, setBookedSlotsLoading] = useState(() =>
-    Boolean(selectedRoomParam)
-  );
-  const [enrichedSlots, setEnrichedSlots] = useState<EnrichedBookingSlot[]>([]);
   const [userActiveSlots, setUserActiveSlots] = useState<UserActiveSlot[]>([]);
   const [roomSchedules, setRoomSchedules] = useState<Schedule[]>([]);
   const [assistantRooms, setAssistantRooms] = useState<Room[]>([]);
-  const [assistantReservations, setAssistantReservations] = useState<Reservation[]>([]);
+  const [assistantReservations, setAssistantReservations] = useState<AssistantReservationRecord[]>([]);
   const [assistantSchedules, setAssistantSchedules] = useState<Schedule[]>([]);
   const [assistantDataLoading, setAssistantDataLoading] = useState(false);
   const [assistantDataError, setAssistantDataError] = useState<string | null>(null);
+  const [manualRoomSlots, setManualRoomSlots] = useState<BookingSlot[]>([]);
+  const [manualRoomSlotsLoading, setManualRoomSlotsLoading] = useState(Boolean(selectedRoomParam));
   const [now, setNow] = useState(() => new Date());
 
   const assistantBuildingIds = useMemo(() => {
     return getAssistantBuildingIds(activeBuilding?.id, activeCampus);
   }, [activeBuilding, activeCampus]);
   const assistantDataBuildingIds = useMemo(() => getAssistantBuildingIds(), []);
+  const bookedSlots = useMemo<BookingSlot[]>(() => [
+    ...assistantReservations
+      .filter((reservation) => reservation.roomId === selectedRoomParam && reservation.status === 'approved')
+      .map(({ date, endTime, startTime }) => ({ date, endTime, startTime })),
+    ...manualRoomSlots,
+  ], [assistantReservations, manualRoomSlots, selectedRoomParam]);
+  const enrichedSlots = useMemo<EnrichedBookingSlot[]>(() => [
+    ...assistantReservations
+      .filter((reservation) =>
+        reservation.roomId === selectedRoomParam &&
+        (reservation.status === 'approved' || reservation.status === 'pending')
+      )
+      .map((reservation) => ({
+        date: reservation.date,
+        endTime: reservation.endTime,
+        isCurrentUser: reservation.isCurrentUser,
+        startTime: reservation.startTime,
+        status: reservation.status as 'approved' | 'pending',
+      })),
+    ...manualRoomSlots.map((slot) => ({ ...slot, status: 'manual-unavailable' as const })),
+  ], [assistantReservations, manualRoomSlots, selectedRoomParam]);
+  const bookedSlotsLoading = assistantDataLoading || manualRoomSlotsLoading;
 
   useEffect(() => {
     if (!firebaseUser || !activeBuilding) {
@@ -478,6 +489,7 @@ export default function ReserveRoomPage() {
     let roomsLoaded = false;
     let reservationsLoaded = false;
     let schedulesLoaded = false;
+    let reservationRequestActive = false;
 
     const updateLoading = () => {
       if (!cancelled && !loadError) {
@@ -502,10 +514,6 @@ export default function ReserveRoomPage() {
       buildingIds: assistantDataBuildingIds,
       collection: 'rooms',
     });
-    logAssistantFirestoreQuery({
-      buildingIds: assistantDataBuildingIds,
-      collection: 'reservations',
-    });
 
     const unsubscribeRooms = onRoomsByBuildingIds(
       assistantDataBuildingIds,
@@ -526,23 +534,31 @@ export default function ReserveRoomPage() {
       () => handleListenerFailure('rooms')
     );
 
-    const unsubscribeReservations = onReservationsByBuildingIds(
-      assistantDataBuildingIds,
-      (nextReservations) => {
-        if (cancelled) {
-          return;
-        }
-
-        logAssistantFirestoreSnapshot({
-          buildingIds: assistantDataBuildingIds,
-          collection: 'reservations',
-          rawDocuments: nextReservations,
-        });
+    const loadReservationSnapshot = async () => {
+      if (cancelled || reservationRequestActive) return;
+      reservationRequestActive = true;
+      try {
+        const result = await apiRequest<{ reservations: AssistantReservationRecord[] }>(
+          '/api/reservations/availability-snapshot',
+          { body: { buildingIds: assistantDataBuildingIds } }
+        );
+        if (cancelled) return;
         reservationsLoaded = true;
-        setAssistantReservations(nextReservations);
+        loadError = false;
+        setAssistantReservations(result.reservations);
+        setAssistantDataError(null);
         updateLoading();
-      },
-      () => handleListenerFailure('reservations')
+      } catch {
+        if (!cancelled) handleListenerFailure('reservations');
+      } finally {
+        reservationRequestActive = false;
+      }
+    };
+
+    void loadReservationSnapshot();
+    const reservationRefreshInterval = window.setInterval(
+      () => void loadReservationSnapshot(),
+      30_000
     );
 
     const unsubscribeSchedules = onSchedulesByBuildingIds(
@@ -562,21 +578,24 @@ export default function ReserveRoomPage() {
     return () => {
       cancelled = true;
       unsubscribeRooms();
-      unsubscribeReservations();
       unsubscribeSchedules();
+      window.clearInterval(reservationRefreshInterval);
     };
   }, [assistantDataBuildingIds, authLoading, firebaseUser?.uid]);
 
   useEffect(() => {
     if (!selectedRoomParam) {
+      setManualRoomSlots([]);
+      setManualRoomSlotsLoading(false);
       return;
     }
 
     let cancelled = false;
-    const unsubscribe = onBookedDatesByRoom(selectedRoomParam, (slots) => {
+    setManualRoomSlotsLoading(true);
+    const unsubscribe = onManualUnavailableSlotsByRoom(selectedRoomParam, (slots) => {
       if (cancelled) return;
-      setBookedSlots(slots);
-      setBookedSlotsLoading(false);
+      setManualRoomSlots(slots);
+      setManualRoomSlotsLoading(false);
     });
 
     return () => {
@@ -610,25 +629,6 @@ export default function ReserveRoomPage() {
 
     return () => {
       cancelled = true;
-    };
-  }, [selectedRoomParam]);
-
-  // Enriched room slots (approved + pending with userId) for the schedule panel.
-  useEffect(() => {
-    if (!selectedRoomParam) {
-      setEnrichedSlots([]);
-      return;
-    }
-
-    let cancelled = false;
-    const unsubscribe = onEnrichedSlotsByRoom(selectedRoomParam, (slots) => {
-      if (cancelled) return;
-      setEnrichedSlots(slots);
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribe();
     };
   }, [selectedRoomParam]);
 
@@ -672,7 +672,7 @@ export default function ReserveRoomPage() {
   const recommendationRooms = autocompleteRooms.filter((room) =>
     assistantBuildingIds.includes(room.originalRoom.buildingId)
   );
-  const assistantReservationRecords = toAssistantReservationRecords(assistantReservations);
+  const assistantReservationRecords = assistantReservations;
   const selectedRecommendationRoom = selectedRoomParam
     ? autocompleteRooms.find((room) => room.roomId === selectedRoomParam) ?? null
     : null;
@@ -1221,6 +1221,15 @@ export default function ReserveRoomPage() {
   }
 
   function handleRoomSelect(roomId: string, preserveDateTime = false) {
+    if (!roomId) {
+      setManualRoomSlots([]);
+      setManualRoomSlotsLoading(false);
+      setRoomSchedules([]);
+      setDetailsStep(2);
+      router.push('/dashboard/reserve');
+      return;
+    }
+
     const nextRoom =
       rooms.find((room) => room.id === roomId) ??
       assistantRooms.find((room) => room.id === roomId) ??
@@ -1236,9 +1245,8 @@ export default function ReserveRoomPage() {
         setStartTime(previousTimeslot.startTime);
         setEndTime(previousTimeslot.endTime);
       }
-      setBookedSlots([]);
-      setBookedSlotsLoading(true);
-      setEnrichedSlots([]);
+      setManualRoomSlots([]);
+      setManualRoomSlotsLoading(true);
       setRoomSchedules([]);
     }
 

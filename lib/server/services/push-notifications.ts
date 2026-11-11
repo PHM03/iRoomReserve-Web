@@ -3,6 +3,13 @@ import "server-only";
 import type { BuildingAdminNotificationType } from "@/lib/auth/auth";
 import { db, serverTimestamp } from "@/lib/firebase/firebase-admin";
 
+type FirestoreWriteTarget = {
+  set(
+    documentRef: FirebaseFirestore.DocumentReference,
+    data: FirebaseFirestore.DocumentData
+  ): unknown;
+};
+
 export type AppNotificationType =
   | "new_reservation"
   | "reservation_cancelled"
@@ -57,7 +64,7 @@ function getExpoPushTokens(userData: Record<string, unknown> | undefined) {
 }
 
 export function queueNotificationWrite(
-  batch: FirebaseFirestore.WriteBatch,
+  batch: FirestoreWriteTarget,
   queuedNotifications: AppNotificationInput[],
   input: AppNotificationInput
 ) {

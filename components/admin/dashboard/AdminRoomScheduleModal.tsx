@@ -54,8 +54,8 @@ export default function AdminRoomScheduleModal({
   const campus = inferCampusFromBuilding({ id: room.buildingId, name: room.buildingName }) ?? 'main';
   const timeRange = TIME_RANGES[campus];
 
-  useEffect(() => onBookedDatesByRoom(room.id, setBookedSlots), [room.id]);
-  useEffect(() => onEnrichedSlotsByRoom(room.id, setSlots), [room.id]);
+  useEffect(() => onBookedDatesByRoom(room.id, room.buildingId, setBookedSlots), [room.buildingId, room.id]);
+  useEffect(() => onEnrichedSlotsByRoom(room.id, room.buildingId, setSlots), [room.buildingId, room.id]);
   useEffect(() => setSelectedSlots([]), [date, room.id]);
 
   const daySlots = useMemo<ScheduleSlot[]>(() => {
