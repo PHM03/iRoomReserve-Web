@@ -1,0 +1,13 @@
+{
+  "version": "1.1.0-usb-provisioning",
+  "board": "DOIT ESP32 DEVKIT V1",
+  "flashSize": "4MB",
+  "flashMode": "dio",
+  "flashFrequency": "40m",
+  "files": [
+    { "path": "bootloader.bin", "address": 4096 },
+    { "path": "partitions.bin", "address": 32768 },
+    { "path": "boot_app0.bin", "address": 57344 },
+    { "path": "firmware.bin", "address": 65536 }
+  ]
+}

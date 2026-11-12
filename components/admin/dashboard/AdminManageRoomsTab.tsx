@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import AdminFloorFilter from '@/components/admin/AdminFloorFilter';
 import AdminRoomScheduleModal from '@/components/admin/dashboard/AdminRoomScheduleModal';
+import BeaconSetupModal from '@/components/admin/dashboard/BeaconSetupModal';
 import {
     getBuildingFloorOptions,
     getFloorDisplayLabel,
@@ -252,11 +253,12 @@ export default function AdminManageRoomsTab({
     const [beaconPromptValue, setBeaconPromptValue] = useState('');
     const [beaconPromptError, setBeaconPromptError] = useState('');
     const [savingBeaconPrompt, setSavingBeaconPrompt] = useState(false);
+    const [beaconSetupRoom, setBeaconSetupRoom] = useState<Room | null>(null);
+    const [beaconWifiSsid, setBeaconWifiSsid] = useState('');
+    const [beaconWifiPassword, setBeaconWifiPassword] = useState('');
 
     const [roomSearch, setRoomSearch] = useState('');
     const [roomFloorFilter, setRoomFloorFilter] = useState('');
-    const [beaconScriptSsid, setBeaconScriptSsid] = useState('St. Dominic College of Asia');
-    const [beaconScriptPassword, setBeaconScriptPassword] = useState('');
     const [rooms, setRooms] = useState<Room[]>([]);
     const [roomCounts, setRoomCounts] = useState<RoomCountSummary>(EMPTY_ROOM_COUNTS);
     const [roomsLoading, setRoomsLoading] = useState(true);
@@ -589,31 +591,12 @@ export default function AdminManageRoomsTab({
         return `${buildingPrefix}-${roomCode}-beacon`;
     };
 
-    const copyRoomHardwareScript = async (room: Room, beaconId: string) => {
-        try {
-            const response = await fetch('/hardware/room-reserve.ino');
-            if (!response.ok) throw new Error('Could not load hardware script');
-            let script = await response.text();
-            script = script
-                .replace(/const char\* ssid\s*=\s*"[^"]*";/, `const char* ssid = ${JSON.stringify(beaconScriptSsid)};`)
-                .replace(/const char\* password\s*=\s*"[^"]*";/, `const char* password = ${JSON.stringify(beaconScriptPassword)};`)
-                .replace(/const char\* roomId\s*=\s*"[^"]*";/, `const char* roomId   = ${JSON.stringify(room.id)};`)
-                .replace(/const char\* roomName\s*=\s*"[^"]*";/, `const char* roomName = ${JSON.stringify(room.name)};`)
-                .replace(/const char\* beaconId\s*=\s*"[^"]*";/, `const char* beaconId = ${JSON.stringify(beaconId)};`);
-            await navigator.clipboard.writeText(script);
-            setCopyToast(`Hardware script for ${room.name} copied`);
-        } catch (error) {
-            console.warn('Failed to copy hardware script:', error);
-            setCopyToast('Could not copy hardware script');
-        }
-    };
-
-    const startCopyRoomScript = (room: Room, beaconIdOverride?: string) => {
+    const startBeaconSetup = (room: Room, beaconIdOverride?: string) => {
         const beaconId = beaconIdOverride === undefined
             ? room.beaconId?.trim() ?? ''
             : beaconIdOverride.trim();
         if (beaconId) {
-            void copyRoomHardwareScript(room, beaconId);
+            setBeaconSetupRoom({ ...room, beaconId });
             return;
         }
         setBeaconPromptRoom(room);
@@ -621,7 +604,7 @@ export default function AdminManageRoomsTab({
         setBeaconPromptError('');
     };
 
-    const saveBeaconId = async (alsoCopyScript: boolean) => {
+    const saveBeaconId = async (alsoStartSetup: boolean) => {
         if (!beaconPromptRoom || !beaconPromptValue.trim()) return;
         const room = beaconPromptRoom;
         const beaconId = beaconPromptValue.trim();
@@ -633,7 +616,7 @@ export default function AdminManageRoomsTab({
                 currentRoom.id === room.id ? { ...currentRoom, beaconId } : currentRoom
             ));
             setBeaconPromptRoom(null);
-            if (alsoCopyScript) await copyRoomHardwareScript(room, beaconId);
+            if (alsoStartSetup) setBeaconSetupRoom({ ...room, beaconId });
         } catch (error) {
             console.warn('Failed to save room Beacon ID:', error);
             setBeaconPromptError('Could not save the Beacon ID. Please try again.');
@@ -809,34 +792,27 @@ export default function AdminManageRoomsTab({
                 </div>
             )}
 
-            {hasAnyRooms && showRoomIdentifiers ? (
-                <div className="flex flex-col gap-3 rounded-2xl border border-blue-200/70 bg-blue-50/80 p-3 shadow-sm sm:flex-row sm:items-center">
-                    <span className="shrink-0 pl-1 text-sm !font-extrabold text-black" style={{ fontWeight: 800 }}>For Beacon Script:</span>
-                    <input
-                        type="text"
-                        aria-label="Beacon script SSID"
-                        placeholder="SSID"
-                        value={beaconScriptSsid}
-                        onChange={(event) => setBeaconScriptSsid(event.target.value)}
-                        className="glass-input min-w-0 flex-1 px-4 py-2.5 text-sm"
-                    />
-                    <input
-                        type="text"
-                        aria-label="Beacon script password"
-                        placeholder="Password"
-                        value={beaconScriptPassword}
-                        onChange={(event) => setBeaconScriptPassword(event.target.value)}
-                        className="glass-input min-w-0 flex-1 px-4 py-2.5 text-sm"
-                    />
-                </div>
-            ) : null}
-
             {scheduleRoom && (
                 <AdminRoomScheduleModal
                     room={scheduleRoom}
                     onClose={() => setScheduleRoom(null)}
                 />
             )}
+
+            {showRoomIdentifiers && beaconSetupRoom ? (
+                <BeaconSetupModal
+                    roomId={beaconSetupRoom.id}
+                    roomName={beaconSetupRoom.name}
+                    beaconId={beaconSetupRoom.beaconId?.trim() ?? ''}
+                    initialWifiSsid={beaconWifiSsid}
+                    initialWifiPassword={beaconWifiPassword}
+                    onWifiCredentialsChange={(ssid, password) => {
+                        setBeaconWifiSsid(ssid);
+                        setBeaconWifiPassword(password);
+                    }}
+                    onClose={() => setBeaconSetupRoom(null)}
+                />
+            ) : null}
 
             {addRoomStep === 1 && (
                 <div className="glass-card p-6 mb-8 !rounded-2xl">
@@ -1406,7 +1382,7 @@ export default function AdminManageRoomsTab({
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    startCopyRoomScript(
+                                                    startBeaconSetup(
                                                         { ...room, name: editName.trim() || room.name },
                                                         editBeaconId,
                                                     )
@@ -1414,7 +1390,7 @@ export default function AdminManageRoomsTab({
                                                 disabled={savingRoomId === room.id || !editBeaconId.trim()}
                                                 className="ui-button-blue rounded-lg px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60"
                                             >
-                                                Copy Script
+                                                Set up Beacon
                                             </button>
                                         ) : null}
                                     </div>
@@ -1446,11 +1422,11 @@ export default function AdminManageRoomsTab({
                                     <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
                                         {showRoomIdentifiers && <button
                                             type="button"
-                                            onClick={() => startCopyRoomScript(room)}
+                                            onClick={() => startBeaconSetup(room)}
                                             disabled={deletingRoomId === room.id}
                                             className="ui-button-blue rounded-lg px-3 py-2 text-[11px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
                                         >
-                                            Copy Script
+                                            Set up Beacon
                                         </button>}
                                         <button
                                             type="button"
@@ -1483,7 +1459,7 @@ export default function AdminManageRoomsTab({
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4" role="presentation">
                     <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="beacon-prompt-title">
                         <h2 id="beacon-prompt-title" className="text-lg font-bold text-black">Add Beacon ID</h2>
-                        <p className="mt-2 text-sm text-black/70">This room needs a Beacon ID before its hardware script can be configured.</p>
+                        <p className="mt-2 text-sm text-black/70">This room needs a Beacon ID before a beacon can be set up.</p>
                         <label className="mt-5 block text-xs font-bold text-black" htmlFor="room-beacon-prompt">Beacon ID</label>
                         <input
                             id="room-beacon-prompt"
@@ -1499,7 +1475,7 @@ export default function AdminManageRoomsTab({
                                 Add Beacon ID Only
                             </button>
                             <button type="button" onClick={() => void saveBeaconId(true)} disabled={savingBeaconPrompt || !beaconPromptValue.trim()} className="ui-button-blue rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-60">
-                                Add Beacon ID and Copy Script
+                                Add Beacon ID and Set up Beacon
                             </button>
                             <button type="button" onClick={() => setBeaconPromptRoom(null)} disabled={savingBeaconPrompt} className="rounded-lg border border-dark/10 px-3 py-2 text-sm font-bold text-black hover:bg-dark/5 disabled:opacity-60">
                                 Cancel
