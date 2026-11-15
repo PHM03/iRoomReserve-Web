@@ -84,6 +84,18 @@ export function isRoomTypeHelpRequest(text: string) {
   return asksForTypes && !includesReservationDetails;
 }
 
+export function isUndecidedRoomChoiceRequest(text: string) {
+  const asksForGuidance = /\b(?:help\s+me\s+(?:choose|decide|pick)|(?:i\s+)?(?:can't|can’t|cannot|can\s+not)\s+decide|not\s+sure\s+which|(?:i\s+)?(?:don't|don’t|do\s+not)\s+know\s+which)\b/i.test(text);
+  if (!asksForGuidance) {
+    return false;
+  }
+
+  const includesConcreteRoomCriteria =
+    /\b\d+\b|\b(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|morning|afternoon|evening)\b|\b(?:conference|glass\s+room|class\s*room|classroom|lab|laboratory|gymnasium|open\s+area|specialized\s+room|projector|whiteboard|air\s+conditioning|\bac\b|campus|building|between)\b/i.test(text);
+
+  return !includesConcreteRoomCriteria;
+}
+
 export function isAlternativeRoomRequest(text: string) {
   return /\b(?:other|another|different|more)\s+rooms?\b|\bothers?\s+rooms?\b|\b(?:more|other)\s+(?:options|choices|alternatives)\b|\balternatives?\b|\bsimilar(?:\s+to)?\b/i.test(text);
 }
@@ -236,7 +248,7 @@ export function buildReservationChatClarificationMessage(
   }
 
   return hasSelectedRoom
-    ? 'Your reservation details are complete. Select Preview availability to check the room and schedule.'
+    ? 'Your reservation details are complete. Select Check Availability to check the room and schedule.'
     : 'Your reservation details are ready. Select a specific room from the matching rooms so I can check its availability.';
 }
 

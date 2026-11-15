@@ -106,6 +106,15 @@ export interface AssistantRecommendation extends AssistantRoomRecord {
   score: number;
 }
 
+export interface AssistantRoomFitFeedback {
+  averageRating: number | null;
+  reviewCount: number;
+}
+
+export interface AssistantRoomFitCard extends AssistantRecommendation {
+  feedbackSummary?: AssistantRoomFitFeedback;
+}
+
 export interface AssistantTimeslotSuggestion extends AssistantTimeslot {
   label: string;
 }
@@ -981,9 +990,10 @@ function scoreRoomAgainstPreferences(
   if (
     typeof preferences.minCapacity === 'number' &&
     Number.isFinite(preferences.minCapacity) &&
+    preferences.minCapacity > 0 &&
     room.capacity >= preferences.minCapacity
   ) {
-    score += 2;
+    score += 2 / Math.max(1, room.capacity / preferences.minCapacity);
   }
 
   if (
@@ -1217,6 +1227,70 @@ export function findAssistantRoomMatches(
   );
 
   return recommendations;
+}
+
+export function findAssistantRoomFits(
+  rooms: readonly AssistantRoomRecord[],
+  preferences: AssistantPreferences,
+  limit = SCORE_LIMIT
+) {
+  const normalizedPreferences: AssistantPreferences = {
+    minCapacity: preferences.minCapacity,
+    preferredBuilding: preferences.preferredBuilding,
+    preferredType: preferences.preferredType,
+    requiredFeatures: normalizeFeatures(preferences.requiredFeatures),
+  };
+
+  return rooms
+    .filter((room) => room.status !== 'Unavailable')
+    .filter((room) => roomMatchesPreferences(room, normalizedPreferences))
+    .map((room) => {
+      const preferenceReason = createPreferenceReason(room, normalizedPreferences);
+      const reasonDetails = preferenceReason.replace(
+        /\. It is available at your selected time\.$/,
+        ''
+      );
+
+      return {
+        ...room,
+        reason: reasonDetails === 'Recommended because it is available at your selected time.'
+          ? 'Suggested from the rooms that match your choices. Availability has not been checked for a date and time.'
+          : `${reasonDetails} Availability has not been checked for a date and time.`,
+        score: scoreRoomAgainstPreferences(room, normalizedPreferences),
+      };
+    })
+    .sort(sortRecommendations)
+    .slice(0, Math.max(0, limit));
+}
+
+export function sortAssistantRoomFitsByFeedback<T extends AssistantRoomFitCard>(
+  roomFits: readonly T[],
+  limit = SCORE_LIMIT
+) {
+  const defaultRating = 3.5;
+  const priorReviewCount = 3;
+  const getSmoothedRating = (room: T) => {
+    const summary = room.feedbackSummary;
+    if (!summary || summary.reviewCount <= 0 || summary.averageRating === null) {
+      return defaultRating;
+    }
+
+    return (
+      (summary.averageRating * summary.reviewCount + defaultRating * priorReviewCount) /
+      (summary.reviewCount + priorReviewCount)
+    );
+  };
+
+  return [...roomFits]
+    .sort((left, right) =>
+      right.score - left.score ||
+      getSmoothedRating(right) - getSmoothedRating(left) ||
+      (right.feedbackSummary?.reviewCount ?? 0) - (left.feedbackSummary?.reviewCount ?? 0) ||
+      left.capacity - right.capacity ||
+      left.label.localeCompare(right.label) ||
+      left.roomId.localeCompare(right.roomId)
+    )
+    .slice(0, Math.max(0, limit));
 }
 
 function hasValidAssistantTimeRange(timeslot: AssistantTimeslot) {

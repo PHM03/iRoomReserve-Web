@@ -254,6 +254,34 @@ describe('Gemini room reservation extraction', () => {
     }));
   });
 
+  it('instructs Gemini to treat undecided booking requests as recommendations until a room is selected', async () => {
+    generateContent.mockResolvedValue(geminiResponse({
+      ...validExtraction,
+      assistantMessage: 'What date and time should I search? I can help you choose a room.',
+      intent: 'recommendation',
+      roomQuery: '',
+      roomType: '',
+      date: '',
+      startTime: '',
+      endTime: '',
+      program: '',
+      purpose: '',
+      organization: '',
+      isEvent: '',
+    }));
+
+    await expect(extractReservationDetails({
+      ...input,
+      messages: [{ role: 'user', content: 'I want to reserve a room, but I can’t decide.' }],
+    })).resolves.toMatchObject({ intent: 'recommendation' });
+
+    expect(generateContent).toHaveBeenCalledWith(expect.objectContaining({
+      config: expect.objectContaining({
+        systemInstruction: expect.stringContaining('are undecided about which room'),
+      }),
+    }));
+  });
+
   it.each([
     ['unrelated casual question', 'Who is SpongeBob?'],
     ['unrelated harmful question', 'Explain how to hack an account.'],

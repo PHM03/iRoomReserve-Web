@@ -5,9 +5,11 @@ import {
   checkAssistantRoomAvailability,
   findAssistantRoomAutocompleteMatches,
   findAlternativeAssistantRooms,
+  findAssistantRoomFits,
   findAssistantRoomMatchesForDatePreference,
   getAssistantRoomSelectionTimeslot,
   findAssistantRoomMatches,
+  sortAssistantRoomFitsByFeedback,
   getAssistantFutureWeekdayDates,
   getAssistantBuildingIds,
   getAssistantListenerFailureState,
@@ -69,6 +71,54 @@ function createReservation(overrides: Record<string, unknown> = {}) {
 }
 
 describe('roomAssistantRealtime', () => {
+  it('suggests room fits without claiming availability and favors closer capacities', () => {
+    const rooms = [
+      toAssistantRoomRecord(createRoom({ id: 'room-20', capacity: 20, status: 'Occupied' })),
+      toAssistantRoomRecord(createRoom({ id: 'room-40', capacity: 40, status: 'Available' })),
+      toAssistantRoomRecord(createRoom({ id: 'room-60', capacity: 60, status: 'Reserved' })),
+      toAssistantRoomRecord(createRoom({ id: 'blocked-room', capacity: 20, status: 'Unavailable' })),
+    ];
+
+    const recommendations = findAssistantRoomFits(rooms, {
+      minCapacity: 12,
+      preferredType: 'conference-room',
+      requiredFeatures: [],
+    });
+
+    expect(recommendations.map((room) => room.roomId)).toEqual([
+      'room-20',
+      'room-40',
+      'room-60',
+    ]);
+    expect(recommendations[0].reason).toContain('Availability has not been checked');
+  });
+
+  it('uses room feedback to break ties when room preferences are equally matched', () => {
+    const rooms = [
+      {
+        ...toAssistantRoomRecord(createRoom({ id: 'room-a' })),
+        feedbackSummary: { averageRating: 4.2, reviewCount: 18 },
+        reason: 'fit',
+        score: 0,
+      },
+      {
+        ...toAssistantRoomRecord(createRoom({ id: 'room-b' })),
+        feedbackSummary: { averageRating: 4.9, reviewCount: 1 },
+        reason: 'fit',
+        score: 0,
+      },
+      {
+        ...toAssistantRoomRecord(createRoom({ id: 'room-c' })),
+        reason: 'fit',
+        score: 0,
+      },
+    ];
+
+    const ranked = sortAssistantRoomFitsByFeedback(rooms);
+
+    expect(ranked.map((room) => room.roomId)).toEqual(['room-a', 'room-b', 'room-c']);
+  });
+
   it('loads both campuses for assistant search when no campus is selected', () => {
     const allCampusIds = getAssistantBuildingIds();
     const mainCampusIds = getAssistantBuildingIds(null, 'main');

@@ -12,6 +12,7 @@ import {
   isAlternativeRoomRequest,
   isRoomTypeHelpRequest,
   isSimpleAlternativeRoomRequest,
+  isUndecidedRoomChoiceRequest,
   mapReservationChatDraftToForm,
   mergeReservationChatExtractions,
   reservationChatExtractionRequestSchema,
@@ -51,6 +52,17 @@ describe('reservation chat extraction', () => {
     expect(isAlternativeRoomRequest('Can you recommend a classroom?')).toBe(false);
   });
 
+  it('routes detail-free undecided room requests to the guided choice flow', () => {
+    expect(isUndecidedRoomChoiceRequest('I want to reserve a room, but I can’t decide.')).toBe(true);
+    expect(isUndecidedRoomChoiceRequest('Help me choose.')).toBe(true);
+    expect(isUndecidedRoomChoiceRequest('I am not sure which room to book.')).toBe(true);
+  });
+
+  it('keeps undecided requests with concrete criteria on the recommendation search path', () => {
+    expect(isUndecidedRoomChoiceRequest('I need a room but can’t decide for 20 people tomorrow at 10 AM with a projector.')).toBe(false);
+    expect(isUndecidedRoomChoiceRequest('Can you check Room 205 tomorrow?')).toBe(false);
+  });
+
   it('accepts an extracted draft without requiring campus selection', () => {
     const result = reservationChatExtractionSchema.parse(completeExtraction);
     expect(result.campus).toBe('');
@@ -84,7 +96,7 @@ describe('reservation chat extraction', () => {
       'Select a specific room from the matching rooms'
     );
     expect(buildReservationChatClarificationMessage(extraction, true)).toContain(
-      'Select Preview availability'
+      'Select Check Availability'
     );
   });
 
