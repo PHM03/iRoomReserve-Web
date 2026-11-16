@@ -58,7 +58,7 @@ async function waitForAuthReady() {
 
 export async function apiRequest<T>(
   input: string,
-  { body, method = "POST", params, role, userId }: ApiRequestOptions = {}
+  { body, method = "POST", params }: ApiRequestOptions = {}
 ): Promise<T> {
   await waitForAuthReady();
   const currentUser = auth.currentUser;
@@ -69,9 +69,6 @@ export async function apiRequest<T>(
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(currentUser?.uid ? { "x-user-id": currentUser.uid } : {}),
-      ...(userId ? { "x-user-id": userId } : {}),
-      ...(role ? { "x-user-role": role } : {}),
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
@@ -114,7 +111,7 @@ export async function apiRequest<T>(
 
 export async function apiRequestBlob(
   input: string,
-  { body, method = "POST", params, role, userId }: ApiRequestOptions = {}
+  { body, method = "POST", params }: ApiRequestOptions = {}
 ): Promise<Response> {
   await waitForAuthReady();
   const currentUser = auth.currentUser;
@@ -125,9 +122,6 @@ export async function apiRequestBlob(
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(currentUser?.uid ? { "x-user-id": currentUser.uid } : {}),
-      ...(userId ? { "x-user-id": userId } : {}),
-      ...(role ? { "x-user-role": role } : {}),
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });

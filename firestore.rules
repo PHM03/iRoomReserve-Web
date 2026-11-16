@@ -182,8 +182,20 @@ service cloud.firestore {
         || isPrivilegedUser()
         || isApprovedUser()
       );
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && request.auth.uid == userId;
+      // A client may create only its own pending profile. Approval, role,
+      // campus assignments, and other authorization fields are server managed.
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+        request.resource.data.status == "pending" &&
+        request.resource.data.keys().hasOnly([
+          "firstName", "lastName", "email", "role", "status", "campus",
+          "campusName", "updatedAt", "createdAt", "expoPushTokens",
+          "pushNotificationsEnabled"
+        ]);
+      allow update: if isSignedIn() && request.auth.uid == userId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "firstName", "lastName", "email", "campus", "campusName",
+          "updatedAt", "expoPushTokens", "pushNotificationsEnabled"
+        ]);
     }
 
     // Optional self-reported gender is kept outside the broadly readable user
@@ -204,7 +216,10 @@ service cloud.firestore {
     }
 
     match /notifications/{docId} {
-      allow read, update, delete: if isSignedIn() && request.auth.uid == resource.data.recipientUid;
+      allow read, delete: if isSignedIn() && request.auth.uid == resource.data.recipientUid;
+      allow update: if isSignedIn() && request.auth.uid == resource.data.recipientUid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["read"]) &&
+        request.resource.data.read == true;
     }
 
     match /adminRequests/{docId} {

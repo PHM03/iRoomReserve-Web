@@ -283,7 +283,6 @@ export async function uploadReservationDocument(
     method: "POST",
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(auth.currentUser?.uid ? { "x-user-id": auth.currentUser.uid } : {}),
     },
     body: formData,
   });
@@ -326,7 +325,6 @@ export async function deleteUploadedReservationDocument(path: string): Promise<v
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(currentUser?.uid ? { "x-user-id": currentUser.uid } : {}),
     },
     body: JSON.stringify({ path }),
   });

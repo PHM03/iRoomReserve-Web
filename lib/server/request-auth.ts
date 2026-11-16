@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 import { normalizeAssignedBuildings } from "@/lib/admin/assignedBuildings";
 import { type ReservationCampus } from "@/lib/buildings/campuses";
 import { auth as adminAuth, db } from "@/lib/firebase/firebase-admin";
-import { normalizeRole, type UserRole } from "@/lib/auth/roles";
+import { type UserRole } from "@/lib/auth/roles";
 import { resolveCampusAssignment } from "@/lib/buildings/campusAssignments";
 
 export interface RequestAuthContext {
@@ -33,6 +33,7 @@ interface UserProfileData {
 
 interface GetRequestAuthContextOptions {
   includeProfile?: boolean;
+  /** @deprecated Compatibility headers are ignored; use a verified bearer token. */
   allowCompatibilityHeaders?: boolean;
 }
 
@@ -79,13 +80,9 @@ export async function getRequestAuthContext(
   request: NextRequest,
   options: GetRequestAuthContextOptions = {}
 ): Promise<RequestAuthContext> {
-  const { includeProfile = true, allowCompatibilityHeaders = true } = options;
-  const fallbackUid = allowCompatibilityHeaders
-    ? request.headers.get("x-user-id")
-    : null;
-  const fallbackRole = allowCompatibilityHeaders
-    ? normalizeRole(request.headers.get("x-user-role"))
-    : null;
+  // Identity must come from a Firebase-signed token. Client-controlled x-user-*
+  // headers can impersonate another account, so they are never accepted.
+  const { includeProfile = true } = options;
   const authHeader = request.headers.get("authorization");
 
   if (authHeader?.startsWith("Bearer ")) {
@@ -96,7 +93,7 @@ export async function getRequestAuthContext(
         : getEmptyProfileContext();
       return {
         uid: decoded.uid,
-        role: profileContext.role ?? fallbackRole,
+        role: profileContext.role,
         status: profileContext.status,
         email: profileContext.email ?? decoded.email?.trim().toLowerCase() ?? null,
         campus: profileContext.campus,
@@ -106,23 +103,21 @@ export async function getRequestAuthContext(
       };
     } catch (error) {
       console.warn("Firebase ID token verification failed", { error });
-      // Compatibility headers remain available only to legacy routes that opt in.
+      // Never downgrade an invalid bearer token to an untrusted header identity.
+      if (authHeader) {
+        return {
+          uid: null,
+          role: null,
+          ...getEmptyProfileContext(),
+          verified: false,
+        };
+      }
     }
   }
 
-  const fallbackProfileContext =
-    includeProfile && fallbackUid
-      ? await getProfileContext(fallbackUid)
-      : getEmptyProfileContext();
-
   return {
-    uid: fallbackUid,
-    role: fallbackProfileContext.role ?? fallbackRole,
-    status: fallbackProfileContext.status,
-    email: fallbackProfileContext.email,
-    campus: fallbackProfileContext.campus,
-    assignedBuildingId: fallbackProfileContext.assignedBuildingId,
-    assignedBuildingIds: fallbackProfileContext.assignedBuildingIds,
+    uid: null,
+    ...getEmptyProfileContext(),
     verified: false,
   };
 }
