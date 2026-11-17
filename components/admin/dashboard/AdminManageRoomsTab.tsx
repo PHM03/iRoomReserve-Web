@@ -358,6 +358,29 @@ export default function AdminManageRoomsTab({
     );
 
     useEffect(() => {
+        const normalizedSearch = roomSearch.trim().toLowerCase();
+        if (!normalizedSearch) return;
+
+        const matchingRooms = rooms.filter((room) =>
+            room.name.toLowerCase().includes(normalizedSearch)
+        );
+        const exactMatch = matchingRooms.find(
+            (room) => room.name.trim().toLowerCase() === normalizedSearch
+        );
+        const matchingFloors = [
+            ...new Set(matchingRooms.map((room) => room.floor).filter(Boolean)),
+        ];
+        const targetFloor =
+            exactMatch?.floor ?? (matchingFloors.length === 1 ? matchingFloors[0] : '');
+
+        if (targetFloor) {
+            setRoomFloorFilter((currentFloor) =>
+                currentFloor === targetFloor ? currentFloor : targetFloor
+            );
+        }
+    }, [roomSearch, rooms]);
+
+    useEffect(() => {
         let cancelled = false;
 
         setFloors([]);
