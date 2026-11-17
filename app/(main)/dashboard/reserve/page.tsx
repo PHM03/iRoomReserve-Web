@@ -301,6 +301,7 @@ export default function ReserveRoomPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [roomsError, setRoomsError] = useState('');
+  const allCampusRoomsPromise = useRef<Promise<Room[]> | null>(null);
   const [activeCampus, setActiveCampus] = useState<ReservationCampus | null>(null);
   const [activeBuilding, setActiveBuilding] = useState<{ id: string; name: string } | null>(null);
   const [activeFloor, setActiveFloor] = useState<string | null>(null);
@@ -400,8 +401,10 @@ export default function ReserveRoomPage() {
     setRoomsLoading(true);
     setRoomsError('');
 
-    const loadRooms = query
-      ? Promise.all(
+    let loadRooms: Promise<Room[]>;
+    if (query) {
+      if (!allCampusRoomsPromise.current) {
+        allCampusRoomsPromise.current = Promise.all(
           (['main', 'digi'] as ReservationCampus[]).flatMap((campus) =>
             getManagedBuildingsForCampus(campus).map((building) =>
               getRoomsByBuilding(building.id)
@@ -411,8 +414,15 @@ export default function ReserveRoomPage() {
           const uniqueRooms = new Map<string, Room>();
           roomGroups.flat().forEach((room) => uniqueRooms.set(room.id, room));
           return Array.from(uniqueRooms.values());
-        })
-      : getRoomsByBuilding(activeBuilding!.id);
+        }).catch((error) => {
+          allCampusRoomsPromise.current = null;
+          throw error;
+        });
+      }
+      loadRooms = allCampusRoomsPromise.current;
+    } else {
+      loadRooms = getRoomsByBuilding(activeBuilding!.id);
+    }
 
     loadRooms
       .then((loadedRooms) => {
