@@ -39,6 +39,7 @@ interface DaySchedulePanelProps {
   userActiveSlots: readonly UserActiveSlot[];
   currentUserId: string;
   currentRoomId: string;
+  roomAvailable: boolean;
   campusTimeRange: { startMinutes: number; endMinutes: number };
   selectedStartTime?: string;
   selectedEndTime?: string;
@@ -104,6 +105,7 @@ export default function DaySchedulePanel({
   userActiveSlots,
   currentUserId,
   currentRoomId,
+  roomAvailable,
   campusTimeRange,
   selectedStartTime = '',
   selectedEndTime = '',
@@ -140,6 +142,11 @@ export default function DaySchedulePanel({
     const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
 
     for (const { endTime: slotEnd, startTime: slotStart } of getReservationTimeSlots(campusTimeRange)) {
+
+      if (!roomAvailable) {
+        slots.push({ startTime: slotStart, endTime: slotEnd, status: 'manual-unavailable' });
+        continue;
+      }
 
       if (isBeforeToday || (isToday && reservationTimeToMinutes(slotStart) <= nowMinutes)) {
         slots.push({
@@ -238,6 +245,7 @@ export default function DaySchedulePanel({
     return slots;
   }, [
     campusTimeRange,
+    roomAvailable,
     currentRoomId,
     currentUserId,
     date,
@@ -323,8 +331,10 @@ export default function DaySchedulePanel({
       case 'available':
         return `${base} cursor-pointer schedule-slot-available${selectedClass}`;
       case 'past':
-      case 'class-scheduled':
+        return `${base} cursor-not-allowed schedule-slot-unavailable${selectedClass}`;
       case 'manual-unavailable':
+        return `${base} cursor-not-allowed schedule-slot-conflict${selectedClass}`;
+      case 'class-scheduled':
         return `${base} cursor-not-allowed schedule-slot-unavailable${selectedClass}`;
       case 'reserved-others':
         return `${base} cursor-pointer schedule-slot-reserved${selectedClass}`;
@@ -359,8 +369,9 @@ export default function DaySchedulePanel({
       case 'available':
         return 'border border-green-200/80 bg-green-50/90 text-green-700';
       case 'past':
-      case 'manual-unavailable':
         return 'border border-gray-200/90 bg-gray-100/95 text-gray-600';
+      case 'manual-unavailable':
+        return 'border border-red-300/80 bg-red-100/90 text-red-800';
       case 'class-scheduled':
         return 'border border-blue-200/90 bg-blue-50/95 text-blue-700';
       case 'reserved-others':
@@ -487,7 +498,7 @@ export default function DaySchedulePanel({
       case 'class-scheduled':
         return 'Class scheduled';
       case 'manual-unavailable':
-        return 'Manually unavailable';
+        return 'Room currently unavailable';
       case 'reserved-others':
         return 'Reserved';
       case 'user-conflict':

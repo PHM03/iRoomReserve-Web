@@ -2277,6 +2277,7 @@ export default function ReserveRoomPage() {
                               userActiveSlots={userActiveSlots}
                               currentUserId={firebaseUser.uid}
                               currentRoomId={selectedRoomId}
+                              roomAvailable={!isRoomAdministrativelyUnavailable(selectedRoom.status)}
                               campusTimeRange={CAMPUS_TIME_RANGES[selectedCampus]}
                               selectedStartTime={startTime}
                               selectedEndTime={endTime}
