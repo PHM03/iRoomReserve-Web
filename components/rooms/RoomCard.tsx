@@ -79,7 +79,7 @@ export default function RoomCard({
           </span>
           {administrativelyUnavailable && (
             <span className="inline-flex items-center rounded-full border border-red-500/30 bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-800">
-              Unavailable for reservations
+              Currently unavailable for reservations
             </span>
           )}
         </div>

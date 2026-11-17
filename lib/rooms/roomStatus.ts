@@ -419,7 +419,7 @@ export function getCurrentRoomReservation(
 }
 
 export type RoomOperationalActivity =
-  | "Administratively unavailable"
+  | "Marked as Unavailable"
   | "Occupied"
   | "Reserved"
   | "Class in progress"
@@ -456,7 +456,7 @@ export function resolveRoomOperationalState(
   if (condition === "Unavailable") {
     return {
       condition,
-      activity: "Administratively unavailable",
+      activity: "Marked as Unavailable",
       reservation,
       checkedIn,
     };

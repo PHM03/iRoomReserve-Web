@@ -1974,7 +1974,7 @@ export default function ReserveRoomPage() {
                       </span>
                       {isRoomAdministrativelyUnavailable(selectedRoom.status) && (
                         <span className="rounded-full border border-red-500/30 bg-red-50 px-3 py-1 text-xs font-bold text-red-800">
-                          Unavailable for reservations
+                          Currently unavailable for reservations
                         </span>
                       )}
                   </div>

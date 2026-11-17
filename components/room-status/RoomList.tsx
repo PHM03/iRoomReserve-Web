@@ -12,7 +12,7 @@ interface RoomListProps {
 }
 
 function activityTone(activity: string) {
-  if (activity === 'Occupied' || activity === 'Administratively unavailable' || activity === 'Time block') {
+  if (activity === 'Occupied' || activity === 'Marked as Unavailable' || activity === 'Time block') {
     return 'ui-badge-red';
   }
   if (activity === 'Reserved' || activity === 'Class in progress') {

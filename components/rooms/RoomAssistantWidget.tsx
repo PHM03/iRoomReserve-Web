@@ -1267,7 +1267,7 @@ export default function RoomAssistantWidget({
       return;
     }
     if (isRoomAdministrativelyUnavailable(quickRoom.status)) {
-      setQuickError(`${quickRoom.label || quickRoom.roomId} is unavailable for reservations. Choose another room.`);
+      setQuickError(`${quickRoom.label || quickRoom.roomId} is currently unavailable for reservations. Choose another room.`);
       return;
     }
     setQuickBusy(true);
@@ -1579,13 +1579,13 @@ export default function RoomAssistantWidget({
           ) {
             nextChatAvailability = {
               available: false,
-              message: `${exactRoom.label || exactRoom.roomId} is unavailable for reservations. Ask me for similar rooms or choose another room.`,
+              message: `${exactRoom.label || exactRoom.roomId} is currently unavailable for reservations. Ask me for similar rooms or choose another room.`,
             };
           }
           nextExtraction = {
             ...correctedExtraction,
             assistantMessage: isRoomAdministrativelyUnavailable(exactRoom.status)
-              ? `${exactRoom.label || exactRoom.roomId} at ${[campusName, buildingName].filter(Boolean).join(' · ')} is unavailable for reservations. Ask me for similar rooms or choose another room.`
+              ? `${exactRoom.label || exactRoom.roomId} at ${[campusName, buildingName].filter(Boolean).join(' · ')} is currently unavailable for reservations. Ask me for similar rooms or choose another room.`
               : `I found ${exactRoom.label || exactRoom.roomId} at ${[campusName, buildingName].filter(Boolean).join(' · ')}. I selected it so you can check availability.`,
             buildingQuery: correctedExtraction.buildingQuery || buildingName,
             campus: correctedExtraction.campus || exactRoomCampus || '',
@@ -3423,12 +3423,12 @@ export default function RoomAssistantWidget({
                       return <button key={room.roomId} type="button" disabled={administrativelyUnavailable} onClick={() => { if (administrativelyUnavailable) return; setQuickRoom(room); setQuickRoomQuery(room.label || room.roomId); setQuickAvailability(null); setQuickError(''); }} className="block w-full rounded-lg px-2.5 py-2 text-left enabled:hover:bg-[#a12124]/6 disabled:cursor-not-allowed disabled:opacity-65">
                         <span className="block text-xs font-bold">{room.label || room.roomId}</span>
                         <span className="block text-xs text-black/65">{campus ? getCampusName(campus) : 'Campus unavailable'} · {room.building || room.originalRoom.buildingName || room.originalRoom.buildingId}</span>
-                        {administrativelyUnavailable && <span className="mt-0.5 block text-xs font-bold text-red-800">Unavailable for reservations</span>}
+                        {administrativelyUnavailable && <span className="mt-0.5 block text-xs font-bold text-red-800">Currently unavailable for reservations</span>}
                       </button>;
                     }) : <p className="px-2.5 py-2 text-[10px] text-black/60">{dataLoading ? 'Loading live rooms…' : 'No matching live rooms. Try another room, campus, or building.'}</p>}
                   </div>
                 )}
-                {quickRoom && <p className={`mt-1 text-[10px] ${isRoomAdministrativelyUnavailable(quickRoom.status) ? 'font-bold text-red-800' : 'text-black/65'}`}>{isRoomAdministrativelyUnavailable(quickRoom.status) ? 'Unavailable for reservations: ' : 'Selected: '}{getRoomDisplayName(quickRoom)} · {(() => { const campus = inferCampusFromBuilding({ id: quickRoom.originalRoom.buildingId, name: quickRoom.originalRoom.buildingName }); return campus ? getCampusName(campus) : 'Campus unavailable'; })()} · {quickRoom.building || quickRoom.originalRoom.buildingName || quickRoom.originalRoom.buildingId}</p>}
+                {quickRoom && <p className={`mt-1 text-[10px] ${isRoomAdministrativelyUnavailable(quickRoom.status) ? 'font-bold text-red-800' : 'text-black/65'}`}>{isRoomAdministrativelyUnavailable(quickRoom.status) ? 'Currently unavailable for reservations: ' : 'Selected: '}{getRoomDisplayName(quickRoom)} · {(() => { const campus = inferCampusFromBuilding({ id: quickRoom.originalRoom.buildingId, name: quickRoom.originalRoom.buildingName }); return campus ? getCampusName(campus) : 'Campus unavailable'; })()} · {quickRoom.building || quickRoom.originalRoom.buildingName || quickRoom.originalRoom.buildingId}</p>}
               </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <label className="text-[10px] font-bold text-black/75">Date<input type="date" value={quickDate} onChange={(event) => { setQuickDate(event.target.value); setQuickAvailability(null); setQuickError(''); }} className="mt-1 w-full rounded-lg border border-black/12 bg-[#f8f4ef] px-2 py-2 text-xs font-normal" /></label>
@@ -3534,11 +3534,11 @@ export default function RoomAssistantWidget({
                       const isMinimized = isSelected && chatReservationDetailsMinimized;
                       return (
                         <div key={room.roomId} className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs ${isSelected ? 'border-[#a12124] bg-[#a12124]/8' : 'border-black/10 hover:bg-black/5'}`}>
-                          <button type="button" onClick={() => { setChatSelectedRoomId(room.roomId); setChatReservationDetailsMinimized(false); setChatAvailability(isRoomAdministrativelyUnavailable(room.status) ? { available: false, message: `${room.label || room.roomId} is unavailable for reservations. Choose another room.` } : null); setChatError(''); }}
+                          <button type="button" onClick={() => { setChatSelectedRoomId(room.roomId); setChatReservationDetailsMinimized(false); setChatAvailability(isRoomAdministrativelyUnavailable(room.status) ? { available: false, message: `${room.label || room.roomId} is currently unavailable for reservations. Choose another room.` } : null); setChatError(''); }}
                             className="min-w-0 flex-1 text-left">
                             <span className="flex items-center justify-between gap-2 font-bold">
                               <span>{room.label || room.roomId}{isMinimized ? ' · selected' : ''}</span>
-                              {isRoomAdministrativelyUnavailable(room.status) && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[9px] font-bold text-red-800">Unavailable for reservations</span>}
+                              {isRoomAdministrativelyUnavailable(room.status) && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[9px] font-bold text-red-800">Currently unavailable for reservations</span>}
                             </span>
                             {!isMinimized && <span className="mt-0.5 block text-xs text-black/65">{campus ? getCampusName(campus) : 'Campus unavailable'} · {room.building || room.originalRoom.buildingName || room.originalRoom.buildingId}</span>}
                           </button>
@@ -3754,7 +3754,7 @@ export default function RoomAssistantWidget({
                             className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${availabilityBadgeClass}`}
                           >
                             {administrativelyUnavailable
-                              ? 'Unavailable for reservations'
+                              ? 'Currently unavailable for reservations'
                               : availability === true
                               ? 'Available · checked'
                               : availability === false

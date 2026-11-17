@@ -46,7 +46,7 @@ function bleLabel(room: Room) {
 function activityTone(activity: string) {
   if (activity === 'Occupied') return 'ui-badge-red';
   if (activity === 'Reserved' || activity === 'Class in progress') return 'ui-badge-blue';
-  if (activity === 'Administratively unavailable' || activity === 'Time block') return 'ui-badge-red';
+  if (activity === 'Marked as Unavailable' || activity === 'Time block') return 'ui-badge-red';
   return 'ui-badge-green';
 }
 
@@ -146,7 +146,7 @@ export default function AdminRoomStatusSection({
             const floorLabel = floorOptions.find((option) => option.value === room.floor)?.label ?? room.floor;
             const relevantReservation = reservation?.status === 'approved' ? reservation : null;
             const displayedReservation = relevantReservation ?? pendingFinish;
-            const activityLabel = state.condition === 'Unavailable' ? 'Administratively unavailable' : activity;
+            const activityLabel = state.condition === 'Unavailable' ? 'Marked as Unavailable' : activity;
             const reservationWindow = displayedReservation ? `${formatDate(displayedReservation.date)} · ${formatTime12h(displayedReservation.startTime)}–${formatTime12h(displayedReservation.endTime)}` : 'No active reservation';
             const reservationLabel = relevantReservation
               ? `${relevantReservation.status} · ${reservationWindow}`

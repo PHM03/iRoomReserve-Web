@@ -55,7 +55,7 @@ export function sanitizeRoomDayScheduleForViewer(
         startTime: interval.startTime,
         endTime: interval.endTime,
         status: 'Unavailable',
-        reason: 'Room administratively unavailable',
+        reason: 'Currently unavailable for reservations',
       }];
     }
     if (interval.kind === 'campus-closed') {
