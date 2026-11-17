@@ -40,6 +40,33 @@ function getReservationDates(reservation: Reservation) {
   return reservation.dates?.length ? reservation.dates : [reservation.date];
 }
 
+function getReservationsForFilter(
+  reservations: Reservation[],
+  filter: FilterTab,
+  currentDateTime = getCurrentDateTimeStringInTimeZone(),
+) {
+  if (filter === 'rejected') {
+    return reservations.filter(
+      (reservation) =>
+        reservation.status === 'rejected' || reservation.status === 'cancelled',
+    );
+  }
+  if (filter === 'all') return reservations;
+  return reservations.filter(
+    (reservation) =>
+      getDisplayReservationStatus(reservation, currentDateTime) === filter,
+  );
+}
+
+function getMostRecentReservationDate(reservations: Reservation[]) {
+  const mostRecentReservation = [...reservations].sort((left, right) => {
+    const createdAtDifference =
+      (right.createdAt?.seconds ?? 0) - (left.createdAt?.seconds ?? 0);
+    return createdAtDifference || right.date.localeCompare(left.date);
+  })[0];
+  return mostRecentReservation?.date ?? null;
+}
+
 function getReservationDateParts(date: string) {
   const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
@@ -176,22 +203,6 @@ export default function MyReservationsPage() {
       if (cancelled) return;
       setReservations(nextReservations);
       if (!hasInitializedDateFilter.current) {
-        const today = getCurrentDateTimeStringInTimeZone().date;
-        const firstUpcomingDate = nextReservations
-          .filter((reservation) =>
-            reservation.status === 'pending' || reservation.status === 'approved',
-          )
-          .flatMap((reservation) => getReservationDates(reservation))
-          .filter((date) => date >= today && getReservationDateParts(date) !== null)
-          .sort()[0];
-        const dateParts = firstUpcomingDate
-          ? getReservationDateParts(firstUpcomingDate)
-          : null;
-
-        if (dateParts) {
-          setSelectedYear(dateParts.year);
-          setSelectedMonth(dateParts.month);
-        }
         const initialDateTime = getCurrentDateTimeStringInTimeZone();
         const initialFilter: FilterTab = nextReservations.some(
           (reservation) => reservation.status === 'pending',
@@ -213,6 +224,16 @@ export default function MyReservationsPage() {
                   ? 'completed'
                   : 'all';
         setActiveFilter(initialFilter);
+        const mostRecentDate = getMostRecentReservationDate(
+          getReservationsForFilter(nextReservations, initialFilter, initialDateTime),
+        );
+        const dateParts = mostRecentDate
+          ? getReservationDateParts(mostRecentDate)
+          : null;
+        if (dateParts) {
+          setSelectedYear(dateParts.year);
+          setSelectedMonth(dateParts.month);
+        }
         hasInitializedDateFilter.current = true;
       }
     });
@@ -390,6 +411,16 @@ export default function MyReservationsPage() {
   const handleTabClick = useCallback(
     (tab: FilterTab) => {
       setActiveFilter(tab);
+      const mostRecentDate = getMostRecentReservationDate(
+        getReservationsForFilter(reservations, tab, currentDateTime),
+      );
+      const dateParts = mostRecentDate
+        ? getReservationDateParts(mostRecentDate)
+        : null;
+      if (dateParts) {
+        setSelectedYear(dateParts.year);
+        setSelectedMonth(dateParts.month);
+      }
 
       const persist = (key: string, count: number, setter: (n: number) => void) => {
         setter(count);
@@ -408,6 +439,7 @@ export default function MyReservationsPage() {
     [
       lsKeyPending, lsKeyApproved, lsKeyRejected, lsKeyExpired, lsKeyCompleted,
       pendingCount, approvedCount, rejectedCount, expiredCount, completedCount,
+      reservations, currentDateTime,
     ]
   );
 
