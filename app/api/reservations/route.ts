@@ -9,6 +9,7 @@ import { groupReservationsForDisplay } from "@/lib/reservations/reservation-grou
 import { getRequestAuthContext } from "@/lib/server/request-auth";
 import {
   assertAuthenticated,
+  assertCanManageBuilding,
   assertOwnsResource,
   assertRole,
   assertVerifiedAuthentication,
@@ -133,6 +134,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get("roomId")?.trim() ?? "";
+    const buildingId = searchParams.get("buildingId")?.trim() ?? "";
     const userId = searchParams.get("userId")?.trim() ?? "";
     const campus = searchParams.get("campus")?.trim().toLowerCase() ?? "";
     const statuses = searchParams
@@ -153,7 +155,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!roomId && !userId && !campus) {
+    if (!roomId && !buildingId && !userId && !campus) {
       return NextResponse.json(
         {
           error: {
@@ -167,6 +169,10 @@ export async function GET(request: NextRequest) {
 
     if (userId) {
       assertOwnsResource(authContext, userId);
+    }
+
+    if (buildingId) {
+      assertCanManageBuilding(authContext, buildingId);
     }
 
     if (campus) {
@@ -191,6 +197,10 @@ export async function GET(request: NextRequest) {
       reservationsQuery = reservationsQuery.where("roomId", "==", roomId);
     }
 
+    if (buildingId) {
+      reservationsQuery = reservationsQuery.where("buildingId", "==", buildingId);
+    }
+
     if (userId) {
       reservationsQuery = reservationsQuery.where("userId", "==", userId);
     }
@@ -200,7 +210,9 @@ export async function GET(request: NextRequest) {
         ? [...new Set(getManagedBuildingIdsForCampus(campus).map((value) => value.trim()))]
         : [];
     const snapshots =
-      buildingIds.length > 0
+      buildingId
+        ? [await applyStatusFilters(reservationsQuery, statuses).get()]
+        : buildingIds.length > 0
         ? await Promise.all(
             buildingIds.map((buildingId) =>
               applyStatusFilters(
@@ -221,7 +233,7 @@ export async function GET(request: NextRequest) {
     );
 
     const normalizedReservations =
-      roomId || (!userId && !campus)
+      buildingId || roomId || (!userId && !campus)
         ? reservations.sort(sortReservations)
         : groupReservationsForDisplay(reservations);
 

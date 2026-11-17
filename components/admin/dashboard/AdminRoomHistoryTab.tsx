@@ -7,9 +7,11 @@ import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
 import { getRoomsByBuilding, type Room } from '@/lib/rooms/rooms';
 import {
+  fetchReservationsByBuilding,
   onReservationsByBuilding,
   type Reservation,
 } from '@/lib/reservations/reservations';
+import type { ReservationTimestampLike } from '@/lib/reservations/reservation-monitoring';
 import { formatDate, formatTimeRange } from '@/lib/utils/dateTime';
 import { getManagedBuildingOptionLabel, RoleBadge, StatusBadge } from './shared';
 
@@ -73,17 +75,75 @@ function getHistoryEntryStatus(
   reservation?: Pick<Reservation, 'checkedInAt' | 'status'> | null
 ) {
   const hasStarted = Boolean(reservation?.checkedInAt);
-  const normalizedStatus = entry.status.toLowerCase();
+  const normalizedStatus = (reservation?.status ?? entry.status).toLowerCase();
 
-  if (normalizedStatus === 'completed') {
-    return hasStarted ? 'completed' : 'expired';
+  if (
+    normalizedStatus === 'rejected' ||
+    normalizedStatus === 'cancelled' ||
+    normalizedStatus === 'expired'
+  ) {
+    return normalizedStatus;
   }
 
-  if (entry.date < getTodayDateKey() && !hasStarted) {
+  if (normalizedStatus === 'completed') {
+    return 'completed';
+  }
+
+  if (
+    (normalizedStatus === 'approved' || normalizedStatus === 'pending') &&
+    entry.date < getTodayDateKey() &&
+    !hasStarted
+  ) {
     return 'expired';
   }
 
   return normalizedStatus;
+}
+
+function formatTimestampTime(value: ReservationTimestampLike) {
+  if (!value) return '';
+  const date =
+    value instanceof Date
+      ? value
+      : typeof value.toDate === 'function'
+        ? value.toDate()
+        : (() => {
+            const seconds =
+              typeof value.seconds === 'number'
+                ? value.seconds
+                : typeof value._seconds === 'number'
+                  ? value._seconds
+                  : null;
+            return seconds === null ? null : new Date(seconds * 1000);
+          })();
+  if (!date) return '';
+  if (Number.isNaN(date.getTime())) return '';
+
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function getHistoryTimeLabel(
+  entry: RoomHistoryEntry,
+  reservation?: Reservation
+) {
+  if (getHistoryEntryStatus(entry, reservation) === 'completed') {
+    const checkedInTime = formatTimestampTime(
+      reservation?.checkedInAt ??
+        reservation?.reservationStartedAt ??
+        reservation?.createdAt
+    );
+    const finishedTime = formatTimestampTime(reservation?.completedAt);
+
+    if (checkedInTime && finishedTime) {
+      return `${checkedInTime} - ${finishedTime}`;
+    }
+  }
+
+  return formatTimeRange(entry.startTime, entry.endTime);
 }
 
 function getEntriesForHistoryFilter(
@@ -175,9 +235,11 @@ export default function AdminRoomHistoryTab({
   const [historySearch, setHistorySearch] = useState('');
   const [buildingRooms, setBuildingRooms] = useState<Room[]>([]);
   const [buildingReservations, setBuildingReservations] = useState<Reservation[]>([]);
+  const [restoredReservations, setRestoredReservations] = useState<Reservation[]>([]);
   const [loadedReservationsBuildingId, setLoadedReservationsBuildingId] = useState('');
   const [expandedUsers, setExpandedUsers] = useState<string[]>([]);
   const initializedBuildingId = useRef('');
+  const hasInitializedHistoryFilter = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,15 +282,82 @@ export default function AdminRoomHistoryTab({
     });
   }, [buildingId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!buildingId) {
+      setRestoredReservations([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void fetchReservationsByBuilding(buildingId)
+      .then((nextReservations) => {
+        if (!cancelled) setRestoredReservations(nextReservations);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.warn('Failed to restore reservation check-in times:', error);
+          setRestoredReservations([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [buildingId]);
+
   const roomFloorMap = useMemo(
     () => new Map(buildingRooms.map((room) => [room.id, room.floor])),
     [buildingRooms]
   );
 
   const reservationMap = useMemo(
-    () => new Map(buildingReservations.map((reservation) => [reservation.id, reservation])),
-    [buildingReservations]
+    () => {
+      const reservations = new Map(
+        restoredReservations.map((reservation) => [reservation.id, reservation])
+      );
+      buildingReservations.forEach((reservation) => {
+        const restored = reservations.get(reservation.id);
+        reservations.set(reservation.id, {
+          ...restored,
+          ...reservation,
+          checkedInAt: reservation.checkedInAt ?? restored?.checkedInAt,
+          reservationStartedAt:
+            reservation.reservationStartedAt ?? restored?.reservationStartedAt,
+          completedAt: reservation.completedAt ?? restored?.completedAt,
+        });
+      });
+      return reservations;
+    },
+    [buildingReservations, restoredReservations]
   );
+
+  const historyEntries = useMemo(() => {
+    const historySourceIds = new Set(roomHistory.map((entry) => entry.sourceId));
+    const reservationsWithoutHistory = buildingReservations
+      .filter((reservation) => !historySourceIds.has(reservation.id))
+      .map(
+        (reservation): RoomHistoryEntry => ({
+          id: reservation.id,
+          roomId: reservation.roomId,
+          roomName: reservation.roomName,
+          buildingId: reservation.buildingId,
+          userName: reservation.userName,
+          userRole: reservation.userRole,
+          date: reservation.date,
+          startTime: reservation.startTime,
+          endTime: reservation.endTime,
+          type: 'reservation',
+          purpose: reservation.purpose,
+          sourceId: reservation.id,
+          status: reservation.status,
+          createdAt: reservation.createdAt,
+        })
+      );
+
+    return [...roomHistory, ...reservationsWithoutHistory];
+  }, [buildingReservations, roomHistory]);
 
   const availableHistoryYears = useMemo(() => {
     const reservationDates = buildingReservations
@@ -268,7 +397,7 @@ export default function AdminRoomHistoryTab({
   const normalizedRoomHistory = useMemo(() => {
     const latestEntriesBySourceId = new Map<string, RoomHistoryEntry>();
 
-    roomHistory.forEach((entry) => {
+    historyEntries.forEach((entry) => {
       const existingEntry = latestEntriesBySourceId.get(entry.sourceId);
 
       if (!existingEntry) {
@@ -297,7 +426,7 @@ export default function AdminRoomHistoryTab({
     });
 
     return Array.from(latestEntriesBySourceId.values());
-  }, [roomHistory]);
+  }, [historyEntries]);
 
   useEffect(() => {
     if (
@@ -310,29 +439,43 @@ export default function AdminRoomHistoryTab({
       (entry) => entry.buildingId === buildingId
     );
 
-    const nextFilter =
-      HISTORY_STATUS_FILTERS.find(
-        (filter) =>
-          filter.key !== 'all' &&
-          getEntriesForHistoryFilter(buildingHistory, filter.key, reservationMap).length > 0
-      )?.key ?? 'all';
+    const nextFilter = hasInitializedHistoryFilter.current
+      ? historyFilter
+      : HISTORY_STATUS_FILTERS.find(
+          (filter) =>
+            filter.key !== 'all' &&
+            getEntriesForHistoryFilter(buildingHistory, filter.key, reservationMap).length > 0
+        )?.key ?? 'all';
     const mostRecentDate = getMostRecentHistoryDate(
       getEntriesForHistoryFilter(buildingHistory, nextFilter, reservationMap)
     );
     const dateParts = mostRecentDate ? getHistoryDateParts(mostRecentDate) : null;
 
-    setHistoryFilter(nextFilter);
+    if (!hasInitializedHistoryFilter.current) {
+      setHistoryFilter(nextFilter);
+      hasInitializedHistoryFilter.current = true;
+    }
     if (dateParts) {
       setHistoryYearFilter(String(dateParts.year));
       setHistoryMonthFilter(String(dateParts.month));
     }
     initializedBuildingId.current = buildingId;
-  }, [buildingId, loadedReservationsBuildingId, normalizedRoomHistory, reservationMap]);
+  }, [
+    buildingId,
+    historyFilter,
+    loadedReservationsBuildingId,
+    normalizedRoomHistory,
+    reservationMap,
+  ]);
 
   const handleHistoryFilterChange = (filter: HistoryStatusFilter) => {
     setHistoryFilter(filter);
     const mostRecentDate = getMostRecentHistoryDate(
-      getEntriesForHistoryFilter(normalizedRoomHistory, filter, reservationMap)
+      getEntriesForHistoryFilter(
+        normalizedRoomHistory.filter((entry) => entry.buildingId === buildingId),
+        filter,
+        reservationMap
+      )
     );
     const dateParts = mostRecentDate ? getHistoryDateParts(mostRecentDate) : null;
     if (dateParts) {
@@ -664,7 +807,10 @@ export default function AdminRoomHistoryTab({
                                         {formatDate(reservation.date)}
                                       </td>
                                       <td className="whitespace-nowrap px-4 py-3 text-sm text-black">
-                                        {formatTimeRange(reservation.startTime, reservation.endTime)}
+                                        {getHistoryTimeLabel(
+                                          reservation,
+                                          reservationMap.get(reservation.sourceId)
+                                        )}
                                       </td>
                                       <td className="max-w-[280px] px-4 py-3 text-sm text-black">
                                         <span className="block truncate">{reservation.purpose}</span>
@@ -763,7 +909,12 @@ export default function AdminRoomHistoryTab({
                             </div>
                             <div className="flex justify-between gap-4">
                               <span className="text-black/60">Time</span>
-                              <span>{formatTimeRange(reservation.startTime, reservation.endTime)}</span>
+                              <span className="text-right">
+                                {getHistoryTimeLabel(
+                                  reservation,
+                                  reservationMap.get(reservation.sourceId)
+                                )}
+                              </span>
                             </div>
                             <div className="flex justify-between gap-4">
                               <span className="text-black/60">Purpose</span>
@@ -786,7 +937,7 @@ export default function AdminRoomHistoryTab({
       <div className="mt-4 flex justify-center">
         <div className="rounded-xl bg-white px-4 py-2.5 shadow-sm ring-1 ring-black/5">
         <p className="text-xs font-medium text-gray-600">
-          Showing {groupedHistory.length} of {new Set(roomHistory.map((entry) => entry.userName)).size} users
+          Showing {groupedHistory.length} of {new Set(normalizedRoomHistory.map((entry) => entry.userName)).size} users
         </p>
       </div>
       </div>

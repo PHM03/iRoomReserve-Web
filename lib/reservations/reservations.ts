@@ -72,6 +72,7 @@ export interface Reservation {
   occurrenceCount?: number;
   checkedInAt?: Timestamp | null;
   reservationStartedAt?: Timestamp | null;
+  completedAt?: Timestamp | null;
   expiredAt?: ReservationTimestampLike;
   expirationReason?: string | null;
   expirationMessage?: {
@@ -101,6 +102,7 @@ export type ReservationInput = Omit<
   | "revisionScope"
   | "checkedInAt"
   | "reservationStartedAt"
+  | "completedAt"
   | "expiredAt"
   | "expirationReason"
   | "expirationMessage"
@@ -352,6 +354,15 @@ export async function fetchPendingReservationsForApprover(): Promise<Reservation
   return apiRequest("/api/reservations/pending-approvals", {
     method: "GET",
     userId: auth.currentUser?.uid,
+  });
+}
+
+export async function fetchReservationsByBuilding(
+  buildingId: string
+): Promise<Reservation[]> {
+  return apiRequest("/api/reservations", {
+    method: "GET",
+    params: { buildingId },
   });
 }
 
