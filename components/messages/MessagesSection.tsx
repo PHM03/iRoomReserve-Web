@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
-import { filterInboxMessagesByBuildingScope } from '@/lib/admin/adminInboxScope';
 import { formatDate, formatDateTime, formatTimeRange } from '@/lib/utils/dateTime';
 import {
   type Message,
@@ -96,9 +95,9 @@ function getDateRange(preset: DatePreset): { from: number; to: number } {
 }
 
 interface MessagesSectionProps {
-  inboxBuildingIds?: readonly string[];
   notifications?: AppNotification[];
   registerComposeOpener?: (openCompose: () => void) => void;
+  showBuildingName?: boolean;
   showComposeButton?: boolean;
   showReservationUpdates?: boolean;
   initialTab?: InboxTab;
@@ -361,14 +360,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
     revisionId: string;
   } | null>(null);
 
-  const scopedInbox = useMemo(
-    () =>
-      filterInboxMessagesByBuildingScope(
-        inbox,
-        props.inboxBuildingIds ?? [],
-      ),
-    [inbox, props.inboxBuildingIds],
-  );
+  const scopedInbox = inbox;
 
   useEffect(() => {
     if (!firebaseUser) return;
@@ -879,7 +871,7 @@ export default function MessagesSection(props: Readonly<MessagesSectionProps>) {
                           <span className="rounded-full bg-dark/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-black/55">
                             {counterpartRole || 'Staff'}
                           </span>
-                          {props.inboxBuildingIds && message.buildingName && (
+                          {props.showBuildingName && message.buildingName && (
                             <span className="rounded-full border border-primary/15 bg-primary/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">
                               {message.buildingName}
                             </span>

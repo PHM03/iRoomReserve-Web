@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -40,6 +41,11 @@ export default function ComposeModal({
   const [loadingRecipients, setLoadingRecipients] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (open) setPortalTarget(document.body);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -83,7 +89,7 @@ export default function ComposeModal({
     };
   }, [open, firebaseUser, profile?.role]);
 
-  if (!open) return null;
+  if (!open || !portalTarget) return null;
 
   const senderName =
     [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') ||
@@ -159,9 +165,9 @@ export default function ComposeModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-3 backdrop-blur-[2px] sm:p-6"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 p-3 backdrop-blur-[2px] sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="compose-modal-title"
@@ -395,6 +401,7 @@ export default function ComposeModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    portalTarget,
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface BeaconSetupModalProps {
   roomId: string;
@@ -115,6 +116,11 @@ export default function BeaconSetupModal({
   const [wifiSsid, setWifiSsid] = useState(initialWifiSsid);
   const [wifiPassword, setWifiPassword] = useState(initialWifiPassword);
   const [showWifiPassword, setShowWifiPassword] = useState(false);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setPortalTarget(document.body);
+  }, []);
 
   const isBusy = phase === 'flashing' || phase === 'provisioning';
 
@@ -215,15 +221,17 @@ export default function BeaconSetupModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" role="presentation">
+  if (!portalTarget) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-black/50 p-3 sm:p-6" role="presentation">
       <div
-        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+        className="flex max-h-[calc(100dvh-1.5rem)] min-h-0 w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="beacon-setup-title"
       >
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-gray-200 px-6 py-5">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-blue-700">ESP32 setup</p>
             <h2 id="beacon-setup-title" className="mt-1 text-xl font-bold text-black">Set up {roomName}</h2>
@@ -240,7 +248,8 @@ export default function BeaconSetupModal({
           </button>
         </div>
 
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
           Flashing replaces the current firmware and erases saved Wi-Fi and room settings on this ESP32.
         </div>
 
@@ -334,7 +343,9 @@ export default function BeaconSetupModal({
             <p className="text-xs text-black/55">DOIT ESP32 DEVKIT V1 · Flash bundle 1.1.0-usb-provisioning</p>
           </div>
         ) : null}
+        </div>
       </div>
-    </div>
+    </div>,
+    portalTarget,
   );
 }
