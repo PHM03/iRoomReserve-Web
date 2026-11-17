@@ -2,7 +2,7 @@
 
 import SoftSelect from '@/components/ui/SoftSelect';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import AdminBuildingSelect from '@/components/admin/AdminBuildingSelect';
 import type { RoomHistoryEntry } from '@/lib/rooms/roomHistory';
 import { getRoomsByBuilding, type Room } from '@/lib/rooms/rooms';
@@ -86,6 +86,36 @@ function getHistoryEntryStatus(
   return normalizedStatus;
 }
 
+function getEntriesForHistoryFilter(
+  entries: RoomHistoryEntry[],
+  filter: HistoryStatusFilter,
+  reservationMap: Map<string, Reservation>
+) {
+  return entries.filter((entry) => {
+    const status = getHistoryEntryStatus(entry, reservationMap.get(entry.sourceId));
+    if (filter === 'all') return true;
+    if (filter === 'rejectedCancelled') {
+      return status === 'rejected' || status === 'cancelled';
+    }
+    return status === filter;
+  });
+}
+
+function getMostRecentHistoryDate(entries: RoomHistoryEntry[]) {
+  const mostRecentEntry = [...entries].sort(
+    (left, right) =>
+      right.date.localeCompare(left.date) ||
+      right.startTime.localeCompare(left.startTime)
+  )[0];
+  return mostRecentEntry?.date ?? null;
+}
+
+function getHistoryDateParts(date: string) {
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return { year: Number(match[1]), month: Number(match[2]) - 1 };
+}
+
 function getRoomHistoryEntryPriority(entry: RoomHistoryEntry) {
   const normalizedStatus = entry.status.toLowerCase();
 
@@ -145,7 +175,9 @@ export default function AdminRoomHistoryTab({
   const [historySearch, setHistorySearch] = useState('');
   const [buildingRooms, setBuildingRooms] = useState<Room[]>([]);
   const [buildingReservations, setBuildingReservations] = useState<Reservation[]>([]);
+  const [loadedReservationsBuildingId, setLoadedReservationsBuildingId] = useState('');
   const [expandedUsers, setExpandedUsers] = useState<string[]>([]);
+  const initializedBuildingId = useRef('');
 
   useEffect(() => {
     let cancelled = false;
@@ -178,11 +210,13 @@ export default function AdminRoomHistoryTab({
   useEffect(() => {
     if (!buildingId) {
       setBuildingReservations([]);
+      setLoadedReservationsBuildingId('');
       return () => {};
     }
 
     return onReservationsByBuilding(buildingId, (nextReservations) => {
       setBuildingReservations(nextReservations);
+      setLoadedReservationsBuildingId(buildingId);
     });
   }, [buildingId]);
 
@@ -197,12 +231,39 @@ export default function AdminRoomHistoryTab({
   );
 
   const availableHistoryYears = useMemo(() => {
-    const years = roomHistory
-      .map((entry) => new Date(`${entry.date}T00:00:00`).getFullYear())
-      .filter((year) => !Number.isNaN(year));
+    const reservationDates = buildingReservations
+      .filter((reservation) => reservation.buildingId === buildingId)
+      .flatMap((reservation) =>
+        reservation.dates?.length ? reservation.dates : [reservation.date]
+      );
+    const historyDates = roomHistory
+      .filter((entry) => entry.buildingId === buildingId)
+      .map((entry) => entry.date);
+    const years = [
+      currentYear,
+      ...[...reservationDates, ...historyDates]
+        .map((date) => getHistoryDateParts(date)?.year)
+        .filter((year): year is number => year !== undefined),
+    ];
+    const earliestYear = Math.min(...years);
+    const latestYear = Math.max(...years);
 
-    return [...new Set([currentYear, ...years])].sort((left, right) => right - left);
-  }, [currentYear, roomHistory]);
+    return Array.from(
+      { length: latestYear - earliestYear + 1 },
+      (_, index) => latestYear - index
+    );
+  }, [buildingId, buildingReservations, currentYear, roomHistory]);
+  const selectedHistoryYear = availableHistoryYears.some(
+    (year) => String(year) === historyYearFilter
+  )
+    ? historyYearFilter
+    : String(availableHistoryYears[0] ?? currentYear);
+
+  useEffect(() => {
+    if (historyYearFilter !== selectedHistoryYear) {
+      setHistoryYearFilter(selectedHistoryYear);
+    }
+  }, [historyYearFilter, selectedHistoryYear]);
 
   const normalizedRoomHistory = useMemo(() => {
     const latestEntriesBySourceId = new Map<string, RoomHistoryEntry>();
@@ -238,6 +299,48 @@ export default function AdminRoomHistoryTab({
     return Array.from(latestEntriesBySourceId.values());
   }, [roomHistory]);
 
+  useEffect(() => {
+    if (
+      !buildingId ||
+      loadedReservationsBuildingId !== buildingId ||
+      initializedBuildingId.current === buildingId
+    ) return;
+
+    const buildingHistory = normalizedRoomHistory.filter(
+      (entry) => entry.buildingId === buildingId
+    );
+
+    const nextFilter =
+      HISTORY_STATUS_FILTERS.find(
+        (filter) =>
+          filter.key !== 'all' &&
+          getEntriesForHistoryFilter(buildingHistory, filter.key, reservationMap).length > 0
+      )?.key ?? 'all';
+    const mostRecentDate = getMostRecentHistoryDate(
+      getEntriesForHistoryFilter(buildingHistory, nextFilter, reservationMap)
+    );
+    const dateParts = mostRecentDate ? getHistoryDateParts(mostRecentDate) : null;
+
+    setHistoryFilter(nextFilter);
+    if (dateParts) {
+      setHistoryYearFilter(String(dateParts.year));
+      setHistoryMonthFilter(String(dateParts.month));
+    }
+    initializedBuildingId.current = buildingId;
+  }, [buildingId, loadedReservationsBuildingId, normalizedRoomHistory, reservationMap]);
+
+  const handleHistoryFilterChange = (filter: HistoryStatusFilter) => {
+    setHistoryFilter(filter);
+    const mostRecentDate = getMostRecentHistoryDate(
+      getEntriesForHistoryFilter(normalizedRoomHistory, filter, reservationMap)
+    );
+    const dateParts = mostRecentDate ? getHistoryDateParts(mostRecentDate) : null;
+    if (dateParts) {
+      setHistoryYearFilter(String(dateParts.year));
+      setHistoryMonthFilter(String(dateParts.month));
+    }
+  };
+
   const filteredHistory = useMemo(() => {
     const normalizedSearch = historySearch.trim().toLowerCase();
 
@@ -259,8 +362,7 @@ export default function AdminRoomHistoryTab({
       const entryDate = new Date(`${entry.date}T00:00:00`);
 
       if (
-        historyYearFilter !== 'all' &&
-        entryDate.getFullYear() !== Number(historyYearFilter)
+        entryDate.getFullYear() !== Number(selectedHistoryYear)
       ) {
         return false;
       }
@@ -301,7 +403,7 @@ export default function AdminRoomHistoryTab({
     historyFilter,
     historyMonthFilter,
     historySearch,
-    historyYearFilter,
+    selectedHistoryYear,
     normalizedRoomHistory,
     reservationMap,
   ]);
@@ -388,11 +490,11 @@ export default function AdminRoomHistoryTab({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <SoftSelect
-                value={historyYearFilter}
+                value={selectedHistoryYear}
                 onChange={(event) => setHistoryYearFilter(event.target.value)}
+                placeholder="Select Year"
                 className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-[0_8px_22px_rgba(15,23,42,0.08)]  transition-all focus:border-[#a12124] focus:outline-none focus:ring-2 focus:ring-[#a12124]/25"
               >
-                <option value="all">All Years</option>
                 {availableHistoryYears.map((year) => (
                   <option key={year} value={year}>
                     {year}
@@ -418,7 +520,7 @@ export default function AdminRoomHistoryTab({
             {HISTORY_STATUS_FILTERS.map((filter) => (
               <button
                 key={filter.key}
-                onClick={() => setHistoryFilter(filter.key)}
+                onClick={() => handleHistoryFilterChange(filter.key)}
                 className={`rounded-lg px-3 py-2 text-xs font-bold transition-all ${
                   historyFilter === filter.key
                     ? 'border border-primary bg-primary text-white'

@@ -9,6 +9,7 @@ interface SoftSelectProps {
   className?: string;
   disabled?: boolean;
   onChange: (event: { target: { value: string } }) => void;
+  placeholder?: string;
   value: string | number;
 }
 
@@ -18,6 +19,7 @@ export default function SoftSelect({
   className = '',
   disabled = false,
   onChange,
+  placeholder,
   value,
 }: Readonly<SoftSelectProps>) {
   const options = Children.toArray(children)
@@ -46,6 +48,7 @@ export default function SoftSelect({
       options={options}
       value={String(value)}
       onChange={(nextValue) => onChange({ target: { value: nextValue } })}
+      placeholder={placeholder}
       disabled={disabled}
       elevated={false}
       fullWidth={className.includes('w-full')}
