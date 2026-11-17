@@ -107,7 +107,6 @@ export async function getRequestAuthContext(
       if (authHeader) {
         return {
           uid: null,
-          role: null,
           ...getEmptyProfileContext(),
           verified: false,
         };
