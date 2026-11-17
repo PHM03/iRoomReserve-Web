@@ -382,7 +382,14 @@ export default function ReserveRoomPage() {
   const bookedSlotsLoading = assistantDataLoading || manualRoomSlotsLoading;
 
   useEffect(() => {
-    if (!firebaseUser || !activeBuilding) {
+    if (!firebaseUser) {
+      setRooms([]);
+      setRoomsLoading(false);
+      return;
+    }
+
+    const query = searchQuery.trim();
+    if (!query && !activeBuilding) {
       setRooms([]);
       setRoomsLoading(false);
       return;
@@ -393,7 +400,21 @@ export default function ReserveRoomPage() {
     setRoomsLoading(true);
     setRoomsError('');
 
-    getRoomsByBuilding(activeBuilding.id)
+    const loadRooms = query
+      ? Promise.all(
+          (['main', 'digi'] as ReservationCampus[]).flatMap((campus) =>
+            getManagedBuildingsForCampus(campus).map((building) =>
+              getRoomsByBuilding(building.id)
+            )
+          )
+        ).then((roomGroups) => {
+          const uniqueRooms = new Map<string, Room>();
+          roomGroups.flat().forEach((room) => uniqueRooms.set(room.id, room));
+          return Array.from(uniqueRooms.values());
+        })
+      : getRoomsByBuilding(activeBuilding!.id);
+
+    loadRooms
       .then((loadedRooms) => {
         if (!active) {
           return;
@@ -420,7 +441,7 @@ export default function ReserveRoomPage() {
     return () => {
       active = false;
     };
-  }, [firebaseUser, activeBuilding]);
+  }, [firebaseUser, activeBuilding, searchQuery]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setNow(new Date()), 60_000);
