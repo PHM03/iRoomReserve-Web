@@ -28,7 +28,6 @@ import {
 } from '@/lib/occupancy/occupancyClient';
 import { type Room } from '@/lib/rooms/rooms';
 import { type Reservation } from '@/lib/reservations/reservations';
-import { isReservationActiveTimeSlot } from '@/lib/rooms/roomStatus';
 
 interface BleAdminMonitorProps {
   buildingName?: string;
@@ -78,26 +77,17 @@ function formatRefreshCountdown(milliseconds: number) {
   return `${minutes}:${seconds}`;
 }
 
-function getReservationStatus(
-  roomId: string,
-  reservations: Reservation[],
-  beaconConnected: boolean
-) {
-  const hasOngoingReservation = reservations.some(
-    (reservation) =>
-      reservation.roomId === roomId && isReservationActiveTimeSlot(reservation)
-  );
-
-  if (!hasOngoingReservation) {
+function getReservationStatus(beaconConnected: boolean) {
+  if (beaconConnected) {
     return {
-      label: 'Vacant',
-      status: 'VACANT',
+      label: 'Occupied',
+      status: 'OCCUPIED',
     } as const;
   }
 
   return {
-    label: beaconConnected ? 'Connected' : 'Disconnected',
-    status: beaconConnected ? 'CONNECTED' : 'DISCONNECTED',
+    label: 'Vacant',
+    status: 'VACANT',
   } as const;
 }
 
@@ -120,7 +110,6 @@ function getRoomLastUpdateTimestamp(
 }
 
 export default function BleAdminMonitor({
-  reservations,
   rooms,
   className = '',
   pollIntervalMs = BLE_MONITOR_REFRESH_INTERVAL_MS,
@@ -375,8 +364,6 @@ export default function BleAdminMonitor({
                 {filteredBeaconRooms.map((room) => {
                   const hardwareOnline = isRoomBeaconHardwareOnline(room);
                   const reservationStatus = getReservationStatus(
-                    room.id,
-                    reservations,
                     room.beaconConnected === true
                   );
                   const lastUpdateTimestamp = getRoomLastUpdateTimestamp(room);

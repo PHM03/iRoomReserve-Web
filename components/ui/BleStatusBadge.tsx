@@ -25,6 +25,11 @@ function getBleBadgeTheme(status: string) {
         containerClassName: 'border-red-500/25 bg-red-500/10 text-red-700',
         dotClassName: 'bg-red-500',
       };
+    case 'OCCUPIED':
+      return {
+        containerClassName: 'border-red-500/25 bg-red-500/10 text-red-700',
+        dotClassName: 'bg-red-500',
+      };
     case 'END_OF_RESERVATION':
       return {
         containerClassName:
